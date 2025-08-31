@@ -1,11 +1,12 @@
 import { App, Plugin, PluginSettingTab, Setting, Notice, Modal, Platform, Editor } from "obsidian";
+import { DEFAULT_SNIPPETS } from "./presets";
 
 // --- настройки ---
 interface SnipSidianSettings {
     snippets: Record<string, string>;
 }
 const DEFAULT_SETTINGS: SnipSidianSettings = {
-    snippets: { brb: "be right back", omw: "on my way" },
+  snippets: DEFAULT_SNIPPETS,
 };
 
 export default class SnipSidianPlugin extends Plugin {
