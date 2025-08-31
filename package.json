@@ -4,7 +4,7 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "esbuild main.ts --bundle --outfile=main.js --format=cjs --platform=node --target=es2020 --external:obsidian --external:electron --external:@codemirror/*",
+        "build": "esbuild src/main.ts --bundle --outfile=main.js --format=cjs --platform=node --target=es2020 --external:obsidian --external:electron --external:@codemirror/*",
         "build:watch": "npm run build -- --watch"
     },
     "devDependencies": {
