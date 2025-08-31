@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, Setting, Notice, Modal, Platform } from "obsidian";
+import { App, Plugin, PluginSettingTab, Setting, Notice, Modal, Platform, Editor } from "obsidian";
 
 // --- настройки ---
 interface SnipSidianSettings {
@@ -15,11 +15,20 @@ export default class SnipSidianPlugin extends Plugin {
         console.log("SnipSidian plugin loaded!");
         await this.loadSettings();
 
+        // тестовая команда
         this.addCommand({
             id: "insert-hello-world",
             name: "Insert Hello World",
             editorCallback: (editor) => editor.replaceSelection("Hello World"),
         });
+
+        // 🔥 авторазвёртка при вводе разделителя
+        this.registerEvent(
+            this.app.workspace.on("editor-change", (editor) => {
+                if (!editor) return;
+                this.tryExpandAtCursor(editor);
+            })
+        );
 
         this.addSettingTab(new SnipSidianSettingTab(this.app, this));
     }
@@ -34,6 +43,54 @@ export default class SnipSidianPlugin extends Plugin {
 
     async saveSettings() {
         await this.saveData(this.settings);
+    }
+
+    // === Expansion logic ===
+
+    /** Разворачиваем триггер перед курсором, если последний ввод — разделитель */
+    private tryExpandAtCursor(editor: Editor) {
+        const cursor = editor.getCursor();
+        const lineText = editor.getLine(cursor.line);
+        if (cursor.ch === 0) return;
+
+        const prevChar = lineText[cursor.ch - 1] ?? "";
+        if (!this.isSeparator(prevChar)) return;
+
+        const sepIndex = cursor.ch - 1;          // позиция разделителя
+        const lastWordChar = sepIndex - 1;       // последний символ слова (перед разделителем)
+
+        const start = this.findWordStart(lineText, lastWordChar);
+        if (start === null) return;
+
+        const trigger = lineText.slice(start, sepIndex); // [start, sepIndex)
+        if (!trigger) return;
+
+        const replacement = this.settings.snippets[trigger];
+        if (replacement === undefined) return;
+
+        // заменить только слово; разделитель оставить (undo-friendly)
+        const from = { line: cursor.line, ch: start };
+        const to = { line: cursor.line, ch: sepIndex };
+        editor.replaceRange(replacement, from, to);
+    }
+
+    /** true если символ — разделитель */
+    private isSeparator(ch: string): boolean {
+        // пробелы/переводы строк/таб + базовая пунктуация
+        return /[\s.,!?;:()\[\]{}"'\-\\/]/.test(ch);
+    }
+
+    /** Найти начало слова, заканчивающегося на endIndex (включительно). Возвратить индекс или null. */
+    private findWordStart(text: string, endIndex: number): number | null {
+        if (endIndex < 0) return null;
+        let i = endIndex;
+
+        // Триггеры считаем ASCII: буквы/цифры/подчёркивание
+        const isWord = (c: string) => /[A-Za-z0-9_]/.test(c);
+
+        if (!isWord(text[i])) return null;
+        while (i - 1 >= 0 && isWord(text[i - 1])) i--;
+        return i;
     }
 }
 
