@@ -1,12 +1,13 @@
 import { App, Plugin, PluginSettingTab, Setting, Notice, Modal, Platform, Editor } from "obsidian";
 import { DEFAULT_SNIPPETS } from "./presets";
 
-// --- настройки ---
+// --- Settings interface ---
 interface SnipSidianSettings {
     snippets: Record<string, string>;
 }
+
 const DEFAULT_SETTINGS: SnipSidianSettings = {
-  snippets: DEFAULT_SNIPPETS,
+    snippets: DEFAULT_SNIPPETS,
 };
 
 export default class SnipSidianPlugin extends Plugin {
@@ -16,14 +17,14 @@ export default class SnipSidianPlugin extends Plugin {
         console.log("SnipSidian plugin loaded!");
         await this.loadSettings();
 
-        // тестовая команда
+        // Example command for testing
         this.addCommand({
             id: "insert-hello-world",
             name: "Insert Hello World",
             editorCallback: (editor) => editor.replaceSelection("Hello World"),
         });
 
-        // 🔥 авторазвёртка при вводе разделителя
+        // Register snippet expansion on editor changes
         this.registerEvent(
             this.app.workspace.on("editor-change", (editor) => {
                 if (!editor) return;
@@ -48,7 +49,7 @@ export default class SnipSidianPlugin extends Plugin {
 
     // === Expansion logic ===
 
-    /** Разворачиваем триггер перед курсором, если последний ввод — разделитель */
+    /** Try to expand the trigger before the cursor if the last typed character was a separator */
     private tryExpandAtCursor(editor: Editor) {
         const cursor = editor.getCursor();
         const lineText = editor.getLine(cursor.line);
@@ -57,36 +58,34 @@ export default class SnipSidianPlugin extends Plugin {
         const prevChar = lineText[cursor.ch - 1] ?? "";
         if (!this.isSeparator(prevChar)) return;
 
-        const sepIndex = cursor.ch - 1;          // позиция разделителя
-        const lastWordChar = sepIndex - 1;       // последний символ слова (перед разделителем)
+        const sepIndex = cursor.ch - 1;          // position of the separator
+        const lastWordChar = sepIndex - 1;       // last character of the word
 
         const start = this.findWordStart(lineText, lastWordChar);
         if (start === null) return;
 
-        const trigger = lineText.slice(start, sepIndex); // [start, sepIndex)
+        const trigger = lineText.slice(start, sepIndex);
         if (!trigger) return;
 
         const replacement = this.settings.snippets[trigger];
         if (replacement === undefined) return;
 
-        // заменить только слово; разделитель оставить (undo-friendly)
+        // Replace only the word, keep the separator (undo-friendly)
         const from = { line: cursor.line, ch: start };
         const to = { line: cursor.line, ch: sepIndex };
         editor.replaceRange(replacement, from, to);
     }
 
-    /** true если символ — разделитель */
+    /** Returns true if the character is considered a separator */
     private isSeparator(ch: string): boolean {
-        // пробелы/переводы строк/таб + базовая пунктуация
         return /[\s.,!?;:()\[\]{}"'\-\\/]/.test(ch);
     }
 
-    /** Найти начало слова, заканчивающегося на endIndex (включительно). Возвратить индекс или null. */
+    /** Find the start index of a word ending at endIndex (inclusive). Return index or null. */
     private findWordStart(text: string, endIndex: number): number | null {
         if (endIndex < 0) return null;
         let i = endIndex;
 
-        // Триггеры считаем ASCII: буквы/цифры/подчёркивание
         const isWord = (c: string) => /[A-Za-z0-9_]/.test(c);
 
         if (!isWord(text[i])) return null;
@@ -95,7 +94,7 @@ export default class SnipSidianPlugin extends Plugin {
     }
 }
 
-// ====== НАСТРОЙКИ (UI) ======
+// ====== Settings UI ======
 class SnipSidianSettingTab extends PluginSettingTab {
     plugin: SnipSidianPlugin;
 
@@ -258,7 +257,7 @@ class SnipSidianSettingTab extends PluginSettingTab {
     }
 }
 
-/** Простая модалка для копипасты JSON */
+/** Simple modal for JSON copy/paste */
 class JSONModal extends Modal {
     text: string;
     title: string;
