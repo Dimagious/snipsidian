@@ -1,0 +1,10 @@
+{
+    "name": "SnipSidian",
+    "id": "snipsidian",
+    "version": "0.1.0",
+    "minAppVersion": "1.5.0",
+    "description": "Text expansion with hotstrings (trigger → replacement) inside Obsidian editor.",
+    "author": "Dimagious",
+    "authorUrl": "https://github.com/Dimagious",
+    "isDesktopOnly": false
+}

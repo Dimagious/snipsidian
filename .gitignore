@@ -1,0 +1,4 @@
+node_modules/
+.esbuild/
+*.log
+main.js
