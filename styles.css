@@ -1,0 +1,13 @@
+/* styles.css at plugin root */
+.snipsidian-settings .snipsidian-group-header {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  margin: 12px 0 6px;
+  opacity: 0.9;
+}
+
+.snipsidian-settings .snipsidian-empty {
+  opacity: 0.7;
+  font-style: italic;
+}
