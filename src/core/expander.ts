@@ -4,6 +4,7 @@ import type { Editor, EditorPosition } from "obsidian";
  * Expand trigger before the cursor when the last typed character is a separator.
  * Replaces only the word; keeps the separator (undo-friendly).
  * Supports a single cursor placeholder "$|" inside the replacement.
+ * Skips expansion inside inline code, fenced code blocks, and YAML frontmatter.
  */
 export function expandIfTriggered(editor: Editor, snippets: Record<string, string>) {
     const cursor = editor.getCursor();
@@ -13,7 +14,10 @@ export function expandIfTriggered(editor: Editor, snippets: Record<string, strin
     const prevChar = lineText[cursor.ch - 1] ?? "";
     if (!isSeparator(prevChar)) return;
 
-    const sepIndex = cursor.ch - 1;    // position of the separator just typed
+    // Skip in code-oriented contexts
+    if (isInCodeContext(editor, cursor)) return;
+
+    const sepIndex = cursor.ch - 1;    // separator just typed
     const lastWordChar = sepIndex - 1; // last character of the word
     const start = findWordStart(lineText, lastWordChar);
     if (start === null) return;
@@ -44,7 +48,7 @@ export function expandIfTriggered(editor: Editor, snippets: Record<string, strin
     }
 }
 
-/** Return true if the character is considered a separator */
+/** Returns true if the character is considered a separator */
 export function isSeparator(ch: string): boolean {
     return /[\s.,!?;:()\[\]{}"'\-\\/]/.test(ch);
 }
@@ -71,8 +75,105 @@ function advancePos(from: EditorPosition, text: string): EditorPosition {
         ch += text.length;
         return { line, ch };
     }
-    // Move down by number of newlines
     line += parts.length - 1;
-    ch = parts[parts.length - 1].length; // length after the last newline
+    ch = parts[parts.length - 1].length;
     return { line, ch };
+}
+
+/** True if cursor is inside code context: inline code, fenced code, or YAML frontmatter. */
+function isInCodeContext(editor: Editor, cursor: EditorPosition): boolean {
+    if (isInYamlFrontmatter(editor, cursor.line)) return true;
+    if (isInFencedCode(editor, cursor.line)) return true;
+    if (isInInlineCode(editor, cursor)) return true;
+    return false;
+}
+
+/** YAML frontmatter: lines between leading '---' and the next '---'. */
+function isInYamlFrontmatter(editor: Editor, curLine: number): boolean {
+    const firstLine = editor.getLine(0)?.trim();
+    if (firstLine !== "---") return false;
+
+    // Find the closing '---' after line 0
+    const last = Math.min(curLine, editor.lastLine());
+    for (let i = 1; i <= last; i++) {
+        const t = editor.getLine(i).trim();
+        if (t === "---") {
+            // closing delimiter found; cursor inside only if before closing line
+            return false;
+        }
+        if (i === curLine) return true;
+    }
+    // No closing delimiter yet and cursor is below the opening
+    return curLine > 0;
+}
+
+/**
+ * Fenced code blocks: toggle on lines that start with ``` or ~~~ (trimmed).
+ * Heuristic: a line whose trimmed text starts with triple backticks or tildes toggles fence state.
+ */
+function isInFencedCode(editor: Editor, curLine: number): boolean {
+    let inFence = false;
+    let fenceToken: "`" | "~" | null = null;
+
+    for (let i = 0; i <= curLine; i++) {
+        const line = editor.getLine(i);
+        const trimmed = line.trimStart();
+
+        // Detect a fence opener/closer at line start: ``` or ~~~
+        if (trimmed.startsWith("```")) {
+            if (!inFence) {
+                inFence = true;
+                fenceToken = "`";
+            } else if (fenceToken === "`") {
+                // closing the same type of fence
+                // If curLine is exactly this line, we consider the cursor outside only after the line is completed.
+                if (i < curLine) inFence = false;
+                else inFence = false; // safest: treat as closed at this line
+            }
+            continue;
+        }
+        if (trimmed.startsWith("~~~")) {
+            if (!inFence) {
+                inFence = true;
+                fenceToken = "~";
+            } else if (fenceToken === "~") {
+                if (i < curLine) inFence = false;
+                else inFence = false;
+            }
+            continue;
+        }
+    }
+    return inFence;
+}
+
+/**
+ * Inline code: an odd number of unescaped single backticks (`) before the cursor
+ * on the current line indicates the cursor is inside `inline code`.
+ * We ignore triple backticks (```), treating them as fences handled elsewhere.
+ */
+function isInInlineCode(editor: Editor, cursor: EditorPosition): boolean {
+    const line = editor.getLine(cursor.line);
+    const before = line.slice(0, cursor.ch);
+
+    let i = 0;
+    let ticks = 0;
+    while (i < before.length) {
+        if (before[i] === "\\") {
+            i += 2; // skip escaped char
+            continue;
+        }
+        // Skip ``` sequences entirely
+        if (before.startsWith("```", i)) {
+            i += 3;
+            continue;
+        }
+        if (before[i] === "`") {
+            ticks++;
+            i++;
+            continue;
+        }
+        i++;
+    }
+    // Inside if we saw an odd number of backticks before the cursor
+    return ticks % 2 === 1;
 }
