@@ -40,8 +40,18 @@ export default class SnipSidianPlugin extends Plugin {
     }
 
     async loadSettings() {
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        const saved = await this.loadData();
+        const savedSnippets = (saved?.snippets ?? {}) as Record<string, string>;
+
+        // Deep-merge: defaults first, then user's saved keys override
+        this.settings = {
+            snippets: {
+                ...DEFAULT_SNIPPETS,   // new defaults always available
+                ...savedSnippets,      // user's edits win
+            },
+        };
     }
+
 
     async saveSettings() {
         await this.saveData(this.settings);
@@ -226,6 +236,24 @@ class SnipSidianSettingTab extends PluginSettingTab {
                         }
                     };
                     modal.open();
+                })
+            );
+
+        new Setting(containerEl)
+            .setName("Add missing defaults")
+            .setDesc("Merge any new default snippets into your current list (user snippets are not overwritten).")
+            .addButton((b) =>
+                b.setButtonText("Apply").onClick(async () => {
+                    const before = Object.keys(this.plugin.settings.snippets).length;
+                    this.plugin.settings.snippets = {
+                        ...DEFAULT_SNIPPETS,
+                        ...this.plugin.settings.snippets, // user's values win
+                    };
+                    await this.plugin.saveSettings();
+                    const after = Object.keys(this.plugin.settings.snippets).length;
+                    new Notice(`Defaults merged (${after - before} added).`);
+                    // re-render list to show new rows
+                    this.display();
                 })
             );
 
