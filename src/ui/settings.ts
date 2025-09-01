@@ -38,6 +38,32 @@ function isBadTrigger(key: string): boolean {
     return /[\s.,!?;:()\[\]{}"'\-\\/]/.test(key) || key.length === 0;
 }
 
+function splitKey(key: string): { group: string; name: string } {
+    const i = key.indexOf("/");
+    return i === -1 ? { group: "", name: key } : { group: key.slice(0, i), name: key.slice(i + 1) };
+}
+function joinKey(group: string, name: string): string {
+    return group ? `${group}/${name}` : name;
+}
+
+// slug для хранения ключей группы
+function slugifyGroup(label: string): string {
+    return (label || "")
+        .trim()
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .toLowerCase();
+}
+// красивый заголовок группы
+function displayGroupTitle(groupKey: string): string {
+    const last = groupKey.includes("/") ? groupKey.split("/").pop()! : groupKey;
+    return last
+        .replace(/[-_]+/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 /** Settings tab: packages (Espanso), grouped snippets list, search, export/import, reveal, merge defaults, reload */
 export class SnipSidianSettingTab extends PluginSettingTab {
     plugin: SnipSidianPlugin;
@@ -178,15 +204,34 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         let selectedPkgId = PACKAGE_CATALOG[0]?.id ?? "";
         let overwritePkg = false;
 
+        // Folder label (human name) -> slug group key for storage
+        let folderLabelTouched = false;
+        let folderLabel = PACKAGE_CATALOG.find(p => p.id === selectedPkgId)?.label ?? "Package";
+        let folderInputEl: HTMLInputElement | undefined;
+
         const pkgRow = new Setting(containerEl)
             .setName("Install from catalog")
-            .setDesc("Select a package and install. By default, existing triggers are kept; enable overwrite to replace them.");
+            .setDesc("Select a package and install it into a folder.");
 
         pkgRow.addDropdown((dd) => {
             PACKAGE_CATALOG.forEach((p) => dd.addOption(p.id, p.label));
             if (selectedPkgId) dd.setValue(selectedPkgId);
-            dd.onChange((v) => (selectedPkgId = v));
+            dd.onChange((v) => {
+                selectedPkgId = v;
+                if (!folderLabelTouched) {
+                    folderLabel = PACKAGE_CATALOG.find(p => p.id === v)?.label ?? "Package";
+                    if (folderInputEl) folderInputEl.value = folderLabel;
+                }
+            });
         });
+
+        // Human folder label (pretty), keys use slug(folderLabel)
+        pkgRow.addText((t) => {
+            t.setPlaceholder("Folder label (e.g. Obsidian Callouts)")
+                .setValue(folderLabel)
+                .onChange((v) => { folderLabelTouched = true; folderLabel = v; });
+            folderInputEl = t.inputEl;
+        }).setDesc("This label is shown in the UI; keys are stored under a slug derived from it.");
 
         pkgRow.addToggle((tg) =>
             tg
@@ -213,7 +258,14 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                         }
                         const yamlText = item.yaml ?? "";
                         const parsed = espansoYamlToSnippets(yamlText);
-                        await applySnippetsMerge(parsed, overwritePkg);
+
+                        // prefix triggers with slug(folder label)
+                        const groupKey = slugifyGroup(folderLabel) || "package";
+                        const withPrefix: Record<string, string> = Object.fromEntries(
+                            Object.entries(parsed).map(([k, v]) => [`${groupKey}/${k}`, v])
+                        );
+
+                        await applySnippetsMerge(withPrefix, overwritePkg);
                     } catch (e) {
                         console.error(e);
                         new Notice("Failed to install package");
@@ -285,7 +337,6 @@ export class SnipSidianSettingTab extends PluginSettingTab {
             modal.open();
         };
 
-
         // ===== Snippets (with search and grouping) =====
         containerEl.createEl("h3", { text: "Snippets" });
 
@@ -337,7 +388,9 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                     this.groupOpen.set(group, !this.groupOpen.get(group));
                     renderList();
                 });
-                hdr.createEl("span", { text: ` ${group} (${items.length})` });
+
+                const title = group === "Ungrouped" ? "Ungrouped" : displayGroupTitle(group);
+                hdr.createEl("span", { text: ` ${title} (${items.length})` });
 
                 if (!this.groupOpen.get(group)) continue;
 
@@ -346,25 +399,32 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                     const row = new Setting(listEl);
                     let currentKey = trigger;
 
+                    const { group: grp, name: tail } = splitKey(trigger);
+
+                    // input only for tail (no visual prefix)
                     row.addText((t) =>
                         t
-                            .setPlaceholder("trigger (e.g. dev/brb)")
-                            .setValue(trigger)
-                            .onChange(async (raw) => {
-                                const newKey = normalizeTrigger(raw);
-                                if (!newKey || newKey === currentKey) return;
-                                if (isBadTrigger(newKey)) {
+                            .setPlaceholder("trigger")
+                            .setValue(tail)
+                            .onChange(async (rawTail) => {
+                                const newTail = normalizeTrigger(rawTail);
+                                if (!newTail) return;
+
+                                const newKey = joinKey(grp, newTail);
+                                if (newKey === currentKey) return;
+                                if (isBadTrigger(newTail)) {
                                     new Notice("Trigger cannot be empty or contain spaces/punctuation");
-                                    (t.inputEl as HTMLInputElement).value = currentKey;
+                                    (t.inputEl as HTMLInputElement).value = splitKey(currentKey).name;
                                     return;
                                 }
+
                                 const map = this.plugin.settings.snippets;
                                 const val = map[currentKey];
                                 delete map[currentKey];
                                 if (newKey in map) {
                                     new Notice(`Trigger "${newKey}" already exists`);
                                     map[currentKey] = val; // rollback
-                                    (t.inputEl as HTMLInputElement).value = currentKey;
+                                    (t.inputEl as HTMLInputElement).value = splitKey(currentKey).name;
                                     return;
                                 }
                                 map[newKey] = val;
@@ -538,4 +598,3 @@ class PackagePreviewModal extends Modal {
         };
     }
 }
-
