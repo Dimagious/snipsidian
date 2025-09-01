@@ -440,6 +440,8 @@ class JSONModal extends Modal {
         const { contentEl, titleEl } = this;
         titleEl.setText(this.title);
 
+        contentEl.addClass("snipsidian-modal");
+
         const ta = contentEl.createEl("textarea", { text: this.text });
         ta.style.width = "100%";
         ta.style.height = "300px";
@@ -482,7 +484,7 @@ class PackagePreviewModal extends Modal {
             text: `Will add ${this.diff.added.length} new snippet(s). Conflicts: ${this.diff.conflicts.length}.`,
         });
 
-        // conflicts table (если есть)
+        // conflicts table
         if (this.diff.conflicts.length) {
             contentEl.createEl("h4", { text: "Conflicts" });
             const table = contentEl.createEl("table", { cls: "snipsidian-preview-table" });
@@ -496,22 +498,20 @@ class PackagePreviewModal extends Modal {
                 tr.createEl("td", { text: c.key });
                 tr.createEl("td", { text: c.current });
                 tr.createEl("td", { text: c.incoming });
-                const actionTd = tr.createEl("td");
+
+                const actionTd = tr.createEl("td", { cls: "conflict-action" });
                 const sel = actionTd.createEl("select");
-                sel.append(
-                    new Option("Keep current", "keep"),
-                    new Option("Overwrite", "overwrite"),
-                );
+                sel.append(new Option("Keep current", "keep"), new Option("Overwrite", "overwrite"));
                 sel.value = this.choices.get(c.key) ?? "keep";
                 sel.onchange = () => this.choices.set(c.key, sel.value as "keep" | "overwrite");
             }
 
-            // bulk controls
-            const bulk = contentEl.createDiv({ cls: "snipsidian-help" });
+            // bulk controls under the table
+            const bulk = contentEl.createDiv({ cls: "snipsidian-bulk-actions" });
             const btnKeepAll = bulk.createEl("button", { text: "Keep all current" });
             btnKeepAll.onclick = () => {
                 for (const k of this.choices.keys()) this.choices.set(k, "keep");
-                this.close(); this.open(); // простой re-render
+                this.close(); this.open(); // simple re-render
             };
             const btnOverwriteAll = bulk.createEl("button", { text: "Overwrite all" });
             btnOverwriteAll.onclick = () => {
@@ -528,14 +528,11 @@ class PackagePreviewModal extends Modal {
         const apply = footer.createEl("button", { text: "Apply" });
         apply.onclick = () => {
             const result: Record<string, string> = { ...this.plugin.settings.snippets };
-
             for (const a of this.diff.added) result[a.key] = a.value;
-
             for (const c of this.diff.conflicts) {
                 const choice = this.choices.get(c.key) ?? "keep";
                 result[c.key] = choice === "overwrite" ? c.incoming : c.current;
             }
-
             this.onConfirm?.(result);
             this.close();
         };

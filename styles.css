@@ -1,80 +1,62 @@
-/* scope: settings tab */
-.snipsidian-settings {
-  font-size: 14px;
-  line-height: 1.5;
+/* modal sizing + inner spacing */
+.snipsidian-modal {
+  min-width: 720px;
 }
 
-/* subtle helper paragraphs */
-.snipsidian-help {
-  margin: 0.75em 0 1.25em;
-  padding: 0.5em 0.75em;
-  background: var(--background-secondary-alt);
-  border-left: 3px solid var(--interactive-accent);
-  border-radius: 4px;
-  color: var(--text-muted);
-  font-size: 0.9em;
-}
-.snipsidian-help a {
-  color: var(--text-accent);
-  text-decoration: underline;
-}
-
-/* group headers with toggle */
-.snipsidian-group-header {
-  display: flex;
-  align-items: center;
-  font-weight: 600;
-  margin-top: 0.75em;
-  padding: 0.25em 0;
-  border-bottom: 1px solid var(--background-modifier-border);
-}
-.snipsidian-group-header button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-muted);
-  font-size: 1em;
-  width: 1.5em;
-}
-
-/* empty state */
-.snipsidian-empty {
-  margin: 1em 0;
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-/* modal footer buttons */
-.modal-button-container {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5em;
-  margin-top: 0.75em;
-}
-.modal-button-container button {
-  padding: 0.25em 0.75em;
-  border-radius: 4px;
-}
-
-/* preview table */
+/* table look & feel */
 .snipsidian-preview-table {
   width: 100%;
   border-collapse: collapse;
-  margin: 0.5em 0 0.75em;
+  margin: 1em 0;
   font-size: 0.9em;
+  border-radius: 6px;
+  overflow: hidden;
 }
 .snipsidian-preview-table th,
 .snipsidian-preview-table td {
   border-bottom: 1px solid var(--background-modifier-border);
-  padding: 6px 8px;
-  vertical-align: top;
+  padding: 8px 10px;
+  vertical-align: middle;
 }
 .snipsidian-preview-table th {
   text-align: left;
   color: var(--text-muted);
   font-weight: 600;
 }
-.snipsidian-help button {
-  margin-right: 0.5em;
+.snipsidian-preview-table tr:hover td {
+  background: var(--background-secondary);
+}
+/* monospace for values (readability, alignment) */
+.snipsidian-preview-table td:nth-child(2),
+.snipsidian-preview-table td:nth-child(3) {
+  font-family: var(--font-monospace);
+  white-space: pre-wrap;
 }
 
+/* action cell: compact select */
+.snipsidian-preview-table .conflict-action select {
+  font-size: 0.85em;
+  padding: 2px 6px;
+}
+
+/* bulk actions under the table */
+.snipsidian-bulk-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5em;
+  margin-top: 0.75em;
+}
+.snipsidian-bulk-actions button {
+  padding: 0.3em 0.8em;
+  border-radius: 4px;
+}
+
+/* footer separation & spacing */
+.modal-button-container {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75em;
+  margin-top: 1em;
+  padding-top: 0.75em;
+  border-top: 1px solid var(--background-modifier-border);
+}
