@@ -1,6 +1,8 @@
 import { App, Modal, Notice, Platform, PluginSettingTab, Setting } from "obsidian";
 import type SnipSidianPlugin from "../main";
 import { DEFAULT_SNIPPETS } from "../presets";
+import { espansoYamlToSnippets } from "../packages/espanso";
+import { PACKAGE_CATALOG } from "../packages/catalog";
 
 /** Runtime helpers **/
 function isRecordOfString(x: unknown): x is Record<string, string> {
@@ -10,17 +12,15 @@ function isRecordOfString(x: unknown): x is Record<string, string> {
     }
     return true;
 }
-
 function normalizeTrigger(raw: string): string {
     return raw.trim();
 }
-
 function isBadTrigger(key: string): boolean {
     // Disallow spaces and the same separators that the expander uses
     return /[\s.,!?;:()\[\]{}"'\-\\/]/.test(key) || key.length === 0;
 }
 
-/** Settings tab: grouped snippets list + search + export/import + reveal + merge defaults + reload */
+/** Settings tab: packages (Espanso), grouped snippets list, search, export/import, reveal, merge defaults, reload */
 export class SnipSidianSettingTab extends PluginSettingTab {
     plugin: SnipSidianPlugin;
 
@@ -36,7 +36,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
     display(): void {
         const { containerEl } = this;
         containerEl.empty();
-        containerEl.addClass("snipsidian-settings"); // scope CSS
+        containerEl.addClass("snipsidian-settings");
         containerEl.createEl("h2", { text: "SnipSidian Settings" });
 
         // ===== Advanced first =====
@@ -141,6 +141,115 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 })
             );
 
+        // ===== Packages (Espanso-compatible) =====
+        containerEl.createEl("h3", { text: "Packages (Espanso-compatible)" });
+
+        // Brief explainer (no URL install due to CORS)
+        const expl = containerEl.createDiv({ cls: "snipsidian-help" });
+        const p1 = expl.createEl("p");
+        p1.appendText("Install ready-made text expansion packages compatible with ");
+        const link = p1.createEl("a", { text: "Espanso Hub", href: "https://hub.espanso.org" });
+        link.setAttr("target", "_blank");
+        p1.appendText(". Use the built-in catalog below or paste YAML from the package's Source page.");
+        const p2 = expl.createEl("p");
+        p2.appendText("Note: Direct URL installs are disabled due to browser CORS restrictions. Open a package on the Hub → ");
+        p2.appendText("Source → copy the contents of ");
+        p2.appendText("package.yml");
+        p2.appendText(" and paste it here.");
+
+        let selectedPkgId = PACKAGE_CATALOG[0]?.id ?? "";
+        let overwritePkg = false;
+
+        const pkgRow = new Setting(containerEl)
+            .setName("Install from catalog")
+            .setDesc("Select a package and install. By default, existing triggers are kept; enable overwrite to replace them.");
+
+        pkgRow.addDropdown((dd) => {
+            PACKAGE_CATALOG.forEach((p) => dd.addOption(p.id, p.label));
+            if (selectedPkgId) dd.setValue(selectedPkgId);
+            dd.onChange((v) => (selectedPkgId = v));
+        });
+
+        pkgRow.addToggle((tg) =>
+            tg
+                .setTooltip("Overwrite existing triggers (package values win on conflict)")
+                .setValue(overwritePkg)
+                .onChange((v) => (overwritePkg = v))
+        );
+
+        pkgRow.addButton((b) =>
+            b
+                .setButtonText("Install")
+                .setCta()
+                .setTooltip("Install the selected package")
+                .onClick(async () => {
+                    const item = PACKAGE_CATALOG.find((p) => p.id === selectedPkgId);
+                    if (!item) {
+                        new Notice("Package not found");
+                        return;
+                    }
+                    try {
+                        if (item.kind !== "builtin") {
+                            new Notice("Only built-in catalog items are supported here.");
+                            return;
+                        }
+                        const yamlText = item.yaml ?? "";
+                        const parsed = espansoYamlToSnippets(yamlText);
+                        await applySnippetsMerge(parsed, overwritePkg);
+                    } catch (e) {
+                        console.error(e);
+                        new Notice("Failed to install package");
+                    }
+                })
+        );
+
+        // Paste YAML area (Espanso package.yml)
+        let pastedYaml = "";
+        const pasteRow = new Setting(containerEl)
+            .setName("Install from YAML")
+            .setDesc("Paste Espanso YAML here and click Install.");
+        pasteRow.addTextArea((ta) => {
+            ta.setPlaceholder('matches:\n  - trigger: ":brb"\n    replace: "be right back"\n');
+            ta.onChange((v) => (pastedYaml = v));
+            ta.inputEl.rows = 6;
+        });
+        pasteRow.addToggle((tg) =>
+            tg.setTooltip("Overwrite existing triggers (package values win on conflict)").onChange((v) => (overwritePkg = v))
+        );
+        pasteRow.addButton((b) =>
+            b
+                .setButtonText("Install pasted YAML")
+                .setCta()
+                .setTooltip("Convert pasted YAML and install")
+                .onClick(async () => {
+                    try {
+                        const parsed = espansoYamlToSnippets(pastedYaml || "");
+                        await applySnippetsMerge(parsed, overwritePkg);
+                    } catch (e) {
+                        console.error(e);
+                        new Notice("Failed to parse pasted YAML");
+                    }
+                })
+        );
+
+        // helper: merge + save + refresh
+        const applySnippetsMerge = async (incoming: Record<string, string>, overwrite: boolean) => {
+            if (!incoming || !Object.keys(incoming).length) {
+                new Notice("No snippets found in package");
+                return;
+            }
+            const before = Object.keys(this.plugin.settings.snippets).length;
+            this.plugin.settings.snippets = overwrite
+                ? { ...this.plugin.settings.snippets, ...incoming } // package wins
+                : { ...incoming, ...this.plugin.settings.snippets }; // user wins
+            await this.plugin.saveSettings();
+            const after = Object.keys(this.plugin.settings.snippets).length;
+            new Notice(
+                `Installed ${Object.keys(incoming).length} snippets (${after - before >= 0 ? "+" : ""}${after - before} total change).`
+            );
+            this.display();
+        };
+
         // ===== Snippets (with search and grouping) =====
         containerEl.createEl("h3", { text: "Snippets" });
 
@@ -237,8 +346,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                                 this.plugin.settings.snippets[currentKey] = val;
                                 await this.plugin.saveSettings();
                             });
-                        // Make textarea taller (fix for previous error: use TextAreaComponent.inputEl)
-                        ta.inputEl.rows = 2;
+                        ta.inputEl.rows = 2; // taller editor
                     });
 
                     row.addExtraButton((btn) =>
