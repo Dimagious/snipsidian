@@ -55,3 +55,26 @@
   padding: 0.25em 0.75em;
   border-radius: 4px;
 }
+
+/* preview table */
+.snipsidian-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5em 0 0.75em;
+  font-size: 0.9em;
+}
+.snipsidian-preview-table th,
+.snipsidian-preview-table td {
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding: 6px 8px;
+  vertical-align: top;
+}
+.snipsidian-preview-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.snipsidian-help button {
+  margin-right: 0.5em;
+}
+
