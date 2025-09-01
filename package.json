@@ -5,7 +5,8 @@
     "type": "module",
     "scripts": {
         "build": "esbuild src/main.ts --bundle --outfile=main.js --format=cjs --platform=node --target=es2020 --external:obsidian --external:electron --external:@codemirror/*",
-        "build:watch": "npm run build -- --watch"
+        "build:vault": "node scripts/build-vault.cjs",
+        "dev:vault": "node scripts/build-vault.cjs --watch"
     },
     "dependencies": {
         "js-yaml": "^4.1.0"
