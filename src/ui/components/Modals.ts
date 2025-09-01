@@ -1,0 +1,112 @@
+import { App, Modal } from "obsidian";
+import type SnipSidianPlugin from "../../main";
+import { DiffResult } from "../../services/utils";
+
+export class JSONModal extends Modal {
+    text: string;
+    title: string;
+    onApply?: (text: string) => void;
+
+    constructor(app: App, text: string, title = "JSON") {
+        super(app);
+        this.text = text;
+        this.title = title;
+    }
+
+    onOpen(): void {
+        const { contentEl, titleEl } = this;
+        titleEl.setText(this.title);
+
+        contentEl.addClass("snipsidian-modal");
+
+        const ta = contentEl.createEl("textarea", { text: this.text });
+        ta.style.width = "100%";
+        ta.style.height = "300px";
+
+        const footer = contentEl.createDiv({ cls: "modal-button-container" });
+        const apply = footer.createEl("button", { text: "Apply" });
+        apply.onclick = () => {
+            this.onApply?.(ta.value);
+            this.close();
+        };
+
+        const close = footer.createEl("button", { text: "Close" });
+        close.onclick = () => this.close();
+    }
+}
+
+export class PackagePreviewModal extends Modal {
+    plugin: SnipSidianPlugin;
+    titleText: string;
+    diff: DiffResult;
+    choices = new Map<string, "keep" | "overwrite">();
+    onConfirm?: (resolved: Record<string, string>) => void;
+
+    constructor(app: App, plugin: SnipSidianPlugin, title: string, diff: DiffResult) {
+        super(app);
+        this.plugin = plugin;
+        this.titleText = title;
+        this.diff = diff;
+        for (const c of diff.conflicts) this.choices.set(c.key, "keep");
+    }
+
+    onOpen(): void {
+        const { contentEl, titleEl } = this;
+        titleEl.setText(this.titleText);
+
+        const summary = contentEl.createDiv();
+        summary.createEl("p", {
+            text: `Will add ${this.diff.added.length} new snippet(s). Conflicts: ${this.diff.conflicts.length}.`,
+        });
+
+        if (this.diff.conflicts.length) {
+            contentEl.createEl("h4", { text: "Conflicts" });
+            const table = contentEl.createEl("table", { cls: "snipsidian-preview-table" });
+            const thead = table.createEl("thead");
+            const headRow = thead.createEl("tr");
+            ["Trigger", "Current", "Incoming", "Action"].forEach((h) => headRow.createEl("th", { text: h }));
+
+            const tbody = table.createEl("tbody");
+            for (const c of this.diff.conflicts) {
+                const tr = tbody.createEl("tr");
+                tr.createEl("td", { text: c.key });
+                tr.createEl("td", { text: c.current });
+                tr.createEl("td", { text: c.incoming });
+
+                const actionTd = tr.createEl("td", { cls: "conflict-action" });
+                const sel = actionTd.createEl("select");
+                sel.append(new Option("Keep current", "keep"), new Option("Overwrite", "overwrite"));
+                sel.value = this.choices.get(c.key) ?? "keep";
+                sel.onchange = () => this.choices.set(c.key, sel.value as "keep" | "overwrite");
+            }
+
+            const bulk = contentEl.createDiv({ cls: "snipsidian-bulk-actions" });
+            const btnKeepAll = bulk.createEl("button", { text: "Keep all current" });
+            btnKeepAll.onclick = () => {
+                for (const k of this.choices.keys()) this.choices.set(k, "keep");
+                this.close(); this.open();
+            };
+            const btnOverwriteAll = bulk.createEl("button", { text: "Overwrite all" });
+            btnOverwriteAll.onclick = () => {
+                for (const k of this.choices.keys()) this.choices.set(k, "overwrite");
+                this.close(); this.open();
+            };
+        }
+
+        const footer = contentEl.createDiv({ cls: "modal-button-container" });
+        const cancel = footer.createEl("button", { text: "Cancel" });
+        cancel.onclick = () => this.close();
+
+        const apply = footer.createEl("button", { text: "Apply" });
+        apply.onclick = () => {
+            const result: Record<string, string> = { ...this.plugin.settings.snippets };
+            for (const a of this.diff.added) result[a.key] = a.value;
+            for (const c of this.diff.conflicts) {
+                const choice = this.choices.get(c.key) ?? "keep";
+                result[c.key] = choice === "overwrite" ? c.incoming : c.current;
+            }
+            this.onConfirm?.(result);
+            this.close();
+        };
+    }
+}
