@@ -67,3 +67,24 @@
   font-family: var(--font-monospace);
   white-space: nowrap;
 }
+
+.snipsidian-bulkbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  margin: 8px 0 6px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary-alt);
+}
+.snipsidian-bulkbar button { padding: 4px 10px; border-radius: 6px; }
+.snipsidian-group-header { display: flex; align-items: center; gap: 8px; }
+.snipsidian-group-checkbox { margin-left: 4px; }
+.snipsidian-row-checkbox { margin-right: 8px; }
+.snipsidian-row-checkbox,
+.snipsidian-group-checkbox {
+  appearance: checkbox; -webkit-appearance: checkbox;
+  width: 14px; height: 14px;
+}
+

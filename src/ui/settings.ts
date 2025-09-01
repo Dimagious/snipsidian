@@ -11,18 +11,18 @@ import {
     splitKey,
     joinKey,
     slugifyGroup,
-    displayGroupTitle
+    displayGroupTitle,
 } from "../services/utils";
-
 import { JSONModal, PackagePreviewModal } from "./components/Modals";
 
-/** Settings tab: packages (Espanso), grouped snippets list, search, export/import, reveal, merge defaults, reload */
 export class SnipSidianSettingTab extends PluginSettingTab {
     plugin: SnipSidianPlugin;
 
-    // UI state (not persisted)
-    private groupOpen = new Map<string, boolean>(); // group -> isOpen
+    private groupOpen = new Map<string, boolean>();
     private searchQuery = "";
+
+    private selectionMode = false;
+    private selected = new Set<string>();
 
     constructor(app: App, plugin: SnipSidianPlugin) {
         super(app, plugin);
@@ -35,7 +35,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         containerEl.addClass("snipsidian-settings");
         containerEl.createEl("h2", { text: "SnipSidian Settings" });
 
-        // ===== Advanced first =====
+        // ===== Advanced =====
         containerEl.createEl("h3", { text: "Advanced" });
 
         new Setting(containerEl)
@@ -91,10 +91,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
             .addButton((b) =>
                 b.setButtonText("Apply").onClick(async () => {
                     const before = Object.keys(this.plugin.settings.snippets).length;
-                    this.plugin.settings.snippets = {
-                        ...DEFAULT_SNIPPETS,
-                        ...this.plugin.settings.snippets,
-                    };
+                    this.plugin.settings.snippets = { ...DEFAULT_SNIPPETS, ...this.plugin.settings.snippets };
                     await this.plugin.saveSettings();
                     const after = Object.keys(this.plugin.settings.snippets).length;
                     new Notice(`Defaults merged (${after - before} added).`);
@@ -137,10 +134,9 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 })
             );
 
-        // ===== Packages (Espanso-compatible) =====
+        // ===== Packages =====
         containerEl.createEl("h3", { text: "Packages (Espanso-compatible)" });
 
-        // Brief explainer (no URL install due to CORS)
         const expl = containerEl.createDiv({ cls: "snipsidian-help" });
         const p1 = expl.createEl("p");
         p1.appendText("Install ready-made text expansion packages compatible with ");
@@ -156,9 +152,8 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         let selectedPkgId = PACKAGE_CATALOG[0]?.id ?? "";
         let overwritePkg = false;
 
-        // Folder label (human name) -> slug group key for storage
         let folderLabelTouched = false;
-        let folderLabel = PACKAGE_CATALOG.find(p => p.id === selectedPkgId)?.label ?? "Package";
+        let folderLabel = PACKAGE_CATALOG.find((p) => p.id === selectedPkgId)?.label ?? "Package";
         let folderInputEl: HTMLInputElement | undefined;
 
         const pkgRow = new Setting(containerEl)
@@ -171,19 +166,23 @@ export class SnipSidianSettingTab extends PluginSettingTab {
             dd.onChange((v) => {
                 selectedPkgId = v;
                 if (!folderLabelTouched) {
-                    folderLabel = PACKAGE_CATALOG.find(p => p.id === v)?.label ?? "Package";
+                    folderLabel = PACKAGE_CATALOG.find((p) => p.id === v)?.label ?? "Package";
                     if (folderInputEl) folderInputEl.value = folderLabel;
                 }
             });
         });
 
-        // Human folder label (pretty), keys use slug(folderLabel)
-        pkgRow.addText((t) => {
-            t.setPlaceholder("Folder label (e.g. Obsidian Callouts)")
-                .setValue(folderLabel)
-                .onChange((v) => { folderLabelTouched = true; folderLabel = v; });
-            folderInputEl = t.inputEl;
-        }).setDesc("This label is shown in the UI; keys are stored under a slug derived from it.");
+        pkgRow
+            .addText((t) => {
+                t.setPlaceholder("Folder label (e.g. Obsidian Callouts)")
+                    .setValue(folderLabel)
+                    .onChange((v) => {
+                        folderLabelTouched = true;
+                        folderLabel = v;
+                    });
+                folderInputEl = t.inputEl;
+            })
+            .setDesc("This label is shown in the UI; keys are stored under a slug derived from it.");
 
         pkgRow.addToggle((tg) =>
             tg
@@ -210,13 +209,10 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                         }
                         const yamlText = item.yaml ?? "";
                         const parsed = espansoYamlToSnippets(yamlText);
-
-                        // prefix triggers with slug(folder label)
                         const groupKey = slugifyGroup(folderLabel) || "package";
                         const withPrefix: Record<string, string> = Object.fromEntries(
                             Object.entries(parsed).map(([k, v]) => [`${groupKey}/${k}`, v])
                         );
-
                         await applySnippetsMerge(withPrefix, overwritePkg);
                     } catch (e) {
                         console.error(e);
@@ -225,9 +221,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 })
         );
 
-        // Paste YAML area (Espanso package.yml)
-        // ⬇️ REPLACE FROM HERE: "Install from YAML" block
-        // Paste YAML area (Espanso package.yml) — with required Folder label
+        // Paste YAML
         let pastedYaml = "";
         let yamlFolderLabel = "";
         let yamlOverwrite = false;
@@ -236,37 +230,29 @@ export class SnipSidianSettingTab extends PluginSettingTab {
             .setName("Install from YAML")
             .setDesc("Paste Espanso YAML here, choose a folder label, and click Install.");
 
-        // 1) Folder label (required). Keys will be stored under slug(label)/<trigger>
         pasteRow.addText((t) => {
-            t.setPlaceholder("Folder label (e.g. Obsidian Callouts)")
-                .onChange((v) => {
-                    yamlFolderLabel = v;
-                    // enable/disable install button below when user types
-                    if (installYamlBtn) installYamlBtn.setDisabled(!yamlFolderLabel.trim());
-                });
+            t.setPlaceholder("Folder label (e.g. Obsidian Callouts)").onChange((v) => {
+                yamlFolderLabel = v;
+                if (installYamlBtn) installYamlBtn.setDisabled(!yamlFolderLabel.trim());
+            });
         });
 
-        // 2) YAML textarea
         pasteRow.addTextArea((ta) => {
             ta.setPlaceholder('matches:\n  - trigger: ":brb"\n    replace: "be right back"\n');
             ta.onChange((v) => (pastedYaml = v));
             ta.inputEl.rows = 6;
         });
 
-        // 3) Overwrite toggle (same semantics as catalog)
         pasteRow.addToggle((tg) =>
-            tg
-                .setTooltip("Overwrite existing triggers (incoming values win on conflict)")
-                .onChange((v) => (yamlOverwrite = v))
+            tg.setTooltip("Overwrite existing triggers (incoming values win on conflict)").onChange((v) => (yamlOverwrite = v))
         );
 
-        // 4) Install button (disabled until folder label is provided)
         let installYamlBtn: import("obsidian").ButtonComponent | null = null;
         pasteRow.addButton((b) => {
             installYamlBtn = b;
             b.setButtonText("Install pasted YAML")
                 .setCta()
-                .setDisabled(true) // until folder label is non-empty
+                .setDisabled(true)
                 .setTooltip("Convert pasted YAML and install into the chosen folder")
                 .onClick(async () => {
                     try {
@@ -280,13 +266,10 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                             new Notice("No snippets found in YAML.");
                             return;
                         }
-
-                        // prefix all triggers with slug(folder label)
                         const groupKey = slugifyGroup(label) || "package";
                         const withPrefix: Record<string, string> = Object.fromEntries(
                             Object.entries(parsed).map(([k, v]) => [`${groupKey}/${k}`, v])
                         );
-
                         await applySnippetsMerge(withPrefix, yamlOverwrite);
                     } catch (e) {
                         console.error(e);
@@ -294,8 +277,6 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                     }
                 });
         });
-        // ⬆️ REPLACE UNTIL HERE
-
 
         // helper: merge + save + refresh
         const applySnippetsMerge = async (incoming: Record<string, string>, overwriteToggle: boolean) => {
@@ -303,11 +284,8 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 new Notice("No snippets found in package");
                 return;
             }
-
-            // Diff first
             const diff = diffIncoming(incoming, this.plugin.settings.snippets);
 
-            // If there are no conflicts and the user enabled overwriteToggle, we will add them anyway (speeding up UX)
             if (diff.conflicts.length === 0) {
                 const before = Object.keys(this.plugin.settings.snippets).length;
                 const next = overwriteToggle
@@ -321,7 +299,6 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 return;
             }
 
-            // Open preview modal to resolve conflicts item-by-item
             const modal = new PackagePreviewModal(this.app, this.plugin, "Preview package changes", diff);
             modal.onConfirm = async (resolvedMap) => {
                 this.plugin.settings.snippets = resolvedMap;
@@ -332,13 +309,11 @@ export class SnipSidianSettingTab extends PluginSettingTab {
             modal.open();
         };
 
-        // ===== Snippets (with search and grouping) =====
+        // ===== Snippets =====
         containerEl.createEl("h3", { text: "Snippets" });
 
-        // Search input
-        const searchSetting = new Setting(containerEl)
-            .setName("Search")
-            .setDesc("Filter by trigger or replacement text.");
+        // Search row
+        const searchSetting = new Setting(containerEl).setName("Search").setDesc("Filter by trigger or replacement text.");
         searchSetting.addText((t) =>
             t.setPlaceholder("Type to filter…").onChange((q) => {
                 this.searchQuery = q.trim().toLowerCase();
@@ -346,12 +321,62 @@ export class SnipSidianSettingTab extends PluginSettingTab {
             })
         );
 
+        // Selection mode row
+        let selectionToggle: import("obsidian").ToggleComponent | undefined;
+        new Setting(containerEl)
+            .setName("Selection mode")
+            .setDesc("Enable multi-select (checkboxes) to perform bulk actions. Use group checkboxes for “Select all”.")
+            .addToggle((tg) => {
+                selectionToggle = tg;
+                tg.setTooltip("Enable selection mode to pick multiple snippets")
+                    .setValue(this.selectionMode)
+                    .onChange((v) => {
+                        this.selectionMode = v;
+                        if (!v) this.selected.clear();
+                        renderList();
+                    });
+            });
+
         const listEl = containerEl.createDiv();
 
         const renderList = () => {
             listEl.empty();
 
-            // Filter + group by prefix before '/'
+            // Bulk bar
+            const renderBulkBar = () => {
+                if (!this.selectionMode) return;
+                const bar = listEl.createDiv({ cls: "snipsidian-bulkbar" });
+
+                const left = bar.createDiv({ cls: "snipsidian-bulk-left" });
+                left.createSpan({ text: `${this.selected.size} selected` });
+
+                const middle = bar.createSpan();
+                (middle as HTMLSpanElement).style.flex = "1";
+
+                const exitBtn = bar.createEl("button", { text: "Exit selection" });
+                exitBtn.onclick = () => {
+                    this.selectionMode = false;
+                    this.selected.clear();
+                    selectionToggle?.setValue(false);
+                    renderList();
+                };
+
+                const delBtn = bar.createEl("button", { text: `Delete (${this.selected.size})` });
+                delBtn.disabled = this.selected.size === 0;
+                delBtn.onclick = async () => {
+                    if (this.selected.size === 0) return;
+                    const n = this.selected.size;
+                    if (!confirm(`Delete ${n} selected snippet(s)?`)) return;
+                    for (const k of this.selected) delete this.plugin.settings.snippets[k];
+                    await this.plugin.saveSettings();
+                    this.selected.clear();
+                    renderList();
+                    new Notice(`Deleted ${n} snippet(s).`);
+                };
+            };
+            renderBulkBar();
+
+            // Filter + group by prefix
             const entries = Object.entries(this.plugin.settings.snippets)
                 .filter(([k, v]) => {
                     if (!this.searchQuery) return true;
@@ -376,7 +401,6 @@ export class SnipSidianSettingTab extends PluginSettingTab {
             for (const [group, items] of groups) {
                 if (!this.groupOpen.has(group)) this.groupOpen.set(group, true);
 
-                // Group header with toggle
                 const hdr = listEl.createDiv({ cls: "snipsidian-group-header" });
                 const toggle = hdr.createEl("button", { text: this.groupOpen.get(group) ? "▾" : "▸" });
                 toggle.addEventListener("click", () => {
@@ -384,19 +408,48 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                     renderList();
                 });
 
+                if (this.selectionMode) {
+                    const cb = document.createElement("input");
+                    cb.type = "checkbox";
+                    cb.classList.add("snipsidian-group-checkbox");
+                    const keysInGroup = items.map(([k]) => k);
+                    const allSelected = keysInGroup.every((k) => this.selected.has(k));
+                    const someSelected = !allSelected && keysInGroup.some((k) => this.selected.has(k));
+                    cb.checked = allSelected;
+                    cb.indeterminate = someSelected;
+                    cb.title = "Select all in group";
+                    cb.onchange = () => {
+                        if (cb.checked) keysInGroup.forEach((k) => this.selected.add(k));
+                        else keysInGroup.forEach((k) => this.selected.delete(k));
+                        renderList();
+                    };
+                    hdr.insertAdjacentElement("beforeend", cb);
+                }
+
                 const title = group === "Ungrouped" ? "Ungrouped" : displayGroupTitle(group);
                 hdr.createEl("span", { text: ` ${title} (${items.length})` });
 
                 if (!this.groupOpen.get(group)) continue;
 
-                // Items
                 items.forEach(([trigger, replacement]) => {
                     const row = new Setting(listEl);
-                    let currentKey = trigger;
 
+                    if (this.selectionMode) {
+                        const cb = document.createElement("input");
+                        cb.type = "checkbox";
+                        cb.classList.add("snipsidian-row-checkbox");
+                        cb.checked = this.selected.has(trigger);
+                        cb.onchange = () => {
+                            if (cb.checked) this.selected.add(trigger);
+                            else this.selected.delete(trigger);
+                            renderList(); // <-- обновляем счётчик и tri-state в хедере
+                        };
+                        row.controlEl.insertAdjacentElement("afterbegin", cb);
+                    }
+
+                    let currentKey = trigger;
                     const { group: grp, name: tail } = splitKey(trigger);
 
-                    // input only for tail (no visual prefix)
                     row.addText((t) =>
                         t
                             .setPlaceholder("trigger")
@@ -416,16 +469,22 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                                 const map = this.plugin.settings.snippets;
                                 const val = map[currentKey];
                                 delete map[currentKey];
+
+                                if (this.selected.has(currentKey)) {
+                                    this.selected.delete(currentKey);
+                                    this.selected.add(newKey);
+                                }
+
                                 if (newKey in map) {
                                     new Notice(`Trigger "${newKey}" already exists`);
-                                    map[currentKey] = val; // rollback
+                                    map[currentKey] = val;
                                     (t.inputEl as HTMLInputElement).value = splitKey(currentKey).name;
                                     return;
                                 }
                                 map[newKey] = val;
                                 currentKey = newKey;
                                 await this.plugin.saveSettings();
-                                renderList(); // group may change
+                                renderList();
                             })
                     );
 
@@ -437,7 +496,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                                 this.plugin.settings.snippets[currentKey] = val;
                                 await this.plugin.saveSettings();
                             });
-                        ta.inputEl.rows = 2; // taller editor
+                        ta.inputEl.rows = 2;
                     });
 
                     row.addExtraButton((btn) =>
@@ -454,7 +513,6 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 });
             }
 
-            // Add snippet button at the end
             new Setting(listEl).addButton((b) =>
                 b
                     .setButtonText("+ Add snippet")
