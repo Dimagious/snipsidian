@@ -274,33 +274,76 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         );
 
         // Paste YAML area (Espanso package.yml)
+        // ⬇️ REPLACE FROM HERE: "Install from YAML" block
+        // Paste YAML area (Espanso package.yml) — with required Folder label
         let pastedYaml = "";
+        let yamlFolderLabel = "";
+        let yamlOverwrite = false;
+
         const pasteRow = new Setting(containerEl)
             .setName("Install from YAML")
-            .setDesc("Paste Espanso YAML here and click Install.");
+            .setDesc("Paste Espanso YAML here, choose a folder label, and click Install.");
+
+        // 1) Folder label (required). Keys will be stored under slug(label)/<trigger>
+        pasteRow.addText((t) => {
+            t.setPlaceholder("Folder label (e.g. Obsidian Callouts)")
+                .onChange((v) => {
+                    yamlFolderLabel = v;
+                    // enable/disable install button below when user types
+                    if (installYamlBtn) installYamlBtn.setDisabled(!yamlFolderLabel.trim());
+                });
+        });
+
+        // 2) YAML textarea
         pasteRow.addTextArea((ta) => {
             ta.setPlaceholder('matches:\n  - trigger: ":brb"\n    replace: "be right back"\n');
             ta.onChange((v) => (pastedYaml = v));
             ta.inputEl.rows = 6;
         });
+
+        // 3) Overwrite toggle (same semantics as catalog)
         pasteRow.addToggle((tg) =>
-            tg.setTooltip("Overwrite existing triggers (package values win on conflict)").onChange((v) => (overwritePkg = v))
+            tg
+                .setTooltip("Overwrite existing triggers (incoming values win on conflict)")
+                .onChange((v) => (yamlOverwrite = v))
         );
-        pasteRow.addButton((b) =>
-            b
-                .setButtonText("Install pasted YAML")
+
+        // 4) Install button (disabled until folder label is provided)
+        let installYamlBtn: import("obsidian").ButtonComponent | null = null;
+        pasteRow.addButton((b) => {
+            installYamlBtn = b;
+            b.setButtonText("Install pasted YAML")
                 .setCta()
-                .setTooltip("Convert pasted YAML and install")
+                .setDisabled(true) // until folder label is non-empty
+                .setTooltip("Convert pasted YAML and install into the chosen folder")
                 .onClick(async () => {
                     try {
+                        const label = yamlFolderLabel.trim();
+                        if (!label) {
+                            new Notice("Please provide a folder label.");
+                            return;
+                        }
                         const parsed = espansoYamlToSnippets(pastedYaml || "");
-                        await applySnippetsMerge(parsed, overwritePkg);
+                        if (!Object.keys(parsed).length) {
+                            new Notice("No snippets found in YAML.");
+                            return;
+                        }
+
+                        // prefix all triggers with slug(folder label)
+                        const groupKey = slugifyGroup(label) || "package";
+                        const withPrefix: Record<string, string> = Object.fromEntries(
+                            Object.entries(parsed).map(([k, v]) => [`${groupKey}/${k}`, v])
+                        );
+
+                        await applySnippetsMerge(withPrefix, yamlOverwrite);
                     } catch (e) {
                         console.error(e);
-                        new Notice("Failed to parse pasted YAML");
+                        new Notice("Failed to parse or install YAML");
                     }
-                })
-        );
+                });
+        });
+        // ⬆️ REPLACE UNTIL HERE
+
 
         // helper: merge + save + refresh
         const applySnippetsMerge = async (incoming: Record<string, string>, overwriteToggle: boolean) => {
