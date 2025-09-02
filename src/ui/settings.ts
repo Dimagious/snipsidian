@@ -214,6 +214,16 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 })
             );
 
+        new Setting(containerEl)
+            .setName("Support Snipsidian")
+            .setDesc(createFragment(f => {
+                f.createEl("a", {
+                    text: "Buy me a coffee ☕",
+                    href: "https://buymeacoffee.com/dimagious",
+                    attr: { target: "_blank", rel: "noopener" }
+                });
+            }));
+
         // ===== Packages =====
         containerEl.createEl("h3", { text: "Packages (Espanso-compatible)" });
 

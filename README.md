@@ -8,6 +8,7 @@
 ![TypeScript](https://img.shields.io/badge/typescript-5.x-3178c6)
 ![Vitest](https://img.shields.io/badge/tests-vitest-6b46c1)
 ![esbuild](https://img.shields.io/badge/bundler-esbuild-fbbf24)
+[![Buy Me A Coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-☕-ff813f?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/dimagious)
 
 Snipsidian is an Obsidian plugin that brings **hotstrings / text snippets expansion** to the editor — with folders, bulk editing, and Espanso-compatible packages.
 
