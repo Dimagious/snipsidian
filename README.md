@@ -1,5 +1,14 @@
 # SnipSidian
 
+[![CI](https://img.shields.io/github/actions/workflow/status/Dimagious/snipsidian/ci.yml?branch=main&label=ci)](https://github.com/Dimagious/snipsidian/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/Dimagious/snipsidian/branch/main/graph/badge.svg)](https://codecov.io/gh/Dimagious/snipsidian)
+[![Release](https://img.shields.io/github/v/release/Dimagious/snipsidian)](https://github.com/Dimagious/snipsidian/releases)
+![Obsidian ≥ 1.5.0](https://img.shields.io/badge/obsidian-%E2%89%A5%201.5.0-7c3aed)
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![TypeScript](https://img.shields.io/badge/typescript-5.x-3178c6)
+![Vitest](https://img.shields.io/badge/tests-vitest-6b46c1)
+![esbuild](https://img.shields.io/badge/bundler-esbuild-fbbf24)
+
 SnipSidian is an Obsidian plugin that brings **hotstrings / text snippets expansion** to the editor — with folders, bulk editing, and Espanso-compatible packages.
 
 <p align="center">
@@ -29,7 +38,7 @@ SnipSidian is an Obsidian plugin that brings **hotstrings / text snippets expans
 
 1. Open **Settings → Community plugins → SnipSidian**.
 2. In **Snippets**:
-   - Create a snippet: type a **trigger** and **replacement**.  
+   - Create a snippet: type a **trigger** and **replacement**.
    - Use the **folder dropdown** to organize snippets; or select several and click **Move to…**.
 3. Use **Selection mode** to bulk delete or move:
    - Toggle **Selection mode**, tick checkboxes (or use a group “Select all”), then **Delete** or **Move to…**.
@@ -45,9 +54,11 @@ SnipSidian is an Obsidian plugin that brings **hotstrings / text snippets expans
 ## Data & sync
 
 All snippets are stored in your vault at:
+
 ```
 .obsidian/plugins/snipsidian/data.json
 ```
+
 They sync with your vault. Foldered snippets are saved under `folder/trigger` keys (e.g., `obsidian-callouts/warn`).
 
 ## Development
@@ -79,10 +90,9 @@ They sync with your vault. Foldered snippets are saved under `folder/trigger` ke
 **Settings – package install (catalog & YAML)**
 ![Settings / packages](docs/screens/settings.png)
 
-| Snippets manager | Selection mode |
-| --- | --- |
+| Snippets manager                       | Selection mode                                |
+| -------------------------------------- | --------------------------------------------- |
 | ![Snippets](docs/screens/snippets.png) | ![Selection](docs/screens/selection-mode.png) |
-
 
 ## Roadmap
 
@@ -96,3 +106,9 @@ PRs welcome! Please keep changes small and focused. For feature ideas, open an i
 ## License
 
 MIT
+
+## Coverage
+
+- Online report: **Codecov** → https://codecov.io/gh/Dimagious/snipsidian  
+- Local HTML: `npm run coverage` (отчёты в `coverage/` → открой `coverage/index.html`)
+

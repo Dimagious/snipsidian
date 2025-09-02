@@ -1,20 +1,30 @@
 {
     "name": "snipsidian",
-    "version": "0.1.0",
+    "version": "0.4.0",
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "esbuild src/main.ts --bundle --outfile=main.js --format=cjs --platform=node --target=es2020 --external:obsidian --external:electron --external:@codemirror/*",
+        "build": "esbuild src/main.ts --bundle --outfile=main.js --minify --external:obsidian --external:@codemirror/state --external:@codemirror/view",
         "build:vault": "node scripts/build-vault.cjs",
-        "dev:vault": "node scripts/build-vault.cjs --watch"
+        "dev:vault": "node scripts/build-vault.cjs --watch",
+        "test": "vitest run --coverage",
+        "coverage": "vitest run --coverage",
+        "release:check": "node scripts/version-sync.cjs && npm run test && npm run build",
+        "release:zip": "node scripts/make-zip.cjs",
+        "release": "npm run release:check && npm run release:zip"
     },
     "dependencies": {
         "js-yaml": "^4.1.0"
     },
     "devDependencies": {
+        "@types/js-yaml": "^4.0.9",
+        "@types/node": "^20.12.12",
+        "@vitest/coverage-v8": "^3.2.4",
         "esbuild": "^0.23.0",
+        "jsdom": "^26.1.0",
         "obsidian": "^1.5.0",
+        "tsx": "^4.20.5",
         "typescript": "^5.5.0",
-        "@types/node": "^20.12.12"
+        "vitest": "^3.2.4"
     }
 }
