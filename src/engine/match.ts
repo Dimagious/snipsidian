@@ -1,9 +1,9 @@
+// src/engine/match.ts
 import { DEFAULT_DELIMITERS, isSeparator } from "../shared/delimiters";
 import type { Dict, ExpandInput, TriggerMatch } from "./types";
 
 /**
- * Finds a trigger immediately before a delimiter, considering word boundaries.
- * Returns the range [fromCh, toCh) (toCh usually matches sepCh).
+ * Find trigger right before a delimiter, respecting word boundaries.
  */
 export function findTrigger(
     input: ExpandInput,
@@ -13,30 +13,30 @@ export function findTrigger(
     const { textBefore, sepCh, lastTyped } = input;
     if (!delimiters.includes(lastTyped)) return null;
 
-    // Simple model: a word consists of [A-Za-z0-9_]
-    const isWord = (c: string) => /[A-Za-z0-9_]/.test(c);
+    // Unicode-aware "word" char: any letter or number, plus underscore.
+    // \p{L} = any kind of letter; \p{N} = any kind of numeric character.
+    const isWord = (c: string) => /[\p{L}\p{N}_]/u.test(c);
+    // NOTE: no /u flag needed with separate alternatives
+    // If you prefer a single class, you can also use: /[\p{L}\p{N}_]/u
 
     const lastWordEnd = sepCh - 1;
     if (lastWordEnd < 0) return null;
 
-    const line = textBefore + lastTyped; // convenient to look at characters before the delimiter
+    const line = textBefore + lastTyped;
     if (!isWord(line[lastWordEnd])) return null;
 
-    // Step back to the start of the word
+    // walk back to the start of the word
     let i = lastWordEnd;
     while (i - 1 >= 0 && isWord(line[i - 1])) i--;
     const fromCh = i;
-    const toCh = sepCh; // delimiter is not included
+    const toCh = sepCh; // exclude the delimiter itself
 
     const trigger = line.slice(fromCh, toCh);
     if (!trigger) return null;
 
-    // Word boundary on the right is already guaranteed by the delimiter
+    // left boundary must be a separator or start-of-line (avoid mid-word expansions)
     const leftNeighbor = fromCh - 1 >= 0 ? line[fromCh - 1] : "";
-    if (leftNeighbor && !isSeparator(leftNeighbor)) {
-        // If the left neighbor is not a delimiter, we are inside a word
-        return null;
-    }
+    if (leftNeighbor && !isSeparator(leftNeighbor)) return null;
 
     if (dict[trigger] === undefined) return null;
     return { trigger, fromCh, toCh };
