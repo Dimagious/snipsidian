@@ -42,6 +42,9 @@ function copyAssets() {
                 },
             },
         ],
+        footer: {
+            js: "module.exports = module.exports.default || module.exports;",
+        }
     });
 
     await ctx.rebuild();

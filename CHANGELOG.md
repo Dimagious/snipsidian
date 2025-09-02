@@ -94,3 +94,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Hardened expansion/guards around inline & fenced code and YAML frontmatter (covered by tests).
 - Prevent version drift on releases via version-consistency check.
+
+## [0.4.1] - 2025-09-02
+
+### Fixed
+- Release bundle now built as **CommonJS** with an interop footer so Obsidian can construct the plugin class correctly.  
+  No more “TypeError: h is not a constructor” on load.
+
+### Changed
+- Build scripts unified for CI and local vault builds (consistent flags).
+- Docs: clarify plugin folder name (`snipsidian`) for manual installs.
