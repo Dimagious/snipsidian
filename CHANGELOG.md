@@ -71,3 +71,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Selection is preserved when renaming or moving snippets.
 
+## [0.4.0] - 2025-09-02
+
+### Added
+- **Modular architecture**: split into `app/`, `engine/`, `adapters/`, `store/`, `importers/`, `shared/`, `core/`. Clear boundaries; most logic moved into small pure modules.
+- **Test suite (Vitest + jsdom)** with high coverage for engine, core expander, adapters, store, importers, and shared utils.
+- **CI (GitHub Actions)**: typecheck (`tsc --noEmit`), unit tests with coverage, Codecov upload, release bundle build, artifacts.
+- **Release workflow** on tags `v*`: build `main.js`, pack ZIP, auto-create GitHub Release and attach assets.
+- **Badges & docs**: CI/Codecov/Release/stack badges in README; coverage section.
+- **Funding links**: Sponsor/Buy Me a Coffee hooks added (README + repo).
+- **Dev scripts**: 
+  - `scripts/assert-versions.cjs` (checks `package.json` vs `manifest.json`),
+  - `scripts/version-sync.cjs` (quick bump & sync),
+  - `scripts/make-zip.cjs` (release ZIP).
+
+### Changed
+- **Thin entry**: `main.ts` now delegates to `app/plugin.ts`; esbuild keeps `obsidian`/CM6 externals.
+- **Importers**: Espanso/catalog moved from `packages/` to `src/importers/…`.
+- **Utilities**: refactor/organize helpers (`normalizeTrigger`, `isBadTrigger`, `splitKey/joinKey`, `slugifyGroup`, `displayGroupTitle`) and shared markdown/delimiters.
+- **Type safety**: add `tsconfig.json`, `@types/js-yaml`; stricter CI typecheck.
+
+### Fixed
+- Hardened expansion/guards around inline & fenced code and YAML frontmatter (covered by tests).
+- Prevent version drift on releases via version-consistency check.

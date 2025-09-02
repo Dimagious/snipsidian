@@ -13,6 +13,7 @@ pnpm-lock.yaml
 coverage/
 
 snipsidian-*.zip
+main.js
 
 # Env
 .env
