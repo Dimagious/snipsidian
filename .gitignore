@@ -1,4 +1,19 @@
+# Node / tooling
 node_modules/
-.esbuild/
-*.log
-main.js
+npm-debug.log*
+yarn.lock
+pnpm-lock.yaml
+
+# OS/IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Tests & reports
+coverage/
+
+snipsidian-*.zip
+
+# Env
+.env
+.env.*

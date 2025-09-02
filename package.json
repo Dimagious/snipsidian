@@ -9,7 +9,10 @@
         "dev:vault": "node scripts/build-vault.cjs --watch",
         "test": "vitest run",
         "test:ui": "vitest",
-        "coverage": "vitest run --coverage"
+        "coverage": "vitest run --coverage",
+        "release:check": "node scripts/version-sync.cjs && npm run test && npm run build",
+        "release:zip": "node scripts/make-zip.cjs",
+        "release": "npm run release:check && npm run release:zip"
     },
     "dependencies": {
         "js-yaml": "^4.1.0"
