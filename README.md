@@ -1,4 +1,4 @@
-# SnipSidian
+# Snipsidian
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Dimagious/snipsidian/ci.yml?branch=main&label=ci)](https://github.com/Dimagious/snipsidian/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/Dimagious/snipsidian/branch/main/graph/badge.svg)](https://codecov.io/gh/Dimagious/snipsidian)
@@ -9,10 +9,10 @@
 ![Vitest](https://img.shields.io/badge/tests-vitest-6b46c1)
 ![esbuild](https://img.shields.io/badge/bundler-esbuild-fbbf24)
 
-SnipSidian is an Obsidian plugin that brings **hotstrings / text snippets expansion** to the editor — with folders, bulk editing, and Espanso-compatible packages.
+Snipsidian is an Obsidian plugin that brings **hotstrings / text snippets expansion** to the editor — with folders, bulk editing, and Espanso-compatible packages.
 
 <p align="center">
-  <img alt="SnipSidian selection mode screenshot" src="docs/screens/selection-mode.png" width="720" />
+  <img alt="SnipSidian selection mode screenshot" src="docs/screens/settings.png" width="720" />
 </p>
 
 ## Features
