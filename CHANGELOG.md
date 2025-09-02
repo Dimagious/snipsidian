@@ -52,3 +52,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Notes
 
 - Catalog items are small and safe-by-default. Big sets (e.g. full emoji packs) can be installed via **Paste YAML**.
+
+## [0.3.0] - 2025-09-02
+
+### Added
+- Selection mode: checkboxes on rows and groups; per-group “Select all”; floating action bar.
+- Bulk delete: remove all selected snippets with confirmation and a live counter.
+- Move snippets:
+  - Bulk move to a new or existing folder via the “Move to…” modal.
+  - Per-row move using a dropdown (“Ungrouped” / existing groups / “New group…”).
+- Group management: rename a folder; delete a folder (with an option to move its contents).
+- Expand/Collapse all and persistent open/closed state of groups across sessions.
+
+### Changed
+- Catalog/YAML installs now go into nicely named folders (label → slug); the UI shows human-readable names.
+- Modals are responsive: “Move to…” no longer overflows horizontally; the preview table scrolls inside.
+
+### Fixed
+- Selection is preserved when renaming or moving snippets.
+

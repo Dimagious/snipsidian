@@ -1,16 +1,21 @@
-/* modal sizing + inner spacing */
+/* modal sizing + inner spacing (responsive) */
 .snipsidian-modal {
-  min-width: 720px;
+  width: min(640px, 92vw);
+  max-width: 92vw;
+}
+.snipsidian-modal * {
+  box-sizing: border-box;
 }
 
 /* table look & feel */
 .snipsidian-preview-table {
+  display: block;
+  overflow-x: auto;
   width: 100%;
   border-collapse: collapse;
   margin: 1em 0;
   font-size: 0.9em;
   border-radius: 6px;
-  overflow: hidden;
 }
 .snipsidian-preview-table th,
 .snipsidian-preview-table td {
@@ -59,4 +64,41 @@
   margin-top: 1em;
   padding-top: 0.75em;
   border-top: 1px solid var(--background-modifier-border);
+}
+.snipsidian-modal .modal-button-container {
+  flex-wrap: wrap;
+}
+
+/* Move-to modal: поле на всю ширину */
+.snipsidian-move-modal select,
+.snipsidian-move-modal input[type="text"],
+.snipsidian-move-modal textarea {
+  width: 100%;
+}
+
+.snipsidian-prefix {
+  margin-right: 6px;
+  opacity: 0.7;
+  font-family: var(--font-monospace);
+  white-space: nowrap;
+}
+
+.snipsidian-bulkbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  margin: 8px 0 6px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary-alt);
+}
+.snipsidian-bulkbar button { padding: 4px 10px; border-radius: 6px; }
+.snipsidian-group-header { display: flex; align-items: center; gap: 8px; }
+.snipsidian-group-checkbox { margin-left: 4px; }
+.snipsidian-row-checkbox { margin-right: 8px; }
+.snipsidian-row-checkbox,
+.snipsidian-group-checkbox {
+  appearance: checkbox; -webkit-appearance: checkbox;
+  width: 14px; height: 14px;
 }
