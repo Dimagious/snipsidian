@@ -1,7 +1,8 @@
 import { App, Modal } from "obsidian";
 import type SnipSidianPlugin from "../../main";
-import { DiffResult } from "../../services/utils";
+import { DiffResult, displayGroupTitle, slugifyGroup } from "../../services/utils";
 
+/** Simple JSON copy/paste modal */
 export class JSONModal extends Modal {
     text: string;
     title: string;
@@ -35,6 +36,7 @@ export class JSONModal extends Modal {
     }
 }
 
+/** Package preview & conflict resolution modal */
 export class PackagePreviewModal extends Modal {
     plugin: SnipSidianPlugin;
     titleText: string;
@@ -106,6 +108,66 @@ export class PackagePreviewModal extends Modal {
                 result[c.key] = choice === "overwrite" ? c.incoming : c.current;
             }
             this.onConfirm?.(result);
+            this.close();
+        };
+    }
+}
+
+/** Group picker for bulk move (Move to…) */
+export class GroupPickerModal extends Modal {
+    titleText: string;
+    groups: string[];
+    allowUngrouped: boolean;
+    onSubmit?: (groupKey: string | null) => void;
+
+    constructor(
+        app: App,
+        opts: { title: string; groups: string[]; allowUngrouped?: boolean }
+    ) {
+        super(app);
+        this.titleText = opts.title;
+        this.groups = opts.groups ?? [];
+        this.allowUngrouped = !!opts.allowUngrouped;
+    }
+
+    onOpen(): void {
+        const { contentEl, titleEl } = this;
+        titleEl.setText(this.titleText);
+        contentEl.addClass("snipsidian-modal");
+
+        const form = contentEl.createDiv({ cls: "snipsidian-move-form" });
+
+        const select = form.createEl("select");
+        if (this.allowUngrouped) select.append(new Option("Ungrouped", ""));
+        for (const g of this.groups) {
+            select.append(new Option(displayGroupTitle(g), g));
+        }
+        select.append(new Option("New group…", "__new__"));
+
+        const newWrap = form.createDiv({ cls: "snipsidian-newgroup-wrap" });
+        const input = newWrap.createEl("input", {
+            type: "text",
+            placeholder: "New group name",
+        });
+        newWrap.hide();
+
+        select.onchange = () => {
+            if (select.value === "__new__") newWrap.show();
+            else newWrap.hide();
+        };
+
+        const footer = contentEl.createDiv({ cls: "modal-button-container" });
+        const cancel = footer.createEl("button", { text: "Cancel" });
+        cancel.onclick = () => this.close();
+
+        const apply = footer.createEl("button", { text: "Move" });
+        apply.onclick = () => {
+            let target: string | null = select.value;
+            if (target === "__new__") {
+                const label = input.value.trim();
+                target = slugifyGroup(label) || ""; // '' => Ungrouped
+            }
+            this.onSubmit?.(target);
             this.close();
         };
     }

@@ -1,16 +1,21 @@
-/* modal sizing + inner spacing */
+/* modal sizing + inner spacing (responsive) */
 .snipsidian-modal {
-  min-width: 720px;
+  width: min(640px, 92vw);
+  max-width: 92vw;
+}
+.snipsidian-modal * {
+  box-sizing: border-box;
 }
 
 /* table look & feel */
 .snipsidian-preview-table {
+  display: block;
+  overflow-x: auto;
   width: 100%;
   border-collapse: collapse;
   margin: 1em 0;
   font-size: 0.9em;
   border-radius: 6px;
-  overflow: hidden;
 }
 .snipsidian-preview-table th,
 .snipsidian-preview-table td {
@@ -60,6 +65,16 @@
   padding-top: 0.75em;
   border-top: 1px solid var(--background-modifier-border);
 }
+.snipsidian-modal .modal-button-container {
+  flex-wrap: wrap;
+}
+
+/* Move-to modal: поле на всю ширину */
+.snipsidian-move-modal select,
+.snipsidian-move-modal input[type="text"],
+.snipsidian-move-modal textarea {
+  width: 100%;
+}
 
 .snipsidian-prefix {
   margin-right: 6px;
@@ -87,4 +102,3 @@
   appearance: checkbox; -webkit-appearance: checkbox;
   width: 14px; height: 14px;
 }
-

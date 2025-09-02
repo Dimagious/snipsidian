@@ -13,20 +13,100 @@ import {
     slugifyGroup,
     displayGroupTitle,
 } from "../services/utils";
-import { JSONModal, PackagePreviewModal } from "./components/Modals";
+import { JSONModal, PackagePreviewModal, GroupPickerModal } from "./components/Modals";
+
+type SnippetMap = Record<string, string>;
+type GroupKey = string; // '' means Ungrouped
 
 export class SnipSidianSettingTab extends PluginSettingTab {
     plugin: SnipSidianPlugin;
 
+    // UI state
     private groupOpen = new Map<string, boolean>();
     private searchQuery = "";
 
+    // selection mode
     private selectionMode = false;
     private selected = new Set<string>();
 
     constructor(app: App, plugin: SnipSidianPlugin) {
         super(app, plugin);
         this.plugin = plugin;
+    }
+
+    // ---- helpers (local, UI-level) ----
+    private ensureUiState() {
+        // persist open/closed groups in settings.ui.groupOpen (object of booleans)
+        const anySettings = this.plugin.settings as any;
+        if (!anySettings.ui) anySettings.ui = {};
+        if (!anySettings.ui.groupOpen) anySettings.ui.groupOpen = {};
+    }
+    private loadOpenState(group: string, defaultOpen = true): boolean {
+        this.ensureUiState();
+        const store = (this.plugin.settings as any).ui.groupOpen as Record<string, boolean>;
+        if (store[group] === undefined) store[group] = defaultOpen;
+        return store[group];
+    }
+    private saveOpenState(group: string, open: boolean) {
+        this.ensureUiState();
+        const store = (this.plugin.settings as any).ui.groupOpen as Record<string, boolean>;
+        store[group] = open;
+        // saving settings for a flip of a caret is too heavy; delay until next big save
+    }
+
+    private allGroupsFrom(map: SnippetMap): GroupKey[] {
+        const s = new Set<string>();
+        for (const k of Object.keys(map)) {
+            const g = k.includes("/") ? k.split("/", 1)[0] : "Ungrouped";
+            s.add(g);
+        }
+        return Array.from(s).sort((a, b) => a.localeCompare(b));
+    }
+
+    private safeRenameKey(map: SnippetMap, oldKey: string, newKey: string): { ok: boolean; reason?: string } {
+        if (oldKey === newKey) return { ok: true };
+        if (newKey in map) return { ok: false, reason: `Trigger "${newKey}" already exists` };
+        const val = map[oldKey];
+        if (val === undefined) return { ok: false, reason: "Original key missing" };
+        delete map[oldKey];
+        map[newKey] = val;
+        // keep selection
+        if (this.selected.has(oldKey)) {
+            this.selected.delete(oldKey);
+            this.selected.add(newKey);
+        }
+        return { ok: true };
+    }
+
+    private bulkMoveKeys(targetGroup: GroupKey, keys: string[]): { moved: number; skipped: number } {
+        const map = this.plugin.settings.snippets;
+        // pre-check conflicts to avoid half-applied state
+        let skipped = 0;
+        const ops: Array<{ oldKey: string; newKey: string }> = [];
+        for (const k of keys) {
+            const { name } = splitKey(k);
+            const newKey = targetGroup ? `${targetGroup}/${name}` : name;
+            if (newKey in map && !keys.includes(newKey)) {
+                skipped++;
+                continue;
+            }
+            ops.push({ oldKey: k, newKey });
+        }
+        let moved = 0;
+        for (const { oldKey, newKey } of ops) {
+            if (oldKey === newKey) continue;
+            const r = this.safeRenameKey(map, oldKey, newKey);
+            if (r.ok) moved++;
+            else skipped++;
+        }
+        return { moved, skipped };
+    }
+
+    private promptNewGroup(initial = ""): GroupKey | null {
+        const label = window.prompt("Folder name (pretty label). Leave empty for Ungrouped:", initial ?? "");
+        if (label === null) return null; // cancelled
+        const slug = slugifyGroup(label);
+        return slug || ""; // '' -> Ungrouped
     }
 
     display(): void {
@@ -337,6 +417,30 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                     });
             });
 
+        // Expand/Collapse all
+        const expandRow = new Setting(containerEl)
+            .setName("Groups")
+            .setDesc("Expand or collapse all groups.");
+        expandRow
+            .addButton((b) =>
+                b.setButtonText("Expand all").onClick(() => {
+                    for (const g of this.groupOpen.keys()) {
+                        this.groupOpen.set(g, true);
+                        this.saveOpenState(g, true);
+                    }
+                    renderList();
+                })
+            )
+            .addButton((b) =>
+                b.setButtonText("Collapse all").onClick(() => {
+                    for (const g of this.groupOpen.keys()) {
+                        this.groupOpen.set(g, false);
+                        this.saveOpenState(g, false);
+                    }
+                    renderList();
+                })
+            );
+
         const listEl = containerEl.createDiv();
 
         const renderList = () => {
@@ -350,8 +454,39 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 const left = bar.createDiv({ cls: "snipsidian-bulk-left" });
                 left.createSpan({ text: `${this.selected.size} selected` });
 
-                const middle = bar.createSpan();
-                (middle as HTMLSpanElement).style.flex = "1";
+                const spacer = bar.createSpan();
+                (spacer as HTMLSpanElement).style.flex = "1";
+
+                // Move to...
+                const moveBtn = bar.createEl("button", { text: "Move to…" });
+                moveBtn.disabled = this.selected.size === 0;
+                moveBtn.onclick = () => {
+                    if (this.selected.size === 0) return;
+                    const groups = this.allGroupsFrom(this.plugin.settings.snippets).filter(
+                        (g) => g !== "Ungrouped"
+                    );
+                    const modal = new GroupPickerModal(this.app, {
+                        title: `Move ${this.selected.size} snippet(s) to…`,
+                        groups,
+                        allowUngrouped: true,
+                    });
+                    modal.onSubmit = async (target) => {
+                        if (target === null) return;
+                        const { moved, skipped } = this.bulkMoveKeys(
+                            target,
+                            Array.from(this.selected)
+                        );
+                        await this.plugin.saveSettings();
+                        const openKey = target || "Ungrouped";
+                        this.groupOpen.set(openKey, true);
+                        this.saveOpenState(openKey, true);
+                        renderList();
+                        new Notice(
+                            `Moved ${moved} item(s)${skipped ? `, skipped ${skipped} (conflicts)` : ""}.`
+                        );
+                    };
+                    modal.open();
+                };
 
                 const exitBtn = bar.createEl("button", { text: "Exit selection" });
                 exitBtn.onclick = () => {
@@ -390,6 +525,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 return;
             }
 
+            // Build groups
             const groups = new Map<string, Array<[string, string]>>();
             for (const e of entries) {
                 const [k] = e;
@@ -398,13 +534,19 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 groups.get(group)!.push(e);
             }
 
-            for (const [group, items] of groups) {
-                if (!this.groupOpen.has(group)) this.groupOpen.set(group, true);
+            // ensure groupOpen has defaults (and persisted values)
+            for (const g of groups.keys()) {
+                if (!this.groupOpen.has(g)) this.groupOpen.set(g, this.loadOpenState(g, true));
+            }
 
+            for (const [group, items] of groups) {
+                // Header
                 const hdr = listEl.createDiv({ cls: "snipsidian-group-header" });
-                const toggle = hdr.createEl("button", { text: this.groupOpen.get(group) ? "▾" : "▸" });
-                toggle.addEventListener("click", () => {
-                    this.groupOpen.set(group, !this.groupOpen.get(group));
+                const toggleBtn = hdr.createEl("button", { text: this.groupOpen.get(group) ? "▾" : "▸" });
+                toggleBtn.addEventListener("click", () => {
+                    const next = !this.groupOpen.get(group);
+                    this.groupOpen.set(group, next);
+                    this.saveOpenState(group, next);
                     renderList();
                 });
 
@@ -429,7 +571,87 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 const title = group === "Ungrouped" ? "Ungrouped" : displayGroupTitle(group);
                 hdr.createEl("span", { text: ` ${title} (${items.length})` });
 
+                // Group actions (rename / delete)
+                if (group !== "Ungrouped") {
+                    const actions = hdr.createDiv({ cls: "snipsidian-group-actions" });
+                    const renameBtn = actions.createEl("button", { text: "Rename" });
+                    renameBtn.onclick = async () => {
+                        const newLabel = window.prompt(`Rename group "${title}" to:`, title);
+                        if (newLabel === null) return;
+                        const newSlug = slugifyGroup(newLabel);
+                        if (!newSlug) {
+                            new Notice("Empty name not allowed.");
+                            return;
+                        }
+                        if (newSlug === group) return;
+                        // check conflicts
+                        const map = this.plugin.settings.snippets;
+                        for (const [k] of items) {
+                            const { name } = splitKey(k);
+                            const newKey = `${newSlug}/${name}`;
+                            if (newKey in map && !items.find(([kk]) => kk === newKey)) {
+                                new Notice(`Conflict for "${newKey}". Rename aborted.`);
+                                return;
+                            }
+                        }
+                        let moved = 0;
+                        for (const [k] of items) {
+                            const { name } = splitKey(k);
+                            const newKey = `${newSlug}/${name}`;
+                            const r = this.safeRenameKey(map, k, newKey);
+                            if (r.ok) moved++;
+                        }
+                        await this.plugin.saveSettings();
+                        // update open state
+                        this.groupOpen.delete(group);
+                        this.saveOpenState(group, undefined as unknown as boolean);
+                        this.groupOpen.set(newSlug, true);
+                        this.saveOpenState(newSlug, true);
+                        renderList();
+                        new Notice(`Renamed group to "${displayGroupTitle(newSlug)}" (${moved} moved).`);
+                    };
+
+                    const deleteBtn = actions.createEl("button", { text: "Delete group" });
+                    deleteBtn.onclick = async () => {
+                        if (items.length === 0) {
+                            this.groupOpen.delete(group);
+                            this.saveOpenState(group, undefined as unknown as boolean);
+                            renderList();
+                            return;
+                        }
+                        const choice = window.confirm(
+                            `Delete group "${title}" with ${items.length} snippet(s)?\n` +
+                            "OK = Delete all,  Cancel = Move to another folder…"
+                        );
+                        if (choice) {
+                            // delete all
+                            for (const [k] of items) delete this.plugin.settings.snippets[k];
+                            await this.plugin.saveSettings();
+                            this.groupOpen.delete(group);
+                            this.saveOpenState(group, undefined as unknown as boolean);
+                            renderList();
+                            new Notice(`Deleted ${items.length} snippet(s) from "${title}".`);
+                        } else {
+                            // move to…
+                            const newG = this.promptNewGroup("");
+                            if (newG === null) return;
+                            const { moved, skipped } = this.bulkMoveKeys(newG, items.map(([k]) => k));
+                            await this.plugin.saveSettings();
+                            this.groupOpen.set(newG || "Ungrouped", true);
+                            this.saveOpenState(newG || "Ungrouped", true);
+                            renderList();
+                            new Notice(
+                                `Moved ${moved} from "${title}" to "${displayGroupTitle(newG || "Ungrouped")}"` +
+                                (skipped ? `, skipped ${skipped} (conflicts)` : "")
+                            );
+                        }
+                    };
+                }
+
                 if (!this.groupOpen.get(group)) continue;
+
+                // Items
+                const existingGroups = Array.from(groups.keys()).filter((g) => g !== group && g !== "Ungrouped").sort();
 
                 items.forEach(([trigger, replacement]) => {
                     const row = new Setting(listEl);
@@ -442,7 +664,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                         cb.onchange = () => {
                             if (cb.checked) this.selected.add(trigger);
                             else this.selected.delete(trigger);
-                            renderList(); // <-- обновляем счётчик и tri-state в хедере
+                            renderList();
                         };
                         row.controlEl.insertAdjacentElement("afterbegin", cb);
                     }
@@ -450,6 +672,51 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                     let currentKey = trigger;
                     const { group: grp, name: tail } = splitKey(trigger);
 
+                    // per-row group selector
+                    row.addDropdown((dd) => {
+                        dd.addOption("", "Ungrouped");
+                        // existing groups (title-cased)
+                        const all = this.allGroupsFrom(this.plugin.settings.snippets).filter((g) => g !== "Ungrouped");
+                        for (const g of all) dd.addOption(g, displayGroupTitle(g));
+                        dd.addOption("__new__", "New group…");
+                        dd.setValue(grp || "");
+                        dd.onChange(async (val) => {
+                            if (val === "__new__") {
+                                const ng = this.promptNewGroup("");
+                                if (ng === null) {
+                                    dd.setValue(grp || "");
+                                    return;
+                                }
+                                await moveTo(ng);
+                                dd.setValue(ng || "");
+                            } else {
+                                await moveTo(val);
+                            }
+                        });
+
+                        const moveTo = async (targetGroup: GroupKey) => {
+                            const newKey = targetGroup ? `${targetGroup}/${tail}` : tail;
+                            if (newKey === currentKey) return;
+                            if (newKey in this.plugin.settings.snippets) {
+                                new Notice(`Trigger "${newKey}" already exists`);
+                                dd.setValue(grp || "");
+                                return;
+                            }
+                            const r = this.safeRenameKey(this.plugin.settings.snippets, currentKey, newKey);
+                            if (!r.ok) {
+                                new Notice(r.reason ?? "Failed to move");
+                                dd.setValue(grp || "");
+                                return;
+                            }
+                            currentKey = newKey;
+                            this.groupOpen.set(targetGroup || "Ungrouped", true);
+                            this.saveOpenState(targetGroup || "Ungrouped", true);
+                            await this.plugin.saveSettings();
+                            renderList();
+                        };
+                    });
+
+                    // tail input
                     row.addText((t) =>
                         t
                             .setPlaceholder("trigger")
@@ -513,6 +780,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 });
             }
 
+            // Add snippet button
             new Setting(listEl).addButton((b) =>
                 b
                     .setButtonText("+ Add snippet")
