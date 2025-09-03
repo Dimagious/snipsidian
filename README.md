@@ -41,8 +41,6 @@ Organize, bulk edit, and supercharge your Markdown workflow — without leaving 
 
 Snipsy ships with a ready-to-use catalog:
 
-## 📚 Built-in Snippet Packs
-
 | Pack               | Preview |
 | ------------------ | ------- |
 | **Emoji (lite)**   | 😀 😂 ❤️ 🔥 👍 |
