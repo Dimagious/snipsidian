@@ -104,3 +104,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Build scripts unified for CI and local vault builds (consistent flags).
 - Docs: clarify plugin folder name (`snipsidian`) for manual installs.
+
+## [0.4.2] - 2025-09-03
+
+### Added
+- Demo GIF in README to showcase one-click catalog install, callouts, and symbolic triggers.
+
+### Changed
+- Delimiters: -, /, \, | are no longer treated as separators (enables ->, <-, etc.); double and single quotes added to the separator set for better Markdown behavior.
+- Runtime dictionary: engine now compiles the dict from grouped keys, so groups are UI-only and do not affect matching.
+- Settings UX: edits no longer save & resort on every keystroke; changes are debounced and saved on blur—no flicker, no focus loss.
+
+### Fixed
+- Symbolic & structural triggers: -> → →, info → callout now expand reliably; token detection scans left to the nearest separator instead of relying on \w boundaries.
+- Markdown awareness: sturdier checks for fenced code/inline code/frontmatter to avoid false positives.
+- Tests updated to reflect the new delimiter contract.
