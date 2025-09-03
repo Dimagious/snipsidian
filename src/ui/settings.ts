@@ -115,6 +115,19 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         containerEl.addClass("snipsidian-settings");
         containerEl.createEl("h2", { text: "SnipSidian Settings" });
 
+        const debounce = <T extends (...a: any[]) => any>(fn: T, ms: number) => {
+            let t: number | undefined;
+            return (...args: Parameters<T>) => {
+                if (t) window.clearTimeout(t);
+                t = window.setTimeout(() => fn(...args), ms) as unknown as number;
+            };
+        };
+
+        const saveSoft = debounce(async () => {
+            await this.plugin.saveSettings();
+        }, 400);
+
+
         // ===== Advanced =====
         containerEl.createEl("h3", { text: "Advanced" });
 
@@ -526,8 +539,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 .filter(([k, v]) => {
                     if (!this.searchQuery) return true;
                     return k.toLowerCase().includes(this.searchQuery) || v.toLowerCase().includes(this.searchQuery);
-                })
-                .sort(([a], [b]) => a.localeCompare(b));
+                });
 
             if (!entries.length) {
                 const empty = listEl.createDiv({ text: "No snippets match the filter." });
@@ -726,12 +738,11 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                         };
                     });
 
-                    // tail input
-                    row.addText((t) =>
-                        t
-                            .setPlaceholder("trigger")
+                    // --- trigger input ---
+                    row.addText((t) => {
+                        t.setPlaceholder("trigger")
                             .setValue(tail)
-                            .onChange(async (rawTail) => {
+                            .onChange((rawTail) => {
                                 const newTail = normalizeTrigger(rawTail);
                                 if (!newTail) return;
 
@@ -758,22 +769,22 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                                     (t.inputEl as HTMLInputElement).value = splitKey(currentKey).name;
                                     return;
                                 }
+
                                 map[newKey] = val;
                                 currentKey = newKey;
-                                await this.plugin.saveSettings();
-                                renderList();
-                            })
-                    );
+                            });
+                        t.inputEl.addEventListener("blur", () => { saveSoft(); });
+                    });
 
                     row.addTextArea((ta) => {
-                        ta
-                            .setPlaceholder("replacement (e.g. be right back)")
+                        ta.setPlaceholder("replacement (e.g. be right back)")
                             .setValue(replacement)
-                            .onChange(async (val) => {
+                            .onChange((val) => {
                                 this.plugin.settings.snippets[currentKey] = val;
-                                await this.plugin.saveSettings();
                             });
+
                         ta.inputEl.rows = 2;
+                        ta.inputEl.addEventListener("blur", () => { saveSoft(); });
                     });
 
                     row.addExtraButton((btn) =>

@@ -1,8 +1,15 @@
 import type { SnipSidianSettings } from "../types";
 import { isRecordOfString } from "./schema";
+import { splitKey } from "../services/utils";
 
 export function getDict(settings: SnipSidianSettings): Record<string, string> {
-    return settings.snippets || {};
+    const src = settings.snippets || {};
+    const out: Record<string, string> = {};
+    for (const [fullKey, val] of Object.entries(src)) {
+        const { name } = splitKey(fullKey);
+        out[name] = val;
+    }
+    return out;
 }
 
 export function mergeDefaults(

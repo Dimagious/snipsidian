@@ -3,19 +3,32 @@ import { DEFAULT_DELIMITERS, isSeparator } from "./delimiters";
 
 describe("delimiters", () => {
     it("DEFAULT_DELIMITERS contains common separators", () => {
-        expect(DEFAULT_DELIMITERS).toContain(" ");
-        expect(DEFAULT_DELIMITERS).toContain(".");
-        expect(DEFAULT_DELIMITERS).toContain(",");
-        expect(DEFAULT_DELIMITERS).toContain("(");
-        expect(DEFAULT_DELIMITERS).toContain(")");
-        expect(DEFAULT_DELIMITERS).toContain("-");
-        expect(DEFAULT_DELIMITERS).toContain("/");
-        expect(DEFAULT_DELIMITERS).toContain("|");
+        for (const ch of [
+            " ", "\t", "\n",
+            ".", ",", "!", "?", ";", ":",
+            "(", ")", "[", "]", "{", "}", "\"", "'",
+        ]) {
+            expect(DEFAULT_DELIMITERS).toContain(ch);
+        }
+        expect(DEFAULT_DELIMITERS).not.toContain("-");
+        expect(DEFAULT_DELIMITERS).not.toContain("/");
+        expect(DEFAULT_DELIMITERS).not.toContain("\\");
+        expect(DEFAULT_DELIMITERS).not.toContain("|");
     });
 
-    it("isSeparator returns true for whitespace and punctuation", () => {
-        for (const ch of [" ", "\t", "\n", ".", ",", "!", "?", ";", ":", "(", ")", "[", "]", "{", "}", "\"", "'", "-", "\\", "/", "|"]) {
+    it("isSeparator returns true for whitespace and punctuation (excluding - / \\ |)", () => {
+        for (const ch of [
+            " ", "\t", "\n",
+            ".", ",", "!", "?", ";", ":",
+            "(", ")", "[", "]", "{", "}", "\"", "'",
+        ]) {
             expect(isSeparator(ch)).toBe(true);
+        }
+    });
+
+    it("treats '-', '/', '\\\\', '|' as non-separators to support symbolic triggers", () => {
+        for (const ch of ["-", "/", "\\", "|"]) {
+            expect(isSeparator(ch)).toBe(false);
         }
     });
 

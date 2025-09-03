@@ -24,24 +24,23 @@ export function isInFencedCode(
     lastLine: number,
     curLine: number
 ): boolean {
-    let inFence = false as boolean;
+    let inFence = false;
     let fenceToken: "`" | "~" | null = null;
 
     for (let i = 0; i <= Math.min(curLine, lastLine); i++) {
-        const trimmed = (getLine(i) ?? "").trimStart();
-        if (trimmed.startsWith("```")) {
-            if (!inFence) { inFence = true; fenceToken = "`"; }
-            else if (fenceToken === "`") inFence = (i === curLine) ? false : false;
-            continue;
-        }
-        if (trimmed.startsWith("~~~")) {
-            if (!inFence) { inFence = true; fenceToken = "~"; }
-            else if (fenceToken === "~") inFence = (i === curLine) ? false : false;
-            continue;
+        const t = (getLine(i) ?? "");
+        const m = t.match(/^\s*(```|~~~)/);
+        if (!m) continue;
+        const token = m[1] === "```" ? "`" : "~";
+        if (!inFence) {
+            inFence = true; fenceToken = token;
+        } else if (fenceToken === token) {
+            inFence = false; fenceToken = null;
         }
     }
     return inFence;
 }
+
 
 export function isInInlineCode(line: string, cursorCh: number): boolean {
     const before = line.slice(0, cursorCh);
