@@ -119,3 +119,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Symbolic & structural triggers: -> → →, info → callout now expand reliably; token detection scans left to the nearest separator instead of relying on \w boundaries.
 - Markdown awareness: sturdier checks for fenced code/inline code/frontmatter to avoid false positives.
 - Tests updated to reflect the new delimiter contract.
+
+## [0.5.0] - 2025-09-03
+
+### Added
+- **Emoji (lite, builtin)** — ~120 most popular emojis.
+- **Task states (builtin)** — task states (`- [ ]`, `- [x]`, doing, waiting, canceled, etc.).
+- Extended:
+  - **Markdown basics** (bold, italic, headings, links).
+  - **Obsidian Callouts** (summary, question, success, error, etc.).
+
+### Changed
+- Package catalog (`PACKAGE_CATALOG`) is now sorted alphabetically by `label` for convenience.
+
