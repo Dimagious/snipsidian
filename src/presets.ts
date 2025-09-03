@@ -6,12 +6,6 @@ export const DEFAULT_SNIPPETS: Record<string, string> = {
   ty: "thank you",
   imo: "in my opinion",
 
-  // Markdown helpers
-  code: "```$|\n```",
-  todo: "- [ ] $|",
-  bullet: "- $|",
-  quote: "> $|",
-
   // Headings
   h1: "# $|",
   h2: "## $|",
