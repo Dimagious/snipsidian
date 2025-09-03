@@ -12,9 +12,14 @@
 
 Snipsidian is an Obsidian plugin that brings **hotstrings / text snippets expansion** to the editor — with folders, bulk editing, and Espanso-compatible packages.
 
-<p align="center">
-  <img alt="SnipSidian selection mode screenshot" src="docs/screens/settings.png" width="720" />
-</p>
+## Demo
+![Snipsidian demo](docs/screens/demo.gif)
+
+## How to install
+1. Open **Settings → Community plugins** in Obsidian and disable Safe Mode.
+2. Click **Browse**, search **SnipSidian**, and **Install**.
+3. Toggle the plugin **ON**.
+4. Open **Settings → SnipSidian** to configure snippets.
 
 ## Features
 

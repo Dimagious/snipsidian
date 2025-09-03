@@ -11,7 +11,8 @@
         "coverage": "vitest run --coverage",
         "release:check": "node scripts/version-sync.cjs && npm run test && npm run build",
         "release:zip": "node scripts/make-zip.cjs",
-        "release": "npm run release:check && npm run release:zip"
+        "release": "npm run release:check && npm run release:zip",
+        "tree": "tree -L 3 -I 'node_modules|coverage'"
     },
     "dependencies": {
         "js-yaml": "^4.1.0"
