@@ -113,7 +113,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
         containerEl.addClass("snipsidian-settings");
-        containerEl.createEl("h2", { text: "SnipSidian Settings" });
+        containerEl.createEl("h2", { text: "Snipsy" });
 
         const debounce = <T extends (...a: any[]) => any>(fn: T, ms: number) => {
             let t: number | undefined;
@@ -228,7 +228,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName("Support Snipsidian")
+            .setName("Support Snipsy")
             .setDesc(createFragment(f => {
                 f.createEl("a", {
                     text: "Buy me a coffee ☕",

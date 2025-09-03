@@ -1,4 +1,4 @@
-# Snipsidian
+# Snipsy
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Dimagious/snipsidian/ci.yml?branch=main&label=ci)](https://github.com/Dimagious/snipsidian/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/Dimagious/snipsidian/branch/main/graph/badge.svg)](https://codecov.io/gh/Dimagious/snipsidian)
@@ -10,16 +10,16 @@
 ![esbuild](https://img.shields.io/badge/bundler-esbuild-fbbf24)
 [![Buy Me A Coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-☕-ff813f?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/dimagious)
 
-Snipsidian is an Obsidian plugin that brings **hotstrings / text snippets expansion** to the editor — with folders, bulk editing, and Espanso-compatible packages.
+Snipsy is an Obsidian plugin that brings **hotstrings / text snippets expansion** to the editor — with folders, bulk editing, and Espanso-compatible packages.
 
 ## Demo
-![Snipsidian demo](docs/screens/demo.gif)
+![Snipsy demo](docs/screens/demo.gif)
 
 ## How to install
 1. Open **Settings → Community plugins** in Obsidian and disable Safe Mode.
-2. Click **Browse**, search **SnipSidian**, and **Install**.
+2. Click **Browse**, search **Snipsy**, and **Install**.
 3. Toggle the plugin **ON**.
-4. Open **Settings → SnipSidian** to configure snippets.
+4. Open **Settings → Snipsy** to configure snippets.
 
 ## Features
 
@@ -34,7 +34,7 @@ Snipsidian is an Obsidian plugin that brings **hotstrings / text snippets expans
 - **Import/Export JSON**, **Reveal `data.json`** (desktop), and **merge defaults**.
 - **Nice UI details:** expand/collapse all, persistent open/closed state of folders, responsive modals.
 
-## Why SnipSidian?
+## Why Snipsy?
 
 - Smooth **bulk management** (select, move, delete) right inside Settings.
 - **Folders with human-readable names** in the UI; under the hood, triggers are stored with a slugged prefix (`folder/trigger`) for portability.
@@ -42,7 +42,7 @@ Snipsidian is an Obsidian plugin that brings **hotstrings / text snippets expans
 
 ## Quick start
 
-1. Open **Settings → Community plugins → SnipSidian**.
+1. Open **Settings → Community plugins → Snipsy**.
 2. In **Snippets**:
    - Create a snippet: type a **trigger** and **replacement**.
    - Use the **folder dropdown** to organize snippets; or select several and click **Move to…**.

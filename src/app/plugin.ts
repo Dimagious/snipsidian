@@ -25,12 +25,12 @@ export default class HotstringsPlugin extends Plugin {
         });
 
         this.addSettingTab(new SnipSidianSettingTab(this.app, this));
-        console.log("SnipSidian/Hotstrings modular plugin loaded");
+        console.log("Snipsy modular plugin loaded");
     }
 
     onunload() {
         try { this.off?.(); } catch { }
-        console.log("SnipSidian/Hotstrings modular plugin unloaded");
+        console.log("Snipsy modular plugin unloaded");
     }
 
     async loadSettings() {
