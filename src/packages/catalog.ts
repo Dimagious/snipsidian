@@ -1,8 +1,8 @@
 export type PackageItem = {
-    id: string;
-    label: string;
-    kind: "builtin";
-    yaml: string;
+  id: string;
+  label: string;
+  kind: "builtin";
+  yaml: string;
 };
 
 /* ---------- Builtins curated for Obsidian ---------- */
@@ -15,10 +15,47 @@ const BUILTIN_MARKDOWN_YAML = `matches:
     replace: "- [ ] $|"
   - trigger: ":quote"
     replace: "> $|"
+  - trigger: ":inline"
+    replace: "\`$|\`"
+  - trigger: ":bold"
+    replace: "**$|**"
+  - trigger: ":italic"
+    replace: "_$|_"
+  - trigger: ":strike"
+    replace: "~~$|~~"
+  - trigger: ":h1"
+    replace: "# $|"
+  - trigger: ":h2"
+    replace: "## $|"
+  - trigger: ":h3"
+    replace: "### $|"
+  - trigger: ":h4"
+    replace: "#### $|"
+  - trigger: ":ul"
+    replace: "- $|"
+  - trigger: ":ol"
+    replace: "1. $|"
+  - trigger: ":check"
+    replace: "- [x] $|"
+  - trigger: ":link"
+    replace: "[$|](url)"
+  - trigger: ":image"
+    replace: "![$|](url)"
+  - trigger: ":wikilink"
+    replace: "[[$|]]"
+  - trigger: ":alias"
+    replace: "[[note|$|]]"
+  - trigger: ":hr"
+    replace: "---"
+  - trigger: ":tbl2"
+    replace: "| H1 | H2 |\\n| --- | --- |\\n| $| | |"
+  - trigger: ":tbl3"
+    replace: "| Header | Header | Header |\\n| --- | --- | --- |\\n| $| | | |"
 `;
 
 // Obsidian callouts
 const BUILTIN_CALLOUTS_YAML = `matches:
+  # Базовые
   - trigger: ":note"
     replace: "> [!note] $|\\n> "
   - trigger: ":tip"
@@ -31,14 +68,36 @@ const BUILTIN_CALLOUTS_YAML = `matches:
     replace: "> [!danger] $|\\n> "
   - trigger: ":quote-callout"
     replace: "> [!quote]\\n> $|"
-`;
-
-// Markdown tables (3×3 scaffold)
-const BUILTIN_TABLES_YAML = `matches:
-  - trigger: ":tbl3"
-    replace: "| Header | Header | Header |\\n| --- | --- | --- |\\n| $| | | |"
-  - trigger: ":tbl2"
-    replace: "| H1 | H2 |\\n| --- | --- |\\n| $| | |"
+  - trigger: ":abstract"
+    replace: "> [!abstract] $|\\n> "
+  - trigger: ":summary"
+    replace: "> [!summary] $|\\n> "
+  - trigger: ":tldr"
+    replace: "> [!tldr] $|\\n> "
+  - trigger: ":example"
+    replace: "> [!example] $|\\n> "
+  - trigger: ":faq"
+    replace: "> [!faq] $|\\n> "
+  - trigger: ":question"
+    replace: "> [!question] $|\\n> "
+  - trigger: ":todo-callout"
+    replace: "> [!todo] $|\\n> - [ ] "
+  - trigger: ":success"
+    replace: "> [!success] $|\\n> "
+  - trigger: ":check-callout"
+    replace: "> [!check] $|\\n> "
+  - trigger: ":done"
+    replace: "> [!done] $|\\n> "
+  - trigger: ":failure"
+    replace: "> [!failure] $|\\n> "
+  - trigger: ":missing"
+    replace: "> [!missing] $|\\n> "
+  - trigger: ":error"
+    replace: "> [!error] $|\\n> "
+  - trigger: ":bug"
+    replace: "> [!bug] $|\\n> "
+  - trigger: ":cite"
+    replace: "> [!cite] $|\\n> "
 `;
 
 // Unicode arrows
@@ -79,21 +138,210 @@ const BUILTIN_MATH_LITE_YAML = `matches:
     replace: "∞"
 `;
 
-// Kaomoji (lite)
-const BUILTIN_KAOMOJI_YAML = `matches:
-  - trigger: ":shrug"
-    replace: "¯\\\\_(ツ)_/¯"
-  - trigger: ":tableflip"
-    replace: "(╯°□°）╯︵ ┻━┻"
-  - trigger: ":unflip"
-    replace: "┬─┬ ノ( ゜-゜ノ )"
+// Emoji (lite)
+const BUILTIN_EMOJI_LITE_YAML = `matches:
+  # 😀 Смайлики — базовые
+  - trigger: ":grinning"        ; replace: "😀"
+  - trigger: ":smiley"          ; replace: "😃"
+  - trigger: ":smile"           ; replace: "😄"
+  - trigger: ":grin"            ; replace: "😁"
+  - trigger: ":laughing"        ; replace: "😆"
+  - trigger: ":sweat_smile"     ; replace: "😅"
+  - trigger: ":joy"             ; replace: "😂"
+  - trigger: ":rofl"            ; replace: "🤣"
+  - trigger: ":slight_smile"    ; replace: "🙂"
+  - trigger: ":upside_down"     ; replace: "🙃"
+  - trigger: ":wink"            ; replace: "😉"
+  - trigger: ":blush"           ; replace: "😊"
+  - trigger: ":yum"             ; replace: "😋"
+  - trigger: ":sunglasses"      ; replace: "😎"
+  - trigger: ":heart_eyes"      ; replace: "😍"
+  - trigger: ":kissing_heart"   ; replace: "😘"
+  - trigger: ":kissing"         ; replace: "😗"
+  - trigger: ":relaxed"         ; replace: "☺️"
+  - trigger: ":kissing_smiling" ; replace: "😙"
+  - trigger: ":kissing_closed"  ; replace: "😚"
+  - trigger: ":hug"             ; replace: "🤗"
+  - trigger: ":star_struck"     ; replace: "🤩"
+  - trigger: ":thinking"        ; replace: "🤔"
+  - trigger: ":zipper_mouth"    ; replace: "🤐"
+  - trigger: ":neutral"         ; replace: "😐"
+  - trigger: ":expressionless"  ; replace: "😑"
+  - trigger: ":no_mouth"        ; replace: "😶"
+  - trigger: ":smirk"           ; replace: "😏"
+  - trigger: ":unamused"        ; replace: "😒"
+  - trigger: ":roll_eyes"       ; replace: "🙄"
+  - trigger: ":grimacing"       ; replace: "😬"
+  - trigger: ":lying"           ; replace: "🤥"
+  - trigger: ":relieved"        ; replace: "😌"
+  - trigger: ":pensive"         ; replace: "😔"
+  - trigger: ":sleepy"          ; replace: "😪"
+  - trigger: ":sleeping"        ; replace: "😴"
+  - trigger: ":drooling"        ; replace: "🤤"
+  - trigger: ":mask"            ; replace: "😷"
+  - trigger: ":facepalm"        ; replace: "🤦"
+  - trigger: ":shrug_emoji"     ; replace: "🤷"
+  - trigger: ":mind_blown"      ; replace: "🤯"
+
+  # 😢 Негатив/эмоции
+  - trigger: ":confused"        ; replace: "😕"
+  - trigger: ":worried"         ; replace: "😟"
+  - trigger: ":slight_frown"    ; replace: "🙁"
+  - trigger: ":frowning"        ; replace: "☹️"
+  - trigger: ":open_mouth"      ; replace: "😮"
+  - trigger: ":hushed"          ; replace: "😯"
+  - trigger: ":astonished"      ; replace: "😲"
+  - trigger: ":flushed"         ; replace: "😳"
+  - trigger: ":pleading"        ; replace: "🥺"
+  - trigger: ":cry"             ; replace: "😢"
+  - trigger: ":sob"             ; replace: "😭"
+  - trigger: ":persevere"       ; replace: "😣"
+  - trigger: ":disappointed"    ; replace: "😞"
+  - trigger: ":downcast"        ; replace: "😓"
+  - trigger: ":cold_sweat"      ; replace: "😰"
+  - trigger: ":weary"           ; replace: "😩"
+  - trigger: ":tired"           ; replace: "😫"
+  - trigger: ":angry"           ; replace: "😠"
+  - trigger: ":pout"            ; replace: "😡"
+  - trigger: ":exploding"       ; replace: "🤯"
+  - trigger: ":skull"           ; replace: "💀"
+  - trigger: ":clown"           ; replace: "🤡"
+
+  - trigger: ":thumbsup"        ; replace: "👍"
+  - trigger: ":thumbsdown"      ; replace: "👎"
+  - trigger: ":ok_hand"         ; replace: "👌"
+  - trigger: ":pinched"         ; replace: "🤌"
+  - trigger: ":pinch"           ; replace: "🤏"
+  - trigger: ":v"               ; replace: "✌️"
+  - trigger: ":crossed_fingers" ; replace: "🤞"
+  - trigger: ":handshake"       ; replace: "🤝"
+  - trigger: ":clap"            ; replace: "👏"
+  - trigger: ":pray"            ; replace: "🙏"
+  - trigger: ":wave"            ; replace: "👋"
+  - trigger: ":raised_hand"     ; replace: "✋"
+  - trigger: ":muscle"          ; replace: "💪"
+  - trigger: ":point_up"        ; replace: "☝️"
+  - trigger: ":point_right"     ; replace: "👉"
+  - trigger: ":point_left"      ; replace: "👈"
+  - trigger: ":point_down"      ; replace: "👇"
+
+  - trigger: ":heart"           ; replace: "❤️"
+  - trigger: ":orange_heart"    ; replace: "🧡"
+  - trigger: ":yellow_heart"    ; replace: "💛"
+  - trigger: ":green_heart"     ; replace: "💚"
+  - trigger: ":blue_heart"      ; replace: "💙"
+  - trigger: ":purple_heart"    ; replace: "💜"
+  - trigger: ":black_heart"     ; replace: "🖤"
+  - trigger: ":white_heart"     ; replace: "🤍"
+  - trigger: ":brown_heart"     ; replace: "🤎"
+  - trigger: ":sparkling_heart" ; replace: "💖"
+  - trigger: ":two_hearts"      ; replace: "💕"
+  - trigger: ":heartbeat"       ; replace: "💓"
+  - trigger: ":broken_heart"    ; replace: "💔"
+  - trigger: ":revolving_hearts"; replace: "💞"
+
+  - trigger: ":sparkles"        ; replace: "✨"
+  - trigger: ":star"            ; replace: "⭐️"
+  - trigger: ":boom"            ; replace: "💥"
+  - trigger: ":fire"            ; replace: "🔥"
+  - trigger: ":100"             ; replace: "💯"
+  - trigger: ":tada"            ; replace: "🎉"
+  - trigger: ":balloon"         ; replace: "🎈"
+  - trigger: ":confetti"        ; replace: "🎊"
+  - trigger: ":check"           ; replace: "✔️"
+  - trigger: ":heavy_check"     ; replace: "✅"
+  - trigger: ":x"               ; replace: "❌"
+  - trigger: ":warning"         ; replace: "⚠️"
+  - trigger: ":info_symbol"     ; replace: "ℹ️"
+  - trigger: ":question"        ; replace: "❓"
+  - trigger: ":grey_question"   ; replace: "❔"
+  - trigger: ":exclamation"     ; replace: "❗️"
+  - trigger: ":double_excl"     ; replace: "‼️"
+  - trigger: ":atm"             ; replace: "💳"
+  - trigger: ":moneybag"        ; replace: "💰"
+  - trigger: ":chart_up"        ; replace: "📈"
+  - trigger: ":chart_down"      ; replace: "📉"
+  - trigger: ":paperclip"       ; replace: "📎"
+  - trigger: ":pushpin"         ; replace: "📌"
+  - trigger: ":link"            ; replace: "🔗"
+  - trigger: ":lock"            ; replace: "🔒"
+  - trigger: ":unlock"          ; replace: "🔓"
+  - trigger: ":hourglass"       ; replace: "⌛️"
+  - trigger: ":alarm"           ; replace: "⏰"
+  - trigger: ":calendar"        ; replace: "📅"
+  - trigger: ":memo"            ; replace: "📝"
+  - trigger: ":bookmark"        ; replace: "🔖"
+  - trigger: ":mag"             ; replace: "🔍"
+  - trigger: ":bulb"            ; replace: "💡"
+  - trigger: ":hammer"          ; replace: "🔨"
+  - trigger: ":wrench"          ; replace: "🔧"
+  - trigger: ":gear"            ; replace: "⚙️"
+
+  - trigger: ":coffee"          ; replace: "☕️"
+  - trigger: ":tea"             ; replace: "🫖"
+  - trigger: ":beer"            ; replace: "🍺"
+  - trigger: ":cheers"          ; replace: "🍻"
+  - trigger: ":wine"            ; replace: "🍷"
+  - trigger: ":cocktail"        ; replace: "🍸"
+  - trigger: ":pizza"           ; replace: "🍕"
+  - trigger: ":burger"          ; replace: "🍔"
+  - trigger: ":fries"           ; replace: "🍟"
+  - trigger: ":cake"            ; replace: "🍰"
+  - trigger: ":cookie"          ; replace: "🍪"
+  - trigger: ":apple"           ; replace: "🍎"
+
+  - trigger: ":dog"             ; replace: "🐶"
+  - trigger: ":cat"             ; replace: "🐱"
+  - trigger: ":fox"             ; replace: "🦊"
+  - trigger: ":bear"            ; replace: "🐻"
+  - trigger: ":panda"           ; replace: "🐼"
+  - trigger: ":unicorn"         ; replace: "🦄"
+
+  - trigger: ":back"            ; replace: "◀️"
+  - trigger: ":next"            ; replace: "▶️"
+  - trigger: ":top"             ; replace: "🔝"
+  - trigger: ":soon"            ; replace: "🔜"
+  - trigger: ":fast_forward"    ; replace: "⏩"
+  - trigger: ":rewind"          ; replace: "⏪"
 `;
 
+// Task states (builtin)
+const BUILTIN_TASKS_YAML = `matches:
+  # Базовое todo
+  - trigger: ":todo"
+    replace: "- [ ] $|"
+
+  # Выполнено
+  - trigger: ":done"
+    replace: "- [x] $|"
+
+  # В процессе
+  - trigger: ":doing"
+    replace: "- [/] $|"
+
+  # Отложено / ожидание
+  - trigger: ":waiting"
+    replace: "- [-] $|"
+
+  # Отменено
+  - trigger: ":cancel"
+    replace: "- [~] $|"
+
+  # Планируется (scheduled)
+  - trigger: ":sched"
+    replace: "- [?] $|"
+
+  # Дважды проверить
+  - trigger: ":important"
+    replace: "- [!] $|"
+`;
+
+
 export const PACKAGE_CATALOG: PackageItem[] = [
-    { id: "builtin-callouts", label: "Obsidian Callouts (builtin)", kind: "builtin", yaml: BUILTIN_CALLOUTS_YAML },
-    { id: "builtin-markdown", label: "Markdown basics (builtin)", kind: "builtin", yaml: BUILTIN_MARKDOWN_YAML },
-    { id: "builtin-tables", label: "Markdown tables (builtin)", kind: "builtin", yaml: BUILTIN_TABLES_YAML },
-    { id: "builtin-arrows", label: "Unicode arrows (builtin)", kind: "builtin", yaml: BUILTIN_UNICODE_ARROWS_YAML },
-    { id: "builtin-math-lite", label: "Math symbols (lite, builtin)", kind: "builtin", yaml: BUILTIN_MATH_LITE_YAML },
-    { id: "builtin-kaomoji-lite", label: "Kaomoji (lite, builtin)", kind: "builtin", yaml: BUILTIN_KAOMOJI_YAML },
+  { id: "builtin-arrows", label: "Unicode arrows (builtin)", kind: "builtin", yaml: BUILTIN_UNICODE_ARROWS_YAML },
+  { id: "builtin-callouts", label: "Obsidian Callouts (builtin)", kind: "builtin", yaml: BUILTIN_CALLOUTS_YAML },
+  { id: "builtin-emoji-lite", label: "Emoji (lite, builtin)", kind: "builtin", yaml: BUILTIN_EMOJI_LITE_YAML },
+  { id: "builtin-markdown", label: "Markdown basics (builtin)", kind: "builtin", yaml: BUILTIN_MARKDOWN_YAML },
+  { id: "builtin-math-lite", label: "Math symbols (lite, builtin)", kind: "builtin", yaml: BUILTIN_MATH_LITE_YAML },
+  { id: "builtin-tasks", label: "Task states (builtin)", kind: "builtin", yaml: BUILTIN_TASKS_YAML },
 ];
