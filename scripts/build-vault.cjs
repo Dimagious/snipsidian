@@ -29,7 +29,8 @@ function copyAssets() {
         format: "cjs",
         platform: "node",
         target: "es2020",
-        external: ["obsidian", "electron", "@codemirror/*"],
+        external: ["obsidian", "electron", "@codemirror/state", "@codemirror/view"],
+        loader: { ".css": "text" },
         plugins: [
             {
                 name: "copy-assets",
@@ -51,6 +52,11 @@ function copyAssets() {
 
     if (watch) {
         await ctx.watch();
+        for (const f of ["styles.css", "manifest.json"]) {
+            if (fs.existsSync(f)) {
+                fs.watchFile(f, { interval: 300 }, copyAssets);
+            }
+        }
         console.log("[snipsidian] Watching for changes…");
     } else {
         await ctx.dispose();

@@ -1,4 +1,4 @@
-import { App, Modal } from "obsidian";
+import { App, ButtonComponent, Modal, Setting, TextComponent } from "obsidian";
 import type SnipSidianPlugin from "../../main";
 import { DiffResult, displayGroupTitle, slugifyGroup } from "../../services/utils";
 
@@ -172,3 +172,76 @@ export class GroupPickerModal extends Modal {
         };
     }
 }
+
+// ---- Simple text prompt modal (rename, etc.) ----
+export class TextPromptModal extends Modal {
+    private value = "";
+    constructor(
+        app: App,
+        private readonly opts: {
+            title: string;
+            initial?: string;
+            placeholder?: string;
+            cta?: string;
+            validate?: (v: string) => string | null;
+            onSubmit: (v: string) => void;
+        }
+    ) { super(app); }
+
+    onOpen(): void {
+        const { contentEl, titleEl } = this;
+        titleEl.setText(this.opts.title);
+        contentEl.addClass("snipsidian-modal");
+        contentEl.addClass("snipsidian-prompt");
+
+        // Row: label + input (как в Settings)
+        let input!: TextComponent;
+        new Setting(contentEl)
+            .setName("New name")
+            .setDesc("")
+            .addText((t) => {
+                input = t;
+                t.setPlaceholder(this.opts.placeholder ?? "Type a name…");
+                if (this.opts.initial) t.setValue(this.opts.initial);
+                this.value = this.opts.initial ?? "";
+                t.inputEl.addEventListener("input", () => { this.value = t.getValue(); });
+            });
+
+        // Error text
+        const err = contentEl.createDiv();
+        err.style.color = "var(--text-error)";
+        err.style.fontSize = "0.9em";
+        err.style.margin = "4px 0 0";
+        err.textContent = "";
+
+        // Footer
+        const footer = contentEl.createDiv({ cls: "modal-button-container" });
+        new ButtonComponent(footer)
+            .setButtonText("Cancel")
+            .onClick(() => this.close());
+
+        const ok = new ButtonComponent(footer)
+            .setCta()
+            .setButtonText(this.opts.cta ?? "OK")
+            .onClick(() => {
+                const v = (this.value ?? "").trim();
+                if (!v) { err.textContent = "Value cannot be empty."; return; }
+                if (this.opts.validate) {
+                    const msg = this.opts.validate(v);
+                    if (msg) { err.textContent = msg; return; }
+                }
+                this.opts.onSubmit(v);
+                this.close();
+            });
+
+        // Keyboard UX
+        input.inputEl.addEventListener("keydown", (e: KeyboardEvent) => {
+            if (e.key === "Enter") { e.preventDefault(); ok.buttonEl.click(); }
+        });
+
+        // Focus
+        input.inputEl.focus();
+        input.inputEl.select();
+    }
+}
+

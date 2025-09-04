@@ -1,13 +1,41 @@
-/* modal sizing + inner spacing (responsive) */
-.snipsidian-modal {
+/* ============ Modals ============ */
+.modal .snipsidian-modal {
   width: min(640px, 92vw);
   max-width: 92vw;
+  overflow-x: hidden !important;
 }
-.snipsidian-modal * {
+.modal .snipsidian-modal * {
   box-sizing: border-box;
 }
 
-/* table look & feel */
+/* Kill horizontal scroll on Obsidian modal wrapper */
+.modal .modal-content { overflow-x: hidden !important; }
+
+/* Prompt (rename, etc.) layout */
+.modal .snipsidian-prompt .setting-item { 
+  margin: 0 0 10px; 
+  padding-left: 0; 
+  padding-right: 0; 
+}
+.modal .snipsidian-prompt .setting-item-info { width: auto; flex: 0 0 auto; }
+.modal .snipsidian-prompt .setting-item-control { width: 100%; flex: 1 1 auto; }
+.modal .snipsidian-modal .modal-title {
+  font-weight: 600;
+  font-size: 1.05em;
+  margin-bottom: 8px;
+  white-space: normal;
+}
+.modal .snipsidian-modal input[type="text"],
+.modal .snipsidian-modal textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.modal .snipsidian-modal.snipsidian-prompt {
+  width: min(560px, 92vw);
+}
+
+/* ============ Preview table ============ */
 .snipsidian-preview-table {
   display: block;
   overflow-x: auto;
@@ -31,20 +59,15 @@
 .snipsidian-preview-table tr:hover td {
   background: var(--background-secondary);
 }
-/* monospace for values (readability, alignment) */
 .snipsidian-preview-table td:nth-child(2),
 .snipsidian-preview-table td:nth-child(3) {
   font-family: var(--font-monospace);
   white-space: pre-wrap;
 }
-
-/* action cell: compact select */
 .snipsidian-preview-table .conflict-action select {
   font-size: 0.85em;
   padding: 2px 6px;
 }
-
-/* bulk actions under the table */
 .snipsidian-bulk-actions {
   display: flex;
   justify-content: flex-end;
@@ -56,33 +79,64 @@
   border-radius: 4px;
 }
 
-/* footer separation & spacing */
-.modal-button-container {
+/* Modal footer */
+.modal .snipsidian-modal .modal-button-container {
   display: flex;
   justify-content: flex-end;
   gap: 0.75em;
   margin-top: 1em;
   padding-top: 0.75em;
   border-top: 1px solid var(--background-modifier-border);
-}
-.snipsidian-modal .modal-button-container {
   flex-wrap: wrap;
+  padding-left: 0;
+  padding-right: 0;
 }
+.modal .snipsidian-modal .modal-button-container button { white-space: nowrap; }
 
-/* Move-to modal: поле на всю ширину */
-.snipsidian-move-modal select,
-.snipsidian-move-modal input[type="text"],
-.snipsidian-move-modal textarea {
+/* Move-to modal: full-width controls */
+.modal .snipsidian-move-modal select,
+.modal .snipsidian-move-modal input[type="text"],
+.modal .snipsidian-move-modal textarea {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
+/* ============ Settings panel ============ */
+.mod-settings .snipsidian-settings {
+  --snip-h2-mb: 6px;
+  --snip-h3-mt: 18px;
+  --snip-h3-mb: 6px;
+}
+.mod-settings .snipsidian-settings h2 {
+  margin-top: 0;
+  margin-bottom: var(--snip-h2-mb);
+}
+.mod-settings .snipsidian-settings .snipsidian-subtitle {
+  margin-top: 0;
+  margin-bottom: 14px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.mod-settings .snipsidian-settings h3 {
+  margin-top: var(--snip-h3-mt);
+  margin-bottom: var(--snip-h3-mb);
+}
+.mod-settings .snipsidian-settings .setting-item {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.mod-settings .snipsidian-settings h3 + .setting-item {
+  margin-top: 2px;
+}
+
+/* Snippets list bits */
 .snipsidian-prefix {
   margin-right: 6px;
   opacity: 0.7;
   font-family: var(--font-monospace);
   white-space: nowrap;
 }
-
 .snipsidian-bulkbar {
   display: flex;
   align-items: center;
@@ -99,6 +153,22 @@
 .snipsidian-row-checkbox { margin-right: 8px; }
 .snipsidian-row-checkbox,
 .snipsidian-group-checkbox {
-  appearance: checkbox; -webkit-appearance: checkbox;
-  width: 14px; height: 14px;
+  appearance: checkbox; 
+  -webkit-appearance: checkbox;
+  width: 14px; 
+  height: 14px;
+}
+.snipsidian-options > summary {
+  cursor: pointer;
+  margin: 6px 0 8px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* Layout helpers */
+.mod-settings .snipsidian-settings .snipsy-flex-spacer { flex: 1; }
+.mod-settings .snipsidian-settings .snipsidian-bulkbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }

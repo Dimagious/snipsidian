@@ -1,6 +1,5 @@
-import { App, Notice, Platform, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, Platform, PluginSettingTab, Setting, Modal, TextComponent, ButtonComponent } from "obsidian";
 import type SnipSidianPlugin from "../main";
-import { DEFAULT_SNIPPETS } from "../presets";
 import { espansoYamlToSnippets } from "../packages/espanso";
 import { PACKAGE_CATALOG } from "../packages/catalog";
 import {
@@ -13,7 +12,7 @@ import {
     slugifyGroup,
     displayGroupTitle,
 } from "../services/utils";
-import { JSONModal, PackagePreviewModal, GroupPickerModal } from "./components/Modals";
+import { JSONModal, PackagePreviewModal, GroupPickerModal, TextPromptModal } from "./components/Modals";
 
 type SnippetMap = Record<string, string>;
 type GroupKey = string; // '' means Ungrouped
@@ -36,7 +35,6 @@ export class SnipSidianSettingTab extends PluginSettingTab {
 
     // ---- helpers (local, UI-level) ----
     private ensureUiState() {
-        // persist open/closed groups in settings.ui.groupOpen (object of booleans)
         const anySettings = this.plugin.settings as any;
         if (!anySettings.ui) anySettings.ui = {};
         if (!anySettings.ui.groupOpen) anySettings.ui.groupOpen = {};
@@ -51,7 +49,6 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         this.ensureUiState();
         const store = (this.plugin.settings as any).ui.groupOpen as Record<string, boolean>;
         store[group] = open;
-        // saving settings for a flip of a caret is too heavy; delay until next big save
     }
 
     private allGroupsFrom(map: SnippetMap): GroupKey[] {
@@ -112,8 +109,12 @@ export class SnipSidianSettingTab extends PluginSettingTab {
     display(): void {
         const { containerEl } = this;
         containerEl.empty();
-        containerEl.addClass("snipsidian-settings");
-        containerEl.createEl("h2", { text: "Snipsy" });
+
+        if (!containerEl.classList.contains("snipsidian-settings")) {
+            containerEl.addClass("snipsidian-settings");
+        }
+
+        containerEl.createEl("h2", { text: "Snipsy – Snippet Manager" });
 
         const debounce = <T extends (...a: any[]) => any>(fn: T, ms: number) => {
             let t: number | undefined;
@@ -126,10 +127,6 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         const saveSoft = debounce(async () => {
             await this.plugin.saveSettings();
         }, 400);
-
-
-        // ===== Advanced =====
-        containerEl.createEl("h3", { text: "Advanced" });
 
         new Setting(containerEl)
             .setName("Export / Import")
@@ -179,20 +176,6 @@ export class SnipSidianSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName("Add missing defaults")
-            .setDesc("Merge any new default snippets into your current list (user snippets are not overwritten).")
-            .addButton((b) =>
-                b.setButtonText("Apply").onClick(async () => {
-                    const before = Object.keys(this.plugin.settings.snippets).length;
-                    this.plugin.settings.snippets = { ...DEFAULT_SNIPPETS, ...this.plugin.settings.snippets };
-                    await this.plugin.saveSettings();
-                    const after = Object.keys(this.plugin.settings.snippets).length;
-                    new Notice(`Defaults merged (${after - before} added).`);
-                    this.display();
-                })
-            );
-
-        new Setting(containerEl)
             .setName("Reload snippets")
             .setDesc("Re-read data.json and refresh the UI.")
             .addButton((b) =>
@@ -206,7 +189,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName("Reveal data.json")
-            .setDesc("Open the plugin data file in your file manager (desktop only).")
+            .setDesc("Open the raw data.json file that stores all snippets (advanced users).")
             .addButton((b) =>
                 b.setButtonText("Reveal").onClick(async () => {
                     try {
@@ -215,7 +198,8 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                         const adapter: any = this.app.vault.adapter as any;
                         if (typeof adapter.getBasePath !== "function") throw new Error("Not supported on this platform");
                         const base: string = adapter.getBasePath();
-                        const path = `${base}/.obsidian/plugins/snipsidian/data.json`;
+                        const configDir: string = (this.app.vault as any).configDir ?? ".obsidian";
+                        const path = `${base}/${configDir}/plugins/snipsidian/data.json`;
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const electron = (window as any).require?.("electron");
                         if (!electron?.shell?.showItemInFolder) throw new Error("Electron shell not available");
@@ -227,31 +211,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 })
             );
 
-        new Setting(containerEl)
-            .setName("Support Snipsy")
-            .setDesc(createFragment(f => {
-                f.createEl("a", {
-                    text: "Buy me a coffee ☕",
-                    href: "https://buymeacoffee.com/dimagious",
-                    attr: { target: "_blank", rel: "noopener" }
-                });
-            }));
-
         // ===== Packages =====
-        containerEl.createEl("h3", { text: "Packages (Espanso-compatible)" });
-
-        const expl = containerEl.createDiv({ cls: "snipsidian-help" });
-        const p1 = expl.createEl("p");
-        p1.appendText("Install ready-made text expansion packages compatible with ");
-        const link = p1.createEl("a", { text: "Espanso Hub", href: "https://hub.espanso.org" });
-        link.setAttr("target", "_blank");
-        p1.appendText(". Use the built-in catalog below or paste YAML from the package's Source page.");
-        const p2 = expl.createEl("p");
-        p2.appendText("Note: Direct URL installs are disabled due to browser CORS restrictions. Open a package on the Hub → ");
-        p2.appendText("Source → copy the contents of ");
-        p2.appendText("package.yml");
-        p2.appendText(" and paste it here.");
-
         let selectedPkgId = PACKAGE_CATALOG[0]?.id ?? "";
         let overwritePkg = false;
 
@@ -323,6 +283,19 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                     }
                 })
         );
+
+        containerEl.createEl("h3", { text: "Packages (Espanso-compatible)" });
+        const expl = containerEl.createDiv({ cls: "snipsidian-help" });
+        const p1 = expl.createEl("p");
+        p1.appendText("Install ready-made text expansion packages compatible with ");
+        const link = p1.createEl("a", { text: "Espanso Hub", href: "https://hub.espanso.org" });
+        link.setAttr("target", "_blank");
+        p1.appendText(". Use the built-in catalog below or paste YAML from the package's Source page.");
+        const p2 = expl.createEl("p");
+        p2.appendText("Note: Direct URL installs are disabled due to browser CORS restrictions. Open a package on the Hub → ");
+        p2.appendText("Source → copy the contents of ");
+        p2.appendText("package.yml");
+        p2.appendText(" and paste it here.");
 
         // Paste YAML
         let pastedYaml = "";
@@ -415,16 +388,18 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         // ===== Snippets =====
         containerEl.createEl("h3", { text: "Snippets" });
 
-        // Search row
-        const searchSetting = new Setting(containerEl).setName("Search").setDesc("Filter by trigger or replacement text.");
-        searchSetting.addText((t) =>
-            t.setPlaceholder("Type to filter…").onChange((q) => {
-                this.searchQuery = q.trim().toLowerCase();
-                renderList();
-            })
-        );
+        // --- Search row ---
+        new Setting(containerEl)
+            .setName("Search")
+            .setDesc("Filter by trigger or replacement text.")
+            .addText((t) =>
+                t.setPlaceholder("Type to filter…").onChange((q) => {
+                    this.searchQuery = q.trim().toLowerCase();
+                    renderList();
+                })
+            );
 
-        // Selection mode row
+        // --- Selection mode ---
         let selectionToggle: import("obsidian").ToggleComponent | undefined;
         new Setting(containerEl)
             .setName("Selection mode")
@@ -440,30 +415,40 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                     });
             });
 
-        // Expand/Collapse all
-        const expandRow = new Setting(containerEl)
+        // --- Groups: single toggle (expand/collapse all) ---
+        const groupsRow = new Setting(containerEl)
             .setName("Groups")
-            .setDesc("Expand or collapse all groups.");
-        expandRow
-            .addButton((b) =>
-                b.setButtonText("Expand all").onClick(() => {
-                    for (const g of this.groupOpen.keys()) {
-                        this.groupOpen.set(g, true);
-                        this.saveOpenState(g, true);
-                    }
-                    renderList();
-                })
-            )
-            .addButton((b) =>
-                b.setButtonText("Collapse all").onClick(() => {
-                    for (const g of this.groupOpen.keys()) {
-                        this.groupOpen.set(g, false);
-                        this.saveOpenState(g, false);
-                    }
-                    renderList();
-                })
-            );
+            .setDesc("Expand or collapse all groups at once.");
 
+        let groupsToggle: import("obsidian").ToggleComponent | undefined;
+
+        const allGroups = (): string[] => this.allGroupsFrom(this.plugin.settings.snippets);
+
+        // ensure open state exists for all current groups
+        allGroups().forEach((g) => {
+            if (!this.groupOpen.has(g)) this.groupOpen.set(g, this.loadOpenState(g, true));
+        });
+
+        const areAllOpen = (): boolean =>
+            allGroups().every((g) => this.groupOpen.get(g) === true);
+
+        const applyAll = (open: boolean) => {
+            for (const g of allGroups()) {
+                this.groupOpen.set(g, open);
+                this.saveOpenState(g, open);
+            }
+            renderList();
+            groupsToggle?.setValue(open);
+        };
+
+        groupsRow.addToggle((tg) => {
+            groupsToggle = tg;
+            tg.setTooltip("Toggle all groups open/closed")
+                .setValue(areAllOpen())
+                .onChange((v) => applyAll(v));
+        });
+
+        // ---- list mount point
         const listEl = containerEl.createDiv();
 
         const renderList = () => {
@@ -477,8 +462,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 const left = bar.createDiv({ cls: "snipsidian-bulk-left" });
                 left.createSpan({ text: `${this.selected.size} selected` });
 
-                const spacer = bar.createSpan();
-                (spacer as HTMLSpanElement).style.flex = "1";
+                bar.createSpan({ cls: "snipsy-flex-spacer" });
 
                 // Move to...
                 const moveBtn = bar.createEl("button", { text: "Move to…" });
@@ -558,7 +542,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
 
             // ensure groupOpen has defaults (and persisted values)
             for (const g of groups.keys()) {
-                if (!this.groupOpen.has(g)) this.groupOpen.set(g, this.loadOpenState(g, true));
+                if (!this.groupOpen.has(g)) this.groupOpen.set(g, this.loadOpenState(g, false));
             }
 
             for (const [group, items] of groups) {
@@ -596,45 +580,64 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 // Group actions (rename / delete)
                 if (group !== "Ungrouped") {
                     const actions = hdr.createDiv({ cls: "snipsidian-group-actions" });
+
                     const renameBtn = actions.createEl("button", { text: "Rename" });
-                    renameBtn.onclick = async () => {
-                        const newLabel = window.prompt(`Rename group "${title}" to:`, title);
-                        if (newLabel === null) return;
-                        const newSlug = slugifyGroup(newLabel);
-                        if (!newSlug) {
-                            new Notice("Empty name not allowed.");
-                            return;
-                        }
-                        if (newSlug === group) return;
-                        // check conflicts
-                        const map = this.plugin.settings.snippets;
-                        for (const [k] of items) {
-                            const { name } = splitKey(k);
-                            const newKey = `${newSlug}/${name}`;
-                            if (newKey in map && !items.find(([kk]) => kk === newKey)) {
-                                new Notice(`Conflict for "${newKey}". Rename aborted.`);
-                                return;
+                    renameBtn.onclick = (ev) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+
+                        new TextPromptModal(this.app, {
+                            title: "Rename group",
+                            initial: title,
+                            placeholder: "New group name",
+                            cta: "Rename",
+                            validate: (v) => {
+                                const slug = slugifyGroup(v);
+                                if (!slug) return "Name cannot be empty.";
+                                if (slug === group) return "Name is unchanged.";
+                                const exists = Object.keys(this.plugin.settings.snippets).some(k =>
+                                    k.startsWith(slug + "/")
+                                );
+                                return exists ? `Group "${displayGroupTitle(slug)}" already exists.` : null;
+                            },
+                            onSubmit: async (newLabel) => {
+                                const newSlug = slugifyGroup(newLabel);
+                                const map = this.plugin.settings.snippets;
+
+                                for (const [k] of items) {
+                                    const { name } = splitKey(k);
+                                    const newKey = `${newSlug}/${name}`;
+                                    if (newKey in map && !items.find(([kk]) => kk === newKey)) {
+                                        new Notice(`Conflict for "${newKey}". Rename aborted.`);
+                                        return;
+                                    }
+                                }
+
+                                let moved = 0;
+                                for (const [k] of items) {
+                                    const { name } = splitKey(k);
+                                    const newKey = `${newSlug}/${name}`;
+                                    const r = this.safeRenameKey(map, k, newKey);
+                                    if (r.ok) moved++;
+                                }
+                                await this.plugin.saveSettings();
+
+                                this.groupOpen.delete(group);
+                                this.saveOpenState(group, undefined as unknown as boolean);
+                                this.groupOpen.set(newSlug, true);
+                                this.saveOpenState(newSlug, true);
+
+                                renderList();
+                                new Notice(`Renamed group to "${displayGroupTitle(newSlug)}" (${moved} moved).`);
                             }
-                        }
-                        let moved = 0;
-                        for (const [k] of items) {
-                            const { name } = splitKey(k);
-                            const newKey = `${newSlug}/${name}`;
-                            const r = this.safeRenameKey(map, k, newKey);
-                            if (r.ok) moved++;
-                        }
-                        await this.plugin.saveSettings();
-                        // update open state
-                        this.groupOpen.delete(group);
-                        this.saveOpenState(group, undefined as unknown as boolean);
-                        this.groupOpen.set(newSlug, true);
-                        this.saveOpenState(newSlug, true);
-                        renderList();
-                        new Notice(`Renamed group to "${displayGroupTitle(newSlug)}" (${moved} moved).`);
+                        }).open();
                     };
 
+
                     const deleteBtn = actions.createEl("button", { text: "Delete group" });
-                    deleteBtn.onclick = async () => {
+                    deleteBtn.onclick = async (ev) => {
+                        ev.preventDefault();
+                        ev.stopPropagation(); // <-- и здесь, чтобы клик не сворачивал группу
                         if (items.length === 0) {
                             this.groupOpen.delete(group);
                             this.saveOpenState(group, undefined as unknown as boolean);
@@ -697,7 +700,6 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                     // per-row group selector
                     row.addDropdown((dd) => {
                         dd.addOption("", "Ungrouped");
-                        // existing groups (title-cased)
                         const all = this.allGroupsFrom(this.plugin.settings.snippets).filter((g) => g !== "Ungrouped");
                         for (const g of all) dd.addOption(g, displayGroupTitle(g));
                         dd.addOption("__new__", "New group…");
