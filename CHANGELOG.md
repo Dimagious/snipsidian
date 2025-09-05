@@ -132,3 +132,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Package catalog (`PACKAGE_CATALOG`) is now sorted alphabetically by `label` for convenience.
 
+## [0.6.0] - 2025-09-05
+
+### Changed
+- **Settings UI redesigned** in a Copilot-like style with tabs (Basic / Packages / Snippets):
+  - Larger header title for clarity.
+  - Removed **Advanced** tab (was placeholder-only).
+  - **Packages**:
+    - Simplified *Install from catalog*: dropdown + single **Install** button.  
+      Removed confusing overwrite toggle and folder rename option — packages now install into fixed folders by label.
+    - Simplified *Install from YAML*: cleaner three-column layout (folder label / YAML textarea / install button).  
+      Removed overwrite toggle for clarity.
+  - **Snippets**:
+    - Removed redundant “Snippets” heading at the top of the tab.
+    - Group actions (**Rename**, **Delete group**) are now aligned to the right for consistency.
+- Polished spacing, alignment and layout across sections for a cleaner look.
+
+### Notes
+- All snippet management logic, package install behavior, and export/import functionality remain unchanged.  
+  This release focuses purely on improving usability and consistency of the settings panel.
+

@@ -1,4 +1,3 @@
-/* scripts/build-vault.cjs */
 const esbuild = require("esbuild");
 const fs = require("fs");
 const path = require("path");
@@ -15,10 +14,48 @@ if (!OUT) {
 const outFile = path.join(OUT, "main.js");
 const watch = process.argv.includes("--watch");
 
-function copyAssets() {
-    for (const f of ["styles.css", "manifest.json"]) {
-        if (fs.existsSync(f)) fs.copyFileSync(f, path.join(OUT, f));
+const EXTRA_FILES = ["styles.css", "manifest.json"];
+const EXTRA_DIRS = ["docs/screens"];
+
+function ensureDir(p) {
+    fs.mkdirSync(p, { recursive: true });
+}
+
+function copyFileSafe(src, dstDir) {
+    if (!fs.existsSync(src)) return;
+    ensureDir(dstDir);
+    const dst = path.join(dstDir, path.basename(src));
+    fs.copyFileSync(src, dst);
+}
+
+function copyDirSafe(srcDir, dstDir) {
+    if (!fs.existsSync(srcDir)) return;
+    ensureDir(dstDir);
+    if (fs.cpSync) {
+        fs.cpSync(srcDir, path.join(dstDir, path.basename(srcDir)), { recursive: true });
+    } else {
+        const base = path.join(dstDir, path.basename(srcDir));
+        ensureDir(base);
+        for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+            const s = path.join(srcDir, entry.name);
+            const d = path.join(base, entry.name);
+            if (entry.isDirectory()) {
+                copyDirSafe(s, base);
+            } else {
+                fs.copyFileSync(s, d);
+            }
+        }
     }
+}
+
+function copyAssets() {
+    for (const f of EXTRA_FILES) copyFileSafe(f, OUT);
+    for (const d of EXTRA_DIRS) {
+        if (!fs.existsSync(d)) continue;
+        const targetParent = path.join(OUT, path.dirname(d)); // OUT/docs
+        copyDirSafe(d, targetParent);
+    }
+    console.log("[snipsidian] Assets copied");
 }
 
 (async () => {
@@ -45,18 +82,29 @@ function copyAssets() {
         ],
         footer: {
             js: "module.exports = module.exports.default || module.exports;",
-        }
+        },
     });
 
     await ctx.rebuild();
 
     if (watch) {
         await ctx.watch();
-        for (const f of ["styles.css", "manifest.json"]) {
+
+        for (const f of EXTRA_FILES) {
             if (fs.existsSync(f)) {
                 fs.watchFile(f, { interval: 300 }, copyAssets);
             }
         }
+
+        for (const d of EXTRA_DIRS) {
+            if (!fs.existsSync(d)) continue;
+            try {
+                fs.watch(d, { recursive: true }, () => copyAssets());
+            } catch {
+                fs.watch(d, () => copyAssets());
+            }
+        }
+
         console.log("[snipsidian] Watching for changes…");
     } else {
         await ctx.dispose();

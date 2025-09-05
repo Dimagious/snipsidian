@@ -1,7 +1,14 @@
 const { execSync } = require("child_process");
 const fs = require("fs");
 
-const files = ["main.js", "manifest.json", "styles.css"].filter(f => fs.existsSync(f));
+let files = ["main.js", "manifest.json", "styles.css"];
+
+if (fs.existsSync("docs/screens")) {
+    files.push("docs/screens");
+}
+
+files = files.filter(f => fs.existsSync(f));
+
 if (!files.length) {
     console.error("[snipsidian] Nothing to pack. Build first.");
     process.exit(1);
