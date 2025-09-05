@@ -281,3 +281,36 @@
 /* Existing helpers kept */
 .mod-settings .snipsidian-settings .snipsy-flex-spacer { flex: 1; }
 
+/* 2-колоночная раскладка для YAML секции */
+.snipsy-row-2 {
+  display: grid;
+  grid-template-columns: 300px 1fr; /* Folder name / YAML+button */
+  gap: 12px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .snipsy-row-2 { grid-template-columns: 1fr; }
+}
+.snipsy-col-yaml .setting-item {
+  align-items: flex-start;
+  gap: 12px;
+}
+.snipsy-col-yaml .setting-item-control {
+  width: 100%;
+}
+.snipsy-col-yaml textarea {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* слот под GIF-демо */
+.snipsy-gif-slot {
+  margin-top: 12px;
+  text-align: center;
+}
+.snipsy-gif-slot img.snipsy-gif {
+  max-width: 100%;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+}
+

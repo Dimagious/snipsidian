@@ -19,7 +19,7 @@ type GroupKey = string; // '' means Ungrouped
 type TabId = "basic" | "packages" | "snippets";
 
 /**
- * Snipsy Settings with Copilot-like tabbed UI (no Advanced tab).
+ * Snipsy Settings with tabbed UI.
  */
 export class SnipSidianSettingTab extends PluginSettingTab {
     plugin: SnipSidianPlugin;
@@ -60,7 +60,6 @@ export class SnipSidianSettingTab extends PluginSettingTab {
     private loadActiveTab(): TabId {
         this.ensureUiState();
         const v = (this.plugin.settings as any).ui.activeTab as TabId | undefined;
-        // если раньше был сохранён "advanced", откатываемся на basic
         if (v === "basic" || v === "packages" || v === "snippets") return v;
         return "basic";
     }
@@ -142,7 +141,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         // persist/restore active tab
         this.activeTab = this.loadActiveTab();
 
-        // Tabs nav (no Advanced)
+        // Tabs nav
         const tabs: Array<{ id: TabId; label: string }> = [
             { id: "basic", label: "Basic" },
             { id: "packages", label: "Packages" },
@@ -287,7 +286,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         void saveSoft;
     }
 
-    /** PACKAGES: Catalog + YAML — упрощённый UX */
+    /** PACKAGES: Catalog + YAML*/
     private renderPackagesTab(root: HTMLElement) {
         const section = (title: string, hint?: string) => {
             const wrap = root.createDiv({ cls: "snipsy-section" });
@@ -296,7 +295,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
             return wrap;
         };
 
-        // === Catalog === (dropdown + Install, без переименования и без overwrite)
+        // === Catalog === (dropdown + Install)
         let selectedPkgId = PACKAGE_CATALOG[0]?.id ?? "";
 
         const s1 = section("Install from catalog", "Select a package and install it into a folder.");
@@ -324,7 +323,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                             }
                             const yamlText = item.yaml ?? "";
                             const parsed = espansoYamlToSnippets(yamlText);
-                            const groupKey = slugifyGroup(item.label) || "package"; // фиксированная папка по label
+                            const groupKey = slugifyGroup(item.label) || "package";
                             const withPrefix: Record<string, string> = Object.fromEntries(
                                 Object.entries(parsed).map(([k, v]) => [`${groupKey}/${k}`, v])
                             );
@@ -336,7 +335,6 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                     })
             );
 
-        // помощь/текст как и раньше
         const help = root.createDiv({ cls: "snipsidian-help" });
         const p1 = help.createEl("p");
         p1.appendText("Install ready-made text expansion packages compatible with ");
@@ -347,30 +345,30 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         p2.appendText("Note: Direct URL installs are disabled due to browser CORS restrictions. Open a package on the Hub → ");
         p2.appendText("Source → copy the contents of package.yml and paste it here.");
 
-        // === Paste YAML === (label + textarea + button, без overwrite)
+        // === Paste YAML (clean 2-column layout + GIF slot) ===
         let pastedYaml = "";
         let yamlFolderLabel = "";
         let installYamlBtn: import("obsidian").ButtonComponent | null = null;
 
-        const s2 = section("Install from YAML", "Paste Espanso YAML here, choose a folder label, and click Install.");
-        const row = s2.createDiv({ cls: "snipsy-row-3" });
+        const s2 = section("Install from YAML", "Paste Espanso YAML here, choose a folder name, and click Install.");
+        const row = s2.createDiv({ cls: "snipsy-row-2" });
 
-        // 1) folder label
-        const col1 = row.createDiv({ cls: "snipsy-col" });
-        new Setting(col1)
+        /** 1) Folder name */
+        const colLeft = row.createDiv({ cls: "snipsy-col" });
+        new Setting(colLeft)
             .setClass("snipsy-inline-setting")
-            .setName("Folder label")
+            .setName("Folder name")
             .addText((t) => {
-                t.setPlaceholder("e.g. Obsidian Callouts").onChange((v) => {
+                t.setPlaceholder("Your folder name").onChange((v) => {
                     yamlFolderLabel = v;
                     if (installYamlBtn) installYamlBtn.setDisabled(!yamlFolderLabel.trim() || !pastedYaml.trim());
                 });
             });
 
-        // 2) textarea
-        const col2 = row.createDiv({ cls: "snipsy-col" });
-        const taSetting = new Setting(col2).setClass("snipsy-inline-setting").setName("YAML");
-        taSetting.addTextArea((ta) => {
+        /** 2) YAML + button Install */
+        const colRight = row.createDiv({ cls: "snipsy-col snipsy-col-yaml" });
+        const yamlSetting = new Setting(colRight).setClass("snipsy-inline-setting");
+        yamlSetting.addTextArea((ta) => {
             ta.setPlaceholder('matches:\n  - trigger: ":brb"\n    replace: "be right back"\n');
             ta.onChange((v) => {
                 pastedYaml = v;
@@ -378,42 +376,53 @@ export class SnipSidianSettingTab extends PluginSettingTab {
             });
             ta.inputEl.rows = 8;
         });
+        yamlSetting.addButton((b) => {
+            installYamlBtn = b;
+            b.setButtonText("Install")
+                .setCta()
+                .setDisabled(true)
+                .setTooltip("Convert pasted YAML and install into the chosen folder")
+                .onClick(async () => {
+                    try {
+                        const label = yamlFolderLabel.trim();
+                        if (!label) { new Notice("Please provide a folder name."); return; }
+                        const parsed = espansoYamlToSnippets(pastedYaml || "");
+                        if (!Object.keys(parsed).length) { new Notice("No snippets found in YAML."); return; }
+                        const groupKey = slugifyGroup(label) || "package";
+                        const withPrefix: Record<string, string> =
+                            Object.fromEntries(Object.entries(parsed).map(([k, v]) => [`${groupKey}/${k}`, v]));
+                        await applySnippetsMerge(withPrefix);
+                    } catch (e) {
+                        console.error(e);
+                        new Notice("Failed to parse or install YAML");
+                    }
+                });
+        });
 
-        // 3) install button
-        const col3 = row.createDiv({ cls: "snipsy-col snipsy-col-actions" });
-        new Setting(col3)
-            .setClass("snipsy-inline-setting")
-            .addButton((b) => {
-                installYamlBtn = b;
-                b.setButtonText("Install pasted YAML")
-                    .setCta()
-                    .setDisabled(true)
-                    .setTooltip("Convert pasted YAML and install into the chosen folder")
-                    .onClick(async () => {
-                        try {
-                            const label = yamlFolderLabel.trim();
-                            if (!label) {
-                                new Notice("Please provide a folder label.");
-                                return;
-                            }
-                            const parsed = espansoYamlToSnippets(pastedYaml || "");
-                            if (!Object.keys(parsed).length) {
-                                new Notice("No snippets found in YAML.");
-                                return;
-                            }
-                            const groupKey = slugifyGroup(label) || "package";
-                            const withPrefix: Record<string, string> = Object.fromEntries(
-                                Object.entries(parsed).map(([k, v]) => [`${groupKey}/${k}`, v])
-                            );
-                            await applySnippetsMerge(withPrefix);
-                        } catch (e) {
-                            console.error(e);
-                            new Notice("Failed to parse or install YAML");
-                        }
-                    });
-            });
+        const gifSlot = s2.createDiv({ cls: "snipsy-gif-slot" });
 
-        // helper: merge + save + refresh (без "overwrite"; существующие выигрывают, конфликты → превью)
+        let imgSrc = "";
+        try {
+            const adapter: any = this.app.vault.adapter as any;
+            const base: string = adapter?.getBasePath?.() ?? "";
+            const configDir: string = (this.app.vault as any).configDir ?? ".obsidian";
+            const absPath = `${base}/${configDir}/plugins/snipsidian/docs/screens/espanso-demo.gif`;
+
+            const fs = require("fs");
+            const buf: Buffer = fs.readFileSync(absPath);
+            imgSrc = `data:image/gif;base64,${buf.toString("base64")}`;
+        } catch (e) {
+            console.warn("[snipsidian] GIF load fallback:", e);
+        }
+
+        if (imgSrc) {
+            gifSlot.createEl("img", { attr: { src: imgSrc, alt: "Demo GIF" }, cls: "snipsy-gif" });
+        } else {
+            gifSlot.createEl("div", { cls: "snipsy-gif-placeholder", text: "Demo GIF goes here" });
+        }
+
+
+        // helper: merge + save + refresh
         const applySnippetsMerge = async (incoming: Record<string, string>) => {
             if (!incoming || !Object.keys(incoming).length) {
                 new Notice("No snippets found in package");
@@ -423,7 +432,6 @@ export class SnipSidianSettingTab extends PluginSettingTab {
 
             if (diff.conflicts.length === 0) {
                 const before = Object.keys(this.plugin.settings.snippets).length;
-                // default: НЕ перезаписываем существующие
                 const next = { ...incoming, ...this.plugin.settings.snippets };
                 this.plugin.settings.snippets = next;
                 await this.plugin.saveSettings();
@@ -444,17 +452,15 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         };
     }
 
-    /** SNIPPETS: поиск, группы, selection mode, CRUD */
+    /** SNIPPETS:search, groups selection mode, CRUD */
     private renderSnippetsTab(root: HTMLElement) {
         const section = (title: string, hint?: string) => {
             const wrap = root.createDiv({ cls: "snipsy-section" });
-            // по просьбе: убираем верхний заголовок "Snippets", поэтому title может быть пустым
             if (title) wrap.createEl("h3", { text: title, cls: "snipsy-section-title" });
             if (hint) wrap.createEl("p", { text: hint, cls: "snipsy-section-hint" });
             return wrap;
         };
 
-        // --- блок без заголовка: search + toggles
         const search = section("");
         new Setting(search)
             .setName("Search")
@@ -631,7 +637,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 const title = group === "Ungrouped" ? "Ungrouped" : displayGroupTitle(group);
                 left.createEl("span", { text: ` ${title} (${items.length})` });
 
-                // Group actions (rename / delete) — выравнивание вправо
+                // Group actions (rename / delete)
                 if (group !== "Ungrouped") {
                     const renameBtn = right.createEl("button", { text: "Rename" });
                     renameBtn.onclick = (ev) => {
