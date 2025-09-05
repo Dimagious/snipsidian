@@ -19,10 +19,8 @@ export class JSONModal extends Modal {
         titleEl.setText(this.title);
 
         contentEl.addClass("snipsidian-modal");
-
         const ta = contentEl.createEl("textarea", { text: this.text });
-        ta.style.width = "100%";
-        ta.style.height = "300px";
+        ta.addClass("snipsidian-json-input");
 
         const footer = contentEl.createDiv({ cls: "modal-button-container" });
         const apply = footer.createEl("button", { text: "Apply" });
@@ -134,6 +132,7 @@ export class GroupPickerModal extends Modal {
         const { contentEl, titleEl } = this;
         titleEl.setText(this.titleText);
         contentEl.addClass("snipsidian-modal");
+        contentEl.addClass("snipsidian-move-modal");
 
         const form = contentEl.createDiv({ cls: "snipsidian-move-form" });
 
@@ -208,10 +207,7 @@ export class TextPromptModal extends Modal {
             });
 
         // Error text
-        const err = contentEl.createDiv();
-        err.style.color = "var(--text-error)";
-        err.style.fontSize = "0.9em";
-        err.style.margin = "4px 0 0";
+        const err = contentEl.createDiv({ cls: "snipsidian-error" });
         err.textContent = "";
 
         // Footer
