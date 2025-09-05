@@ -102,7 +102,7 @@
   box-sizing: border-box;
 }
 
-/* ============ Settings panel ============ */
+/* ============ Settings panel (legacy bits) ============ */
 .mod-settings .snipsidian-settings {
   --snip-h2-mb: 6px;
   --snip-h3-mt: 18px;
@@ -175,18 +175,109 @@
 
 /* JSON editor area inside the generic Snipsy modal */
 .modal .snipsidian-modal .snipsidian-json-input {
-  /* height used to be set via JS; move to CSS */
   min-height: 300px;
-  /* width/max-width уже заданы правилом для textarea ниже */
 }
 
-/* Error text in prompt modal (was inline styles) */
+/* Error text in prompt modal */
 .modal .snipsidian-modal .snipsidian-error {
   color: var(--text-error);
   font-size: 0.9em;
   margin: 4px 0 0;
 }
 
-/* Settings bulk bar spacer (was inline flex: 1) */
+/* Settings bulk bar spacer */
+.mod-settings .snipsidian-settings .snipsy-flex-spacer { flex: 1; }
+
+/* -------- Header & Tabs -------- */
+.snipsy-settings-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.snipsy-title {                 /* крупнее заголовок */
+  font-size: 20px;
+  line-height: 1.2;
+  margin: 0;
+}
+.snipsy-version {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.snipsy-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0 14px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 6px;
+}
+.snipsy-tab {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.snipsy-tab.is-active {
+  border-color: var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+.snipsy-tab-body {
+  display: grid;
+  gap: 12px;
+}
+
+/* -------- Section cards -------- */
+.snipsy-section {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--background-primary);
+}
+.snipsy-section-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.snipsy-section-hint {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* -------- Packages: YAML three-column row -------- */
+.snipsy-row-3 {
+  display: grid;
+  grid-template-columns: 280px 1fr 220px; /* label / textarea / actions */
+  gap: 12px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .snipsy-row-3 {
+    grid-template-columns: 1fr;
+  }
+}
+.snipsy-col-actions .setting-item {
+  justify-content: flex-end;
+}
+.snipsy-inline-setting .setting-item {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* -------- Snippets: group header right-aligned actions -------- */
+.snipsy-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+.snipsy-group-left { display: flex; align-items: center; gap: 8px; }
+.snipsy-group-right { display: flex; gap: 6px; }
+
+/* Existing helpers kept */
 .mod-settings .snipsidian-settings .snipsy-flex-spacer { flex: 1; }
 

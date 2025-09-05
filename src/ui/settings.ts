@@ -1,4 +1,4 @@
-import { App, Notice, Platform, PluginSettingTab, Setting, Modal, TextComponent, ButtonComponent } from "obsidian";
+import { App, Notice, Platform, PluginSettingTab, Setting } from "obsidian";
 import type SnipSidianPlugin from "../main";
 import { espansoYamlToSnippets } from "../packages/espanso";
 import { PACKAGE_CATALOG } from "../packages/catalog";
@@ -16,11 +16,16 @@ import { JSONModal, PackagePreviewModal, GroupPickerModal, TextPromptModal } fro
 
 type SnippetMap = Record<string, string>;
 type GroupKey = string; // '' means Ungrouped
+type TabId = "basic" | "packages" | "snippets";
 
+/**
+ * Snipsy Settings with Copilot-like tabbed UI (no Advanced tab).
+ */
 export class SnipSidianSettingTab extends PluginSettingTab {
     plugin: SnipSidianPlugin;
 
     // UI state
+    private activeTab: TabId = "basic";
     private groupOpen = new Map<string, boolean>();
     private searchQuery = "";
 
@@ -38,6 +43,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         const anySettings = this.plugin.settings as any;
         if (!anySettings.ui) anySettings.ui = {};
         if (!anySettings.ui.groupOpen) anySettings.ui.groupOpen = {};
+        if (!anySettings.ui.activeTab) anySettings.ui.activeTab = this.activeTab;
     }
     private loadOpenState(group: string, defaultOpen = true): boolean {
         this.ensureUiState();
@@ -45,10 +51,22 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         if (store[group] === undefined) store[group] = defaultOpen;
         return store[group];
     }
-    private saveOpenState(group: string, open: boolean) {
+    private saveOpenState(group: string, open: boolean | undefined) {
         this.ensureUiState();
         const store = (this.plugin.settings as any).ui.groupOpen as Record<string, boolean>;
-        store[group] = open;
+        if (open === undefined) delete store[group];
+        else store[group] = open;
+    }
+    private loadActiveTab(): TabId {
+        this.ensureUiState();
+        const v = (this.plugin.settings as any).ui.activeTab as TabId | undefined;
+        // если раньше был сохранён "advanced", откатываемся на basic
+        if (v === "basic" || v === "packages" || v === "snippets") return v;
+        return "basic";
+    }
+    private saveActiveTab(tab: TabId) {
+        this.ensureUiState();
+        (this.plugin.settings as any).ui.activeTab = tab;
     }
 
     private allGroupsFrom(map: SnippetMap): GroupKey[] {
@@ -106,6 +124,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         return slug || ""; // '' -> Ungrouped
     }
 
+    // ---------- Tabs skeleton ----------
     display(): void {
         const { containerEl } = this;
         containerEl.empty();
@@ -114,8 +133,55 @@ export class SnipSidianSettingTab extends PluginSettingTab {
             containerEl.addClass("snipsidian-settings");
         }
 
-        containerEl.createEl("h2", { text: "Snipsy – Snippet Manager" });
+        // Header with big title + small version
+        const header = containerEl.createDiv({ cls: "snipsy-settings-header" });
+        const titleWrap = header.createDiv({ cls: "snipsy-title-wrap" });
+        titleWrap.createEl("h2", { text: "Snipsy — Snippet Manager", cls: "snipsy-title" });
+        header.createEl("span", { text: this.plugin.manifest.version, cls: "snipsy-version" });
 
+        // persist/restore active tab
+        this.activeTab = this.loadActiveTab();
+
+        // Tabs nav (no Advanced)
+        const tabs: Array<{ id: TabId; label: string }> = [
+            { id: "basic", label: "Basic" },
+            { id: "packages", label: "Packages" },
+            { id: "snippets", label: "Snippets" },
+        ];
+        const nav = containerEl.createEl("nav", { cls: "snipsy-tabs" });
+        tabs.forEach((t) => {
+            const btn = nav.createEl("button", {
+                text: t.label,
+                cls: ["snipsy-tab", this.activeTab === t.id ? "is-active" : ""].join(" "),
+            });
+            btn.onClickEvent(async () => {
+                if (this.activeTab !== t.id) {
+                    this.activeTab = t.id;
+                    this.saveActiveTab(t.id);
+                    this.display();
+                }
+            });
+        });
+
+        // Body
+        const body = containerEl.createDiv({ cls: "snipsy-tab-body" });
+        switch (this.activeTab) {
+            case "basic":
+                this.renderBasicTab(body);
+                break;
+            case "packages":
+                this.renderPackagesTab(body);
+                break;
+            case "snippets":
+                this.renderSnippetsTab(body);
+                break;
+        }
+    }
+
+    // ---------- Tab renderers ----------
+
+    /** BASIC: Export/Import + Reload + Reveal */
+    private renderBasicTab(root: HTMLElement) {
         const debounce = <T extends (...a: any[]) => any>(fn: T, ms: number) => {
             let t: number | undefined;
             return (...args: Parameters<T>) => {
@@ -123,14 +189,21 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 t = window.setTimeout(() => fn(...args), ms) as unknown as number;
             };
         };
-
         const saveSoft = debounce(async () => {
             await this.plugin.saveSettings();
         }, 400);
 
-        new Setting(containerEl)
-            .setName("Export / Import")
-            .setDesc("Backup or restore snippets as JSON.")
+        const section = (title: string, hint?: string) => {
+            const wrap = root.createDiv({ cls: "snipsy-section" });
+            wrap.createEl("h3", { text: title, cls: "snipsy-section-title" });
+            if (hint) wrap.createEl("p", { text: hint, cls: "snipsy-section-hint" });
+            return wrap;
+        };
+
+        // Export / Import
+        const s1 = section("Export / Import", "Backup or restore snippets as JSON.");
+        new Setting(s1)
+            .setName("Export JSON")
             .addButton((b) =>
                 b.setButtonText("Export JSON").onClick(async () => {
                     const json = JSON.stringify(this.plugin.settings.snippets, null, 2);
@@ -142,7 +215,9 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                         modal.open();
                     }
                 })
-            )
+            );
+        new Setting(s1)
+            .setName("Import JSON")
             .addButton((b) =>
                 b.setButtonText("Import JSON").onClick(async () => {
                     const modal = new JSONModal(
@@ -175,187 +250,171 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 })
             );
 
-        new Setting(containerEl)
-            .setName("Reload snippets")
-            .setDesc("Re-read data.json and refresh the UI.")
-            .addButton((b) =>
-                b.setButtonText("Reload").onClick(async () => {
-                    await this.plugin.loadSettings();
-                    await this.plugin.saveSettings();
-                    this.display();
-                    new Notice("Snippets reloaded");
-                })
-            );
-
-        new Setting(containerEl)
-            .setName("Reveal data.json")
-            .setDesc("Open the raw data.json file that stores all snippets (advanced users).")
-            .addButton((b) =>
-                b.setButtonText("Reveal").onClick(async () => {
-                    try {
-                        if (!Platform.isDesktopApp) throw new Error("Not desktop");
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const adapter: any = this.app.vault.adapter as any;
-                        if (typeof adapter.getBasePath !== "function") throw new Error("Not supported on this platform");
-                        const base: string = adapter.getBasePath();
-                        const configDir: string = (this.app.vault as any).configDir ?? ".obsidian";
-                        const path = `${base}/${configDir}/plugins/snipsidian/data.json`;
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const electron = (window as any).require?.("electron");
-                        if (!electron?.shell?.showItemInFolder) throw new Error("Electron shell not available");
-                        electron.shell.showItemInFolder(path);
-                    } catch (e) {
-                        new Notice("Reveal unsupported on this platform. Use Export/Import instead.");
-                        console.warn(e);
-                    }
-                })
-            );
-
-        // ===== Packages =====
-        let selectedPkgId = PACKAGE_CATALOG[0]?.id ?? "";
-        let overwritePkg = false;
-
-        let folderLabelTouched = false;
-        let folderLabel = PACKAGE_CATALOG.find((p) => p.id === selectedPkgId)?.label ?? "Package";
-        let folderInputEl: HTMLInputElement | undefined;
-
-        const pkgRow = new Setting(containerEl)
-            .setName("Install from catalog")
-            .setDesc("Select a package and install it into a folder.");
-
-        pkgRow.addDropdown((dd) => {
-            PACKAGE_CATALOG.forEach((p) => dd.addOption(p.id, p.label));
-            if (selectedPkgId) dd.setValue(selectedPkgId);
-            dd.onChange((v) => {
-                selectedPkgId = v;
-                if (!folderLabelTouched) {
-                    folderLabel = PACKAGE_CATALOG.find((p) => p.id === v)?.label ?? "Package";
-                    if (folderInputEl) folderInputEl.value = folderLabel;
-                }
-            });
-        });
-
-        pkgRow
-            .addText((t) => {
-                t.setPlaceholder("Folder label (e.g. Obsidian Callouts)")
-                    .setValue(folderLabel)
-                    .onChange((v) => {
-                        folderLabelTouched = true;
-                        folderLabel = v;
-                    });
-                folderInputEl = t.inputEl;
+        // Reload
+        const s2 = section("Reload snippets", "Re-read data.json and refresh the UI.");
+        new Setting(s2).addButton((b) =>
+            b.setButtonText("Reload").onClick(async () => {
+                await this.plugin.loadSettings();
+                await this.plugin.saveSettings();
+                this.display();
+                new Notice("Snippets reloaded");
             })
-            .setDesc("This label is shown in the UI; keys are stored under a slug derived from it.");
-
-        pkgRow.addToggle((tg) =>
-            tg
-                .setTooltip("Overwrite existing triggers (package values win on conflict)")
-                .setValue(overwritePkg)
-                .onChange((v) => (overwritePkg = v))
         );
 
-        pkgRow.addButton((b) =>
-            b
-                .setButtonText("Install")
-                .setCta()
-                .setTooltip("Install the selected package")
-                .onClick(async () => {
-                    const item = PACKAGE_CATALOG.find((p) => p.id === selectedPkgId);
-                    if (!item) {
-                        new Notice("Package not found");
-                        return;
-                    }
-                    try {
-                        if (item.kind !== "builtin") {
-                            new Notice("Only built-in catalog items are supported here.");
+        // Reveal data.json
+        const s3 = section("Reveal data.json", "Open the raw data.json file (desktop only).");
+        new Setting(s3).addButton((b) =>
+            b.setButtonText("Reveal").onClick(async () => {
+                try {
+                    if (!Platform.isDesktopApp) throw new Error("Not desktop");
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const adapter: any = this.app.vault.adapter as any;
+                    if (typeof adapter.getBasePath !== "function") throw new Error("Not supported on this platform");
+                    const base: string = adapter.getBasePath();
+                    const configDir: string = (this.app.vault as any).configDir ?? ".obsidian";
+                    const path = `${base}/${configDir}/plugins/snipsidian/data.json`;
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const electron = (window as any).require?.("electron");
+                    if (!electron?.shell?.showItemInFolder) throw new Error("Electron shell not available");
+                    electron.shell.showItemInFolder(path);
+                } catch (e) {
+                    new Notice("Reveal unsupported on this platform. Use Export/Import instead.");
+                    console.warn(e);
+                }
+            })
+        );
+
+        void saveSoft;
+    }
+
+    /** PACKAGES: Catalog + YAML — упрощённый UX */
+    private renderPackagesTab(root: HTMLElement) {
+        const section = (title: string, hint?: string) => {
+            const wrap = root.createDiv({ cls: "snipsy-section" });
+            wrap.createEl("h3", { text: title, cls: "snipsy-section-title" });
+            if (hint) wrap.createEl("p", { text: hint, cls: "snipsy-section-hint" });
+            return wrap;
+        };
+
+        // === Catalog === (dropdown + Install, без переименования и без overwrite)
+        let selectedPkgId = PACKAGE_CATALOG[0]?.id ?? "";
+
+        const s1 = section("Install from catalog", "Select a package and install it into a folder.");
+        new Setting(s1)
+            .addDropdown((dd) => {
+                PACKAGE_CATALOG.forEach((p) => dd.addOption(p.id, p.label));
+                if (selectedPkgId) dd.setValue(selectedPkgId);
+                dd.onChange((v) => (selectedPkgId = v));
+            })
+            .addButton((b) =>
+                b
+                    .setButtonText("Install")
+                    .setCta()
+                    .setTooltip("Install the selected package")
+                    .onClick(async () => {
+                        const item = PACKAGE_CATALOG.find((p) => p.id === selectedPkgId);
+                        if (!item) {
+                            new Notice("Package not found");
                             return;
                         }
-                        const yamlText = item.yaml ?? "";
-                        const parsed = espansoYamlToSnippets(yamlText);
-                        const groupKey = slugifyGroup(folderLabel) || "package";
-                        const withPrefix: Record<string, string> = Object.fromEntries(
-                            Object.entries(parsed).map(([k, v]) => [`${groupKey}/${k}`, v])
-                        );
-                        await applySnippetsMerge(withPrefix, overwritePkg);
-                    } catch (e) {
-                        console.error(e);
-                        new Notice("Failed to install package");
-                    }
-                })
-        );
+                        try {
+                            if (item.kind !== "builtin") {
+                                new Notice("Only built-in catalog items are supported here.");
+                                return;
+                            }
+                            const yamlText = item.yaml ?? "";
+                            const parsed = espansoYamlToSnippets(yamlText);
+                            const groupKey = slugifyGroup(item.label) || "package"; // фиксированная папка по label
+                            const withPrefix: Record<string, string> = Object.fromEntries(
+                                Object.entries(parsed).map(([k, v]) => [`${groupKey}/${k}`, v])
+                            );
+                            await applySnippetsMerge(withPrefix);
+                        } catch (e) {
+                            console.error(e);
+                            new Notice("Failed to install package");
+                        }
+                    })
+            );
 
-        containerEl.createEl("h3", { text: "Packages (Espanso-compatible)" });
-        const expl = containerEl.createDiv({ cls: "snipsidian-help" });
-        const p1 = expl.createEl("p");
+        // помощь/текст как и раньше
+        const help = root.createDiv({ cls: "snipsidian-help" });
+        const p1 = help.createEl("p");
         p1.appendText("Install ready-made text expansion packages compatible with ");
         const link = p1.createEl("a", { text: "Espanso Hub", href: "https://hub.espanso.org" });
         link.setAttr("target", "_blank");
         p1.appendText(". Use the built-in catalog below or paste YAML from the package's Source page.");
-        const p2 = expl.createEl("p");
+        const p2 = help.createEl("p");
         p2.appendText("Note: Direct URL installs are disabled due to browser CORS restrictions. Open a package on the Hub → ");
-        p2.appendText("Source → copy the contents of ");
-        p2.appendText("package.yml");
-        p2.appendText(" and paste it here.");
+        p2.appendText("Source → copy the contents of package.yml and paste it here.");
 
-        // Paste YAML
+        // === Paste YAML === (label + textarea + button, без overwrite)
         let pastedYaml = "";
         let yamlFolderLabel = "";
-        let yamlOverwrite = false;
-
-        const pasteRow = new Setting(containerEl)
-            .setName("Install from YAML")
-            .setDesc("Paste Espanso YAML here, choose a folder label, and click Install.");
-
-        pasteRow.addText((t) => {
-            t.setPlaceholder("Folder label (e.g. Obsidian Callouts)").onChange((v) => {
-                yamlFolderLabel = v;
-                if (installYamlBtn) installYamlBtn.setDisabled(!yamlFolderLabel.trim());
-            });
-        });
-
-        pasteRow.addTextArea((ta) => {
-            ta.setPlaceholder('matches:\n  - trigger: ":brb"\n    replace: "be right back"\n');
-            ta.onChange((v) => (pastedYaml = v));
-            ta.inputEl.rows = 6;
-        });
-
-        pasteRow.addToggle((tg) =>
-            tg.setTooltip("Overwrite existing triggers (incoming values win on conflict)").onChange((v) => (yamlOverwrite = v))
-        );
-
         let installYamlBtn: import("obsidian").ButtonComponent | null = null;
-        pasteRow.addButton((b) => {
-            installYamlBtn = b;
-            b.setButtonText("Install pasted YAML")
-                .setCta()
-                .setDisabled(true)
-                .setTooltip("Convert pasted YAML and install into the chosen folder")
-                .onClick(async () => {
-                    try {
-                        const label = yamlFolderLabel.trim();
-                        if (!label) {
-                            new Notice("Please provide a folder label.");
-                            return;
-                        }
-                        const parsed = espansoYamlToSnippets(pastedYaml || "");
-                        if (!Object.keys(parsed).length) {
-                            new Notice("No snippets found in YAML.");
-                            return;
-                        }
-                        const groupKey = slugifyGroup(label) || "package";
-                        const withPrefix: Record<string, string> = Object.fromEntries(
-                            Object.entries(parsed).map(([k, v]) => [`${groupKey}/${k}`, v])
-                        );
-                        await applySnippetsMerge(withPrefix, yamlOverwrite);
-                    } catch (e) {
-                        console.error(e);
-                        new Notice("Failed to parse or install YAML");
-                    }
+
+        const s2 = section("Install from YAML", "Paste Espanso YAML here, choose a folder label, and click Install.");
+        const row = s2.createDiv({ cls: "snipsy-row-3" });
+
+        // 1) folder label
+        const col1 = row.createDiv({ cls: "snipsy-col" });
+        new Setting(col1)
+            .setClass("snipsy-inline-setting")
+            .setName("Folder label")
+            .addText((t) => {
+                t.setPlaceholder("e.g. Obsidian Callouts").onChange((v) => {
+                    yamlFolderLabel = v;
+                    if (installYamlBtn) installYamlBtn.setDisabled(!yamlFolderLabel.trim() || !pastedYaml.trim());
                 });
+            });
+
+        // 2) textarea
+        const col2 = row.createDiv({ cls: "snipsy-col" });
+        const taSetting = new Setting(col2).setClass("snipsy-inline-setting").setName("YAML");
+        taSetting.addTextArea((ta) => {
+            ta.setPlaceholder('matches:\n  - trigger: ":brb"\n    replace: "be right back"\n');
+            ta.onChange((v) => {
+                pastedYaml = v;
+                if (installYamlBtn) installYamlBtn.setDisabled(!yamlFolderLabel.trim() || !pastedYaml.trim());
+            });
+            ta.inputEl.rows = 8;
         });
 
-        // helper: merge + save + refresh
-        const applySnippetsMerge = async (incoming: Record<string, string>, overwriteToggle: boolean) => {
+        // 3) install button
+        const col3 = row.createDiv({ cls: "snipsy-col snipsy-col-actions" });
+        new Setting(col3)
+            .setClass("snipsy-inline-setting")
+            .addButton((b) => {
+                installYamlBtn = b;
+                b.setButtonText("Install pasted YAML")
+                    .setCta()
+                    .setDisabled(true)
+                    .setTooltip("Convert pasted YAML and install into the chosen folder")
+                    .onClick(async () => {
+                        try {
+                            const label = yamlFolderLabel.trim();
+                            if (!label) {
+                                new Notice("Please provide a folder label.");
+                                return;
+                            }
+                            const parsed = espansoYamlToSnippets(pastedYaml || "");
+                            if (!Object.keys(parsed).length) {
+                                new Notice("No snippets found in YAML.");
+                                return;
+                            }
+                            const groupKey = slugifyGroup(label) || "package";
+                            const withPrefix: Record<string, string> = Object.fromEntries(
+                                Object.entries(parsed).map(([k, v]) => [`${groupKey}/${k}`, v])
+                            );
+                            await applySnippetsMerge(withPrefix);
+                        } catch (e) {
+                            console.error(e);
+                            new Notice("Failed to parse or install YAML");
+                        }
+                    });
+            });
+
+        // helper: merge + save + refresh (без "overwrite"; существующие выигрывают, конфликты → превью)
+        const applySnippetsMerge = async (incoming: Record<string, string>) => {
             if (!incoming || !Object.keys(incoming).length) {
                 new Notice("No snippets found in package");
                 return;
@@ -364,9 +423,8 @@ export class SnipSidianSettingTab extends PluginSettingTab {
 
             if (diff.conflicts.length === 0) {
                 const before = Object.keys(this.plugin.settings.snippets).length;
-                const next = overwriteToggle
-                    ? { ...this.plugin.settings.snippets, ...incoming }
-                    : { ...incoming, ...this.plugin.settings.snippets };
+                // default: НЕ перезаписываем существующие
+                const next = { ...incoming, ...this.plugin.settings.snippets };
                 this.plugin.settings.snippets = next;
                 await this.plugin.saveSettings();
                 const after = Object.keys(this.plugin.settings.snippets).length;
@@ -384,12 +442,21 @@ export class SnipSidianSettingTab extends PluginSettingTab {
             };
             modal.open();
         };
+    }
 
-        // ===== Snippets =====
-        containerEl.createEl("h3", { text: "Snippets" });
+    /** SNIPPETS: поиск, группы, selection mode, CRUD */
+    private renderSnippetsTab(root: HTMLElement) {
+        const section = (title: string, hint?: string) => {
+            const wrap = root.createDiv({ cls: "snipsy-section" });
+            // по просьбе: убираем верхний заголовок "Snippets", поэтому title может быть пустым
+            if (title) wrap.createEl("h3", { text: title, cls: "snipsy-section-title" });
+            if (hint) wrap.createEl("p", { text: hint, cls: "snipsy-section-hint" });
+            return wrap;
+        };
 
-        // --- Search row ---
-        new Setting(containerEl)
+        // --- блок без заголовка: search + toggles
+        const search = section("");
+        new Setting(search)
             .setName("Search")
             .setDesc("Filter by trigger or replacement text.")
             .addText((t) =>
@@ -399,14 +466,14 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 })
             );
 
-        // --- Selection mode ---
         let selectionToggle: import("obsidian").ToggleComponent | undefined;
-        new Setting(containerEl)
+        new Setting(search)
             .setName("Selection mode")
             .setDesc("Enable multi-select (checkboxes) to perform bulk actions. Use group checkboxes for “Select all”.")
             .addToggle((tg) => {
                 selectionToggle = tg;
-                tg.setTooltip("Enable selection mode to pick multiple snippets")
+                tg
+                    .setTooltip("Enable selection mode to pick multiple snippets")
                     .setValue(this.selectionMode)
                     .onChange((v) => {
                         this.selectionMode = v;
@@ -415,22 +482,16 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                     });
             });
 
-        // --- Groups: single toggle (expand/collapse all) ---
-        const groupsRow = new Setting(containerEl)
-            .setName("Groups")
-            .setDesc("Expand or collapse all groups at once.");
-
+        // --- Groups: expand/collapse all
+        const groupsRow = new Setting(search).setName("Groups").setDesc("Expand or collapse all groups at once.");
         let groupsToggle: import("obsidian").ToggleComponent | undefined;
 
         const allGroups = (): string[] => this.allGroupsFrom(this.plugin.settings.snippets);
-
-        // ensure open state exists for all current groups
         allGroups().forEach((g) => {
             if (!this.groupOpen.has(g)) this.groupOpen.set(g, this.loadOpenState(g, true));
         });
 
-        const areAllOpen = (): boolean =>
-            allGroups().every((g) => this.groupOpen.get(g) === true);
+        const areAllOpen = (): boolean => allGroups().every((g) => this.groupOpen.get(g) === true);
 
         const applyAll = (open: boolean) => {
             for (const g of allGroups()) {
@@ -443,13 +504,11 @@ export class SnipSidianSettingTab extends PluginSettingTab {
 
         groupsRow.addToggle((tg) => {
             groupsToggle = tg;
-            tg.setTooltip("Toggle all groups open/closed")
-                .setValue(areAllOpen())
-                .onChange((v) => applyAll(v));
+            tg.setTooltip("Toggle all groups open/closed").setValue(areAllOpen()).onChange((v) => applyAll(v));
         });
 
         // ---- list mount point
-        const listEl = containerEl.createDiv();
+        const listEl = root.createDiv();
 
         const renderList = () => {
             listEl.empty();
@@ -469,9 +528,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 moveBtn.disabled = this.selected.size === 0;
                 moveBtn.onclick = () => {
                     if (this.selected.size === 0) return;
-                    const groups = this.allGroupsFrom(this.plugin.settings.snippets).filter(
-                        (g) => g !== "Ungrouped"
-                    );
+                    const groups = this.allGroupsFrom(this.plugin.settings.snippets).filter((g) => g !== "Ungrouped");
                     const modal = new GroupPickerModal(this.app, {
                         title: `Move ${this.selected.size} snippet(s) to…`,
                         groups,
@@ -479,18 +536,13 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                     });
                     modal.onSubmit = async (target) => {
                         if (target === null) return;
-                        const { moved, skipped } = this.bulkMoveKeys(
-                            target,
-                            Array.from(this.selected)
-                        );
+                        const { moved, skipped } = this.bulkMoveKeys(target, Array.from(this.selected));
                         await this.plugin.saveSettings();
                         const openKey = target || "Ungrouped";
                         this.groupOpen.set(openKey, true);
                         this.saveOpenState(openKey, true);
                         renderList();
-                        new Notice(
-                            `Moved ${moved} item(s)${skipped ? `, skipped ${skipped} (conflicts)` : ""}.`
-                        );
+                        new Notice(`Moved ${moved} item(s)${skipped ? `, skipped ${skipped} (conflicts)` : ""}.`);
                     };
                     modal.open();
                 };
@@ -519,11 +571,10 @@ export class SnipSidianSettingTab extends PluginSettingTab {
             renderBulkBar();
 
             // Filter + group by prefix
-            const entries = Object.entries(this.plugin.settings.snippets)
-                .filter(([k, v]) => {
-                    if (!this.searchQuery) return true;
-                    return k.toLowerCase().includes(this.searchQuery) || v.toLowerCase().includes(this.searchQuery);
-                });
+            const entries = Object.entries(this.plugin.settings.snippets).filter(([k, v]) => {
+                if (!this.searchQuery) return true;
+                return k.toLowerCase().includes(this.searchQuery) || v.toLowerCase().includes(this.searchQuery);
+            });
 
             if (!entries.length) {
                 const empty = listEl.createDiv({ text: "No snippets match the filter." });
@@ -547,8 +598,11 @@ export class SnipSidianSettingTab extends PluginSettingTab {
 
             for (const [group, items] of groups) {
                 // Header
-                const hdr = listEl.createDiv({ cls: "snipsidian-group-header" });
-                const toggleBtn = hdr.createEl("button", { text: this.groupOpen.get(group) ? "▾" : "▸" });
+                const hdr = listEl.createDiv({ cls: "snipsidian-group-header snipsy-group-header" });
+                const left = hdr.createDiv({ cls: "snipsy-group-left" });
+                const right = hdr.createDiv({ cls: "snipsy-group-right" });
+
+                const toggleBtn = left.createEl("button", { text: this.groupOpen.get(group) ? "▾" : "▸" });
                 toggleBtn.addEventListener("click", () => {
                     const next = !this.groupOpen.get(group);
                     this.groupOpen.set(group, next);
@@ -571,17 +625,15 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                         else keysInGroup.forEach((k) => this.selected.delete(k));
                         renderList();
                     };
-                    hdr.insertAdjacentElement("beforeend", cb);
+                    left.insertAdjacentElement("beforeend", cb);
                 }
 
                 const title = group === "Ungrouped" ? "Ungrouped" : displayGroupTitle(group);
-                hdr.createEl("span", { text: ` ${title} (${items.length})` });
+                left.createEl("span", { text: ` ${title} (${items.length})` });
 
-                // Group actions (rename / delete)
+                // Group actions (rename / delete) — выравнивание вправо
                 if (group !== "Ungrouped") {
-                    const actions = hdr.createDiv({ cls: "snipsidian-group-actions" });
-
-                    const renameBtn = actions.createEl("button", { text: "Rename" });
+                    const renameBtn = right.createEl("button", { text: "Rename" });
                     renameBtn.onclick = (ev) => {
                         ev.preventDefault();
                         ev.stopPropagation();
@@ -595,9 +647,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                                 const slug = slugifyGroup(v);
                                 if (!slug) return "Name cannot be empty.";
                                 if (slug === group) return "Name is unchanged.";
-                                const exists = Object.keys(this.plugin.settings.snippets).some(k =>
-                                    k.startsWith(slug + "/")
-                                );
+                                const exists = Object.keys(this.plugin.settings.snippets).some((k) => k.startsWith(slug + "/"));
                                 return exists ? `Group "${displayGroupTitle(slug)}" already exists.` : null;
                             },
                             onSubmit: async (newLabel) => {
@@ -623,37 +673,35 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                                 await this.plugin.saveSettings();
 
                                 this.groupOpen.delete(group);
-                                this.saveOpenState(group, undefined as unknown as boolean);
+                                this.saveOpenState(group, undefined);
                                 this.groupOpen.set(newSlug, true);
                                 this.saveOpenState(newSlug, true);
 
                                 renderList();
                                 new Notice(`Renamed group to "${displayGroupTitle(newSlug)}" (${moved} moved).`);
-                            }
+                            },
                         }).open();
                     };
 
-
-                    const deleteBtn = actions.createEl("button", { text: "Delete group" });
+                    const deleteBtn = right.createEl("button", { text: "Delete group" });
                     deleteBtn.onclick = async (ev) => {
                         ev.preventDefault();
-                        ev.stopPropagation(); // <-- и здесь, чтобы клик не сворачивал группу
+                        ev.stopPropagation();
                         if (items.length === 0) {
                             this.groupOpen.delete(group);
-                            this.saveOpenState(group, undefined as unknown as boolean);
+                            this.saveOpenState(group, undefined);
                             renderList();
                             return;
                         }
                         const choice = window.confirm(
-                            `Delete group "${title}" with ${items.length} snippet(s)?\n` +
-                            "OK = Delete all,  Cancel = Move to another folder…"
+                            `Delete group "${title}" with ${items.length} snippet(s)?\n` + "OK = Delete all,  Cancel = Move to another folder…"
                         );
                         if (choice) {
                             // delete all
                             for (const [k] of items) delete this.plugin.settings.snippets[k];
                             await this.plugin.saveSettings();
                             this.groupOpen.delete(group);
-                            this.saveOpenState(group, undefined as unknown as boolean);
+                            this.saveOpenState(group, undefined);
                             renderList();
                             new Notice(`Deleted ${items.length} snippet(s) from "${title}".`);
                         } else {
@@ -676,8 +724,6 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 if (!this.groupOpen.get(group)) continue;
 
                 // Items
-                const existingGroups = Array.from(groups.keys()).filter((g) => g !== group && g !== "Ungrouped").sort();
-
                 items.forEach(([trigger, replacement]) => {
                     const row = new Setting(listEl);
 
@@ -740,7 +786,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                         };
                     });
 
-                    // --- trigger input ---
+                    // trigger input
                     row.addText((t) => {
                         t.setPlaceholder("trigger")
                             .setValue(tail)
@@ -775,18 +821,20 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                                 map[newKey] = val;
                                 currentKey = newKey;
                             });
-                        t.inputEl.addEventListener("blur", () => { saveSoft(); });
+                        t.inputEl.addEventListener("blur", () => {
+                            this.plugin.saveSettings();
+                        });
                     });
 
+                    // replacement
                     row.addTextArea((ta) => {
-                        ta.setPlaceholder("replacement (e.g. be right back)")
-                            .setValue(replacement)
-                            .onChange((val) => {
-                                this.plugin.settings.snippets[currentKey] = val;
-                            });
-
+                        ta.setPlaceholder("replacement (e.g. be right back)").setValue(replacement).onChange((val) => {
+                            this.plugin.settings.snippets[currentKey] = val;
+                        });
                         ta.inputEl.rows = 2;
-                        ta.inputEl.addEventListener("blur", () => { saveSoft(); });
+                        ta.inputEl.addEventListener("blur", () => {
+                            this.plugin.saveSettings();
+                        });
                     });
 
                     row.addExtraButton((btn) =>
@@ -803,7 +851,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 });
             }
 
-            // Add snippet button
+            // Add snippet
             new Setting(listEl).addButton((b) =>
                 b
                     .setButtonText("+ Add snippet")
