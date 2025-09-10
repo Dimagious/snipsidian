@@ -132,6 +132,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Package catalog (`PACKAGE_CATALOG`) is now sorted alphabetically by `label` for convenience.
 
+## [0.7.0] - 2025-01-XX
+
+### Added
+- **Enhanced TypeScript configuration** with stricter type checking (`noImplicitAny`, `noUncheckedIndexedAccess`)
+- **Comprehensive test coverage** for core expander with 13 new test cases covering edge cases
+- **Modular UI architecture** with separated components for better maintainability
+
+### Changed
+- **Settings UI refactored** into modular components (BasicTab, PackagesTab, SnippetsTab)
+- **Catalog module extracted** from packages into dedicated `src/catalog/` module
+- **Improved type safety** throughout the codebase with reduced `any` usage
+- **Enhanced test coverage** for `src/core/expander.ts` (92.68% coverage)
+
+### Fixed
+- **TypeScript compilation errors** resolved with proper nullish coalescing and type annotations
+- **Import path consistency** after architectural refactoring
+
+### Notes
+- All user-facing functionality remains unchanged
+- Focus on code quality, maintainability, and architectural improvements
+- Build size optimized to 76.6kb
+
 ## [0.6.0] - 2025-09-05
 
 ### Changed
@@ -144,7 +166,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Simplified *Install from YAML*: cleaner three-column layout (folder label / YAML textarea / install button).  
       Removed overwrite toggle for clarity.
   - **Snippets**:
-    - Removed redundant “Snippets” heading at the top of the tab.
+    - Removed redundant "Snippets" heading at the top of the tab.
     - Group actions (**Rename**, **Delete group**) are now aligned to the right for consistency.
 - Polished spacing, alignment and layout across sections for a cleaner look.
 
