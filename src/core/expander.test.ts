@@ -171,4 +171,145 @@ describe("core/expander: expandIfTriggered", () => {
         // No $| in replacement -> plugin keeps cursor position as-is
         expect(ed.getCursor()).toEqual({ line: 0, ch: 4 });
     });
+
+    it("does not expand in YAML frontmatter without closing delimiter", () => {
+        const ed = new MockEditor([
+            "---",
+            "fn ",
+            "content after frontmatter"
+        ]);
+        ed.setCursor({ line: 2, ch: 0 }); // after frontmatter, no closing ---
+        expandIfTriggered(ed as any, snippets);
+        expect(ed.getLine(2)).toBe("content after frontmatter"); // unchanged
+    });
+
+    it("does not expand in YAML frontmatter when cursor is after opening delimiter", () => {
+        const ed = new MockEditor([
+            "---",
+            "fn ",
+            "content"
+        ]);
+        ed.setCursor({ line: 1, ch: 3 }); // inside frontmatter, no closing ---
+        expandIfTriggered(ed as any, snippets);
+        expect(ed.getLine(1)).toBe("fn "); // unchanged
+    });
+
+    it("does not expand inside tilde fenced code blocks", () => {
+        const ed = new MockEditor([
+            "~~~",
+            "fn ",
+            "~~~"
+        ]);
+        ed.setCursor({ line: 1, ch: 3 }); // after space inside tilde fence
+        expandIfTriggered(ed as any, snippets);
+        expect(ed.getLine(1)).toBe("fn "); // unchanged
+    });
+
+    it("does not expand inside tilde fenced code blocks without closing delimiter", () => {
+        const ed = new MockEditor([
+            "~~~",
+            "fn ",
+            "content after fence"
+        ]);
+        ed.setCursor({ line: 2, ch: 0 }); // after tilde fence, no closing ~~~
+        expandIfTriggered(ed as any, snippets);
+        expect(ed.getLine(2)).toBe("content after fence"); // unchanged
+    });
+
+    it("does not expand inside inline code with escaped backticks", () => {
+        const ed = new MockEditor("before \\`fn\\` after");
+        ed.setCursor({ line: 0, ch: "before \\`fn\\` ".length }); // after escaped backticks
+        expandIfTriggered(ed as any, snippets);
+        expect(ed.getLine(0)).toBe("before \\`fn\\` after"); // unchanged
+    });
+
+    it("does not expand inside inline code with triple backticks", () => {
+        const ed = new MockEditor("before ```fn``` after");
+        ed.setCursor({ line: 0, ch: "before ```fn``` ".length }); // after triple backticks
+        expandIfTriggered(ed as any, snippets);
+        expect(ed.getLine(0)).toBe("before ```fn``` after"); // unchanged
+    });
+
+    it("does not expand inside inline code with mixed backticks and triple backticks", () => {
+        const ed = new MockEditor("before `fn``` after");
+        ed.setCursor({ line: 0, ch: "before `fn``` ".length }); // after mixed backticks
+        expandIfTriggered(ed as any, snippets);
+        expect(ed.getLine(0)).toBe("before `fn``` after"); // unchanged
+    });
+
+    it("handles fenced code blocks with cursor at closing delimiter line", () => {
+        const ed = new MockEditor([
+            "```",
+            "fn ",
+            "```",
+            "content"
+        ]);
+        ed.setCursor({ line: 2, ch: 0 }); // at closing delimiter line
+        expandIfTriggered(ed as any, snippets);
+        expect(ed.getLine(2)).toBe("```"); // unchanged
+    });
+
+    it("handles tilde fenced code blocks with cursor at closing delimiter line", () => {
+        const ed = new MockEditor([
+            "~~~",
+            "fn ",
+            "~~~",
+            "content"
+        ]);
+        ed.setCursor({ line: 2, ch: 0 }); // at closing delimiter line
+        expandIfTriggered(ed as any, snippets);
+        expect(ed.getLine(2)).toBe("~~~"); // unchanged
+    });
+
+    it("expands trigger with multi-line replacement and cursor placement", () => {
+        const multiLineSnippets = {
+            "fn": "function $|() {\n    // TODO: implement\n}"
+        };
+        const ed = new MockEditor("fn ");
+        ed.setCursor({ line: 0, ch: 3 }); // after the space
+        expandIfTriggered(ed as any, multiLineSnippets);
+        
+        // Should expand to multi-line function
+        expect(ed.getLine(0)).toBe("function () {");
+        expect(ed.getLine(1)).toBe("    // TODO: implement");
+        expect(ed.getLine(2)).toBe("} ");
+        // Cursor should be at placeholder position
+        expect(ed.getCursor()).toEqual({ line: 0, ch: "function ".length });
+    });
+
+    it("handles YAML frontmatter with cursor at closing delimiter", () => {
+        const ed = new MockEditor([
+            "---",
+            "title: test",
+            "---",
+            "fn "
+        ]);
+        ed.setCursor({ line: 3, ch: 3 }); // after space, outside frontmatter
+        expandIfTriggered(ed as any, snippets);
+        expect(ed.getLine(3)).toBe("function () {} "); // should expand
+    });
+
+    it("handles YAML frontmatter with cursor exactly at closing delimiter line", () => {
+        const ed = new MockEditor([
+            "---",
+            "title: test",
+            "---",
+            "content"
+        ]);
+        ed.setCursor({ line: 2, ch: 0 }); // at closing delimiter line
+        expandIfTriggered(ed as any, snippets);
+        expect(ed.getLine(2)).toBe("---"); // unchanged
+    });
+
+    it("handles YAML frontmatter with cursor at closing delimiter line with content", () => {
+        const ed = new MockEditor([
+            "---",
+            "title: test",
+            "---content",
+            "fn "
+        ]);
+        ed.setCursor({ line: 2, ch: 3 }); // at closing delimiter line with content
+        expandIfTriggered(ed as any, snippets);
+        expect(ed.getLine(2)).toBe("---content"); // unchanged
+    });
 });
