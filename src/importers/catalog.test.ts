@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import * as pkg from "../packages/catalog";
+import * as pkg from "../catalog";
 import * as imp from "./catalog";
 
 describe("importers/catalog re-exports", () => {

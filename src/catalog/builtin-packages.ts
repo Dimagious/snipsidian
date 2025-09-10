@@ -1,14 +1,7 @@
-export type PackageItem = {
-  id: string;
-  label: string;
-  kind: "builtin";
-  yaml: string;
-};
-
 /* ---------- Builtins curated for Obsidian ---------- */
 
 // Markdown basics (kept from earlier, moved into catalog)
-const BUILTIN_MARKDOWN_YAML = `matches:
+export const BUILTIN_MARKDOWN_YAML = `matches:
   - trigger: ":code"
     replace: "\\\`\\\`\\\`$|\\n\\\`\\\`\\\`"
   - trigger: ":todo"
@@ -54,7 +47,7 @@ const BUILTIN_MARKDOWN_YAML = `matches:
 `;
 
 // Obsidian callouts
-const BUILTIN_CALLOUTS_YAML = `matches:
+export const BUILTIN_CALLOUTS_YAML = `matches:
   # Базовые
   - trigger: ":note"
     replace: "> [!note] $|\\n> "
@@ -101,7 +94,7 @@ const BUILTIN_CALLOUTS_YAML = `matches:
 `;
 
 // Unicode arrows
-const BUILTIN_UNICODE_ARROWS_YAML = `matches:
+export const BUILTIN_UNICODE_ARROWS_YAML = `matches:
   - triggers: [":rarrow", ":->"]
     replace: "→"
   - triggers: [":larrow", ":<-"]
@@ -115,7 +108,7 @@ const BUILTIN_UNICODE_ARROWS_YAML = `matches:
 `;
 
 // Math symbols (lite)
-const BUILTIN_MATH_LITE_YAML = `matches:
+export const BUILTIN_MATH_LITE_YAML = `matches:
   - trigger: ":pm"
     replace: "±"
   - trigger: ":times"
@@ -139,7 +132,7 @@ const BUILTIN_MATH_LITE_YAML = `matches:
 `;
 
 // Emoji (lite)
-const BUILTIN_EMOJI_LITE_YAML = `matches:
+export const BUILTIN_EMOJI_LITE_YAML = `matches:
   # 😀 Смайлики — базовые
   - trigger: ":grinning"        ; replace: "😀"
   - trigger: ":smiley"          ; replace: "😃"
@@ -306,7 +299,7 @@ const BUILTIN_EMOJI_LITE_YAML = `matches:
 `;
 
 // Task states (builtin)
-const BUILTIN_TASKS_YAML = `matches:
+export const BUILTIN_TASKS_YAML = `matches:
   # Базовое todo
   - trigger: ":todo"
     replace: "- [ ] $|"
@@ -335,13 +328,3 @@ const BUILTIN_TASKS_YAML = `matches:
   - trigger: ":important"
     replace: "- [!] $|"
 `;
-
-
-export const PACKAGE_CATALOG: PackageItem[] = [
-  { id: "builtin-arrows", label: "Unicode arrows (builtin)", kind: "builtin", yaml: BUILTIN_UNICODE_ARROWS_YAML },
-  { id: "builtin-callouts", label: "Obsidian Callouts (builtin)", kind: "builtin", yaml: BUILTIN_CALLOUTS_YAML },
-  { id: "builtin-emoji-lite", label: "Emoji (lite, builtin)", kind: "builtin", yaml: BUILTIN_EMOJI_LITE_YAML },
-  { id: "builtin-markdown", label: "Markdown basics (builtin)", kind: "builtin", yaml: BUILTIN_MARKDOWN_YAML },
-  { id: "builtin-math-lite", label: "Math symbols (lite, builtin)", kind: "builtin", yaml: BUILTIN_MATH_LITE_YAML },
-  { id: "builtin-tasks", label: "Task states (builtin)", kind: "builtin", yaml: BUILTIN_TASKS_YAML },
-];
