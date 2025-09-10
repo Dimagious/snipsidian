@@ -12,16 +12,16 @@ export class PackagesTab {
     ) {}
 
     render(root: HTMLElement) {
-        const section = (title: string, hint?: string) => {
-            const wrap = root.createDiv({ cls: "snipsy-section" });
+        const section = (title: string, hint?: string, specialClass?: string) => {
+            const wrap = root.createDiv({ cls: `snipsy-section ${specialClass || ""}` });
             wrap.createEl("h3", { text: title });
             if (hint) wrap.createEl("p", { text: hint, cls: "snipsy-hint" });
             return wrap;
         };
 
-        section("Install from Catalog", "Curated packages designed for Obsidian.");
+        const catalogSection = section("Install from Catalog", "Curated packages designed for Obsidian.", "snipsy-catalog-section");
 
-        new Setting(root)
+        new Setting(catalogSection)
             .setName("Package")
             .setDesc("Select a package to install")
             .addDropdown((dropdown) => {
@@ -52,9 +52,9 @@ export class PackagesTab {
                 });
             });
 
-        section("Install from YAML", "Paste any Espanso-compatible package.");
+        const yamlSection = section("Install from YAML", "Paste any Espanso-compatible package.", "snipsy-yaml-section");
 
-        new Setting(root)
+        new Setting(yamlSection)
             .setName("YAML Package")
             .setDesc("Paste YAML content from Espanso Hub or other sources")
             .addTextArea((text) => {

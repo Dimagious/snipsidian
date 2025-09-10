@@ -18,16 +18,16 @@ export class BasicTab {
         };
 
         // Export/Import section
-        const section = (title: string, hint?: string) => {
-            const wrap = root.createDiv({ cls: "snipsy-section" });
+        const section = (title: string, hint?: string, specialClass?: string) => {
+            const wrap = root.createDiv({ cls: `snipsy-section ${specialClass || ""}` });
             wrap.createEl("h3", { text: title });
             if (hint) wrap.createEl("p", { text: hint, cls: "snipsy-hint" });
             return wrap;
         };
 
-        section("Export & Import", "Backup your snippets or share them between devices.");
+        const exportSection = section("Export & Import", "Backup your snippets or share them between devices.", "snipsy-export-section");
 
-        new Setting(root)
+        new Setting(exportSection)
             .setName("Export snippets")
             .setDesc("Download your snippets as a JSON file")
             .addButton((btn) =>
@@ -46,7 +46,7 @@ export class BasicTab {
                     })
             );
 
-        new Setting(root)
+        new Setting(exportSection)
             .setName("Import snippets")
             .setDesc("Upload a JSON file to replace your current snippets")
             .addButton((btn) =>
@@ -79,7 +79,7 @@ export class BasicTab {
                     })
             );
 
-        new Setting(root)
+        new Setting(exportSection)
             .setName("Reveal data file")
             .setDesc("Open the snippets data file in your file manager")
             .addButton((btn) =>
@@ -109,9 +109,9 @@ export class BasicTab {
             );
 
         // Help section
-        section("Help & Resources", "Learn more about Snipsy and text expansion.");
+        const helpSection = section("Help & Resources", "Learn more about Snipsy and text expansion.", "snipsy-help-section");
 
-        new Setting(root)
+        new Setting(helpSection)
             .setName("Documentation")
             .setDesc("Visit the GitHub repository for documentation and examples")
             .addButton((btn) =>
@@ -123,7 +123,7 @@ export class BasicTab {
                     })
             );
 
-        new Setting(root)
+        new Setting(helpSection)
             .setName("Espanso Hub")
             .setDesc("Browse thousands of community-created packages")
             .addButton((btn) =>
@@ -135,7 +135,7 @@ export class BasicTab {
                     })
             );
 
-        new Setting(root)
+        new Setting(helpSection)
             .setName("Demo GIF")
             .setDesc("See Snipsy in action")
             .addButton((btn) =>

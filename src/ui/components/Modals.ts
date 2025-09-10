@@ -136,12 +136,17 @@ export class GroupPickerModal extends Modal {
 
         const form = contentEl.createDiv({ cls: "snipsidian-move-form" });
 
+        // Add description
+        const desc = form.createEl("p", { text: "Select a group to move the selected snippets to:" });
+        desc.addClass("snipsy-hint");
+
         const select = form.createEl("select");
-        if (this.allowUngrouped) select.append(new Option("Ungrouped", ""));
+        select.addClass("snipsy-group-select");
+        if (this.allowUngrouped) select.append(new Option("📁 Ungrouped", ""));
         for (const g of this.groups) {
-            select.append(new Option(displayGroupTitle(g), g));
+            select.append(new Option(`📁 ${displayGroupTitle(g)}`, g));
         }
-        select.append(new Option("New group…", "__new__"));
+        select.append(new Option("➕ New group…", "__new__"));
 
         const newWrap = form.createDiv({ cls: "snipsidian-newgroup-wrap" });
         const input = newWrap.createEl("input", {
@@ -238,6 +243,76 @@ export class TextPromptModal extends Modal {
         // Focus
         input.inputEl.focus();
         input.inputEl.select();
+    }
+}
+
+/** Add new snippet modal */
+export class AddSnippetModal extends Modal {
+    onConfirm?: (snippet: { trigger: string; replacement: string; group: string }) => void;
+
+    constructor(app: App, onConfirm?: (snippet: { trigger: string; replacement: string; group: string }) => void) {
+        super(app);
+        this.onConfirm = onConfirm;
+    }
+
+    onOpen(): void {
+        const { contentEl, titleEl } = this;
+        titleEl.setText("Add New Snippet");
+        contentEl.addClass("snipsidian-modal");
+
+        let trigger = "";
+        let replacement = "";
+        let group = "";
+
+        new Setting(contentEl)
+            .setName("Trigger")
+            .setDesc("The text that will be expanded (e.g., :hello)")
+            .addText((text) => {
+                text
+                    .setPlaceholder("e.g., :hello")
+                    .setValue(trigger)
+                    .onChange((value) => {
+                        trigger = value;
+                    });
+            });
+
+        new Setting(contentEl)
+            .setName("Replacement")
+            .setDesc("The text that will replace the trigger")
+            .addTextArea((text) => {
+                text
+                    .setPlaceholder("e.g., Hello, world!")
+                    .setValue(replacement)
+                    .onChange((value) => {
+                        replacement = value;
+                    });
+            });
+
+        new Setting(contentEl)
+            .setName("Group")
+            .setDesc("Optional group name for organization")
+            .addText((text) => {
+                text
+                    .setPlaceholder("e.g., greetings")
+                    .setValue(group)
+                    .onChange((value) => {
+                        group = value;
+                    });
+            });
+
+        const footer = contentEl.createDiv({ cls: "modal-button-container" });
+        
+        const add = footer.createEl("button", { text: "Add Snippet" });
+        add.addClass("mod-cta");
+        add.onclick = () => {
+            if (trigger.trim() && replacement.trim()) {
+                this.onConfirm?.({ trigger: trigger.trim(), replacement: replacement.trim(), group: group.trim() });
+                this.close();
+            }
+        };
+
+        const cancel = footer.createEl("button", { text: "Cancel" });
+        cancel.onclick = () => this.close();
     }
 }
 

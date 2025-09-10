@@ -3,7 +3,7 @@ import type SnipSidianPlugin from "../../main";
 import { normalizeTrigger, isBadTrigger, splitKey, joinKey, displayGroupTitle } from "../../services/utils";
 import { GroupManager } from "../utils/group-utils";
 import { UIStateManager } from "../utils/ui-state";
-import { GroupPickerModal, TextPromptModal } from "./Modals";
+import { AddSnippetModal, GroupPickerModal, TextPromptModal } from "./Modals";
 
 export class SnippetsTab {
     private groupManager: GroupManager;
@@ -18,17 +18,16 @@ export class SnippetsTab {
     }
 
     render(root: HTMLElement) {
-        const section = (title: string, hint?: string) => {
-            const wrap = root.createDiv({ cls: "snipsy-section" });
-            wrap.createEl("h3", { text: title });
-            if (hint) wrap.createEl("p", { text: hint, cls: "snipsy-hint" });
-            return wrap;
-        };
+        // Main Snippet Manager section
+        const managerSection = root.createDiv({ cls: "snipsy-section snipsy-snippet-manager" });
+        managerSection.createEl("h3", { text: "Snippet Manager" });
+        managerSection.createEl("p", { text: "Manage your text expansion snippets with search, bulk operations, and organization tools", cls: "snipsy-hint" });
 
-        // Search and controls
-        section("Search & Controls");
-
-        new Setting(root)
+        // Search subsection
+        const searchSubsection = managerSection.createDiv({ cls: "snipsy-subsection" });
+        searchSubsection.createEl("h4", { text: "Search & Filter" });
+        
+        new Setting(searchSubsection)
             .setName("Search snippets")
             .setDesc("Filter snippets by trigger or replacement text")
             .addText((text) => {
@@ -41,8 +40,17 @@ export class SnippetsTab {
                     });
             });
 
-        new Setting(root)
-            .setName("Selection mode")
+        // Controls subsection
+        const controlsSubsection = managerSection.createDiv({ cls: "snipsy-subsection" });
+        controlsSubsection.createEl("h4", { text: "Management Tools" });
+        
+        // Selection mode and group controls in one row
+        const controlsRow = controlsSubsection.createDiv({ cls: "snipsy-controls-row" });
+        
+        // Selection mode
+        const selectionModeDiv = controlsRow.createDiv({ cls: "snipsy-control-item" });
+        new Setting(selectionModeDiv)
+            .setName("Selection Mode")
             .setDesc("Enable multi-select for bulk operations")
             .addToggle((toggle) => {
                 toggle
@@ -55,10 +63,8 @@ export class SnippetsTab {
             });
 
         // Group controls
-        const groupControls = root.createDiv({ cls: "snipsy-section" });
-        groupControls.createEl("h3", { text: "Group Controls" });
-
-        new Setting(groupControls)
+        const groupControlsDiv = controlsRow.createDiv({ cls: "snipsy-control-item" });
+        new Setting(groupControlsDiv)
             .setName("Expand All Groups")
             .setDesc("Toggle all groups open/closed")
             .addToggle((toggle) => {
@@ -75,32 +81,46 @@ export class SnippetsTab {
                 });
             });
 
-        // Bulk operations will be rendered dynamically in renderSnippetList
+        // Add new snippet button in management tools
+        const addSnippetDiv = controlsSubsection.createDiv({ cls: "snipsy-add-snippet" });
+        new Setting(addSnippetDiv)
+            .setName("Add New Snippet")
+            .setDesc("Create a new text expansion snippet")
+            .addButton((btn) => {
+                btn.setButtonText("Add New Snippet");
+                btn.setCta();
+                btn.onClick(() => {
+                    this.showAddSnippetModal();
+                });
+            });
 
-        // Add new snippet section (always at bottom)
-        this.renderAddSnippetSection(root);
+        // Snippets subsection (created once)
+        const snippetsSubsection = managerSection.createDiv({ cls: "snipsy-subsection" });
+        snippetsSubsection.createEl("h4", { text: "Your Snippets" });
+        const listEl = snippetsSubsection.createDiv({ cls: "snippet-list" });
         
-        // Snippet list (above add section)
-        this.renderSnippetList(root);
+        // Render snippet list content
+        this.renderSnippetListContent(listEl, root);
     }
 
     private renderSnippetList(root: HTMLElement) {
-        // Remove existing list
-        const existingList = root.querySelector(".snippet-list");
-        if (existingList) {
-            existingList.remove();
-        }
+        // Find existing list container
+        const listEl = root.querySelector(".snippet-list");
+        if (!listEl) return;
 
-        // Find add snippet section to insert before it
-        const addSection = root.querySelector(".add-snippet-section");
-        const listEl = addSection 
-            ? root.insertBefore(root.createDiv({ cls: "snippet-list" }), addSection)
-            : root.createDiv({ cls: "snippet-list" });
+        // Clear existing content
+        listEl.empty();
 
         // Render bulk operations if in selection mode and items are selected
         if (this.uiState.getSelectionMode() && this.uiState.getSelected().size > 0) {
-            this.renderBulkOperations(listEl, root);
+            this.renderBulkOperations(listEl as HTMLElement, root);
         }
+
+        // Render snippet list content
+        this.renderSnippetListContent(listEl as HTMLElement, root);
+    }
+
+    private renderSnippetListContent(listEl: HTMLElement, root: HTMLElement) {
 
         const searchQuery = this.uiState.getSearchQuery().toLowerCase();
         const entries = Object.entries(this.plugin.settings.snippets)
@@ -168,7 +188,12 @@ export class SnippetsTab {
             }
             
             // Rename group
-            actions.createEl("button", { text: "Rename", cls: "group-action" }).onclick = () => {
+            const renameBtn = actions.createEl("button", { 
+                text: "✏️", 
+                cls: "group-action-btn rename-btn",
+                title: "Rename group"
+            });
+            renameBtn.onclick = () => {
                 const modal = new TextPromptModal(this.app, {
                     title: "Rename group:",
                     initial: title,
@@ -188,7 +213,12 @@ export class SnippetsTab {
             };
 
             // Delete group
-            actions.createEl("button", { text: "Delete", cls: "group-action" }).onclick = () => {
+            const deleteBtn = actions.createEl("button", { 
+                text: "🗑️", 
+                cls: "group-action-btn delete-btn",
+                title: "Delete group"
+            });
+            deleteBtn.onclick = () => {
                 if (confirm(`Delete group "${title}" with ${items.length} snippets?`)) {
                     for (const [key] of items) {
                         delete this.plugin.settings.snippets[key];
@@ -206,8 +236,10 @@ export class SnippetsTab {
                 
                 for (const [trigger, replacement] of items) {
                     const row = new Setting(content);
-                    row.setName(trigger);
+                    const { name: triggerName } = splitKey(trigger);
+                    row.setName(triggerName);
                     row.setDesc(replacement);
+                    
                     
                     // Selection checkbox (in selection mode)
                     if (this.uiState.getSelectionMode()) {
@@ -225,97 +257,48 @@ export class SnippetsTab {
                         row.controlEl.insertAdjacentElement("afterbegin", cb);
                     }
 
-                    // Edit trigger
-                    row.addText((t) => {
-                        t.setValue(trigger);
-                        t.onChange(async (value) => {
-                            const normalized = normalizeTrigger(value);
-                            if (isBadTrigger(normalized)) {
-                                new Notice("Invalid trigger: contains separators or is empty");
-                                return;
-                            }
-                            
-                            const { group: grp, name: tail } = splitKey(trigger);
-                            const newKey = joinKey(grp, normalized);
-                            
-                            if (newKey !== trigger) {
-                                const result = this.groupManager.safeRenameKey(this.plugin.settings.snippets, trigger, newKey);
-                                if (!result.ok) {
-                                    new Notice(result.reason || "Failed to rename");
-                                    t.setValue(trigger);
-                                    return;
-                                }
-                                
-                                // Update selection
-                                if (this.uiState.getSelected().has(trigger)) {
-                                    this.uiState.getSelected().delete(trigger);
-                                    this.uiState.getSelected().add(newKey);
-                                }
-                                
-                                await this.plugin.saveSettings();
-                                this.renderSnippetList(root);
-                            }
-                        });
+                    // Action buttons container
+                    const actionsContainer = row.controlEl.createDiv({ cls: "snippet-actions" });
+                    
+                    // Edit button
+                    const editBtn = actionsContainer.createEl("button", { 
+                        text: "✏️", 
+                        cls: "snippet-action edit-btn",
+                        title: "Edit snippet"
                     });
-
-                    // Edit replacement
-                    row.addTextArea((t) => {
-                        t.setValue(replacement);
-                        t.onChange(async (value) => {
-                            this.plugin.settings.snippets[trigger] = value;
-                            await this.plugin.saveSettings();
-                        });
-                    });
-
-                    // Group selector
-                    row.addDropdown((dd) => {
-                        dd.addOption("", "Ungrouped");
-                        const allGroups = this.groupManager.allGroupsFrom(this.plugin.settings.snippets);
-                        for (const g of allGroups) {
-                            if (g !== group) {
-                                dd.addOption(g, this.groupManager.displayGroupTitle(g));
-                            }
-                        }
-                        dd.addOption("__new__", "New group...");
-                        
-                        const { group: currentGroup } = splitKey(trigger);
-                        dd.setValue(currentGroup);
-                        
-                        dd.onChange(async (value) => {
-                            if (value === "__new__") {
-                                const newGroup = this.groupManager.promptNewGroup();
-                                if (newGroup === null) return;
-                                const newKey = joinKey(newGroup, splitKey(trigger).name);
-                                const result = this.groupManager.safeRenameKey(this.plugin.settings.snippets, trigger, newKey);
-                                if (result.ok) {
-                                    await this.plugin.saveSettings();
-                                    this.renderSnippetList(root);
-                                } else {
-                                    new Notice(result.reason || "Failed to move");
-                                }
-                            } else {
-                                const newKey = joinKey(value, splitKey(trigger).name);
-                                const result = this.groupManager.safeRenameKey(this.plugin.settings.snippets, trigger, newKey);
-                                if (result.ok) {
-                                    await this.plugin.saveSettings();
-                                    this.renderSnippetList(root);
-                                } else {
-                                    new Notice(result.reason || "Failed to move");
-                                }
-                            }
-                        });
-                    });
-
+                    
                     // Delete button
-                    row.addButton((btn) => {
-                        btn.setIcon("trash");
-                        btn.setTooltip("Delete snippet");
-                        btn.onClick(async () => {
+                    const deleteBtn = actionsContainer.createEl("button", { 
+                        text: "🗑️", 
+                        cls: "snippet-action delete-btn",
+                        title: "Delete snippet"
+                    });
+                    
+                    // Edit mode state
+                    let isEditing = false;
+                    let originalTrigger = triggerName;
+                    let originalReplacement = replacement;
+                    
+                    // Edit button click handler
+                    editBtn.onclick = () => {
+                        if (isEditing) {
+                            // Save changes
+                            this.saveSnippetChanges(row, trigger, originalTrigger, originalReplacement, root);
+                        } else {
+                            // Enter edit mode
+                            this.enterEditMode(row, trigger, triggerName, replacement, editBtn);
+                            isEditing = true;
+                        }
+                    };
+                    
+                    // Delete button click handler
+                    deleteBtn.onclick = async () => {
+                        if (confirm(`Delete snippet "${triggerName}"?`)) {
                             delete this.plugin.settings.snippets[trigger];
                             await this.plugin.saveSettings();
                             this.renderSnippetList(root);
-                        });
-                    });
+                        }
+                    };
                 }
             }
         }
@@ -323,7 +306,7 @@ export class SnippetsTab {
     }
 
     private renderBulkOperations(container: HTMLElement, root: HTMLElement) {
-        const bulkControls = container.createDiv({ cls: "snipsy-section" });
+        const bulkControls = container.createDiv({ cls: "snipsy-section snipsy-bulk-operations" });
         bulkControls.createEl("h3", { text: "Bulk Operations" });
 
         const selectedCount = this.uiState.getSelected().size;
@@ -332,7 +315,7 @@ export class SnippetsTab {
             .setName(`Selected: ${selectedCount} snippet${selectedCount === 1 ? '' : 's'}`)
             .setDesc("Perform actions on selected snippets")
             .addButton((btn) => {
-                btn.setButtonText("Move to...");
+                btn.setButtonText("📁 Move to...");
                 btn.onClick(() => {
                     const groups = this.groupManager.allGroupsFrom(this.plugin.settings.snippets);
                     const modal = new GroupPickerModal(this.app, {
@@ -368,55 +351,148 @@ export class SnippetsTab {
             });
     }
 
-    private renderAddSnippetSection(root: HTMLElement) {
-        // Remove existing add section to avoid duplicates
-        const existingAddSection = root.querySelector(".add-snippet-section");
-        if (existingAddSection) {
-            existingAddSection.remove();
+
+    private showAddSnippetModal() {
+        const modal = new AddSnippetModal(this.app, (snippet) => {
+            if (snippet.trigger && snippet.replacement) {
+                const key = snippet.group 
+                    ? `${snippet.group}/${snippet.trigger}`
+                    : snippet.trigger;
+                
+                this.plugin.settings.snippets[key] = snippet.replacement;
+                this.plugin.saveSettings();
+                
+                // Refresh the list
+                const root = document.querySelector('.snipsidian-settings');
+                if (root) {
+                    this.renderSnippetList(root as HTMLElement);
+                }
+            }
+        });
+        modal.open();
+    }
+
+    private enterEditMode(row: Setting, trigger: string, triggerName: string, replacement: string, editBtn: HTMLButtonElement) {
+        // Clear existing controls
+        row.controlEl.empty();
+        
+        // Debug: log the values
+        console.log("Entering edit mode:", { trigger, triggerName, replacement });
+        
+        // Add trigger input
+        const triggerInput = row.controlEl.createEl("input", {
+            type: "text",
+            value: triggerName || "",
+            placeholder: "Trigger",
+            cls: "snippet-edit-input"
+        });
+        
+        // Add replacement textarea
+        const replacementInput = row.controlEl.createEl("textarea", {
+            value: replacement || "",
+            placeholder: "Replacement",
+            cls: "snippet-edit-textarea"
+        });
+        
+        // Add action buttons
+        const actionsContainer = row.controlEl.createDiv({ cls: "snippet-actions" });
+        
+        const saveBtn = actionsContainer.createEl("button", { 
+            text: "💾", 
+            cls: "snippet-action save-btn",
+            title: "Save changes"
+        });
+        
+        const cancelBtn = actionsContainer.createEl("button", { 
+            text: "❌", 
+            cls: "snippet-action cancel-btn",
+            title: "Cancel editing"
+        });
+        
+        // Update edit button
+        editBtn.textContent = "💾";
+        editBtn.title = "Save changes";
+        
+        // Store references for save/cancel
+        (row as any).editData = {
+            trigger,
+            triggerName,
+            replacement,
+            triggerInput,
+            replacementInput,
+            saveBtn,
+            cancelBtn,
+            editBtn
+        };
+        
+        // Add event handlers
+        saveBtn.onclick = () => {
+            this.saveSnippetChanges(row, trigger, triggerName, replacement, document.querySelector('.snipsidian-settings') as HTMLElement);
+        };
+        
+        cancelBtn.onclick = () => {
+            this.cancelEditMode(row, editBtn);
+        };
+    }
+
+    private async saveSnippetChanges(row: Setting, originalTrigger: string, originalTriggerName: string, originalReplacement: string, root: HTMLElement) {
+        const editData = (row as any).editData;
+        if (!editData) return;
+        
+        const newTriggerName = editData.triggerInput.value.trim();
+        const newReplacement = editData.replacementInput.value.trim();
+        
+        // Validate trigger
+        const normalized = normalizeTrigger(newTriggerName);
+        if (isBadTrigger(normalized)) {
+            new Notice("Invalid trigger: contains separators or is empty");
+            return;
         }
+        
+        // Check if trigger changed
+        const { group: grp } = splitKey(originalTrigger);
+        const newKey = joinKey(grp, normalized);
+        
+        try {
+            // Update snippet data
+            if (newKey !== originalTrigger) {
+                // Trigger changed - need to rename
+                const result = this.groupManager.safeRenameKey(this.plugin.settings.snippets, originalTrigger, newKey);
+                if (!result.ok) {
+                    new Notice(result.reason || "Failed to rename");
+                    return;
+                }
+                
+                // Update selection
+                if (this.uiState.getSelected().has(originalTrigger)) {
+                    this.uiState.getSelected().delete(originalTrigger);
+                    this.uiState.getSelected().add(newKey);
+                }
+            }
+            
+            // Update replacement
+            this.plugin.settings.snippets[newKey] = newReplacement;
+            
+            await this.plugin.saveSettings();
+            this.renderSnippetList(root);
+            
+        } catch (error) {
+            new Notice("Failed to save changes");
+        }
+    }
 
-        // Add new snippet
-        const addSection = root.createDiv({ cls: "snipsy-section add-snippet-section" });
-        addSection.createEl("h3", { text: "Add New Snippet" });
-
-        new Setting(addSection)
-            .setName("Trigger")
-            .setDesc("The text that will be expanded")
-            .addText((text) => {
-                text.setPlaceholder("e.g., :todo");
-            })
-            .setName("Replacement")
-            .setDesc("The text that will replace the trigger")
-            .addTextArea((text) => {
-                text.setPlaceholder("e.g., - [ ] $|");
-            })
-            .addButton((btn) => {
-                btn.setButtonText("Add Snippet");
-                btn.setCta();
-                btn.onClick(async () => {
-                    const triggerInput = btn.buttonEl.parentElement?.querySelector('input[type="text"]') as HTMLInputElement;
-                    const replacementInput = btn.buttonEl.parentElement?.querySelector('textarea') as HTMLTextAreaElement;
-                    
-                    const trigger = normalizeTrigger(triggerInput.value);
-                    const replacement = replacementInput.value;
-                    
-                    if (isBadTrigger(trigger)) {
-                        new Notice("Invalid trigger: contains separators or is empty");
-                        return;
-                    }
-                    
-                    if (!replacement.trim()) {
-                        new Notice("Replacement cannot be empty");
-                        return;
-                    }
-                    
-                    this.plugin.settings.snippets[trigger] = replacement;
-                    await this.plugin.saveSettings();
-                    
-                    triggerInput.value = "";
-                    replacementInput.value = "";
-                    this.renderSnippetList(root);
-                });
-            });
+    private cancelEditMode(row: Setting, editBtn: HTMLButtonElement) {
+        // Reset edit button
+        editBtn.textContent = "✏️";
+        editBtn.title = "Edit snippet";
+        
+        // Clear edit data
+        delete (row as any).editData;
+        
+        // Re-render the snippet list to return to normal view
+        const root = document.querySelector('.snipsidian-settings') as HTMLElement;
+        if (root) {
+            this.renderSnippetList(root);
+        }
     }
 }
