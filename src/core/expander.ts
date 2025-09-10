@@ -60,8 +60,8 @@ export function findWordStart(text: string, endIndex: number): number | null {
 
     const isWord = (c: string) => /[A-Za-z0-9_]/.test(c);
 
-    if (!isWord(text[i])) return null;
-    while (i - 1 >= 0 && isWord(text[i - 1])) i--;
+    if (!isWord(text[i] ?? "")) return null;
+    while (i - 1 >= 0 && isWord(text[i - 1] ?? "")) i--;
     return i;
 }
 
@@ -76,7 +76,7 @@ function advancePos(from: EditorPosition, text: string): EditorPosition {
         return { line, ch };
     }
     line += parts.length - 1;
-    ch = parts[parts.length - 1].length;
+    ch = parts[parts.length - 1]?.length ?? 0;
     return { line, ch };
 }
 
