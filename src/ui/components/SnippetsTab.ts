@@ -59,81 +59,29 @@ export class SnippetsTab {
         groupControls.createEl("h3", { text: "Group Controls" });
 
         new Setting(groupControls)
-            .setName("Expand/Collapse All")
+            .setName("Expand All Groups")
             .setDesc("Toggle all groups open/closed")
-            .addButton((btn) => {
-                btn.setButtonText("Expand All");
-                btn.onClick(() => {
-                    const groups = this.groupManager.allGroupsFrom(this.plugin.settings.snippets);
+            .addToggle((toggle) => {
+                // Check if all groups are open
+                const groups = this.groupManager.allGroupsFrom(this.plugin.settings.snippets);
+                const allOpen = groups.length > 0 && groups.every(group => this.uiState.loadOpenState(group, true));
+                toggle.setValue(allOpen);
+                
+                toggle.onChange((value) => {
                     groups.forEach((group) => {
-                        this.uiState.setGroupOpen(group, true);
-                    });
-                    this.renderSnippetList(root);
-                });
-            })
-            .addButton((btn) => {
-                btn.setButtonText("Collapse All");
-                btn.onClick(() => {
-                    const groups = this.groupManager.allGroupsFrom(this.plugin.settings.snippets);
-                    groups.forEach((group) => {
-                        this.uiState.setGroupOpen(group, false);
+                        this.uiState.setGroupOpen(group, value);
                     });
                     this.renderSnippetList(root);
                 });
             });
 
-        // Bulk operations (only show in selection mode)
-        if (this.uiState.getSelectionMode()) {
-            const bulkControls = root.createDiv({ cls: "snipsy-section" });
-            bulkControls.createEl("h3", { text: "Bulk Operations" });
+        // Bulk operations will be rendered dynamically in renderSnippetList
 
-            new Setting(bulkControls)
-                .setName("Move Selected")
-                .setDesc(`Move ${this.uiState.getSelected().size} selected snippets`)
-                .addButton((btn) => {
-                    btn.setButtonText("Move to...");
-                    btn.setDisabled(this.uiState.getSelected().size === 0);
-                    btn.onClick(() => {
-                        const groups = this.groupManager.allGroupsFrom(this.plugin.settings.snippets);
-                        const modal = new GroupPickerModal(this.app, {
-                            title: "Move to group:",
-                            groups,
-                            allowUngrouped: true
-                        });
-                        modal.onSubmit = (targetGroup) => {
-                            if (targetGroup === null) return;
-                            const keys = Array.from(this.uiState.getSelected());
-                            const { moved, skipped } = this.groupManager.bulkMoveKeys(targetGroup, keys);
-                            this.uiState.setSelected(new Set());
-                            this.renderSnippetList(root);
-                            new Notice(`Moved ${moved} item(s)${skipped ? `, skipped ${skipped} (conflicts)` : ""}.`);
-                        };
-                        modal.open();
-                    });
-                })
-                .addButton((btn) => {
-                    btn.setButtonText("Delete Selected");
-                    btn.setDisabled(this.uiState.getSelected().size === 0);
-                    btn.onClick(() => {
-                        const n = this.uiState.getSelected().size;
-                        if (confirm(`Delete ${n} snippet(s)?`)) {
-                            for (const key of this.uiState.getSelected()) {
-                                delete this.plugin.settings.snippets[key];
-                            }
-                            this.plugin.saveSettings();
-                            this.uiState.setSelected(new Set());
-                            this.renderSnippetList(root);
-                            new Notice(`Deleted ${n} snippet(s).`);
-                        }
-                    });
-                });
-        }
-
-        // Snippet list
-        this.renderSnippetList(root);
-        
-        // Add new snippet (only once, at the end)
+        // Add new snippet section (always at bottom)
         this.renderAddSnippetSection(root);
+        
+        // Snippet list (above add section)
+        this.renderSnippetList(root);
     }
 
     private renderSnippetList(root: HTMLElement) {
@@ -143,7 +91,17 @@ export class SnippetsTab {
             existingList.remove();
         }
 
-        const listEl = root.createDiv({ cls: "snippet-list" });
+        // Find add snippet section to insert before it
+        const addSection = root.querySelector(".add-snippet-section");
+        const listEl = addSection 
+            ? root.insertBefore(root.createDiv({ cls: "snippet-list" }), addSection)
+            : root.createDiv({ cls: "snippet-list" });
+
+        // Render bulk operations if in selection mode and items are selected
+        if (this.uiState.getSelectionMode() && this.uiState.getSelected().size > 0) {
+            this.renderBulkOperations(listEl, root);
+        }
+
         const searchQuery = this.uiState.getSearchQuery().toLowerCase();
         const entries = Object.entries(this.plugin.settings.snippets)
             .filter(([key, value]) => 
@@ -192,6 +150,22 @@ export class SnippetsTab {
 
             // Group actions
             const actions = header.createDiv({ cls: "group-actions" });
+            
+            // Select all checkbox (in selection mode)
+            if (this.uiState.getSelectionMode()) {
+                const selectAllCb = actions.createEl("input", { type: "checkbox" });
+                selectAllCb.checked = items.every(([key]) => this.uiState.getSelected().has(key));
+                selectAllCb.onchange = () => {
+                    if (selectAllCb.checked) {
+                        items.forEach(([key]) => this.uiState.getSelected().add(key));
+                    } else {
+                        items.forEach(([key]) => this.uiState.getSelected().delete(key));
+                    }
+                    // Re-render to update bulk operations section
+                    this.renderSnippetList(root);
+                };
+                selectAllCb.title = "Select all in group";
+            }
             
             // Rename group
             actions.createEl("button", { text: "Rename", cls: "group-action" }).onclick = () => {
@@ -245,6 +219,8 @@ export class SnippetsTab {
                             } else {
                                 this.uiState.getSelected().delete(trigger);
                             }
+                            // Re-render to update bulk operations section
+                            this.renderSnippetList(root);
                         };
                         row.controlEl.insertAdjacentElement("afterbegin", cb);
                     }
@@ -344,6 +320,52 @@ export class SnippetsTab {
             }
         }
 
+    }
+
+    private renderBulkOperations(container: HTMLElement, root: HTMLElement) {
+        const bulkControls = container.createDiv({ cls: "snipsy-section" });
+        bulkControls.createEl("h3", { text: "Bulk Operations" });
+
+        const selectedCount = this.uiState.getSelected().size;
+        
+        new Setting(bulkControls)
+            .setName(`Selected: ${selectedCount} snippet${selectedCount === 1 ? '' : 's'}`)
+            .setDesc("Perform actions on selected snippets")
+            .addButton((btn) => {
+                btn.setButtonText("Move to...");
+                btn.onClick(() => {
+                    const groups = this.groupManager.allGroupsFrom(this.plugin.settings.snippets);
+                    const modal = new GroupPickerModal(this.app, {
+                        title: "Move to group:",
+                        groups,
+                        allowUngrouped: true
+                    });
+                    modal.onSubmit = (targetGroup) => {
+                        if (targetGroup === null) return;
+                        const keys = Array.from(this.uiState.getSelected());
+                        const { moved, skipped } = this.groupManager.bulkMoveKeys(targetGroup, keys);
+                        this.uiState.setSelected(new Set());
+                        this.renderSnippetList(root);
+                        new Notice(`Moved ${moved} item(s)${skipped ? `, skipped ${skipped} (conflicts)` : ""}.`);
+                    };
+                    modal.open();
+                });
+            })
+            .addButton((btn) => {
+                btn.setButtonText("Delete Selected");
+                btn.onClick(() => {
+                    const n = this.uiState.getSelected().size;
+                    if (confirm(`Delete ${n} snippet(s)?`)) {
+                        for (const key of this.uiState.getSelected()) {
+                            delete this.plugin.settings.snippets[key];
+                        }
+                        this.plugin.saveSettings();
+                        this.uiState.setSelected(new Set());
+                        this.renderSnippetList(root);
+                        new Notice(`Deleted ${n} snippet(s).`);
+                    }
+                });
+            });
     }
 
     private renderAddSnippetSection(root: HTMLElement) {
