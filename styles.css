@@ -1,15 +1,29 @@
 /* ============ Modals ============ */
 .modal .snipsidian-modal {
-  width: min(640px, 92vw);
-  max-width: 92vw;
-  overflow-x: hidden !important;
+  width: min(500px, 90vw);
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .modal .snipsidian-modal * {
   box-sizing: border-box;
 }
 
 /* Kill horizontal scroll on Obsidian modal wrapper */
-.modal .modal-content { overflow-x: hidden !important; }
+.modal .modal-content { 
+  overflow: hidden !important; 
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ensure modal content doesn't show background content */
+.modal .modal-content-wrapper {
+  overflow: hidden;
+  max-height: 80vh;
+}
 
 /* Prompt (rename, etc.) layout */
 .modal .snipsidian-prompt .setting-item { 
@@ -32,24 +46,26 @@
   box-sizing: border-box;
 }
 .modal .snipsidian-modal.snipsidian-prompt {
-  width: min(560px, 92vw);
+  width: min(400px, 90vw);
 }
 
 /* ============ Preview table ============ */
 .snipsidian-preview-table {
-  display: block;
-  overflow-x: auto;
+  display: table;
   width: 100%;
   border-collapse: collapse;
   margin: 1em 0;
-  font-size: 0.9em;
+  font-size: 0.85em;
   border-radius: 6px;
+  table-layout: fixed;
 }
 .snipsidian-preview-table th,
 .snipsidian-preview-table td {
   border-bottom: 1px solid var(--background-modifier-border);
-  padding: 8px 10px;
+  padding: 6px 8px;
   vertical-align: middle;
+  word-wrap: break-word;
+  word-break: break-word;
 }
 .snipsidian-preview-table th {
   text-align: left;
@@ -59,14 +75,20 @@
 .snipsidian-preview-table tr:hover td {
   background: var(--background-secondary);
 }
+.snipsidian-preview-table td:nth-child(1) { width: 20%; } /* Trigger */
+.snipsidian-preview-table td:nth-child(2) { width: 30%; } /* Current */
+.snipsidian-preview-table td:nth-child(3) { width: 30%; } /* Incoming */
+.snipsidian-preview-table td:nth-child(4) { width: 20%; } /* Action */
 .snipsidian-preview-table td:nth-child(2),
 .snipsidian-preview-table td:nth-child(3) {
   font-family: var(--font-monospace);
   white-space: pre-wrap;
+  font-size: 0.8em;
 }
 .snipsidian-preview-table .conflict-action select {
-  font-size: 0.85em;
-  padding: 2px 6px;
+  font-size: 0.8em;
+  padding: 2px 4px;
+  width: 100%;
 }
 .snipsidian-bulk-actions {
   display: flex;
@@ -94,12 +116,23 @@
 .modal .snipsidian-modal .modal-button-container button { white-space: nowrap; }
 
 /* Move-to modal: full-width controls */
+.modal .snipsidian-move-modal {
+  width: min(400px, 90vw);
+}
 .modal .snipsidian-move-modal select,
 .modal .snipsidian-move-modal input[type="text"],
 .modal .snipsidian-move-modal textarea {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+}
+.modal .snipsidian-move-modal .snipsidian-move-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.modal .snipsidian-move-modal .snipsidian-newgroup-wrap {
+  margin-top: 8px;
 }
 
 /* ============ Settings panel (legacy bits) ============ */
@@ -175,7 +208,9 @@
 
 /* JSON editor area inside the generic Snipsy modal */
 .modal .snipsidian-modal .snipsidian-json-input {
-  min-height: 300px;
+  min-height: 200px;
+  max-height: 50vh;
+  resize: vertical;
 }
 
 /* Error text in prompt modal */
