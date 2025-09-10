@@ -1,15 +1,15 @@
 /* ============ Modals ============ */
 .modal .snipsidian-modal {
-  width: min(640px, 92vw);
-  max-width: 92vw;
+  width: min(500px, 90vw);
+  max-width: 90vw;
   overflow-x: hidden !important;
 }
 .modal .snipsidian-modal * {
   box-sizing: border-box;
 }
 
-/* Kill horizontal scroll on Obsidian modal wrapper */
-.modal .modal-content { overflow-x: hidden !important; }
+/* Kill horizontal scroll on Obsidian modal wrapper - only for our modals */
+.modal .snipsidian-modal .modal-content { overflow-x: hidden !important; }
 
 /* Prompt (rename, etc.) layout */
 .modal .snipsidian-prompt .setting-item { 
@@ -32,25 +32,31 @@
   box-sizing: border-box;
 }
 .modal .snipsidian-modal.snipsidian-prompt {
-  width: min(560px, 92vw);
+  width: min(400px, 90vw);
 }
 
 /* ============ Preview table ============ */
 .snipsidian-preview-table {
-  display: block;
-  overflow-x: auto;
+  display: table;
   width: 100%;
   border-collapse: collapse;
   margin: 1em 0;
-  font-size: 0.9em;
+  font-size: 0.85em;
   border-radius: 6px;
+  table-layout: fixed;
 }
 .snipsidian-preview-table th,
 .snipsidian-preview-table td {
   border-bottom: 1px solid var(--background-modifier-border);
-  padding: 8px 10px;
+  padding: 6px 8px;
   vertical-align: middle;
+  word-wrap: break-word;
+  word-break: break-word;
 }
+.snipsidian-preview-table td:nth-child(1) { width: 20%; } /* Trigger */
+.snipsidian-preview-table td:nth-child(2) { width: 30%; } /* Current */
+.snipsidian-preview-table td:nth-child(3) { width: 30%; } /* Incoming */
+.snipsidian-preview-table td:nth-child(4) { width: 20%; } /* Action */
 .snipsidian-preview-table th {
   text-align: left;
   color: var(--text-muted);
@@ -59,14 +65,20 @@
 .snipsidian-preview-table tr:hover td {
   background: var(--background-secondary);
 }
+.snipsidian-preview-table td:nth-child(1) { width: 20%; } /* Trigger */
+.snipsidian-preview-table td:nth-child(2) { width: 30%; } /* Current */
+.snipsidian-preview-table td:nth-child(3) { width: 30%; } /* Incoming */
+.snipsidian-preview-table td:nth-child(4) { width: 20%; } /* Action */
 .snipsidian-preview-table td:nth-child(2),
 .snipsidian-preview-table td:nth-child(3) {
   font-family: var(--font-monospace);
   white-space: pre-wrap;
+  font-size: 0.8em;
 }
 .snipsidian-preview-table .conflict-action select {
-  font-size: 0.85em;
-  padding: 2px 6px;
+  font-size: 0.8em;
+  padding: 2px 4px;
+  width: 100%;
 }
 .snipsidian-bulk-actions {
   display: flex;
@@ -75,8 +87,18 @@
   margin-top: 0.75em;
 }
 .snipsidian-bulk-actions button {
-  padding: 0.3em 0.8em;
-  border-radius: 4px;
+  padding: 0.4em 1em;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.snipsidian-bulk-actions button:hover {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
 }
 
 /* Modal footer */
@@ -94,12 +116,23 @@
 .modal .snipsidian-modal .modal-button-container button { white-space: nowrap; }
 
 /* Move-to modal: full-width controls */
+.modal .snipsidian-move-modal {
+  width: min(400px, 90vw);
+}
 .modal .snipsidian-move-modal select,
 .modal .snipsidian-move-modal input[type="text"],
 .modal .snipsidian-move-modal textarea {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+}
+.modal .snipsidian-move-modal .snipsidian-move-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.modal .snipsidian-move-modal .snipsidian-newgroup-wrap {
+  margin-top: 8px;
 }
 
 /* ============ Settings panel (legacy bits) ============ */
@@ -175,7 +208,9 @@
 
 /* JSON editor area inside the generic Snipsy modal */
 .modal .snipsidian-modal .snipsidian-json-input {
-  min-height: 300px;
+  min-height: 200px;
+  max-height: 50vh;
+  resize: vertical;
 }
 
 /* Error text in prompt modal */
@@ -232,20 +267,23 @@
 /* -------- Section cards -------- */
 .snipsy-section {
   border: 1px solid var(--background-modifier-border);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: 10px;
+  padding: 16px;
   background: var(--background-primary);
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 .snipsy-section h3 {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   font-size: 16px;
   font-weight: 600;
+  color: var(--text-normal);
 }
 .snipsy-section .snipsy-hint {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   color: var(--text-muted);
   font-size: 13px;
+  line-height: 1.4;
 }
 
 /* -------- Packages: YAML three-column row -------- */
@@ -279,6 +317,57 @@
 }
 .snipsy-group-left { display: flex; align-items: center; gap: 8px; }
 .snipsy-group-right { display: flex; gap: 6px; }
+
+/* Group header styling */
+.group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+/* Group actions styling */
+.group-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-left: auto;
+}
+.group-action-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0.5;
+  min-width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.group-action-btn:hover {
+  opacity: 1;
+  background: var(--background-modifier-hover);
+  border-color: var(--background-modifier-border);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.group-action-btn.rename-btn:hover {
+  background: var(--color-blue);
+  color: white;
+  border-color: var(--color-blue);
+  box-shadow: 0 2px 8px rgba(var(--color-blue-rgb), 0.3);
+}
+.group-action-btn.delete-btn:hover {
+  background: var(--color-red);
+  color: white;
+  border-color: var(--color-red);
+  box-shadow: 0 2px 8px rgba(var(--color-red-rgb), 0.3);
+}
 
 /* Existing helpers kept */
 .mod-settings .snipsidian-settings .snipsy-flex-spacer { flex: 1; }
@@ -314,5 +403,367 @@
   max-width: 100%;
   border-radius: 6px;
   border: 1px solid var(--background-modifier-border);
+}
+
+/* -------- Text overflow and horizontal scroll fixes -------- */
+.mod-settings .snipsidian-settings {
+  overflow-x: hidden;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+.mod-settings .snipsidian-settings .setting-item {
+  overflow-x: hidden;
+}
+
+.mod-settings .snipsidian-settings .setting-item-name {
+  word-wrap: break-word;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.mod-settings .snipsidian-settings .setting-item-description {
+  word-wrap: break-word;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.mod-settings .snipsidian-settings input[type="text"],
+.mod-settings .snipsidian-settings textarea {
+  max-width: 100%;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+.mod-settings .snipsidian-settings .group-title {
+  word-wrap: break-word;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.mod-settings .snipsidian-settings .snippet-list {
+  overflow-x: hidden;
+}
+
+.mod-settings .snipsidian-settings .group-content {
+  overflow-x: hidden;
+}
+
+/* -------- Selection Mode Styling -------- */
+.snipsy-selection-mode-section {
+  border: 2px solid var(--interactive-accent);
+  background: var(--background-primary-alt);
+  position: relative;
+}
+.snipsy-selection-mode-section::before {
+  content: "🔘";
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 18px;
+  opacity: 0.7;
+}
+.snipsy-selection-mode-section h3 {
+  color: var(--interactive-accent);
+}
+.snipsy-selection-mode-section .snipsy-hint {
+  color: var(--text-accent);
+  font-weight: 500;
+}
+
+
+/* -------- Bulk Operations Styling -------- */
+.snipsy-bulk-operations {
+  border: 2px solid var(--text-accent);
+  background: var(--background-primary-alt);
+  position: relative;
+}
+.snipsy-bulk-operations::before {
+  content: "📦";
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 18px;
+  opacity: 0.7;
+}
+.snipsy-bulk-operations h3 {
+  color: var(--text-accent);
+}
+.snipsy-bulk-operations .setting-item-name {
+  color: var(--text-accent);
+  font-weight: 600;
+}
+
+/* -------- Special Section Styling -------- */
+.snipsy-export-section {
+  border: 2px solid var(--color-green);
+  background: var(--background-primary-alt);
+  position: relative;
+}
+.snipsy-export-section::before {
+  content: "💾";
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 18px;
+  opacity: 0.7;
+}
+.snipsy-export-section h3 {
+  color: var(--color-green);
+}
+
+.snipsy-help-section {
+  border: 2px solid var(--color-blue);
+  background: var(--background-primary-alt);
+  position: relative;
+}
+.snipsy-help-section::before {
+  content: "❓";
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 18px;
+  opacity: 0.7;
+}
+.snipsy-help-section h3 {
+  color: var(--color-blue);
+}
+
+.snipsy-catalog-section {
+  border: 2px solid var(--color-orange);
+  background: var(--background-primary-alt);
+  position: relative;
+}
+.snipsy-catalog-section::before {
+  content: "📦";
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 18px;
+  opacity: 0.7;
+}
+.snipsy-catalog-section h3 {
+  color: var(--color-orange);
+}
+
+.snipsy-yaml-section {
+  border: 2px solid var(--color-purple);
+  background: var(--background-primary-alt);
+  position: relative;
+}
+.snipsy-yaml-section::before {
+  content: "📝";
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 18px;
+  opacity: 0.7;
+}
+.snipsy-yaml-section h3 {
+  color: var(--color-purple);
+}
+
+/* -------- Snippet Manager Styling -------- */
+.snipsy-snippet-manager {
+  border: 2px solid var(--interactive-accent);
+  background: var(--background-primary-alt);
+  position: relative;
+}
+.snipsy-snippet-manager::before {
+  content: "⚙️";
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 18px;
+  opacity: 0.7;
+}
+.snipsy-snippet-manager h3 {
+  color: var(--interactive-accent);
+}
+
+/* Subsections within snippet manager */
+.snipsy-subsection {
+  margin: 16px 0;
+  padding: 12px;
+  background: var(--background-primary);
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+}
+.snipsy-subsection h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Controls row layout */
+.snipsy-controls-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 8px;
+}
+.snipsy-control-item {
+  background: var(--background-secondary);
+  border-radius: 6px;
+  padding: 8px;
+  border: 1px solid var(--background-modifier-border);
+}
+.snipsy-control-item .setting-item {
+  margin: 0;
+  padding: 0;
+}
+.snipsy-control-item .setting-item-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+.snipsy-control-item .setting-item-description {
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+/* Add snippet button in management tools */
+.snipsy-add-snippet {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.snipsy-add-snippet .setting-item {
+  margin: 0;
+}
+.snipsy-add-snippet .setting-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-accent);
+}
+.snipsy-add-snippet .setting-item-description {
+  font-size: 12px;
+  margin-top: 4px;
+}
+.snipsy-add-snippet .mod-cta {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.snipsy-add-snippet .mod-cta:hover {
+  background: var(--interactive-accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Group picker modal improvements */
+.snipsy-group-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 14px;
+  margin: 8px 0;
+}
+.snipsy-group-select:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+.snipsy-group-select option {
+  padding: 4px 8px;
+}
+
+/* Snippet actions styling */
+.snippet-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.snippet-action {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.5;
+}
+.snippet-action:hover {
+  opacity: 1;
+  background: var(--background-modifier-hover);
+  border-color: var(--background-modifier-border);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.snippet-action.edit-btn:hover {
+  background: var(--color-blue);
+  color: white;
+  border-color: var(--color-blue);
+  box-shadow: 0 2px 8px rgba(var(--color-blue-rgb), 0.3);
+}
+.snippet-action.delete-btn:hover {
+  background: var(--color-red);
+  color: white;
+  border-color: var(--color-red);
+  box-shadow: 0 2px 8px rgba(var(--color-red-rgb), 0.3);
+}
+.snippet-action.save-btn:hover {
+  background: var(--color-green);
+  color: white;
+  border-color: var(--color-green);
+  box-shadow: 0 2px 8px rgba(var(--color-green-rgb), 0.3);
+}
+.snippet-action.cancel-btn:hover {
+  background: var(--color-orange);
+  color: white;
+  border-color: var(--color-orange);
+  box-shadow: 0 2px 8px rgba(var(--color-orange-rgb), 0.3);
+}
+
+
+/* Snippet edit mode styling */
+.snippet-edit-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.snippet-edit-input:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+.snippet-edit-textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 6px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+  resize: vertical;
+  margin-bottom: 8px;
+  font-family: var(--font-monospace);
+}
+.snippet-edit-textarea:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
 }
 
