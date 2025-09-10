@@ -189,13 +189,10 @@
 .mod-settings .snipsidian-settings .snipsy-flex-spacer { flex: 1; }
 
 /* -------- Header & Tabs -------- */
-.snipsy-settings-header {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
+.snipsy-header {
   margin-bottom: 8px;
 }
-.snipsy-title {                 /* крупнее заголовок */
+.snipsy-header h2 {
   font-size: 20px;
   line-height: 1.2;
   margin: 0;
@@ -206,24 +203,28 @@
 }
 
 .snipsy-tabs {
-  display: flex;
-  gap: 6px;
   margin: 6px 0 14px;
   border-bottom: 1px solid var(--background-modifier-border);
   padding-bottom: 6px;
 }
-.snipsy-tab {
+.snipsy-tabs .tab-buttons {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.snipsy-tabs .tab-button {
   padding: 6px 10px;
   border-radius: 6px;
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
+  color: var(--text-normal);
 }
-.snipsy-tab.is-active {
+.snipsy-tabs .tab-button.active {
   border-color: var(--background-modifier-border);
   background: var(--background-secondary);
 }
-.snipsy-tab-body {
+.snipsy-tabs .tab-content {
   display: grid;
   gap: 12px;
 }
@@ -234,13 +235,14 @@
   border-radius: 8px;
   padding: 12px;
   background: var(--background-primary);
+  margin-bottom: 12px;
 }
-.snipsy-section-title {
+.snipsy-section h3 {
   margin: 0 0 6px;
   font-size: 16px;
   font-weight: 600;
 }
-.snipsy-section-hint {
+.snipsy-section .snipsy-hint {
   margin: 0 0 10px;
   color: var(--text-muted);
   font-size: 13px;
