@@ -40,38 +40,43 @@ export class SnipSidianSettingTab extends PluginSettingTab {
 
     // ---- helpers (local, UI-level) ----
     private ensureUiState() {
-        const anySettings = this.plugin.settings as any;
-        if (!anySettings.ui) anySettings.ui = {};
-        if (!anySettings.ui.groupOpen) anySettings.ui.groupOpen = {};
-        if (!anySettings.ui.activeTab) anySettings.ui.activeTab = this.activeTab;
+        if (!this.plugin.settings.ui) {
+            this.plugin.settings.ui = {};
+        }
+        if (!this.plugin.settings.ui.groupOpen) {
+            this.plugin.settings.ui.groupOpen = {};
+        }
+        if (!this.plugin.settings.ui.activeTab) {
+            this.plugin.settings.ui.activeTab = this.activeTab;
+        }
     }
     private loadOpenState(group: string, defaultOpen = true): boolean {
         this.ensureUiState();
-        const store = (this.plugin.settings as any).ui.groupOpen as Record<string, boolean>;
+        const store = this.plugin.settings.ui!.groupOpen!;
         if (store[group] === undefined) store[group] = defaultOpen;
         return store[group];
     }
     private saveOpenState(group: string, open: boolean | undefined) {
         this.ensureUiState();
-        const store = (this.plugin.settings as any).ui.groupOpen as Record<string, boolean>;
+        const store = this.plugin.settings.ui!.groupOpen!;
         if (open === undefined) delete store[group];
         else store[group] = open;
     }
     private loadActiveTab(): TabId {
         this.ensureUiState();
-        const v = (this.plugin.settings as any).ui.activeTab as TabId | undefined;
+        const v = this.plugin.settings.ui!.activeTab;
         if (v === "basic" || v === "packages" || v === "snippets") return v;
         return "basic";
     }
     private saveActiveTab(tab: TabId) {
         this.ensureUiState();
-        (this.plugin.settings as any).ui.activeTab = tab;
+        this.plugin.settings.ui!.activeTab = tab;
     }
 
     private allGroupsFrom(map: SnippetMap): GroupKey[] {
         const s = new Set<string>();
         for (const k of Object.keys(map)) {
-            const g = k.includes("/") ? k.split("/", 1)[0] : "Ungrouped";
+            const g = k.includes("/") ? k.split("/", 1)[0] ?? "Ungrouped" : "Ungrouped";
             s.add(g);
         }
         return Array.from(s).sort((a, b) => a.localeCompare(b));
@@ -592,7 +597,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
             const groups = new Map<string, Array<[string, string]>>();
             for (const e of entries) {
                 const [k] = e;
-                const group = k.includes("/") ? k.split("/", 1)[0] : "Ungrouped";
+                const group = k.includes("/") ? k.split("/", 1)[0] ?? "Ungrouped" : "Ungrouped";
                 if (!groups.has(group)) groups.set(group, []);
                 groups.get(group)!.push(e);
             }
@@ -810,7 +815,9 @@ export class SnipSidianSettingTab extends PluginSettingTab {
 
                                 const map = this.plugin.settings.snippets;
                                 const val = map[currentKey];
-                                delete map[currentKey];
+                                if (val !== undefined) {
+                                    delete map[currentKey];
+                                }
 
                                 if (this.selected.has(currentKey)) {
                                     this.selected.delete(currentKey);
@@ -819,12 +826,16 @@ export class SnipSidianSettingTab extends PluginSettingTab {
 
                                 if (newKey in map) {
                                     new Notice(`Trigger "${newKey}" already exists`);
-                                    map[currentKey] = val;
+                                    if (val !== undefined) {
+                                        map[currentKey] = val;
+                                    }
                                     (t.inputEl as HTMLInputElement).value = splitKey(currentKey).name;
                                     return;
                                 }
 
-                                map[newKey] = val;
+                                if (val !== undefined) {
+                                    map[newKey] = val;
+                                }
                                 currentKey = newKey;
                             });
                         t.inputEl.addEventListener("blur", () => {
@@ -872,7 +883,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                         while (this.plugin.settings.snippets[key] !== undefined) key = `${base}${i++}`;
                         this.plugin.settings.snippets[key] = "";
                         await this.plugin.saveSettings();
-                        this.groupOpen.set(key.includes("/") ? key.split("/", 1)[0] : "Ungrouped", true);
+                        this.groupOpen.set(key.includes("/") ? key.split("/", 1)[0] ?? "Ungrouped" : "Ungrouped", true);
                         renderList();
                     })
             );

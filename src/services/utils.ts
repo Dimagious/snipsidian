@@ -52,7 +52,7 @@ export function slugifyGroup(label: string): string {
 }
 
 export function displayGroupTitle(groupKey: string): string {
-    const last = groupKey.includes("/") ? groupKey.split("/", 1)[0] : groupKey;
+    const last = groupKey.includes("/") ? groupKey.split("/", 1)[0] ?? groupKey : groupKey;
     return last
         .replace(/[-_]+/g, " ")
         .replace(/\b\w/g, (c) => c.toUpperCase());

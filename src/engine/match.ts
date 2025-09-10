@@ -12,7 +12,7 @@ export function findTrigger(
   const line = textBefore + lastTyped;
   let i = sepCh - 1;                  
 
-  while (i >= 0 && !isSeparator(line[i])) i--;
+  while (i >= 0 && !isSeparator(line[i] ?? "")) i--;
 
   const fromCh = i + 1;
   const toCh = sepCh;
