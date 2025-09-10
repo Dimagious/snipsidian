@@ -65,6 +65,10 @@
 .snipsidian-preview-table tr:hover td {
   background: var(--background-secondary);
 }
+.snipsidian-preview-table td:nth-child(1) { width: 20%; } /* Trigger */
+.snipsidian-preview-table td:nth-child(2) { width: 30%; } /* Current */
+.snipsidian-preview-table td:nth-child(3) { width: 30%; } /* Incoming */
+.snipsidian-preview-table td:nth-child(4) { width: 20%; } /* Action */
 .snipsidian-preview-table td:nth-child(2),
 .snipsidian-preview-table td:nth-child(3) {
   font-family: var(--font-monospace);
@@ -72,8 +76,9 @@
   font-size: 0.8em;
 }
 .snipsidian-preview-table .conflict-action select {
-  font-size: 0.85em;
-  padding: 2px 6px;
+  font-size: 0.8em;
+  padding: 2px 4px;
+  width: 100%;
 }
 .snipsidian-bulk-actions {
   display: flex;
@@ -120,6 +125,14 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+}
+.modal .snipsidian-move-modal .snipsidian-move-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.modal .snipsidian-move-modal .snipsidian-newgroup-wrap {
+  margin-top: 8px;
 }
 
 /* ============ Settings panel (legacy bits) ============ */
@@ -195,7 +208,9 @@
 
 /* JSON editor area inside the generic Snipsy modal */
 .modal .snipsidian-modal .snipsidian-json-input {
-  min-height: 300px;
+  min-height: 200px;
+  max-height: 50vh;
+  resize: vertical;
 }
 
 /* Error text in prompt modal */
