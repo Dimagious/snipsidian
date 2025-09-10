@@ -316,3 +316,48 @@
   border: 1px solid var(--background-modifier-border);
 }
 
+/* -------- Text overflow and horizontal scroll fixes -------- */
+.mod-settings .snipsidian-settings {
+  overflow-x: hidden;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+.mod-settings .snipsidian-settings .setting-item {
+  overflow-x: hidden;
+}
+
+.mod-settings .snipsidian-settings .setting-item-name {
+  word-wrap: break-word;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.mod-settings .snipsidian-settings .setting-item-description {
+  word-wrap: break-word;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.mod-settings .snipsidian-settings input[type="text"],
+.mod-settings .snipsidian-settings textarea {
+  max-width: 100%;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+.mod-settings .snipsidian-settings .group-title {
+  word-wrap: break-word;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.mod-settings .snipsidian-settings .snippet-list {
+  overflow-x: hidden;
+}
+
+.mod-settings .snipsidian-settings .group-content {
+  overflow-x: hidden;
+}
+

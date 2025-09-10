@@ -131,6 +131,9 @@ export class SnippetsTab {
 
         // Snippet list
         this.renderSnippetList(root);
+        
+        // Add new snippet (only once, at the end)
+        this.renderAddSnippetSection(root);
     }
 
     private renderSnippetList(root: HTMLElement) {
@@ -341,8 +344,17 @@ export class SnippetsTab {
             }
         }
 
+    }
+
+    private renderAddSnippetSection(root: HTMLElement) {
+        // Remove existing add section to avoid duplicates
+        const existingAddSection = root.querySelector(".add-snippet-section");
+        if (existingAddSection) {
+            existingAddSection.remove();
+        }
+
         // Add new snippet
-        const addSection = root.createDiv({ cls: "snipsy-section" });
+        const addSection = root.createDiv({ cls: "snipsy-section add-snippet-section" });
         addSection.createEl("h3", { text: "Add New Snippet" });
 
         new Setting(addSection)
