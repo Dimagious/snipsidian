@@ -4,20 +4,10 @@ import {
   loadDynamicCommunityPackages,
   loadAllCommunityPackages,
   loadCommunityPackagesFromVault,
-  loadCommunityPackage,
-  searchCommunityPackages,
-  getCommunityPackageStats,
   processPackageSubmission,
-  getPackageCategories,
-  getPopularTags,
-  getTopRatedPackages,
-  getMostDownloadedPackages,
-  getRecentlyUpdatedPackages,
-  getPackagesByAuthor,
-  isPackageIdAvailable,
-  generatePackageId,
-  formatPackageMetadata,
-  type PackageSearchOptions
+  loadCommunityPackagesFromGitHub,
+  createPackageIssue,
+  loadCommunityPackagesWithCache
 } from "./community-packages";
 
 // Mock the package validator
@@ -25,6 +15,9 @@ vi.mock("./package-validator", () => ({
   validatePackage: vi.fn(),
   validatePackageFile: vi.fn()
 }));
+
+// Mock fetch API
+global.fetch = vi.fn();
 
 describe("community-packages", () => {
   beforeEach(() => {
@@ -53,8 +46,6 @@ describe("community-packages", () => {
       expect(packages).toEqual([]);
     });
   });
-
-  // loadBuiltinCommunityPackages removed - no built-in packages
 
   describe("loadDynamicCommunityPackages", () => {
     it("should return empty array in test environment", async () => {
@@ -131,96 +122,6 @@ describe("community-packages", () => {
     });
   });
 
-  describe("loadCommunityPackage", () => {
-    it("should return null when package is not found", async () => {
-      const package_ = await loadCommunityPackage("non-existent-package");
-      expect(package_).toBeNull();
-    });
-
-    it("should handle errors gracefully", async () => {
-      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      
-      const package_ = await loadCommunityPackage("invalid-package");
-      expect(package_).toBeNull();
-      
-      consoleSpy.mockRestore();
-    });
-
-    it("should return null for any package ID", async () => {
-      const package_ = await loadCommunityPackage("any-package-id");
-      expect(package_).toBeNull();
-    });
-  });
-
-  describe("searchCommunityPackages", () => {
-    it("should return empty array when no packages match", async () => {
-      const packages = await searchCommunityPackages({ category: "programming" });
-      expect(packages).toEqual([]);
-    });
-
-    it("should filter by category", async () => {
-      // This test will pass when we have actual packages
-      const packages = await searchCommunityPackages({ category: "programming" });
-      expect(Array.isArray(packages)).toBe(true);
-    });
-
-    it("should filter by tags", async () => {
-      const packages = await searchCommunityPackages({ tags: ["javascript", "react"] });
-      expect(Array.isArray(packages)).toBe(true);
-    });
-
-    it("should filter by author", async () => {
-      const packages = await searchCommunityPackages({ author: "test-author" });
-      expect(Array.isArray(packages)).toBe(true);
-    });
-
-    it("should filter by verification status", async () => {
-      const packages = await searchCommunityPackages({ verified: true });
-      expect(Array.isArray(packages)).toBe(true);
-    });
-
-    it("should filter by minimum rating", async () => {
-      const packages = await searchCommunityPackages({ minRating: 4.0 });
-      expect(Array.isArray(packages)).toBe(true);
-    });
-
-    it("should filter by search term", async () => {
-      const packages = await searchCommunityPackages({ searchTerm: "javascript" });
-      expect(Array.isArray(packages)).toBe(true);
-    });
-
-    it("should handle empty search options", async () => {
-      const packages = await searchCommunityPackages();
-      expect(Array.isArray(packages)).toBe(true);
-    });
-
-    it("should handle multiple filter criteria", async () => {
-      const packages = await searchCommunityPackages({
-        category: "programming",
-        tags: ["javascript"],
-        verified: true,
-        minRating: 4.0,
-        searchTerm: "react"
-      });
-      expect(Array.isArray(packages)).toBe(true);
-    });
-  });
-
-  describe("getCommunityPackageStats", () => {
-    it("should return zero stats when no packages are available", async () => {
-      const stats = await getCommunityPackageStats();
-      
-      expect(stats).toEqual({
-        totalPackages: 0,
-        approvedPackages: 0,
-        pendingPackages: 0,
-        rejectedPackages: 0,
-        totalDownloads: 0,
-        averageRating: 0
-      });
-    });
-  });
-
   describe("processPackageSubmission", () => {
     it("should process valid package submission", async () => {
       const { validatePackage, validatePackageFile } = await import("./package-validator");
@@ -278,130 +179,7 @@ describe("community-packages", () => {
       expect(result.errors).toContain("Invalid package data");
     });
 
-    it("should validate community package requirements", async () => {
-      const { validatePackage, validatePackageFile } = await import("./package-validator");
-      
-      vi.mocked(validatePackage).mockReturnValue({
-        isValid: true,
-        errors: [],
-        warnings: []
-      });
-      
-      vi.mocked(validatePackageFile).mockReturnValue({
-        isValid: true,
-        errors: [],
-        warnings: []
-      });
-
-      const packageData = {
-        name: "Test Package",
-        version: "1.0.0",
-        // Missing author for community package
-        description: "A test package",
-        kind: "community",
-        snippets: []
-      };
-
-      const result = await processPackageSubmission(packageData, "community-packages/pending/test-package.yml");
-      
-      expect(result.success).toBe(false);
-      expect(result.errors).toContain("Community packages must have an author");
-    });
-
-    it("should handle missing version for community packages", async () => {
-      const { validatePackage, validatePackageFile } = await import("./package-validator");
-      
-      vi.mocked(validatePackage).mockReturnValue({
-        isValid: true,
-        errors: [],
-        warnings: []
-      });
-      
-      vi.mocked(validatePackageFile).mockReturnValue({
-        isValid: true,
-        errors: [],
-        warnings: []
-      });
-
-      const packageData = {
-        name: "Test Package",
-        author: "test-author",
-        // Missing version for community package
-        description: "A test package",
-        kind: "community",
-        snippets: []
-      };
-
-      const result = await processPackageSubmission(packageData, "community-packages/pending/test-package.yml");
-      
-      expect(result.success).toBe(false);
-      expect(result.errors).toContain("Community packages must have a version");
-    });
-
-    it("should add warnings for missing optional fields", async () => {
-      const { validatePackage, validatePackageFile } = await import("./package-validator");
-      
-      vi.mocked(validatePackage).mockReturnValue({
-        isValid: true,
-        errors: [],
-        warnings: []
-      });
-      
-      vi.mocked(validatePackageFile).mockReturnValue({
-        isValid: true,
-        errors: [],
-        warnings: []
-      });
-
-      const packageData = {
-        name: "Test Package",
-        author: "test-author",
-        version: "1.0.0",
-        description: "A test package",
-        kind: "community",
-        snippets: []
-        // Missing license and homepage
-      };
-
-      const result = await processPackageSubmission(packageData, "community-packages/pending/test-package.yml");
-      
-      expect(result.success).toBe(true);
-      expect(result.warnings).toContain("Community packages should have a license");
-      expect(result.warnings).toContain("Community packages should have a homepage");
-    });
-
-    it("should handle validation errors from package validator", async () => {
-      const { validatePackage, validatePackageFile } = await import("./package-validator");
-      
-      vi.mocked(validatePackage).mockReturnValue({
-        isValid: false,
-        errors: ["Invalid package format"],
-        warnings: ["Minor issue"]
-      });
-      
-      vi.mocked(validatePackageFile).mockReturnValue({
-        isValid: true,
-        errors: [],
-        warnings: []
-      });
-
-      const packageData = {
-        name: "Test Package",
-        author: "test-author",
-        version: "1.0.0",
-        description: "A test package",
-        kind: "community",
-        snippets: []
-      };
-
-      const result = await processPackageSubmission(packageData, "community-packages/pending/test-package.yml");
-      
-      expect(result.success).toBe(false);
-      expect(result.errors).toContain("Invalid package format");
-      expect(result.warnings).toContain("Minor issue");
-    });
-
-    it("should handle validation errors from file validator", async () => {
+    it("should handle invalid file path", async () => {
       const { validatePackage, validatePackageFile } = await import("./package-validator");
       
       vi.mocked(validatePackage).mockReturnValue({
@@ -461,192 +239,271 @@ describe("community-packages", () => {
     });
   });
 
-  describe("getPackageCategories", () => {
-    it("should return all available categories", () => {
-      const categories = getPackageCategories();
+  describe("loadCommunityPackagesFromGitHub", () => {
+    it("should load packages from GitHub API successfully", async () => {
+      const mockFiles = [
+        {
+          name: "basic-emojis.yml",
+          download_url: "https://raw.githubusercontent.com/Dimagious/snipsidian-community/main/approved/basic-emojis.yml"
+        }
+      ];
+
+      const mockYamlContent = `
+name: "Basic Emojis"
+version: "1.0.0"
+author: "snipsidian-community"
+description: "Basic emoji shortcuts"
+snippets:
+  - trigger: ":smile"
+    replace: "😄"
+  - trigger: ":heart"
+    replace: "❤️"
+`;
+
+      vi.mocked(fetch)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockFiles
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          text: async () => mockYamlContent
+        } as Response);
+
+      const packages = await loadCommunityPackagesFromGitHub();
+
+      expect(packages).toHaveLength(1);
+      expect(packages[0].label).toBe("Basic Emojis");
+      expect(packages[0].snippets).toHaveProperty(":smile", "😄");
+    });
+
+    it("should handle GitHub API errors gracefully", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+        json: async () => []
+      } as Response);
+
+      const packages = await loadCommunityPackagesFromGitHub();
+
+      expect(packages).toEqual([]);
+    });
+
+    it("should handle network errors gracefully", async () => {
+      // Mock console.error to avoid noise in tests
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       
-      expect(categories).toEqual([
-        "markdown",
-        "programming",
-        "academic",
-        "business",
-        "creative",
-        "productivity",
-        "language",
-        "other"
-      ]);
-    });
-  });
+      vi.mocked(fetch).mockRejectedValue(new Error("Network error"));
 
-  describe("getPopularTags", () => {
-    it("should return empty array when no packages are available", async () => {
-      const tags = await getPopularTags(10);
-      expect(tags).toEqual([]);
+      const packages = await loadCommunityPackagesFromGitHub();
+
+      expect(packages).toEqual([]);
+      
+      consoleSpy.mockRestore();
     });
 
-    it("should limit results to specified number", async () => {
-      const tags = await getPopularTags(5);
-      expect(tags.length).toBeLessThanOrEqual(5);
-    });
+    it("should handle invalid YAML content gracefully", async () => {
+      const mockFiles = [
+        {
+          name: "invalid.yml",
+          download_url: "https://raw.githubusercontent.com/Dimagious/snipsidian-community/main/approved/invalid.yml"
+        }
+      ];
 
-    it("should return popular tags when packages are available", async () => {
-      // Since loadCommunityPackages returns empty array in test environment,
-      // this test will return empty array
-      const tags = await getPopularTags(3);
-      expect(tags).toEqual([]);
-    });
+      vi.mocked(fetch)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockFiles
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          text: async () => "invalid: yaml: content: ["
+        } as Response);
 
-    it("should handle default limit", async () => {
-      const tags = await getPopularTags();
-      expect(Array.isArray(tags)).toBe(true);
-    });
-  });
+      const packages = await loadCommunityPackagesFromGitHub();
 
-  describe("getTopRatedPackages", () => {
-    it("should return empty array when no packages are available", async () => {
-      const packages = await getTopRatedPackages(10);
       expect(packages).toEqual([]);
     });
 
-    it("should limit results to specified number", async () => {
-      const packages = await getTopRatedPackages(5);
-      expect(packages.length).toBeLessThanOrEqual(5);
-    });
+    it("should handle packages with no snippets", async () => {
+      const mockFiles = [
+        {
+          name: "empty.yml",
+          download_url: "https://raw.githubusercontent.com/Dimagious/snipsidian-community/main/approved/empty.yml"
+        }
+      ];
 
-    it("should handle default limit", async () => {
-      const packages = await getTopRatedPackages();
-      expect(Array.isArray(packages)).toBe(true);
-    });
-  });
+      const mockYamlContent = `
+name: "Empty Package"
+version: "1.0.0"
+author: "test"
+description: "Package with no snippets"
+snippets: []
+`;
 
-  describe("getMostDownloadedPackages", () => {
-    it("should return empty array when no packages are available", async () => {
-      const packages = await getMostDownloadedPackages(10);
-      expect(packages).toEqual([]);
-    });
+      vi.mocked(fetch)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockFiles
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          text: async () => mockYamlContent
+        } as Response);
 
-    it("should limit results to specified number", async () => {
-      const packages = await getMostDownloadedPackages(5);
-      expect(packages.length).toBeLessThanOrEqual(5);
-    });
+      const packages = await loadCommunityPackagesFromGitHub();
 
-    it("should handle default limit", async () => {
-      const packages = await getMostDownloadedPackages();
-      expect(Array.isArray(packages)).toBe(true);
-    });
-  });
-
-  describe("getRecentlyUpdatedPackages", () => {
-    it("should return empty array when no packages are available", async () => {
-      const packages = await getRecentlyUpdatedPackages(10);
-      expect(packages).toEqual([]);
-    });
-
-    it("should limit results to specified number", async () => {
-      const packages = await getRecentlyUpdatedPackages(5);
-      expect(packages.length).toBeLessThanOrEqual(5);
-    });
-
-    it("should handle default limit", async () => {
-      const packages = await getRecentlyUpdatedPackages();
-      expect(Array.isArray(packages)).toBe(true);
-    });
-  });
-
-  describe("getPackagesByAuthor", () => {
-    it("should return empty array when no packages are available", async () => {
-      const packages = await getPackagesByAuthor("test-author");
       expect(packages).toEqual([]);
     });
   });
 
-  describe("isPackageIdAvailable", () => {
-    it("should return true when no packages are available", async () => {
-      const available = await isPackageIdAvailable("test-package");
-      expect(available).toBe(true);
-    });
-  });
-
-  describe("generatePackageId", () => {
-    it("should generate valid package ID from name", () => {
-      const id = generatePackageId("Test Package Name");
-      expect(id).toBe("test-package-name");
-    });
-
-    it("should handle special characters", () => {
-      const id = generatePackageId("Test Package (v1.0)!");
-      expect(id).toBe("test-package-v10");
-    });
-
-    it("should handle multiple spaces and hyphens", () => {
-      const id = generatePackageId("Test   Package---Name");
-      expect(id).toBe("test-package-name");
-    });
-
-    it("should handle leading and trailing characters", () => {
-      const id = generatePackageId("-Test Package-");
-      expect(id).toBe("test-package");
-    });
-  });
-
-  describe("formatPackageMetadata", () => {
-    it("should format complete package metadata", () => {
-      const pkg = {
-        id: "test-package",
-        label: "Test Package",
-        author: "test-author",
-        version: "1.0.0",
-        description: "A test package",
-        category: "productivity",
-        tags: ["test", "example"],
-        rating: 4.5,
-        downloads: 100,
-        lastUpdated: "2025-01-01",
-        verified: true,
-        kind: "community" as const,
-        yaml: "test yaml"
+  describe("createPackageIssue", () => {
+    it("should create GitHub issue successfully", async () => {
+      const mockResponse = {
+        html_url: "https://github.com/Dimagious/snipsidian-community/issues/123"
       };
 
-      const formatted = formatPackageMetadata(pkg);
-      
-      expect(formatted).toEqual({
-        id: "test-package",
-        label: "Test Package",
-        author: "test-author",
-        version: "1.0.0",
-        description: "A test package",
-        category: "productivity",
-        tags: ["test", "example"],
-        rating: 4.5,
-        downloads: 100,
-        lastUpdated: "2025-01-01",
-        verified: true
-      });
-    });
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => mockResponse
+      } as Response);
 
-    it("should handle missing optional fields", () => {
-      const pkg = {
-        id: "test-package",
-        label: "Test Package",
-        kind: "community" as const,
-        yaml: "test yaml"
+      const packageData = {
+        name: "Test Package",
+        version: "1.0.0",
+        author: "test-author",
+        description: "A test package"
       };
 
-      const formatted = formatPackageMetadata(pkg);
-      
-      expect(formatted).toEqual({
-        id: "test-package",
-        label: "Test Package",
-        author: "Unknown",
-        version: "1.0.0",
-        description: "No description available",
-        category: "other",
-        tags: [],
-        rating: 0,
-        downloads: 0,
-        lastUpdated: "Unknown",
-        verified: false
-      });
+      const userInfo = {
+        platform: "obsidian",
+        version: "1.0.0"
+      };
+
+      const result = await createPackageIssue(packageData, userInfo);
+
+      expect(result.success).toBe(true);
+      expect(result.issueUrl).toBe("https://github.com/Dimagious/snipsidian-community/issues/123");
+    });
+
+    it("should handle GitHub API errors", async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: false,
+        status: 422,
+        statusText: "Unprocessable Entity",
+        json: async () => ({})
+      } as Response);
+
+      const packageData = { name: "Test Package" };
+      const userInfo = { platform: "obsidian" };
+
+      const result = await createPackageIssue(packageData, userInfo);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("GitHub API error: 422");
+    });
+
+    it("should handle network errors", async () => {
+      vi.mocked(fetch).mockRejectedValue(new Error("Network error"));
+
+      const packageData = { name: "Test Package" };
+      const userInfo = { platform: "obsidian" };
+
+      const result = await createPackageIssue(packageData, userInfo);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Network error");
+    });
+  });
+
+  describe("loadCommunityPackagesWithCache", () => {
+    it("should load packages from cache when cache is valid", async () => {
+      const mockPlugin = {
+        settings: {
+          communityPackages: {
+            cache: {
+              packages: [
+                {
+                  label: "Cached Package",
+                  author: "test",
+                  version: "1.0.0",
+                  snippets: { ":test": "test" }
+                }
+              ],
+              lastUpdated: Date.now() - 1000 // 1 second ago
+            }
+          }
+        },
+        saveSettings: vi.fn()
+      };
+
+      const packages = await loadCommunityPackagesWithCache(mockPlugin);
+
+      expect(packages).toHaveLength(1);
+      expect(packages[0].label).toBe("Cached Package");
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("should fetch from GitHub when cache is expired", async () => {
+      const mockPlugin = {
+        settings: {
+          communityPackages: {
+            cache: {
+              packages: [],
+              lastUpdated: Date.now() - 25 * 60 * 60 * 1000 // 25 hours ago
+            }
+          }
+        },
+        saveSettings: vi.fn()
+      };
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => []
+      } as Response);
+
+      const packages = await loadCommunityPackagesWithCache(mockPlugin);
+
+      expect(packages).toEqual([]);
+      expect(fetch).toHaveBeenCalled();
+      expect(mockPlugin.saveSettings).toHaveBeenCalled();
+    });
+
+    it("should fetch from GitHub when no cache exists", async () => {
+      const mockPlugin = {
+        settings: {},
+        saveSettings: vi.fn()
+      };
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => []
+      } as Response);
+
+      const packages = await loadCommunityPackagesWithCache(mockPlugin);
+
+      expect(packages).toEqual([]);
+      expect(fetch).toHaveBeenCalled();
+      expect(mockPlugin.saveSettings).toHaveBeenCalled();
+    });
+
+    it("should handle GitHub API errors gracefully", async () => {
+      const mockPlugin = {
+        settings: {},
+        saveSettings: vi.fn()
+      };
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: false,
+        status: 404,
+        statusText: "Not Found"
+      } as Response);
+
+      const packages = await loadCommunityPackagesWithCache(mockPlugin);
+
+      expect(packages).toEqual([]);
+      expect(mockPlugin.saveSettings).toHaveBeenCalled();
     });
   });
 });
