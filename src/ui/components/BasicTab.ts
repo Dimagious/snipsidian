@@ -17,6 +17,14 @@ export class BasicTab {
             }) as T;
         };
 
+        // Helper function for creating sections
+        const section = (title: string, hint?: string, specialClass?: string) => {
+            const wrap = root.createDiv({ cls: `snipsy-section ${specialClass || ""}` });
+            wrap.createEl("h3", { text: title });
+            if (hint) wrap.createEl("p", { text: hint, cls: "snipsy-hint" });
+            return wrap;
+        };
+
         // Commands section
         const commandsSection = section("Commands", "Configure hotkeys for Snipsy commands.", "snipsy-commands-section");
 
@@ -63,13 +71,6 @@ export class BasicTab {
             );
 
         // Export/Import section
-        const section = (title: string, hint?: string, specialClass?: string) => {
-            const wrap = root.createDiv({ cls: `snipsy-section ${specialClass || ""}` });
-            wrap.createEl("h3", { text: title });
-            if (hint) wrap.createEl("p", { text: hint, cls: "snipsy-hint" });
-            return wrap;
-        };
-
         const exportSection = section("Export & Import", "Backup your snippets or share them between devices.", "snipsy-export-section");
 
         new Setting(exportSection)
