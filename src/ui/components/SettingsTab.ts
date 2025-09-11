@@ -3,6 +3,7 @@ import type SnipSidianPlugin from "../../main";
 import { BasicTab } from "./BasicTab";
 import { PackagesTab } from "./PackagesTab";
 import { SnippetsTab } from "./SnippetsTab";
+import { FeedbackTab } from "./FeedbackTab";
 import { UIStateManager } from "../utils/ui-state";
 
 export class SnipSidianSettingTab extends PluginSettingTab {
@@ -11,6 +12,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
     private basicTab: BasicTab;
     private packagesTab: PackagesTab;
     private snippetsTab: SnippetsTab;
+    private feedbackTab: FeedbackTab;
 
     constructor(app: App, plugin: SnipSidianPlugin) {
         super(app, plugin);
@@ -19,6 +21,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         this.basicTab = new BasicTab(app, plugin);
         this.packagesTab = new PackagesTab(app, plugin);
         this.snippetsTab = new SnippetsTab(app, plugin);
+        this.feedbackTab = new FeedbackTab(app, plugin);
     }
 
     display(): void {
@@ -38,6 +41,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
             { id: "basic" as const, label: "Basic" },
             { id: "packages" as const, label: "Packages" },
             { id: "snippets" as const, label: "Snippets" },
+            { id: "feedback" as const, label: "Feedback" },
         ];
 
         const tabContainer = containerEl.createDiv({ cls: "snipsy-tabs" });
@@ -78,6 +82,9 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 break;
             case "snippets":
                 this.snippetsTab.render(container);
+                break;
+            case "feedback":
+                this.feedbackTab.render(container);
                 break;
         }
     }

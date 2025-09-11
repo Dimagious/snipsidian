@@ -1,6 +1,6 @@
 import type { SnipSidianSettings } from "../../types";
 
-export type TabId = "basic" | "packages" | "snippets";
+export type TabId = "basic" | "packages" | "snippets" | "feedback";
 
 export class UIStateManager {
     private activeTab: TabId = "basic";
