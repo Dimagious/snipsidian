@@ -1,56 +1,7 @@
 import * as yaml from "js-yaml";
+import { buildGoogleFormUrl, collectSystemMeta } from "./feedback-form";
 
-// Built-in community packages
-const BUILTIN_PACKAGES = [
-  {
-    name: "Academic Writing",
-    version: "1.0.0",
-    author: "academic-writer",
-    description: "Snippets for academic writing, citations, and research",
-    category: "academic",
-    tags: ["academic", "writing", "research", "citations", "latex"],
-    license: "MIT",
-    homepage: "https://github.com/academic-writer/academic-snippets",
-    snippets: [
-      { trigger: ":cite", replace: "[@author2023]", description: "Insert citation placeholder", keywords: ["citation", "reference", "academic", "research"] },
-      { trigger: ":ref", replace: "See Figure \\ref{fig:example}", description: "Reference to figure", keywords: ["reference", "figure", "latex", "academic"] },
-      { trigger: ":eq", replace: "\\begin{equation}\n\\label{eq:example}\nCURSOR_PLACEHOLDER\n\\end{equation}", description: "LaTeX equation environment", keywords: ["equation", "latex", "math", "academic"] },
-      { trigger: ":abstract", replace: "\\begin{abstract}\nCURSOR_PLACEHOLDER\n\\end{abstract}", description: "Abstract section", keywords: ["abstract", "section", "academic"] },
-      { trigger: ":theorem", replace: "\\begin{theorem}\nCURSOR_PLACEHOLDER\n\\end{theorem}", description: "Theorem environment", keywords: ["theorem", "math", "academic"] },
-      { trigger: ":proof", replace: "\\begin{proof}\nCURSOR_PLACEHOLDER\n\\end{proof}", description: "Proof environment", keywords: ["proof", "math", "academic"] }
-    ]
-  },
-  {
-    name: "Business Templates",
-    version: "1.0.0",
-    author: "business-writer",
-    description: "Professional business writing templates and snippets",
-    category: "business",
-    tags: ["business", "templates", "professional", "email", "reports"],
-    license: "MIT",
-    homepage: "https://github.com/business-writer/business-snippets",
-    snippets: [
-      { trigger: ":email", replace: "Dear [Name],\n\nI hope this email finds you well.\n\nCURSOR_PLACEHOLDER\n\nBest regards,\n[Your Name]", description: "Professional email template", keywords: ["email", "business", "professional"] },
-      { trigger: ":meeting", replace: "Meeting: [Topic]\nDate: [Date]\nAttendees: [List]\n\nAgenda:\n- CURSOR_PLACEHOLDER\n\nAction Items:\n- [ ] Item 1\n- [ ] Item 2", description: "Meeting notes template", keywords: ["meeting", "notes", "business"] },
-      { trigger: ":report", replace: "# [Report Title]\n\n## Executive Summary\nCURSOR_PLACEHOLDER\n\n## Background\n\n## Findings\n\n## Recommendations\n\n## Conclusion", description: "Business report template", keywords: ["report", "business", "professional"] }
-    ]
-  },
-  {
-    name: "Python Snippets",
-    version: "1.0.0",
-    author: "python-dev",
-    description: "Common Python code snippets and patterns",
-    category: "programming",
-    tags: ["python", "programming", "code", "snippets", "development"],
-    license: "MIT",
-    homepage: "https://github.com/python-dev/python-snippets",
-    snippets: [
-      { trigger: ":def", replace: "def function_name(parameters):\n    \"\"\"\n    Function description.\n    \n    Args:\n        parameters: Description of parameters\n    \n    Returns:\n        Description of return value\n    \"\"\"\n    CURSOR_PLACEHOLDER\n    return result", description: "Python function template", keywords: ["python", "function", "def", "programming"] },
-      { trigger: ":class", replace: "class ClassName:\n    \"\"\"\n    Class description.\n    \"\"\"\n    \n    def __init__(self, parameters):\n        \"\"\"\n        Initialize the class.\n        \n        Args:\n            parameters: Description of parameters\n        \"\"\"\n        CURSOR_PLACEHOLDER", description: "Python class template", keywords: ["python", "class", "programming"] },
-      { trigger: ":try", replace: "try:\n    CURSOR_PLACEHOLDER\nexcept Exception as e:\n    print(f\"Error: {e}\")\n    # Handle the exception", description: "Python try-except block", keywords: ["python", "try", "except", "error", "programming"] }
-    ]
-  }
-];
+// No built-in packages - all packages come from GitHub API
 
 interface PackageItem {
     id?: string;
@@ -110,44 +61,7 @@ export async function loadCommunityPackages(): Promise<PackageItem[]> {
   }
 }
 
-/**
- * Loads built-in community packages
- * This function returns the built-in packages that are included with the plugin
- */
-export async function loadBuiltinCommunityPackages(): Promise<PackageItem[]> {
-  const packages: PackageItem[] = [];
-  
-  try {
-    // In test environment, return empty array to match test expectations
-    if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
-      return [];
-    }
-    
-    // Convert built-in packages to PackageItem format
-    for (const builtinPackage of BUILTIN_PACKAGES) {
-      const packageItem: PackageItem = {
-        id: builtinPackage.name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-        label: builtinPackage.name,
-        description: builtinPackage.description,
-        author: builtinPackage.author,
-        version: builtinPackage.version,
-        downloads: Math.floor(Math.random() * 1000) + 100, // Simulate download count
-        tags: builtinPackage.tags || [],
-        verified: true, // All built-in packages are verified
-        rating: Math.floor(Math.random() * 5) + 3, // Simulate rating between 3-5
-        snippets: convertSnippetsToObject(builtinPackage.snippets)
-      };
-      
-      packages.push(packageItem);
-    }
-    
-    console.log("Loaded", packages.length, "built-in community packages");
-    return packages;
-  } catch (error) {
-    console.error("Failed to load built-in community packages:", error);
-    return [];
-  }
-}
+// No built-in packages function - all packages come from GitHub API
 
 /**
  * Loads dynamic community packages from user's vault
@@ -185,10 +99,10 @@ export async function loadDynamicCommunityPackages(app: any): Promise<PackageIte
               description: packageData.description,
               author: packageData.author,
               version: packageData.version,
-              downloads: Math.floor(Math.random() * 1000) + 100,
+              downloads: 0, // Will be updated when packages are actually downloaded
               tags: packageData.tags || [],
               verified: true, // Dynamic packages are also verified
-              rating: Math.floor(Math.random() * 5) + 3,
+              rating: 0, // Will be updated based on actual user ratings
               snippets: packageData.snippets ? convertSnippetsToObject(packageData.snippets) : {}
             };
             
@@ -208,26 +122,187 @@ export async function loadDynamicCommunityPackages(app: any): Promise<PackageIte
   }
 }
 
+
 /**
- * Loads all community packages (built-in + dynamic)
+ * Creates a GitHub Issue for package submission
  */
-export async function loadAllCommunityPackages(app: any): Promise<PackageItem[]> {
+export async function createPackageIssue(packageData: any, userInfo: any): Promise<{ success: boolean; issueUrl?: string; error?: string }> {
   try {
-    const [builtinPackages, dynamicPackages] = await Promise.all([
-      loadBuiltinCommunityPackages(),
-      loadDynamicCommunityPackages(app)
-    ]);
-    
-    // Combine and deduplicate packages
-    const allPackages = [...builtinPackages, ...dynamicPackages];
-    const uniquePackages = allPackages.filter((pkg, index, self) => 
-      index === self.findIndex(p => p.id === pkg.id)
-    );
-    
-    console.log(`Loaded ${uniquePackages.length} total community packages (${builtinPackages.length} built-in, ${dynamicPackages.length} dynamic)`);
-    return uniquePackages;
+    const issue = {
+      title: `[Package Submission] ${packageData.name}`,
+      body: `## Package Information\n\n**Author:** ${userInfo.author || 'Anonymous'}\n**Category:** ${packageData.category || 'other'}\n**Description:** ${packageData.description || 'No description'}\n\n## Package YAML\n\n\`\`\`yaml\n${yaml.dump(packageData)}\n\`\`\`\n\n## Review Checklist\n\n- [ ] Package follows naming conventions\n- [ ] All snippets work correctly\n- [ ] YAML is valid and well-formatted\n- [ ] Content is appropriate and useful\n- [ ] Package fits the chosen category\n- [ ] No duplicate triggers with existing packages`,
+      labels: ['package-submission', 'pending-review']
+    };
+
+    const response = await fetch('https://api.github.com/repos/Dimagious/snipsidian-community/issues', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.github.v3+json'
+      },
+      body: JSON.stringify(issue)
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return { 
+          success: false, 
+          error: 'Community repository not found. Please contact the maintainer to set up the community packages repository.' 
+        };
+      }
+      throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    return { success: true, issueUrl: result.html_url };
   } catch (error) {
-    console.error("Failed to load all community packages:", error);
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+/**
+ * Loads community packages from GitHub API
+ */
+export async function loadCommunityPackagesFromGitHub(): Promise<PackageItem[]> {
+  try {
+    const response = await fetch('https://api.github.com/repos/Dimagious/snipsidian-community/contents/community-packages/approved');
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.log('GitHub repository or approved directory not found yet. Using built-in packages only.');
+        return [];
+      }
+      throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+    }
+
+    const files = await response.json();
+    
+    // Handle case where directory exists but is empty
+    if (!Array.isArray(files) || files.length === 0) {
+      console.log('No approved packages found in GitHub repository yet.');
+      return [];
+    }
+
+    const packages: PackageItem[] = [];
+
+    for (const file of files) {
+      if (file.name.endsWith('.yml') || file.name.endsWith('.yaml')) {
+        try {
+          const contentResponse = await fetch(file.download_url);
+          const content = await contentResponse.text();
+          const packageData = yaml.load(content) as any;
+
+          if (packageData && packageData.name && packageData.snippets) {
+            console.log(`Processing package "${packageData.name}":`, {
+              snippetsType: Array.isArray(packageData.snippets) ? 'array' : typeof packageData.snippets,
+              snippetsCount: Array.isArray(packageData.snippets) ? packageData.snippets.length : Object.keys(packageData.snippets).length,
+              sampleSnippets: Array.isArray(packageData.snippets) ? packageData.snippets.slice(0, 2) : Object.entries(packageData.snippets).slice(0, 2)
+            });
+            
+            const snippets = convertSnippetsToObject(packageData.snippets);
+            
+            console.log(`Converted snippets for "${packageData.name}":`, {
+              convertedCount: Object.keys(snippets).length,
+              sampleConverted: Object.entries(snippets).slice(0, 2)
+            });
+            
+            // Only add package if it has snippets
+            if (Object.keys(snippets).length > 0) {
+              const packageItem: PackageItem = {
+                id: file.name.replace(/\.(yml|yaml)$/, ''),
+                label: packageData.name,
+                description: packageData.description,
+                author: packageData.author,
+                version: packageData.version,
+                downloads: 0, // Will be updated when packages are actually downloaded
+                tags: packageData.tags || [],
+        verified: true,
+                rating: 0, // Will be updated based on actual user ratings
+                snippets: snippets
+              };
+
+              packages.push(packageItem);
+              console.log(`✅ Successfully added package "${packageData.name}" with ${Object.keys(snippets).length} snippets`);
+            } else {
+              console.log(`❌ Package "${packageData.name}" has no valid snippets after conversion - skipping`);
+            }
+          } else {
+            console.log(`❌ Package file "${file.name}" is missing required fields:`, {
+              hasName: !!packageData?.name,
+              hasSnippets: !!packageData?.snippets,
+              packageData: packageData ? Object.keys(packageData) : 'null'
+            });
+          }
+        } catch (error) {
+          console.error(`Failed to load package ${file.name}:`, error);
+        }
+      }
+    }
+
+    console.log(`Loaded ${packages.length} packages from GitHub repository`);
+    return packages;
+  } catch (error) {
+    console.error('Failed to load community packages from GitHub:', error);
+    throw error;
+  }
+}
+
+/**
+ * Loads community packages with caching
+ */
+export async function loadCommunityPackagesWithCache(plugin: any): Promise<PackageItem[]> {
+  const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+  const now = Date.now();
+  
+  // Check if we have valid cache
+  const cache = plugin.settings.communityPackages?.cache;
+  if (cache && (now - cache.lastUpdated) < CACHE_DURATION) {
+    console.log('Loading community packages from cache');
+    return cache.packages;
+  }
+  
+  try {
+    // Load from GitHub
+    console.log('Loading community packages from GitHub');
+    const packages = await loadCommunityPackagesFromGitHub();
+    
+    // Update cache (even if empty, to avoid repeated 404 requests)
+    plugin.settings.communityPackages = {
+      cache: {
+        packages: packages,
+        lastUpdated: now
+      }
+    };
+    await plugin.saveSettings();
+    
+    return packages;
+  } catch (error) {
+    console.error('Failed to load from GitHub, falling back to cache or built-in:', error);
+    
+    // Fallback to cache if available
+    if (cache && cache.packages.length > 0) {
+      console.log('Using cached packages as fallback');
+      return cache.packages;
+    }
+    
+    // No fallback - return empty array if GitHub is unavailable
+    console.log('GitHub API unavailable - no community packages available');
+    return [];
+  }
+}
+
+/**
+ * Loads all community packages from GitHub API
+ */
+export async function loadAllCommunityPackages(app: any, plugin?: any): Promise<PackageItem[]> {
+  try {
+    // Load packages from GitHub API with caching
+    const packages = plugin ? await loadCommunityPackagesWithCache(plugin) : await loadDynamicCommunityPackages(app);
+    
+    console.log(`Loaded ${packages.length} community packages from GitHub`);
+    return packages;
+  } catch (error) {
+    console.error("Failed to load community packages:", error);
     return [];
   }
 }
@@ -235,24 +310,33 @@ export async function loadAllCommunityPackages(app: any): Promise<PackageItem[]>
 /**
  * Loads community packages from the approved directory using Obsidian API
  * This function should be called from UI components that have access to the app instance
- * @deprecated Use loadBuiltinCommunityPackages() instead
+ * @deprecated Use loadCommunityPackagesWithCache() instead
  */
 export async function loadCommunityPackagesFromVault(app: any): Promise<PackageItem[]> {
-  // For now, just return built-in packages
-  // In the future, this could be extended to load from vault or remote source
-  return loadBuiltinCommunityPackages();
+  // Deprecated - use GitHub API instead
+  console.log('loadCommunityPackagesFromVault is deprecated - use GitHub API instead');
+  return [];
 }
 
 /**
- * Converts YAML snippets array format to object format
+ * Converts YAML snippets to object format
+ * Handles both array format and object format
  */
-function convertSnippetsToObject(snippets: any[]): { [trigger: string]: string } {
+function convertSnippetsToObject(snippets: any): { [trigger: string]: string } {
   const snippetsObj: { [trigger: string]: string } = {};
   
   if (Array.isArray(snippets)) {
+    // Array format: [{ trigger: "...", replace: "..." }]
     for (const snippet of snippets) {
       if (snippet.trigger && snippet.replace) {
         snippetsObj[snippet.trigger] = snippet.replace;
+      }
+    }
+  } else if (snippets && typeof snippets === 'object') {
+    // Object format: { "trigger": "replacement", ... }
+    for (const [trigger, replacement] of Object.entries(snippets)) {
+      if (typeof replacement === 'string') {
+        snippetsObj[trigger] = replacement;
       }
     }
   }
