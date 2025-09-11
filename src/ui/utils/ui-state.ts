@@ -24,7 +24,7 @@ export class UIStateManager {
         }
     }
 
-    loadOpenState(group: string, defaultOpen = true): boolean {
+    loadOpenState(group: string, defaultOpen = false): boolean {
         this.ensureUiState();
         const store = this.settings.ui!.groupOpen!;
         if (store[group] === undefined) store[group] = defaultOpen;

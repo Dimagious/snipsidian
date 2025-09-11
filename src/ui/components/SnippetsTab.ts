@@ -70,7 +70,7 @@ export class SnippetsTab {
             .addToggle((toggle) => {
                 // Check if all groups are open
                 const groups = this.groupManager.allGroupsFrom(this.plugin.settings.snippets);
-                const allOpen = groups.length > 0 && groups.every(group => this.uiState.loadOpenState(group, true));
+                const allOpen = groups.length > 0 && groups.every(group => this.uiState.loadOpenState(group, false));
                 toggle.setValue(allOpen);
                 
                 toggle.onChange((value) => {
