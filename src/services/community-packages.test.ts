@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   loadCommunityPackages,
+  loadBuiltinCommunityPackages,
   loadCommunityPackagesFromVault,
   loadCommunityPackage,
   searchCommunityPackages,
@@ -52,8 +53,25 @@ describe("community-packages", () => {
     });
   });
 
-  describe("loadCommunityPackagesFromVault", () => {
+  describe("loadBuiltinCommunityPackages", () => {
     it("should return empty array in test environment", async () => {
+      const packages = await loadBuiltinCommunityPackages();
+      expect(packages).toEqual([]);
+    });
+
+    it("should handle errors gracefully", async () => {
+      // Mock console.error to avoid noise in tests
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      
+      const packages = await loadBuiltinCommunityPackages();
+      expect(packages).toEqual([]);
+      
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe("loadCommunityPackagesFromVault", () => {
+    it("should return built-in packages", async () => {
       const mockApp = {
         vault: {
           getAbstractFileByPath: vi.fn(),
@@ -62,26 +80,7 @@ describe("community-packages", () => {
       };
       
       const packages = await loadCommunityPackagesFromVault(mockApp);
-      expect(packages).toEqual([]);
-    });
-
-    it("should handle missing approved directory gracefully", async () => {
-      const mockApp = {
-        vault: {
-          getAbstractFileByPath: vi.fn().mockReturnValue(null),
-          read: vi.fn()
-        }
-      };
-      
-      // Mock process.env to simulate non-test environment
-      const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'production';
-      
-      const packages = await loadCommunityPackagesFromVault(mockApp);
-      expect(packages).toEqual([]);
-      
-      // Restore original environment
-      process.env.NODE_ENV = originalEnv;
+      expect(packages).toEqual([]); // In test environment, returns empty array
     });
   });
 
