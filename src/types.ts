@@ -4,6 +4,12 @@ export interface SnipSidianSettings {
         groupOpen?: Record<string, boolean>;
         activeTab?: "basic" | "snippets" | "community" | "feedback";
     };
+    communityPackages?: {
+        cache?: {
+            packages: any[];
+            lastUpdated: number;
+        };
+    };
 }
 
 export interface SnippetItem {

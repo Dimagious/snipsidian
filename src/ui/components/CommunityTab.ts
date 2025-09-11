@@ -1,7 +1,8 @@
 // CommunityTab.ts
 import { App, Modal, Notice, Setting } from "obsidian";
 import type SnipSidianPlugin from "../../main";
-import { loadCommunityPackages, loadAllCommunityPackages, processPackageSubmission } from "../../services/community-packages";
+import { loadCommunityPackages, loadAllCommunityPackages, createPackageIssue } from "../../services/community-packages";
+import { buildGoogleFormUrl, collectSystemMeta } from "../../services/feedback-form";
 
 interface PackageItem {
   id?: string;
@@ -9,10 +10,8 @@ interface PackageItem {
   description?: string;
   author?: string;
   version?: string;
-  downloads?: number;
   tags?: string[];
   verified?: boolean;
-  rating?: number;
   snippets?: { [trigger: string]: string };
 }
 
@@ -28,7 +27,6 @@ export class CommunityTab {
   private searchQuery = "";
   private validationResult: any = null;
   private currentSort: { column: string; direction: 'asc' | 'desc' } | null = null;
-  private userVotes: Map<string, 'like' | 'dislike'> = new Map();
   private currentPage = 1;
   private itemsPerPage = 10;
 
@@ -58,17 +56,50 @@ export class CommunityTab {
       this.renderPackages(browseSection);
     };
 
+    const refreshBtn = searchContainer.createEl("button", {
+      text: "🔄 Refresh",
+      cls: "refresh-btn",
+      title: "Refresh community packages from GitHub"
+    });
+    refreshBtn.onclick = async () => {
+      try {
+        // Clear cache and reload packages
+        if (this.plugin.settings.communityPackages?.cache) {
+          this.plugin.settings.communityPackages.cache.lastUpdated = 0;
+          await this.plugin.saveSettings();
+        }
+        
+        this.packages = await loadAllCommunityPackages(this.app, this.plugin);
+        this.packages.sort((a, b) => a.label.localeCompare(b.label));
+        this.filterPackages();
+        this.renderPackages(browseSection);
+        new Notice("✅ Community packages refreshed!");
+      } catch (error) {
+        new Notice(`❌ Failed to refresh packages: ${error}`);
+      }
+    };
+
     try {
       // Load all community packages (built-in + dynamic)
-      this.packages = await loadAllCommunityPackages(this.app);
+      this.packages = await loadAllCommunityPackages(this.app, this.plugin);
       this.packages.sort((a, b) => a.label.localeCompare(b.label));
       this.filteredPackages = this.packages;
       this.renderPackages(browseSection);
-    } catch {
+    } catch (error) {
       const errorContainer = browseSection.createDiv({ cls: "packages-container" });
       errorContainer.createEl("p", {
-        text: "Failed to load community packages. Please check your internet connection.",
+        text: "Community packages are temporarily unavailable. This could be due to:",
         cls: "error-message",
+      });
+      
+      const reasonsList = errorContainer.createEl("ul", { cls: "error-reasons" });
+      reasonsList.createEl("li", { text: "No internet connection" });
+      reasonsList.createEl("li", { text: "GitHub API is temporarily unavailable" });
+      reasonsList.createEl("li", { text: "Community repository is not set up yet" });
+      
+      const refreshNote = errorContainer.createEl("p", {
+        text: "Try clicking the Refresh button above, or check back later.",
+        cls: "error-hint",
       });
     }
 
@@ -196,12 +227,6 @@ export class CommunityTab {
     const labelHeader = headerRow.createEl("th", { text: "Package", cls: "sortable" });
     labelHeader.onclick = () => this.sortPackages("label");
     
-    const downloadsHeader = headerRow.createEl("th", { text: "Downloads", cls: "sortable" });
-    downloadsHeader.onclick = () => this.sortPackages("downloads");
-
-    const ratingHeader = headerRow.createEl("th", { text: "Rating", cls: "sortable" });
-    ratingHeader.onclick = () => this.sortPackages("rating");
-    
     headerRow.createEl("th", { text: "Actions" });
 
     const tbody = table.createEl("tbody");
@@ -215,21 +240,10 @@ export class CommunityTab {
         cls: "package-label-link",
         href: "#",
       });
-      if (pkg.verified) labelLink.createEl("span", { text: " ✓", cls: "verified-badge", title: "Verified package" });
       labelLink.onclick = (e) => {
         e.preventDefault();
         this.showPackageDetails(pkg);
       };
-
-      row.createEl("td", { text: `${pkg.downloads || 0}`, cls: "package-downloads" });
-
-      const ratingCell = row.createEl("td", { cls: "package-rating-cell" });
-      const ratingContainer = ratingCell.createDiv({ cls: "rating-container" });
-      const likeBtn = ratingContainer.createEl("button", { text: "👍", cls: "rating-btn like-btn", title: "Like this package" });
-      likeBtn.onclick = () => this.ratePackage(pkg, "like");
-      ratingContainer.createEl("span", { text: `${pkg.rating || 0}`, cls: "rating-value" });
-      const dislikeBtn = ratingContainer.createEl("button", { text: "👎", cls: "rating-btn dislike-btn", title: "Dislike this package" });
-      dislikeBtn.onclick = () => this.ratePackage(pkg, "dislike");
 
       const actionsCell = row.createEl("td", { cls: "package-actions-cell" });
       
@@ -306,25 +320,45 @@ export class CommunityTab {
       new Notice("Please validate the package first");
       return;
     }
+    
     try {
       const yamlContent = textarea.value.trim();
       const packageData = yaml.load(yamlContent) as any;
-      const packageId = this.generatePackageId(packageData.name);
-      const fileName = `${packageId}.yml`;
-      const result = await processPackageSubmission(packageData, `community-packages/pending/${fileName}`, this.app);
-      if (result.success) {
-        new Notice("🎉 Thank you for contributing to the community! Your package has been submitted for review.");
+      
+      // Create Issue via GitHub API
+      const result = await createPackageIssue(packageData, { author: packageData.author });
+      
+      if (result.success && result.issueUrl) {
+        // Show notification with Issue link
+        const notice = new Notice("🎉 Package submitted successfully! Click to view Issue.", 10000);
+        notice.noticeEl.onclick = () => {
+          window.open(result.issueUrl, '_blank');
+        };
+        
+        // Clear form
         textarea.value = "";
         submitBtn.disabled = true;
         this.validationResult = null;
         const validationContainer = submitBtn.parentElement?.parentElement?.querySelector(".validation-container");
         if (validationContainer) validationContainer.empty();
       } else {
-        new Notice(`Failed to submit package: ${result.errors.join(", ")}`);
+        // Show error with Google Form link
+        this.showErrorWithFeedbackForm(`Failed to submit package: ${result.error}`);
       }
     } catch (error) {
-      new Notice(`Failed to submit package: ${error}`);
+      this.showErrorWithFeedbackForm(`Failed to submit package: ${error}`);
     }
+  }
+
+  private showErrorWithFeedbackForm(message: string) {
+    const errorNotice = new Notice(`❌ ${message} Click to report bug.`, 10000);
+    errorNotice.noticeEl.onclick = () => {
+      const pluginVersion = this.plugin.manifest.version;
+      const meta = collectSystemMeta(this.app, pluginVersion);
+      const baseUrl = "https://docs.google.com/forms/d/e/1FAIpQLSf4kFr5pme9C0CX02NOad_9STlia5-xZ2D-9C88u1mX32WqXw/viewform";
+      const formUrl = buildGoogleFormUrl(baseUrl, "Bug report", meta);
+      window.open(formUrl, '_blank');
+    };
   }
 
   private async installPackage(pkg: PackageItem) {
@@ -396,9 +430,6 @@ export class CommunityTab {
       await this.plugin.saveSettings();
       new Notice(`✅ Successfully installed "${pkg.label}" with ${installedCount} snippets in group "${packageGroup}"`);
       
-      // Update package downloads count (simulate)
-      pkg.downloads = (pkg.downloads || 0) + 1;
-      
       // Re-render to update the "Installed" status
       const browseSection = document.querySelector(".snipsy-community-browse-section");
       if (browseSection) this.renderPackages(browseSection as HTMLElement);
@@ -414,13 +445,32 @@ export class CommunityTab {
     const packageGroup = pkg.label;
     const packageTriggers = Object.keys(pkg.snippets);
     
+    // If package has no snippets, it's not installed
+    if (packageTriggers.length === 0) {
+      console.log(`Package "${pkg.label}" has no snippets - not installed`);
+      return false;
+    }
+    
     // Check if at least 80% of package snippets are installed in the group
     const installedTriggers = packageTriggers.filter(trigger => {
       const groupedKey = joinKey(packageGroup, trigger);
       return this.plugin.settings.snippets[groupedKey] === pkg.snippets![trigger];
     });
     
-    return installedTriggers.length >= packageTriggers.length * 0.8;
+    const isInstalled = installedTriggers.length >= packageTriggers.length * 0.8;
+    
+    // Debug logging to help troubleshoot
+    console.log(`Checking if package "${pkg.label}" is installed:`, {
+      totalTriggers: packageTriggers.length,
+      installedTriggers: installedTriggers.length,
+      percentage: packageTriggers.length > 0 ? (installedTriggers.length / packageTriggers.length * 100).toFixed(1) + '%' : '0%',
+      isInstalled: isInstalled,
+      packageGroup: packageGroup,
+      sampleTriggers: packageTriggers.slice(0, 3),
+      sampleGroupedKeys: packageTriggers.slice(0, 3).map(t => joinKey(packageGroup, t))
+    });
+    
+    return isInstalled;
   }
 
   private generatePackageId(name: string): string {
@@ -440,7 +490,7 @@ export class CommunityTab {
     }
   }
 
-  private sortPackages(column: "label" | "downloads" | "rating") {
+  private sortPackages(column: "label") {
     // Determine sort direction
     if (this.currentSort?.column === column) {
       this.currentSort.direction = this.currentSort.direction === 'asc' ? 'desc' : 'asc';
@@ -453,22 +503,8 @@ export class CommunityTab {
 
     // Sort the packages
     this.filteredPackages.sort((a, b) => {
-      let aValue: any, bValue: any;
-      
-      switch (column) {
-        case "label":
-          aValue = a.label.toLowerCase();
-          bValue = b.label.toLowerCase();
-          break;
-        case "downloads":
-          aValue = a.downloads || 0;
-          bValue = b.downloads || 0;
-          break;
-        case "rating":
-          aValue = a.rating || 0;
-          bValue = b.rating || 0;
-          break;
-      }
+      const aValue = a.label.toLowerCase();
+      const bValue = b.label.toLowerCase();
 
       if (aValue < bValue) return this.currentSort!.direction === 'asc' ? -1 : 1;
       if (aValue > bValue) return this.currentSort!.direction === 'asc' ? 1 : -1;
@@ -487,9 +523,7 @@ export class CommunityTab {
       header.classList.remove('sort-asc', 'sort-desc');
       const text = header.textContent?.trim();
       const columnMap: { [key: string]: string } = {
-        'Package': 'label',
-        'Downloads': 'downloads', 
-        'Rating': 'rating'
+        'Package': 'label'
       };
       if (columnMap[text || ''] === this.currentSort?.column && this.currentSort) {
         header.classList.add(`sort-${this.currentSort.direction}`);
@@ -523,8 +557,6 @@ export class CommunityTab {
     
     meta.createEl("div", { text: `Author: ${pkg.author || "Unknown"}` });
     meta.createEl("div", { text: `Version: ${pkg.version || "1.0.0"}` });
-    meta.createEl("div", { text: `Downloads: ${pkg.downloads || 0}` });
-    meta.createEl("div", { text: `Rating: ${pkg.rating || 0} ${pkg.rating && pkg.rating > 0 ? '👍' : '👎'}` });
     
     if (pkg.tags && pkg.tags.length > 0) {
       const tagsContainer = infoSection.createDiv({ cls: "package-tags" });
@@ -637,34 +669,6 @@ export class CommunityTab {
     modal.open();
   }
 
-  private ratePackage(pkg: PackageItem, action: "like" | "dislike") {
-    const packageId = pkg.id || pkg.label;
-    const currentVote = this.userVotes.get(packageId);
-    
-    // If user already voted the same way, don't allow double voting
-    if (currentVote === action) {
-      new Notice(`You already ${action === "like" ? "liked" : "disliked"} this package`);
-      return;
-    }
-    
-    // If user is changing their vote, adjust the rating accordingly
-    if (currentVote) {
-      // Remove previous vote
-      pkg.rating = (pkg.rating || 0) - (currentVote === "like" ? 1 : -1);
-    }
-    
-    // Add new vote
-    pkg.rating = (pkg.rating || 0) + (action === "like" ? 1 : -1);
-    
-    // Store user's vote
-    this.userVotes.set(packageId, action);
-    
-    // Re-render to update the display
-    const browseSection = document.querySelector(".snipsy-community-browse-section");
-    if (browseSection) this.renderPackages(browseSection as HTMLElement);
-    
-    new Notice(`${action === "like" ? "Liked" : "Disliked"} "${pkg.label}"`);
-  }
 
   private renderPagination(container: HTMLElement, totalPages: number) {
     const paginationContainer = container.createDiv({ cls: "pagination-container" });
