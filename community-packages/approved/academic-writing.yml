@@ -1,0 +1,39 @@
+name: "Academic Writing"
+version: "1.0.0"
+author: "academic-writer"
+description: "Snippets for academic writing, citations, and research"
+category: "academic"
+tags: ["academic", "writing", "research", "citations", "latex"]
+license: "MIT"
+homepage: "https://github.com/academic-writer/academic-snippets"
+
+snippets:
+  - trigger: ":cite"
+    replace: "[@author2023]"
+    description: "Insert citation placeholder"
+    keywords: ["citation", "reference", "academic", "research"]
+  
+  - trigger: ":ref"
+    replace: "See Figure \\ref{fig:example}"
+    description: "Reference to figure"
+    keywords: ["reference", "figure", "latex", "academic"]
+  
+  - trigger: ":eq"
+    replace: "\\begin{equation}\n\\label{eq:example}\nCURSOR_PLACEHOLDER\n\\end{equation}"
+    description: "LaTeX equation environment"
+    keywords: ["equation", "latex", "math", "academic"]
+  
+  - trigger: ":abstract"
+    replace: "\\begin{abstract}\nCURSOR_PLACEHOLDER\n\\end{abstract}"
+    description: "Abstract section"
+    keywords: ["abstract", "section", "academic"]
+  
+  - trigger: ":theorem"
+    replace: "\\begin{theorem}\nCURSOR_PLACEHOLDER\n\\end{theorem}"
+    description: "Theorem environment"
+    keywords: ["theorem", "math", "academic"]
+  
+  - trigger: ":proof"
+    replace: "\\begin{proof}\nCURSOR_PLACEHOLDER\n\\end{proof}"
+    description: "Proof environment"
+    keywords: ["proof", "math", "academic"]

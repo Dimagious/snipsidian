@@ -1,0 +1,17 @@
+# Basic Package Template
+# Copy this template and modify it for your package
+
+name: "Your Package Name"
+version: "1.0.0"
+author: "your-username"
+description: "Brief description of what this package does"
+category: "productivity"  # See categories in wiki
+tags: ["tag1", "tag2", "tag3"]
+license: "MIT"
+homepage: "https://github.com/username/package-name"
+
+snippets:
+  - trigger: ":example"
+    replace: "This is an example replacement"
+    description: "Optional description of what this snippet does"
+    keywords: ["example", "template", "demo"]

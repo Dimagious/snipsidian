@@ -1,0 +1,44 @@
+name: "Python Snippets"
+version: "1.0.0"
+author: "python-dev"
+description: "Common Python function templates and patterns"
+category: "programming"
+tags: ["python", "functions", "coding", "development", "programming"]
+license: "MIT"
+homepage: "https://github.com/python-dev/python-snippets"
+
+snippets:
+  - trigger: ":def"
+    replace: "def CURSOR_PLACEHOLDER():\n    \"\"\"\n    \n    Returns:\n        \n    \"\"\"\n    pass"
+    description: "Python function template with docstring"
+    keywords: ["function", "def", "python", "docstring"]
+  
+  - trigger: ":class"
+    replace: "class CURSOR_PLACEHOLDER:\n    \"\"\"\n    \n    \"\"\"\n    \n    def __init__(self):\n        pass"
+    description: "Python class template"
+    keywords: ["class", "python", "init", "constructor"]
+  
+  - trigger: ":import"
+    replace: "import CURSOR_PLACEHOLDER"
+    description: "Python import statement"
+    keywords: ["import", "module", "python"]
+  
+  - trigger: ":from"
+    replace: "from CURSOR_PLACEHOLDER import "
+    description: "Python from import statement"
+    keywords: ["from", "import", "module", "python"]
+  
+  - trigger: ":if"
+    replace: "if CURSOR_PLACEHOLDER:\n    pass"
+    description: "Python if statement"
+    keywords: ["if", "condition", "python"]
+  
+  - trigger: ":for"
+    replace: "for CURSOR_PLACEHOLDER in :\n    pass"
+    description: "Python for loop"
+    keywords: ["for", "loop", "iteration", "python"]
+  
+  - trigger: ":try"
+    replace: "try:\n    CURSOR_PLACEHOLDER\nexcept Exception as e:\n    pass"
+    description: "Python try-except block"
+    keywords: ["try", "except", "exception", "python"]

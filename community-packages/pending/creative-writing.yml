@@ -1,0 +1,29 @@
+name: "Creative Writing"
+version: "1.0.0"
+author: "creative-writer"
+description: "Snippets for creative writing and storytelling"
+category: "creative"
+tags: ["creative", "writing", "story", "fiction", "narrative"]
+license: "MIT"
+homepage: "https://github.com/creative-writer/creative-snippets"
+
+snippets:
+  - trigger: ":character"
+    replace: "**Name:** CURSOR_PLACEHOLDER\n**Age:** \n**Occupation:** \n**Personality:** \n**Background:** "
+    description: "Character profile template"
+    keywords: ["character", "profile", "fiction", "creative"]
+  
+  - trigger: ":scene"
+    replace: "## Scene: CURSOR_PLACEHOLDER\n\n**Setting:** \n**Time:** \n**Characters:** \n**Conflict:** \n\n### Description\n\n### Dialogue\n\n### Action"
+    description: "Scene template for storytelling"
+    keywords: ["scene", "story", "fiction", "creative"]
+  
+  - trigger: ":dialogue"
+    replace: "\"CURSOR_PLACEHOLDER,\" said [character name]."
+    description: "Dialogue template"
+    keywords: ["dialogue", "speech", "fiction", "creative"]
+  
+  - trigger: ":plot"
+    replace: "## Plot Outline\n\n**Act 1 - Setup:** CURSOR_PLACEHOLDER\n**Act 2 - Confrontation:** \n**Act 3 - Resolution:** \n\n### Key Events\n\n### Character Arcs\n\n### Themes"
+    description: "Plot outline template"
+    keywords: ["plot", "outline", "story", "structure"]

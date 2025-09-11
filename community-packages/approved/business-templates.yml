@@ -1,0 +1,34 @@
+name: "Business Templates"
+version: "1.0.0"
+author: "business-user"
+description: "Professional email templates and business communication"
+category: "business"
+tags: ["business", "email", "communication", "templates", "professional"]
+license: "MIT"
+homepage: "https://github.com/business-user/business-templates"
+
+snippets:
+  - trigger: ":email-follow"
+    replace: "Hi CURSOR_PLACEHOLDER,\n\nI wanted to follow up on our conversation from [date].\n\nBest regards,\nYour Name"
+    description: "Follow-up email template"
+    keywords: ["follow", "up", "email", "business"]
+  
+  - trigger: ":email-meeting"
+    replace: "Hi CURSOR_PLACEHOLDER,\n\nI'd like to schedule a meeting to discuss [topic].\n\nWhen would be a good time for you?\n\nBest regards,\nYour Name"
+    description: "Meeting request email"
+    keywords: ["meeting", "schedule", "request", "email"]
+  
+  - trigger: ":email-thanks"
+    replace: "Hi CURSOR_PLACEHOLDER,\n\nThank you for your time and consideration.\n\nBest regards,\nYour Name"
+    description: "Thank you email"
+    keywords: ["thank", "you", "email", "gratitude"]
+  
+  - trigger: ":meeting-notes"
+    replace: "## Meeting Notes\n\n**Date:** CURSOR_PLACEHOLDER\n**Attendees:** \n**Agenda:** \n\n### Discussion\n\n### Action Items\n- [ ] "
+    description: "Meeting notes template"
+    keywords: ["meeting", "notes", "template", "business"]
+  
+  - trigger: ":project-status"
+    replace: "## Project Status Update\n\n**Project:** CURSOR_PLACEHOLDER\n**Status:** \n**Progress:** \n**Next Steps:** \n**Blockers:** "
+    description: "Project status update template"
+    keywords: ["project", "status", "update", "business"]

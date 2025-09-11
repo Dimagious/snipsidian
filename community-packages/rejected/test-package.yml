@@ -1,0 +1,12 @@
+name: "Test Package"
+version: "1.0.0"
+author: "test-user"
+description: "This is a test package with spam content"
+category: "other"
+tags: ["test", "spam", "dummy"]
+license: "MIT"
+
+snippets:
+  - trigger: ":test"
+    replace: "This is a test"
+    description: "Test snippet"
