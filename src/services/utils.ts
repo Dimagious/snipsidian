@@ -29,7 +29,21 @@ export function normalizeTrigger(raw: string): string {
 }
 
 export function isBadTrigger(key: string): boolean {
-    return /[\s.,!?;:()\[\]{}"'\-\\/]/.test(key) || key.length === 0;
+    // Allow colons at the beginning (like :plot, :scene) but not in the middle
+    // Allow underscores and hyphens
+    if (key.length === 0) return true;
+    
+    // Check for forbidden characters (but allow colon at the beginning)
+    if (/[\s.,!?;()\[\]{}"'\-\\/]/.test(key)) return true;
+    
+    // Check for colon in the middle (not at the beginning)
+    // This regex matches: start of string, any non-colon chars, colon, any chars, colon
+    if (/^[^:]*:.*:/.test(key)) return true;
+    
+    // Also check for colon not at the beginning (like "a:b")
+    if (key.includes(':') && !key.startsWith(':')) return true;
+    
+    return false;
 }
 
 export function splitKey(key: string): { group: string; name: string } {

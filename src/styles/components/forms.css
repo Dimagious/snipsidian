@@ -1,0 +1,136 @@
+/* ============ Form Components ============ */
+
+/* Input styles */
+.snipsy-input {
+  width: 100%;
+  padding: 10px 15px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius-lg);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 14px;
+  transition: all var(--transition-normal);
+  box-sizing: border-box;
+}
+
+.snipsy-input:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.snipsy-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Textarea styles */
+.snipsy-textarea {
+  width: 100%;
+  padding: 15px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius-lg);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+  line-height: 1.4;
+  resize: vertical;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  transition: all var(--transition-normal);
+}
+
+.snipsy-textarea:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.snipsy-textarea--monospace {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+/* Select styles */
+.snipsy-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 14px;
+  margin: var(--spacing-sm) 0;
+}
+
+.snipsy-select:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.snipsy-select option {
+  padding: 4px 8px;
+}
+
+/* Form groups */
+.snipsy-form-group {
+  margin-bottom: var(--spacing-lg);
+}
+
+.snipsy-form-label {
+  display: block;
+  margin-bottom: var(--spacing-xs);
+  font-weight: 500;
+  color: var(--text-normal);
+  font-size: 14px;
+}
+
+.snipsy-form-help {
+  margin-top: var(--spacing-xs);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.snipsy-form-error {
+  margin-top: var(--spacing-xs);
+  color: var(--color-red);
+  font-size: 12px;
+}
+
+/* Edit mode inputs */
+.snippet-edit-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.snippet-edit-input:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.snippet-edit-textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 6px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+  resize: vertical;
+  margin-bottom: var(--spacing-sm);
+  font-family: var(--font-monospace);
+}
+
+.snippet-edit-textarea:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}

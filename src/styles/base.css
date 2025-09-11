@@ -1,0 +1,110 @@
+/* ============ Base Styles ============ */
+/* Общие стили для всех элементов */
+
+/* Box sizing */
+.mod-settings .snipsidian-settings * {
+  box-sizing: border-box;
+}
+
+/* Text overflow and horizontal scroll fixes */
+.mod-settings .snipsidian-settings {
+  overflow-x: hidden;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+.mod-settings .snipsidian-settings .setting-item {
+  overflow-x: hidden;
+}
+
+.mod-settings .snipsidian-settings .setting-item-name {
+  word-wrap: break-word;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.mod-settings .snipsidian-settings .setting-item-description {
+  word-wrap: break-word;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.mod-settings .snipsidian-settings input[type="text"],
+.mod-settings .snipsidian-settings textarea {
+  max-width: 100%;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+.mod-settings .snipsidian-settings .group-title {
+  word-wrap: break-word;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.mod-settings .snipsidian-settings .snippet-list {
+  overflow-x: hidden;
+}
+
+.mod-settings .snipsidian-settings .group-content {
+  overflow-x: hidden;
+}
+
+/* Layout helpers */
+.mod-settings .snipsidian-settings .snipsy-flex-spacer { 
+  flex: 1; 
+}
+
+/* Snippets list bits */
+.snipsidian-prefix {
+  margin-right: 6px;
+  opacity: 0.7;
+  font-family: var(--font-monospace);
+  white-space: nowrap;
+}
+
+.snipsidian-bulkbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  margin: 8px 0 6px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius);
+  background: var(--background-primary-alt);
+}
+
+.snipsidian-bulkbar button { 
+  padding: 4px 10px; 
+  border-radius: var(--border-radius); 
+}
+
+.snipsidian-group-header { 
+  display: flex; 
+  align-items: center; 
+  gap: 8px; 
+}
+
+.snipsidian-group-checkbox { 
+  margin-left: 4px; 
+}
+
+.snipsidian-row-checkbox { 
+  margin-right: 8px; 
+}
+
+.snipsidian-row-checkbox,
+.snipsidian-group-checkbox {
+  appearance: checkbox; 
+  -webkit-appearance: checkbox;
+  width: 14px; 
+  height: 14px;
+}
+
+.snipsidian-options > summary {
+  cursor: pointer;
+  margin: 6px 0 8px;
+  font-weight: 600;
+  color: var(--text-muted);
+}

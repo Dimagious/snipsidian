@@ -43,6 +43,12 @@ describe("community-packages", () => {
       
       consoleSpy.mockRestore();
     });
+
+    it("should return empty array in test environment", async () => {
+      // This test verifies the test environment check
+      const packages = await loadCommunityPackages();
+      expect(packages).toEqual([]);
+    });
   });
 
   describe("loadCommunityPackage", () => {
@@ -58,6 +64,11 @@ describe("community-packages", () => {
       expect(package_).toBeNull();
       
       consoleSpy.mockRestore();
+    });
+
+    it("should return null for any package ID", async () => {
+      const package_ = await loadCommunityPackage("any-package-id");
+      expect(package_).toBeNull();
     });
   });
 
@@ -95,6 +106,22 @@ describe("community-packages", () => {
 
     it("should filter by search term", async () => {
       const packages = await searchCommunityPackages({ searchTerm: "javascript" });
+      expect(Array.isArray(packages)).toBe(true);
+    });
+
+    it("should handle empty search options", async () => {
+      const packages = await searchCommunityPackages();
+      expect(Array.isArray(packages)).toBe(true);
+    });
+
+    it("should handle multiple filter criteria", async () => {
+      const packages = await searchCommunityPackages({
+        category: "programming",
+        tags: ["javascript"],
+        verified: true,
+        minRating: 4.0,
+        searchTerm: "react"
+      });
       expect(Array.isArray(packages)).toBe(true);
     });
   });
@@ -200,6 +227,158 @@ describe("community-packages", () => {
       expect(result.success).toBe(false);
       expect(result.errors).toContain("Community packages must have an author");
     });
+
+    it("should handle missing version for community packages", async () => {
+      const { validatePackage, validatePackageFile } = await import("./package-validator");
+      
+      vi.mocked(validatePackage).mockReturnValue({
+        isValid: true,
+        errors: [],
+        warnings: []
+      });
+      
+      vi.mocked(validatePackageFile).mockReturnValue({
+        isValid: true,
+        errors: [],
+        warnings: []
+      });
+
+      const packageData = {
+        name: "Test Package",
+        author: "test-author",
+        // Missing version for community package
+        description: "A test package",
+        kind: "community",
+        snippets: []
+      };
+
+      const result = await processPackageSubmission(packageData, "community-packages/pending/test-package.yml");
+      
+      expect(result.success).toBe(false);
+      expect(result.errors).toContain("Community packages must have a version");
+    });
+
+    it("should add warnings for missing optional fields", async () => {
+      const { validatePackage, validatePackageFile } = await import("./package-validator");
+      
+      vi.mocked(validatePackage).mockReturnValue({
+        isValid: true,
+        errors: [],
+        warnings: []
+      });
+      
+      vi.mocked(validatePackageFile).mockReturnValue({
+        isValid: true,
+        errors: [],
+        warnings: []
+      });
+
+      const packageData = {
+        name: "Test Package",
+        author: "test-author",
+        version: "1.0.0",
+        description: "A test package",
+        kind: "community",
+        snippets: []
+        // Missing license and homepage
+      };
+
+      const result = await processPackageSubmission(packageData, "community-packages/pending/test-package.yml");
+      
+      expect(result.success).toBe(true);
+      expect(result.warnings).toContain("Community packages should have a license");
+      expect(result.warnings).toContain("Community packages should have a homepage");
+    });
+
+    it("should handle validation errors from package validator", async () => {
+      const { validatePackage, validatePackageFile } = await import("./package-validator");
+      
+      vi.mocked(validatePackage).mockReturnValue({
+        isValid: false,
+        errors: ["Invalid package format"],
+        warnings: ["Minor issue"]
+      });
+      
+      vi.mocked(validatePackageFile).mockReturnValue({
+        isValid: true,
+        errors: [],
+        warnings: []
+      });
+
+      const packageData = {
+        name: "Test Package",
+        author: "test-author",
+        version: "1.0.0",
+        description: "A test package",
+        kind: "community",
+        snippets: []
+      };
+
+      const result = await processPackageSubmission(packageData, "community-packages/pending/test-package.yml");
+      
+      expect(result.success).toBe(false);
+      expect(result.errors).toContain("Invalid package format");
+      expect(result.warnings).toContain("Minor issue");
+    });
+
+    it("should handle validation errors from file validator", async () => {
+      const { validatePackage, validatePackageFile } = await import("./package-validator");
+      
+      vi.mocked(validatePackage).mockReturnValue({
+        isValid: true,
+        errors: [],
+        warnings: []
+      });
+      
+      vi.mocked(validatePackageFile).mockReturnValue({
+        isValid: false,
+        errors: ["Invalid file path"],
+        warnings: ["File warning"]
+      });
+
+      const packageData = {
+        name: "Test Package",
+        author: "test-author",
+        version: "1.0.0",
+        description: "A test package",
+        kind: "community",
+        snippets: []
+      };
+
+      const result = await processPackageSubmission(packageData, "invalid-path.yml");
+      
+      expect(result.success).toBe(false);
+      expect(result.errors).toContain("Invalid file path");
+      expect(result.warnings).toContain("File warning");
+    });
+
+    it("should handle exceptions during processing", async () => {
+      const { validatePackage, validatePackageFile } = await import("./package-validator");
+      
+      vi.mocked(validatePackage).mockImplementation(() => {
+        throw new Error("Validation error");
+      });
+      
+      vi.mocked(validatePackageFile).mockReturnValue({
+        isValid: true,
+        errors: [],
+        warnings: []
+      });
+
+      const packageData = {
+        name: "Test Package",
+        author: "test-author",
+        version: "1.0.0",
+        description: "A test package",
+        kind: "community",
+        snippets: []
+      };
+
+      const result = await processPackageSubmission(packageData, "community-packages/pending/test-package.yml");
+      
+      expect(result.success).toBe(false);
+      expect(result.errors).toContain("Failed to process package submission: Error: Validation error");
+    });
   });
 
   describe("getPackageCategories", () => {
@@ -229,6 +408,18 @@ describe("community-packages", () => {
       const tags = await getPopularTags(5);
       expect(tags.length).toBeLessThanOrEqual(5);
     });
+
+    it("should return popular tags when packages are available", async () => {
+      // Since loadCommunityPackages returns empty array in test environment,
+      // this test will return empty array
+      const tags = await getPopularTags(3);
+      expect(tags).toEqual([]);
+    });
+
+    it("should handle default limit", async () => {
+      const tags = await getPopularTags();
+      expect(Array.isArray(tags)).toBe(true);
+    });
   });
 
   describe("getTopRatedPackages", () => {
@@ -240,6 +431,11 @@ describe("community-packages", () => {
     it("should limit results to specified number", async () => {
       const packages = await getTopRatedPackages(5);
       expect(packages.length).toBeLessThanOrEqual(5);
+    });
+
+    it("should handle default limit", async () => {
+      const packages = await getTopRatedPackages();
+      expect(Array.isArray(packages)).toBe(true);
     });
   });
 
@@ -253,6 +449,11 @@ describe("community-packages", () => {
       const packages = await getMostDownloadedPackages(5);
       expect(packages.length).toBeLessThanOrEqual(5);
     });
+
+    it("should handle default limit", async () => {
+      const packages = await getMostDownloadedPackages();
+      expect(Array.isArray(packages)).toBe(true);
+    });
   });
 
   describe("getRecentlyUpdatedPackages", () => {
@@ -264,6 +465,11 @@ describe("community-packages", () => {
     it("should limit results to specified number", async () => {
       const packages = await getRecentlyUpdatedPackages(5);
       expect(packages.length).toBeLessThanOrEqual(5);
+    });
+
+    it("should handle default limit", async () => {
+      const packages = await getRecentlyUpdatedPackages();
+      expect(Array.isArray(packages)).toBe(true);
     });
   });
 

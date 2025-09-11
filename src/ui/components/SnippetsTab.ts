@@ -238,7 +238,7 @@ export class SnippetsTab {
                     const row = new Setting(content);
                     const { name: triggerName } = splitKey(trigger);
                     row.setName(triggerName);
-                    row.setDesc(replacement);
+                    row.setDesc(replacement || "");
                     
                     
                     // Selection checkbox (in selection mode)
@@ -277,7 +277,7 @@ export class SnippetsTab {
                     // Edit mode state
                     let isEditing = false;
                     let originalTrigger = triggerName;
-                    let originalReplacement = replacement;
+                    let originalReplacement = replacement || "";
                     
                     // Edit button click handler
                     editBtn.onclick = () => {
@@ -286,7 +286,7 @@ export class SnippetsTab {
                             this.saveSnippetChanges(row, trigger, originalTrigger, originalReplacement, root);
                         } else {
                             // Enter edit mode
-                            this.enterEditMode(row, trigger, triggerName, replacement, editBtn);
+                            this.enterEditMode(row, trigger, triggerName, originalReplacement, editBtn);
                             isEditing = true;
                         }
                     };
@@ -378,21 +378,31 @@ export class SnippetsTab {
         
         // Debug: log the values
         console.log("Entering edit mode:", { trigger, triggerName, replacement });
+        console.log("Plugin settings snippets:", this.plugin.settings.snippets);
+        console.log("Snippet from settings:", this.plugin.settings.snippets[trigger]);
+        
+        // Get the actual replacement from settings if it's not provided
+        const actualReplacement = replacement || this.plugin.settings.snippets[trigger] || "";
+        console.log("Actual replacement:", actualReplacement);
         
         // Add trigger input
         const triggerInput = row.controlEl.createEl("input", {
             type: "text",
-            value: triggerName || "",
             placeholder: "Trigger",
             cls: "snippet-edit-input"
         });
+        triggerInput.value = triggerName || "";
+        console.log("Input created with value:", triggerInput.value);
         
         // Add replacement textarea
         const replacementInput = row.controlEl.createEl("textarea", {
-            value: replacement || "",
             placeholder: "Replacement",
             cls: "snippet-edit-textarea"
         });
+        replacementInput.value = actualReplacement;
+        console.log("Textarea created with value:", replacementInput.value);
+        console.log("Textarea element:", replacementInput);
+        console.log("Textarea innerHTML:", replacementInput.innerHTML);
         
         // Add action buttons
         const actionsContainer = row.controlEl.createDiv({ cls: "snippet-actions" });
@@ -417,7 +427,7 @@ export class SnippetsTab {
         (row as any).editData = {
             trigger,
             triggerName,
-            replacement,
+            replacement: actualReplacement,
             triggerInput,
             replacementInput,
             saveBtn,

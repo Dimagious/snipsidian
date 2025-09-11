@@ -1,0 +1,45 @@
+/* ============ CSS Variables ============ */
+/* Цвета */
+:root {
+  --color-green: #4CAF50;
+  --color-green-dark: #45a049;
+  --color-green-rgb: 76, 175, 80;
+  
+  --color-blue: #2196F3;
+  --color-blue-dark: #1976D2;
+  --color-blue-rgb: 33, 150, 243;
+  
+  --color-red: #f44336;
+  --color-red-dark: #d32f2f;
+  --color-red-rgb: 244, 67, 54;
+  
+  --color-orange: #ff9800;
+  --color-orange-dark: #f57c00;
+  --color-orange-rgb: 255, 152, 0;
+  
+  --color-yellow: #ffeb3b;
+  --color-yellow-rgb: 255, 235, 59;
+  
+  /* Размеры */
+  --border-radius: 6px;
+  --border-radius-lg: 8px;
+  --border-radius-xl: 10px;
+  
+  /* Отступы */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
+  --spacing-xxl: 24px;
+  
+  /* Тени */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.2);
+  
+  /* Переходы */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
+}

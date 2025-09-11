@@ -1,0 +1,153 @@
+/* ============ Layout Styles ============ */
+/* Стили для макета и структуры */
+
+/* Header & Tabs */
+.snipsy-header {
+  margin-bottom: var(--spacing-sm);
+}
+
+.snipsy-header h2 {
+  font-size: 20px;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.snipsy-version {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.snipsy-tabs {
+  margin: 6px 0 14px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 6px;
+}
+
+.snipsy-tabs .tab-buttons {
+  display: flex;
+  gap: 6px;
+  margin-bottom: var(--spacing-md);
+}
+
+.snipsy-tabs .tab-button {
+  padding: 6px 10px;
+  border-radius: var(--border-radius);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  color: var(--text-normal);
+}
+
+.snipsy-tabs .tab-button.active {
+  border-color: var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.snipsy-tabs .tab-content {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+/* Section cards */
+.snipsy-section {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius-xl);
+  padding: var(--spacing-lg);
+  background: var(--background-primary);
+  margin-bottom: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.snipsy-section h3 {
+  margin: 0 0 var(--spacing-sm);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.snipsy-section .snipsy-hint {
+  margin: 0 0 var(--spacing-md);
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* Grid layouts */
+.snipsy-row-3 {
+  display: grid;
+  grid-template-columns: 280px 1fr 220px; /* label / textarea / actions */
+  gap: var(--spacing-md);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .snipsy-row-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.snipsy-row-2 {
+  display: grid;
+  grid-template-columns: 300px 1fr; /* Folder name / YAML+button */
+  gap: var(--spacing-md);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .snipsy-row-2 { 
+    grid-template-columns: 1fr; 
+  }
+}
+
+.snipsy-col-actions .setting-item {
+  justify-content: flex-end;
+}
+
+.snipsy-inline-setting .setting-item {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.snipsy-col-yaml .setting-item {
+  align-items: flex-start;
+  gap: var(--spacing-md);
+}
+
+.snipsy-col-yaml .setting-item-control {
+  width: 100%;
+}
+
+.snipsy-col-yaml textarea {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Controls row layout */
+.snipsy-controls-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-sm);
+}
+
+.snipsy-control-item {
+  background: var(--background-secondary);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-sm);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.snipsy-control-item .setting-item {
+  margin: 0;
+  padding: 0;
+}
+
+.snipsy-control-item .setting-item-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.snipsy-control-item .setting-item-description {
+  font-size: 12px;
+  margin-top: 2px;
+}

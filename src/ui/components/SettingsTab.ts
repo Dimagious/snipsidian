@@ -1,27 +1,27 @@
 import { App, PluginSettingTab } from "obsidian";
 import type SnipSidianPlugin from "../../main";
 import { BasicTab } from "./BasicTab";
-import { PackagesTab } from "./PackagesTab";
 import { SnippetsTab } from "./SnippetsTab";
 import { FeedbackTab } from "./FeedbackTab";
+import { CommunityTab } from "./CommunityTab";
 import { UIStateManager } from "../utils/ui-state";
 
 export class SnipSidianSettingTab extends PluginSettingTab {
     plugin: SnipSidianPlugin;
     private uiState: UIStateManager;
     private basicTab: BasicTab;
-    private packagesTab: PackagesTab;
     private snippetsTab: SnippetsTab;
     private feedbackTab: FeedbackTab;
+    private communityTab: CommunityTab;
 
     constructor(app: App, plugin: SnipSidianPlugin) {
         super(app, plugin);
         this.plugin = plugin;
         this.uiState = new UIStateManager(this.plugin.settings);
         this.basicTab = new BasicTab(app, plugin);
-        this.packagesTab = new PackagesTab(app, plugin);
         this.snippetsTab = new SnippetsTab(app, plugin);
         this.feedbackTab = new FeedbackTab(app, plugin);
+        this.communityTab = new CommunityTab(app, plugin);
     }
 
     display(): void {
@@ -38,9 +38,9 @@ export class SnipSidianSettingTab extends PluginSettingTab {
 
         // Tab navigation
         const tabs = [
-            { id: "basic" as const, label: "Basic" },
-            { id: "packages" as const, label: "Packages" },
-            { id: "snippets" as const, label: "Snippets" },
+            { id: "basic" as const, label: "General" },
+            { id: "snippets" as const, label: "Snippets Manager" },
+            { id: "community" as const, label: "Community Packages" },
             { id: "feedback" as const, label: "Feedback" },
         ];
 
@@ -77,11 +77,11 @@ export class SnipSidianSettingTab extends PluginSettingTab {
             case "basic":
                 this.basicTab.render(container);
                 break;
-            case "packages":
-                this.packagesTab.render(container);
-                break;
             case "snippets":
                 this.snippetsTab.render(container);
+                break;
+            case "community":
+                this.communityTab.render(container);
                 break;
             case "feedback":
                 this.feedbackTab.render(container);

@@ -1,4 +1,18 @@
-import type { PackageItem } from "../catalog/types";
+// Define PackageItem type locally since catalog was removed
+interface PackageItem {
+    id?: string;
+    label: string;
+    description?: string;
+    author?: string;
+    version?: string;
+    downloads?: number;
+    tags?: string[];
+    verified?: boolean;
+    category?: string;
+    rating?: number;
+    status?: string;
+    lastUpdated?: string;
+}
 
 export interface ValidationResult {
   isValid: boolean;
@@ -187,7 +201,7 @@ function validateContentQuality(packageData: any, errors: string[], warnings: st
     }
   }
 
-  if (packageData.description) {
+  if (packageData.description && typeof packageData.description === "string") {
     for (const word of inappropriateWords) {
       if (packageData.description.toLowerCase().includes(word)) {
         warnings.push(`Package description contains potentially inappropriate word: '${word}'`);
@@ -309,13 +323,13 @@ export function validatePackageFile(filePath: string): ValidationResult {
 
   const directory = pathParts[pathParts.length - 2];
   const validDirectories = ['approved', 'pending', 'rejected', 'templates'];
-  if (!validDirectories.includes(directory)) {
+  if (directory && !validDirectories.includes(directory)) {
     errors.push(`Package file must be in one of: ${validDirectories.join(', ')}`);
   }
 
   // Check file name
   const fileName = pathParts[pathParts.length - 1];
-  if (!/^[a-zA-Z0-9\-_]+\.(yml|yaml)$/.test(fileName)) {
+  if (fileName && !/^[a-zA-Z0-9\-_]+\.(yml|yaml)$/.test(fileName)) {
     errors.push("Package file name can only contain letters, numbers, hyphens, and underscores");
   }
 

@@ -1,0 +1,402 @@
+/* ============ Snipsidian CSS Modules ============ */
+/* Главный файл для импорта всех CSS модулей */
+
+/* 1. Variables - CSS переменные и константы */
+@import './variables.css';
+
+/* 2. Base - Базовые стили и сброс */
+@import './base.css';
+
+/* 3. Layout - Стили макета и структуры */
+@import './layout.css';
+
+/* 4. Components - Переиспользуемые компоненты */
+@import './components/buttons.css';
+@import './components/forms.css';
+@import './components/modals.css';
+
+/* 5. Sections - Стили для конкретных секций */
+@import './sections/community.css';
+
+/* ============ Legacy Styles (временно) ============ */
+/* Эти стили будут постепенно перенесены в модули */
+
+/* Settings panel (legacy bits) */
+.mod-settings .snipsidian-settings {
+  --snip-h2-mb: 6px;
+  --snip-h3-mt: 18px;
+  --snip-h3-mb: 6px;
+}
+
+.mod-settings .snipsidian-settings h2 {
+  margin-top: 0;
+  margin-bottom: var(--snip-h2-mb);
+}
+
+.mod-settings .snipsidian-settings .snipsidian-subtitle {
+  margin-top: 0;
+  margin-bottom: 14px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.mod-settings .snipsidian-settings h3 {
+  margin-top: var(--snip-h3-mt);
+  margin-bottom: var(--snip-h3-mb);
+}
+
+.mod-settings .snipsidian-settings .setting-item {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.mod-settings .snipsidian-settings h3 + .setting-item {
+  margin-top: 2px;
+}
+
+/* Preview table */
+.snipsidian-preview-table {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 0.85em;
+  border-radius: var(--border-radius);
+  table-layout: fixed;
+}
+
+.snipsidian-preview-table th,
+.snipsidian-preview-table td {
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding: 6px 8px;
+  vertical-align: middle;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+.snipsidian-preview-table td:nth-child(1) { width: 20%; } /* Trigger */
+.snipsidian-preview-table td:nth-child(2) { width: 30%; } /* Current */
+.snipsidian-preview-table td:nth-child(3) { width: 30%; } /* Incoming */
+.snipsidian-preview-table td:nth-child(4) { width: 20%; } /* Action */
+
+.snipsidian-preview-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.snipsidian-preview-table tr:hover td {
+  background: var(--background-secondary);
+}
+
+.snipsidian-preview-table td:nth-child(2),
+.snipsidian-preview-table td:nth-child(3) {
+  font-family: var(--font-monospace);
+  white-space: pre-wrap;
+  font-size: 0.8em;
+}
+
+.snipsidian-preview-table .conflict-action select {
+  font-size: 0.8em;
+  padding: 2px 4px;
+  width: 100%;
+}
+
+.snipsidian-bulk-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5em;
+  margin-top: 0.75em;
+}
+
+.snipsidian-bulk-actions button {
+  padding: 0.4em 1em;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  font-weight: 500;
+  transition: all var(--transition-normal);
+}
+
+.snipsidian-bulk-actions button:hover {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+/* Group header styling */
+.group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.group-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* Special Section Styling */
+.snipsy-commands-section,
+.snipsy-export-section,
+.snipsy-help-section,
+.snipsy-feedback-section,
+.snipsy-support-section {
+  border: 2px solid var(--color-green);
+  background: var(--background-primary-alt);
+  position: relative;
+}
+
+.snipsy-commands-section h3,
+.snipsy-export-section h3,
+.snipsy-help-section h3,
+.snipsy-feedback-section h3,
+.snipsy-support-section h3 {
+  color: var(--color-green);
+}
+
+/* Common section styling */
+.snipsy-catalog-section,
+.snipsy-community-catalog-section,
+.snipsy-community-browse-section,
+.snipsy-community-submit-section,
+.snipsy-community-section,
+.snipsy-espanso-section,
+.snipsy-espanso-link-section,
+.snipsy-snippet-manager {
+  border: 2px solid var(--color-green);
+  background: var(--background-primary-alt);
+  position: relative;
+}
+
+.snipsy-catalog-section h3,
+.snipsy-community-catalog-section h3,
+.snipsy-community-browse-section h3,
+.snipsy-community-submit-section h3,
+.snipsy-community-section h3,
+.snipsy-espanso-section h3,
+.snipsy-snippet-manager h3 {
+  color: var(--color-green);
+}
+
+/* Espanso link section styling */
+.snipsy-espanso-link-section {
+  border: none;
+  background: transparent;
+  text-align: center;
+  padding: 10px 0;
+}
+
+.snipsy-espanso-link-section p {
+  margin: 0;
+  display: inline;
+}
+
+.snipsy-link {
+  color: var(--color-green);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.snipsy-link:hover {
+  text-decoration: underline;
+}
+
+/* Selection Mode Styling */
+.snipsy-selection-mode-section {
+  border: 2px solid var(--color-green);
+  background: var(--background-primary-alt);
+  position: relative;
+}
+
+.snipsy-selection-mode-section h3 {
+  color: var(--color-green);
+}
+
+.snipsy-selection-mode-section .snipsy-hint {
+  color: var(--text-accent);
+  font-weight: 500;
+}
+
+/* Bulk Operations Styling */
+.snipsy-bulk-operations {
+  border: 2px solid var(--text-accent);
+  background: var(--background-primary-alt);
+  position: relative;
+}
+
+.snipsy-bulk-operations::before {
+  content: "📦";
+  position: absolute;
+  top: var(--spacing-lg);
+  right: var(--spacing-lg);
+  font-size: 18px;
+  opacity: 0.7;
+}
+
+.snipsy-bulk-operations h3 {
+  color: var(--text-accent);
+}
+
+.snipsy-bulk-operations .setting-item-name {
+  color: var(--text-accent);
+  font-weight: 600;
+}
+
+/* Subsections within snippet manager */
+.snipsy-subsection {
+  margin: var(--spacing-lg) 0;
+  padding: var(--spacing-md);
+  background: var(--background-primary);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.snipsy-subsection h4 {
+  margin: 0 0 var(--spacing-sm);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Add snippet button in management tools */
+.snipsy-add-snippet {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.snipsy-add-snippet .setting-item {
+  margin: 0;
+}
+
+.snipsy-add-snippet .setting-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-accent);
+}
+
+.snipsy-add-snippet .setting-item-description {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.snipsy-add-snippet .mod-cta {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: var(--border-radius);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  font-weight: 500;
+  transition: all var(--transition-normal);
+}
+
+.snipsy-add-snippet .mod-cta:hover {
+  background: var(--interactive-accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Snippet actions styling */
+.snippet-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+/* GIF slot */
+.snipsy-gif-slot {
+  margin-top: var(--spacing-md);
+  text-align: center;
+}
+
+.snipsy-gif-slot img.snipsy-gif {
+  max-width: 100%;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--background-modifier-border);
+}
+
+/* Package Details Modal */
+.package-details-info {
+  margin-bottom: var(--spacing-xl);
+}
+
+.package-details-info h3 {
+  margin: 0 0 10px 0;
+  color: var(--text-normal);
+}
+
+.package-details-info .package-description {
+  margin: 0 0 15px 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.package-details-info .package-meta {
+  display: flex;
+  gap: var(--spacing-xl);
+  margin-bottom: 15px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.package-details-info .package-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.package-details-info .package-tag {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.package-snippets {
+  margin-top: var(--spacing-xl);
+}
+
+.package-snippets h4 {
+  margin: 0 0 15px 0;
+  color: var(--text-normal);
+}
+
+.snippets-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--background-primary);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+.snippets-table th,
+.snippets-table td {
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: 13px;
+}
+
+.snippets-table th {
+  background: var(--background-secondary);
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.snippets-table td {
+  color: var(--text-muted);
+  font-family: var(--font-monospace);
+}
+
+.modal-button-container {
+  margin-top: var(--spacing-xl);
+  text-align: right;
+}
