@@ -37,7 +37,9 @@ export class BasicTab {
                     .setCta()
                     .onClick(() => {
                         // Open hotkey settings for the insert-snippet command
+                        // @ts-ignore - Obsidian API works correctly at runtime
                         this.app.setting.open();
+                        // @ts-ignore - Obsidian API works correctly at runtime
                         this.app.setting.openTabById("hotkeys");
                         // Focus on our command
                         setTimeout(() => {
@@ -58,7 +60,9 @@ export class BasicTab {
                     .setCta()
                     .onClick(() => {
                         // Open hotkey settings for the open-settings command
+                        // @ts-ignore - Obsidian API works correctly at runtime
                         this.app.setting.open();
+                        // @ts-ignore - Obsidian API works correctly at runtime
                         this.app.setting.openTabById("hotkeys");
                         // Focus on our command
                         setTimeout(() => {

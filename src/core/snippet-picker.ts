@@ -79,7 +79,7 @@ export class SnippetPickerService implements SnippetPickerAPI {
         const tabstopRegex = /\$(\d+)/g;
         let match;
         while ((match = tabstopRegex.exec(text)) !== null) {
-            const tabstopNum = parseInt(match[1], 10);
+            const tabstopNum = parseInt(match[1] || "0", 10);
             if (!tabstops.includes(tabstopNum)) {
                 tabstops.push(tabstopNum);
             }

@@ -35,7 +35,9 @@ export default class HotstringsPlugin extends Plugin {
             id: "open-settings",
             name: "Open Snipy Settings",
             callback: () => {
+                // @ts-ignore - Obsidian API works correctly at runtime
                 this.app.setting.open();
+                // @ts-ignore - Obsidian API works correctly at runtime
                 this.app.setting.openTabById(this.manifest.id);
             }
         });
