@@ -4,6 +4,8 @@ import { PACKAGE_CATALOG } from "../../catalog";
 import { diffIncoming } from "../../services/utils";
 import { espansoYamlToSnippets } from "../../packages/espanso";
 import { PackagePreviewModal } from "./Modals";
+import { validatePackage } from "../../services/package-validator";
+import * as yaml from "js-yaml";
 
 export class PackagesTab {
     constructor(
@@ -75,6 +77,29 @@ export class PackagesTab {
                         }
 
                         try {
+                            // First, try to parse as a community package
+                            const packageData = this.parseYamlPackage(yaml);
+                            if (packageData) {
+                                // Validate community package
+                                const validation = validatePackage(packageData, { strictMode: false });
+                                
+                                if (!validation.isValid) {
+                                    new Notice(`Package validation failed: ${validation.errors.join(', ')}`);
+                                    return;
+                                }
+                                
+                                // Show warnings if any
+                                if (validation.warnings.length > 0) {
+                                    this.showValidationWarnings(validation.warnings);
+                                }
+                                
+                                // Install as community package
+                                this.installCommunityPackage(packageData);
+                                new Notice(`Community package "${packageData.name}" installed successfully!`);
+                                return;
+                            }
+                            
+                            // Fallback to Espanso format
                             const incoming = espansoYamlToSnippets(yaml);
                             const conflicts = diffIncoming(this.plugin.settings.snippets, incoming);
                             
@@ -123,6 +148,47 @@ export class PackagesTab {
             new Notice(`Installed ${Object.keys(incoming).length} snippets from YAML`);
         } catch (err) {
             new Notice(`Failed to install from YAML: ${err}`);
+        }
+    }
+
+    private parseYamlPackage(yamlContent: string): any | null {
+        try {
+            // Try to parse as YAML
+            const data = yaml.load(yamlContent);
+            
+            // Check if it looks like a community package
+            if (data && typeof data === 'object' && 
+                data.name && data.version && data.author && 
+                data.snippets && Array.isArray(data.snippets)) {
+                return data;
+            }
+            
+            return null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    private showValidationWarnings(warnings: string[]) {
+        const warningText = warnings.slice(0, 3).join(', '); // Show first 3 warnings
+        const moreText = warnings.length > 3 ? ` and ${warnings.length - 3} more` : '';
+        new Notice(`Package warnings: ${warningText}${moreText}`, 5000);
+    }
+
+    private async installCommunityPackage(packageData: any) {
+        try {
+            const folder = packageData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+            
+            for (const snippet of packageData.snippets) {
+                if (snippet.trigger && snippet.replace) {
+                    const key = `${folder}/${snippet.trigger}`;
+                    this.plugin.settings.snippets[key] = snippet.replace;
+                }
+            }
+            
+            await this.plugin.saveSettings();
+        } catch (err) {
+            new Notice(`Failed to install community package: ${err}`);
         }
     }
 }
