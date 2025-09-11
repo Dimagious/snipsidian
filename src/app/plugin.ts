@@ -3,7 +3,9 @@ import { registerEditorChange } from "./cm6-bridge";
 import { SnipSidianSettingTab } from "../ui/settings";
 import { DEFAULT_SNIPPETS } from "../presets";
 import type { SnipSidianSettings } from "../types";
-import { getDict } from "../store/snippets";
+import { getDict, getAllSnippetsFlat } from "../store/snippets";
+import { SnippetPickerService } from "../core/snippet-picker";
+import { openSnippetPickerModal } from "../ui/components/SnippetPickerModal";
 
 const DEFAULT_SETTINGS: SnipSidianSettings = { snippets: DEFAULT_SNIPPETS };
 
@@ -17,11 +19,27 @@ export default class HotstringsPlugin extends Plugin {
         // Editor hook (equivalent to current 'editor-change')
         this.off = registerEditorChange(this.app, () => getDict(this.settings));
 
-        // Demo command (keeping compatibility)
+        // Snippet Picker command
         this.addCommand({
-            id: "insert-hello-world",
-            name: "Insert Hello World",
-            editorCallback: (editor) => editor.replaceSelection("Hello World")
+            id: "insert-snippet",
+            name: "Insert Snippet…",
+            callback: () => {
+                const snippets = getAllSnippetsFlat(this.settings);
+                const api = new SnippetPickerService(snippets);
+                openSnippetPickerModal(this.app, api);
+            }
+        });
+
+        // Open Settings command
+        this.addCommand({
+            id: "open-settings",
+            name: "Open Snipy Settings",
+            callback: () => {
+                // @ts-ignore - Obsidian API works correctly at runtime
+                this.app.setting.open();
+                // @ts-ignore - Obsidian API works correctly at runtime
+                this.app.setting.openTabById(this.manifest.id);
+            }
         });
 
         this.addSettingTab(new SnipSidianSettingTab(this.app, this));
