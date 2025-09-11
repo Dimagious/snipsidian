@@ -1,7 +1,7 @@
 // CommunityTab.ts
 import { App, Modal, Notice, Setting } from "obsidian";
 import type SnipSidianPlugin from "../../main";
-import { loadCommunityPackages, loadBuiltinCommunityPackages, processPackageSubmission } from "../../services/community-packages";
+import { loadCommunityPackages, loadAllCommunityPackages, processPackageSubmission } from "../../services/community-packages";
 
 interface PackageItem {
   id?: string;
@@ -59,8 +59,8 @@ export class CommunityTab {
     };
 
     try {
-      // Load built-in community packages
-      this.packages = await loadBuiltinCommunityPackages();
+      // Load all community packages (built-in + dynamic)
+      this.packages = await loadAllCommunityPackages(this.app);
       this.packages.sort((a, b) => a.label.localeCompare(b.label));
       this.filteredPackages = this.packages;
       this.renderPackages(browseSection);
@@ -311,7 +311,7 @@ export class CommunityTab {
       const packageData = yaml.load(yamlContent) as any;
       const packageId = this.generatePackageId(packageData.name);
       const fileName = `${packageId}.yml`;
-      const result = await processPackageSubmission(packageData, `community-packages/pending/${fileName}`);
+      const result = await processPackageSubmission(packageData, `community-packages/pending/${fileName}`, this.app);
       if (result.success) {
         new Notice("🎉 Thank you for contributing to the community! Your package has been submitted for review.");
         textarea.value = "";

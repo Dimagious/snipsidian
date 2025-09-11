@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   loadCommunityPackages,
   loadBuiltinCommunityPackages,
+  loadDynamicCommunityPackages,
+  loadAllCommunityPackages,
   loadCommunityPackagesFromVault,
   loadCommunityPackage,
   searchCommunityPackages,
@@ -67,6 +69,67 @@ describe("community-packages", () => {
       expect(packages).toEqual([]);
       
       consoleSpy.mockRestore();
+    });
+  });
+
+  describe("loadDynamicCommunityPackages", () => {
+    it("should return empty array in test environment", async () => {
+      const mockApp = {
+        vault: {
+          getAbstractFileByPath: vi.fn(),
+          read: vi.fn()
+        }
+      };
+      
+      const packages = await loadDynamicCommunityPackages(mockApp);
+      expect(packages).toEqual([]);
+    });
+
+    it("should handle missing dynamic directory gracefully", async () => {
+      const mockApp = {
+        vault: {
+          getAbstractFileByPath: vi.fn().mockReturnValue(null),
+          read: vi.fn()
+        }
+      };
+      
+      // Mock process.env to simulate non-test environment
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      
+      const packages = await loadDynamicCommunityPackages(mockApp);
+      expect(packages).toEqual([]);
+      
+      // Restore original environment
+      process.env.NODE_ENV = originalEnv;
+    });
+  });
+
+  describe("loadAllCommunityPackages", () => {
+    it("should return empty array in test environment", async () => {
+      const mockApp = {
+        vault: {
+          getAbstractFileByPath: vi.fn(),
+          read: vi.fn()
+        }
+      };
+      
+      const packages = await loadAllCommunityPackages(mockApp);
+      expect(packages).toEqual([]);
+    });
+
+    it("should handle errors gracefully", async () => {
+      const mockApp = {
+        vault: {
+          getAbstractFileByPath: vi.fn().mockImplementation(() => {
+            throw new Error("Vault error");
+          }),
+          read: vi.fn()
+        }
+      };
+      
+      const packages = await loadAllCommunityPackages(mockApp);
+      expect(packages).toEqual([]);
     });
   });
 
