@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   loadCommunityPackages,
+  loadCommunityPackagesFromVault,
   loadCommunityPackage,
   searchCommunityPackages,
   getCommunityPackageStats,
@@ -48,6 +49,39 @@ describe("community-packages", () => {
       // This test verifies the test environment check
       const packages = await loadCommunityPackages();
       expect(packages).toEqual([]);
+    });
+  });
+
+  describe("loadCommunityPackagesFromVault", () => {
+    it("should return empty array in test environment", async () => {
+      const mockApp = {
+        vault: {
+          getAbstractFileByPath: vi.fn(),
+          read: vi.fn()
+        }
+      };
+      
+      const packages = await loadCommunityPackagesFromVault(mockApp);
+      expect(packages).toEqual([]);
+    });
+
+    it("should handle missing approved directory gracefully", async () => {
+      const mockApp = {
+        vault: {
+          getAbstractFileByPath: vi.fn().mockReturnValue(null),
+          read: vi.fn()
+        }
+      };
+      
+      // Mock process.env to simulate non-test environment
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      
+      const packages = await loadCommunityPackagesFromVault(mockApp);
+      expect(packages).toEqual([]);
+      
+      // Restore original environment
+      process.env.NODE_ENV = originalEnv;
     });
   });
 

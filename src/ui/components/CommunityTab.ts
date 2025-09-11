@@ -1,7 +1,7 @@
 // CommunityTab.ts
 import { App, Modal, Notice, Setting } from "obsidian";
 import type SnipSidianPlugin from "../../main";
-import { loadCommunityPackages, processPackageSubmission } from "../../services/community-packages";
+import { loadCommunityPackages, loadCommunityPackagesFromVault, processPackageSubmission } from "../../services/community-packages";
 
 interface PackageItem {
   id?: string;
@@ -59,7 +59,8 @@ export class CommunityTab {
     };
 
     try {
-      this.packages = await loadCommunityPackages();
+      // Try to load packages from vault first, fallback to empty array
+      this.packages = await loadCommunityPackagesFromVault(this.app);
       this.packages.sort((a, b) => a.label.localeCompare(b.label));
       this.filteredPackages = this.packages;
       this.renderPackages(browseSection);
