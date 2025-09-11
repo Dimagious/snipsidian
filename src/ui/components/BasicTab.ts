@@ -17,6 +17,51 @@ export class BasicTab {
             }) as T;
         };
 
+        // Commands section
+        const commandsSection = section("Commands", "Configure hotkeys for Snipsy commands.", "snipsy-commands-section");
+
+        new Setting(commandsSection)
+            .setName("Insert Snippet")
+            .setDesc("Open the snippet picker to insert snippets")
+            .addButton((btn) =>
+                btn
+                    .setButtonText("Set Hotkey")
+                    .setCta()
+                    .onClick(() => {
+                        // Open hotkey settings for the insert-snippet command
+                        this.app.setting.open();
+                        this.app.setting.openTabById("hotkeys");
+                        // Focus on our command
+                        setTimeout(() => {
+                            const hotkeyTab = document.querySelector('.setting-item[data-id="snipsidian:insert-snippet"]');
+                            if (hotkeyTab) {
+                                hotkeyTab.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        }, 100);
+                    })
+            );
+
+        new Setting(commandsSection)
+            .setName("Open Snipy Settings")
+            .setDesc("Quick access to Snipsy settings")
+            .addButton((btn) =>
+                btn
+                    .setButtonText("Set Hotkey")
+                    .setCta()
+                    .onClick(() => {
+                        // Open hotkey settings for the open-settings command
+                        this.app.setting.open();
+                        this.app.setting.openTabById("hotkeys");
+                        // Focus on our command
+                        setTimeout(() => {
+                            const hotkeyTab = document.querySelector('.setting-item[data-id="snipsidian:open-settings"]');
+                            if (hotkeyTab) {
+                                hotkeyTab.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        }, 100);
+                    })
+            );
+
         // Export/Import section
         const section = (title: string, hint?: string, specialClass?: string) => {
             const wrap = root.createDiv({ cls: `snipsy-section ${specialClass || ""}` });
