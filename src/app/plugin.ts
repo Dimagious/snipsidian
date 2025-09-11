@@ -37,6 +37,16 @@ export default class HotstringsPlugin extends Plugin {
             }
         });
 
+        // Open Settings command
+        this.addCommand({
+            id: "open-settings",
+            name: "Open SnipSidian Settings",
+            callback: () => {
+                this.app.setting.open();
+                this.app.setting.openTabById(this.manifest.id);
+            }
+        });
+
         this.addSettingTab(new SnipSidianSettingTab(this.app, this));
         console.log("Snipsy modular plugin loaded");
     }

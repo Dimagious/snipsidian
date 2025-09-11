@@ -57,6 +57,25 @@ describe("app/plugin", () => {
         expect(plugin.settings.snippets).toBeDefined();
     });
 
+    it("adds open settings command", async () => {
+        const app = { 
+            workspace: { on: vi.fn(), offref: vi.fn() },
+            setting: { open: vi.fn(), openTabById: vi.fn() }
+        } as any;
+        // @ts-ignore ctor signature comes from stub
+        const plugin = new PluginClass(app);
+        plugin.manifest = { id: "snipsidian" };
+
+        await plugin.onload();
+
+        // Check that open settings command was added
+        const openSettingsCommand = (plugin as any).addCommandCalls.find(
+            (call: any[]) => call[0]?.id === "open-settings"
+        );
+        expect(openSettingsCommand).toBeDefined();
+        expect(openSettingsCommand[0].name).toBe("Open SnipSidian Settings");
+    });
+
     it("onunload calls disposer", async () => {
         const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
         // @ts-ignore
