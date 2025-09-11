@@ -452,20 +452,12 @@
 
 /* -------- Selection Mode Styling -------- */
 .snipsy-selection-mode-section {
-  border: 2px solid var(--interactive-accent);
+  border: 2px solid var(--color-green);
   background: var(--background-primary-alt);
   position: relative;
 }
-.snipsy-selection-mode-section::before {
-  content: "🔘";
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  font-size: 18px;
-  opacity: 0.7;
-}
 .snipsy-selection-mode-section h3 {
-  color: var(--interactive-accent);
+  color: var(--color-green);
 }
 .snipsy-selection-mode-section .snipsy-hint {
   color: var(--text-accent);
@@ -509,56 +501,17 @@
   color: var(--color-green);
 }
 
-.snipsy-catalog-section {
-  border: 2px solid var(--color-orange);
-  background: var(--background-primary-alt);
-  position: relative;
-}
-.snipsy-catalog-section::before {
-  content: "📦";
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  font-size: 18px;
-  opacity: 0.7;
-}
-.snipsy-catalog-section h3 {
-  color: var(--color-orange);
-}
-
-.snipsy-yaml-section {
-  border: 2px solid var(--color-purple);
-  background: var(--background-primary-alt);
-  position: relative;
-}
-.snipsy-yaml-section::before {
-  content: "📝";
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  font-size: 18px;
-  opacity: 0.7;
-}
-.snipsy-yaml-section h3 {
-  color: var(--color-purple);
-}
-
-/* -------- Snippet Manager Styling -------- */
+.snipsy-catalog-section,
+.snipsy-yaml-section,
 .snipsy-snippet-manager {
-  border: 2px solid var(--interactive-accent);
+  border: 2px solid var(--color-green);
   background: var(--background-primary-alt);
   position: relative;
 }
-.snipsy-snippet-manager::before {
-  content: "⚙️";
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  font-size: 18px;
-  opacity: 0.7;
-}
+.snipsy-catalog-section h3,
+.snipsy-yaml-section h3,
 .snipsy-snippet-manager h3 {
-  color: var(--interactive-accent);
+  color: var(--color-green);
 }
 
 /* Subsections within snippet manager */
