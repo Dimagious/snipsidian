@@ -19,13 +19,6 @@ export default class HotstringsPlugin extends Plugin {
         // Editor hook (equivalent to current 'editor-change')
         this.off = registerEditorChange(this.app, () => getDict(this.settings));
 
-        // Demo command (keeping compatibility)
-        this.addCommand({
-            id: "insert-hello-world",
-            name: "Insert Hello World",
-            editorCallback: (editor) => editor.replaceSelection("Hello World")
-        });
-
         // Snippet Picker command
         this.addCommand({
             id: "insert-snippet",
@@ -40,7 +33,7 @@ export default class HotstringsPlugin extends Plugin {
         // Open Settings command
         this.addCommand({
             id: "open-settings",
-            name: "Open SnipSidian Settings",
+            name: "Open Snipy Settings",
             callback: () => {
                 this.app.setting.open();
                 this.app.setting.openTabById(this.manifest.id);
