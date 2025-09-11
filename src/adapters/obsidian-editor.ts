@@ -71,3 +71,125 @@ export async function tryExpandAtSeparator(
 
     applyEditPlan(editor, plan);
 }
+
+/**
+ * Inserts a snippet at the current cursor position
+ */
+export function insertSnippetAtCursor(editor: Editor, replacement: string): void {
+    const cursor = editor.getCursor();
+    const selection = editor.getSelection();
+
+    // Handle cursor position after insertion
+    const cursorMatch = replacement.indexOf('$|');
+    let cleanReplacement = replacement;
+    let cursorOffset = 0;
+
+    if (cursorMatch !== -1) {
+        // Remove $| from text
+        cleanReplacement = replacement.replace(/\$\|/g, '');
+        cursorOffset = cursorMatch;
+    }
+
+    if (selection) {
+        // If there's a selection, replace it
+        editor.replaceSelection(cleanReplacement);
+        // Set cursor to the correct position
+        if (cursorOffset > 0) {
+            try {
+                const newCursor = {
+                    line: cursor.line,
+                    ch: cursor.ch - selection.length + cursorOffset
+                };
+                editor.setCursor(newCursor);
+            } catch (error) {
+                console.warn('Failed to set cursor position:', error);
+            }
+        }
+    } else {
+        // Otherwise insert at cursor position
+        editor.replaceRange(cleanReplacement, cursor, cursor);
+        // Set cursor to the correct position
+        if (cursorOffset > 0) {
+            try {
+                const newCursor = {
+                    line: cursor.line,
+                    ch: cursor.ch + cursorOffset
+                };
+                editor.setCursor(newCursor);
+            } catch (error) {
+                console.warn('Failed to set cursor position:', error);
+            }
+        }
+    }
+}
+
+/**
+ * Wraps selection with a snippet (if supported)
+ */
+export function wrapSelectionWithSnippet(editor: Editor, replacement: string): void {
+    const selection = editor.getSelection();
+    
+    if (!selection) {
+        // If no selection, just insert
+        insertSnippetAtCursor(editor, replacement);
+        return;
+    }
+    
+    // Handle cursor position after insertion
+    const cursorMatch = replacement.indexOf('$|');
+    let cleanReplacement = replacement;
+    let cursorOffset = 0;
+
+    if (cursorMatch !== -1) {
+        // Remove $| from text
+        cleanReplacement = replacement.replace(/\$\|/g, '');
+        cursorOffset = cursorMatch;
+    }
+    
+    // Get current cursor position before replacement
+    const from = editor.getCursor('from');
+    const to = editor.getCursor('to');
+    
+    // Check if snippet supports wrapping
+    if (cleanReplacement.includes('${SEL}')) {
+        // Replace ${SEL} with selected text
+        const wrappedReplacement = cleanReplacement.replace('${SEL}', selection);
+        editor.replaceSelection(wrappedReplacement);
+    } else if (cleanReplacement.includes('$1')) {
+        // If $1 exists, use it as a container for selection
+        const wrappedReplacement = cleanReplacement.replace('$1', selection);
+        editor.replaceSelection(wrappedReplacement);
+    } else if (cursorOffset > 0) {
+        // If cursor position $| exists, insert selected text there
+        const beforeCursor = cleanReplacement.substring(0, cursorOffset);
+        const afterCursor = cleanReplacement.substring(cursorOffset);
+        const wrappedReplacement = beforeCursor + selection + afterCursor;
+        editor.replaceSelection(wrappedReplacement);
+    } else {
+        // Otherwise just replace selection with replacement
+        editor.replaceSelection(cleanReplacement);
+    }
+    
+    // Set cursor to the correct position
+    if (cursorOffset > 0) {
+        try {
+            let newCursor;
+            if (cleanReplacement.includes('${SEL}') || cleanReplacement.includes('$1')) {
+                // If special placeholders were used, cursor stays at the end
+                newCursor = {
+                    line: from.line,
+                    ch: from.ch + cleanReplacement.length
+                };
+            } else {
+                // If selected text was inserted at $| position, cursor is placed after it
+                newCursor = {
+                    line: from.line,
+                    ch: from.ch + cursorOffset + selection.length
+                };
+            }
+            editor.setCursor(newCursor);
+        } catch (error) {
+            console.warn('Failed to set cursor position:', error);
+        }
+    }
+}

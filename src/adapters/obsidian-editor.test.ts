@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { makeExpandInput, makeContext, applyEditPlan, tryExpandAtSeparator } from "./obsidian-editor";
+import { makeExpandInput, makeContext, applyEditPlan, tryExpandAtSeparator, insertSnippetAtCursor, wrapSelectionWithSnippet } from "./obsidian-editor";
 import type { Dict } from "../engine/types";
 
 /**
@@ -9,6 +9,7 @@ import type { Dict } from "../engine/types";
 class MockEditor {
     lines: string[];
     cursor = { line: 0, ch: 0 };
+    selection: string = "";
 
     constructor(text: string) {
         this.lines = text.split("\n");
@@ -28,6 +29,29 @@ class MockEditor {
 
     lastLine() {
         return this.lines.length - 1;
+    }
+
+    getSelection() {
+        return this.selection;
+    }
+
+    replaceSelection(text: string) {
+        if (this.selection) {
+            // Заменяем выделенный текст
+            const cursor = this.getCursor();
+            const line = this.getLine(cursor.line);
+            const before = line.slice(0, cursor.ch - this.selection.length);
+            const after = line.slice(cursor.ch);
+            this.lines[cursor.line] = before + text + after;
+            this.selection = "";
+            // Обновляем позицию курсора
+            this.cursor.ch = before.length + text.length;
+        } else {
+            // Вставляем в позицию курсора
+            const cursor = this.getCursor();
+            this.replaceRange(text, cursor, cursor);
+            // Курсор уже обновлен в replaceRange
+        }
     }
 
     /**
@@ -62,6 +86,11 @@ class MockEditor {
             const midLast = insertLines[insertLines.length - 1] + after;
             const mids = insertLines.slice(1, -1);
             this.lines = [...head, midFirst, ...mids, midLast, ...tail];
+        }
+        
+        // Обновляем курсор после замены только если это не дублирование
+        if (from.line === to.line && insertLines.length === 1 && from.ch === to.ch) {
+            this.cursor.ch = from.ch + text.length;
         }
     }
 }
@@ -154,5 +183,79 @@ describe("adapters/obsidian-editor: tryExpandAtSeparator", () => {
         ed.setCursor({ line: 0, ch });
         await tryExpandAtSeparator(ed as any, dict, { now: new Date() });
         expect(ed.getLine(0)).toBe("before `fn ` after"); // unchanged
+    });
+});
+
+describe("adapters/obsidian-editor: insertSnippetAtCursor", () => {
+    it("should insert snippet at cursor position", () => {
+        const ed = new MockEditor("Hello world");
+        ed.setCursor({ line: 0, ch: 6 }); // after "Hello "
+        
+        insertSnippetAtCursor(ed as any, "beautiful ");
+        
+        expect(ed.getLine(0)).toBe("Hello beautiful world");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 16 }); // after inserted text
+    });
+
+    it("should handle cursor placeholder", () => {
+        const ed = new MockEditor("Hello world");
+        ed.setCursor({ line: 0, ch: 6 }); // after "Hello "
+        
+        insertSnippetAtCursor(ed as any, "beautiful $| day");
+        
+        expect(ed.getLine(0)).toBe("Hello beautiful  dayworld"); // $| removed, cursor at position
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 16 }); // cursor at $| position
+    });
+
+    it("should replace selection if present", () => {
+        const ed = new MockEditor("Hello world");
+        ed.setCursor({ line: 0, ch: 11 }); // end of line
+        ed.selection = "world"; // simulate selection
+        
+        insertSnippetAtCursor(ed as any, "universe");
+        
+        expect(ed.getLine(0)).toBe("Hello universe");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 14 });
+    });
+});
+
+describe("adapters/obsidian-editor: wrapSelectionWithSnippet", () => {
+    it("should wrap selection with ${SEL} placeholder", () => {
+        const ed = new MockEditor("Hello world");
+        ed.setCursor({ line: 0, ch: 11 });
+        ed.selection = "world";
+        
+        wrapSelectionWithSnippet(ed as any, "**${SEL}**");
+        
+        expect(ed.getLine(0)).toBe("Hello **world**");
+    });
+
+    it("should wrap selection with $1 placeholder", () => {
+        const ed = new MockEditor("Hello world");
+        ed.setCursor({ line: 0, ch: 11 });
+        ed.selection = "world";
+        
+        wrapSelectionWithSnippet(ed as any, "**$1**");
+        
+        expect(ed.getLine(0)).toBe("Hello **world**");
+    });
+
+    it("should replace selection if no wrapping placeholders", () => {
+        const ed = new MockEditor("Hello world");
+        ed.setCursor({ line: 0, ch: 11 });
+        ed.selection = "world";
+        
+        wrapSelectionWithSnippet(ed as any, "universe");
+        
+        expect(ed.getLine(0)).toBe("Hello universe");
+    });
+
+    it("should insert at cursor if no selection", () => {
+        const ed = new MockEditor("Hello world");
+        ed.setCursor({ line: 0, ch: 6 }); // after "Hello "
+        
+        wrapSelectionWithSnippet(ed as any, "beautiful ");
+        
+        expect(ed.getLine(0)).toBe("Hello beautiful world");
     });
 });
