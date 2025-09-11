@@ -253,12 +253,12 @@ npm run release:zip     # Create release package
 ## 📸 Screenshots
 
 ### Settings Interface
-![Settings Interface](docs/screens/settings.png)
+![Settings Interface](docs/screens/basic.png)
 
 ### Snippet Management
-| Snippets Manager | Selection Mode |
+| Snippets Manager | Packages |
 |------------------|----------------|
-| ![Snippets](docs/screens/snippets.png) | ![Selection](docs/screens/selection-mode.png) |
+| ![Snippets](docs/screens/snippets.png) | ![Selection](docs/screens/packages.png) |
 
 ### Package Installation
 ![Package Installation](docs/screens/espanso-demo.gif)
