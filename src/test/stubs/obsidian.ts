@@ -30,3 +30,8 @@ export class PluginSettingTab { }
 export class Setting { }
 export const Platform = { isDesktop: true, isMobile: false };
 export class Notice { constructor(_msg: string) { } }
+export class Modal { 
+    constructor(app: any) { }
+    open() { }
+    close() { }
+}
