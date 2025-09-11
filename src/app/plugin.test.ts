@@ -14,7 +14,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
         loadData = vi.fn().mockResolvedValue(undefined);
         saveData = vi.fn().mockResolvedValue(undefined);
     }
-    return { Plugin };
+    class Modal { 
+        constructor(app: any) { }
+        open() { }
+        close() { }
+    }
+    return { Plugin, Modal };
 }, { virtual: true });
 
 // Bridge mock to control disposer

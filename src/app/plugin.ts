@@ -3,7 +3,9 @@ import { registerEditorChange } from "./cm6-bridge";
 import { SnipSidianSettingTab } from "../ui/settings";
 import { DEFAULT_SNIPPETS } from "../presets";
 import type { SnipSidianSettings } from "../types";
-import { getDict } from "../store/snippets";
+import { getDict, getAllSnippetsFlat } from "../store/snippets";
+import { SnippetPickerService } from "../core/snippet-picker";
+import { openSnippetPickerModal } from "../ui/components/SnippetPickerModal";
 
 const DEFAULT_SETTINGS: SnipSidianSettings = { snippets: DEFAULT_SNIPPETS };
 
@@ -22,6 +24,17 @@ export default class HotstringsPlugin extends Plugin {
             id: "insert-hello-world",
             name: "Insert Hello World",
             editorCallback: (editor) => editor.replaceSelection("Hello World")
+        });
+
+        // Snippet Picker command
+        this.addCommand({
+            id: "insert-snippet",
+            name: "Insert Snippet…",
+            callback: () => {
+                const snippets = getAllSnippetsFlat(this.settings);
+                const api = new SnippetPickerService(snippets);
+                openSnippetPickerModal(this.app, api);
+            }
         });
 
         this.addSettingTab(new SnipSidianSettingTab(this.app, this));
