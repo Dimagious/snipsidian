@@ -13,8 +13,8 @@ export interface SnippetPreview {
 }
 
 /**
- * Фасад для работы с сниппетами в Snippet Picker
- * Не знает про Obsidian API и DOM - только бизнес-логика
+ * Facade for working with snippets in Snippet Picker
+ * Doesn't know about Obsidian API and DOM - only business logic
  */
 export class SnippetPickerService implements SnippetPickerAPI {
     private snippets: SnippetItem[] = [];
@@ -24,14 +24,14 @@ export class SnippetPickerService implements SnippetPickerAPI {
     }
 
     /**
-     * Возвращает все доступные сниппеты
+     * Returns all available snippets
      */
     listAll(): SnippetItem[] {
         return [...this.snippets];
     }
 
     /**
-     * Поиск сниппетов по запросу
+     * Search snippets by query
      */
     search(q: SnippetSearchQuery): SnippetItem[] {
         const normalizedQuery = q.text.trim().toLowerCase();
@@ -42,12 +42,12 @@ export class SnippetPickerService implements SnippetPickerAPI {
         }
 
         let results = this.snippets.filter(item => {
-            // Фильтр по папке
+            // Filter by folder
             if (q.folder && item.folder !== q.folder) {
                 return false;
             }
 
-            // Поиск по trigger, replacement, folder и keywords
+            // Search by trigger, replacement, folder and keywords
             const searchFields = [
                 item.trigger.toLowerCase(),
                 item.replacement.toLowerCase(),
@@ -62,20 +62,20 @@ export class SnippetPickerService implements SnippetPickerAPI {
     }
 
     /**
-     * Генерирует превью сниппета с подсветкой плейсхолдеров
+     * Generates snippet preview with placeholder highlighting
      */
     preview(item: SnippetItem): SnippetPreview {
         const text = item.replacement;
         let cursorIdx: number | undefined;
         const tabstops: number[] = [];
 
-        // Находим $| (курсор)
+        // Find $| (cursor)
         const cursorMatch = text.indexOf('$|');
         if (cursorMatch !== -1) {
             cursorIdx = cursorMatch;
         }
 
-        // Находим $1, $2, ... $n (tabstops)
+        // Find $1, $2, ... $n (tabstops)
         const tabstopRegex = /\$(\d+)/g;
         let match;
         while ((match = tabstopRegex.exec(text)) !== null) {
@@ -85,7 +85,7 @@ export class SnippetPickerService implements SnippetPickerAPI {
             }
         }
 
-        // Сортируем tabstops по порядку
+        // Sort tabstops in order
         tabstops.sort((a, b) => a - b);
 
         return {

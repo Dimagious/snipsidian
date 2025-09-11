@@ -34,7 +34,7 @@ describe("store/snippets", () => {
         it("should return user snippets with correct structure", () => {
             const result = getAllSnippetsFlat(mockSettings);
             
-            // Должны быть пользовательские сниппеты
+            // Should have user snippets
             const userSnippets = result.filter(s => s.folder === "user");
             expect(userSnippets).toHaveLength(2);
             
@@ -47,11 +47,11 @@ describe("store/snippets", () => {
         it("should include builtin package snippets", () => {
             const result = getAllSnippetsFlat(mockSettings);
             
-            // Должны быть сниппеты из пакетов
+            // Should have package snippets
             const packageSnippets = result.filter(s => s.folder.startsWith("builtin-"));
             expect(packageSnippets.length).toBeGreaterThan(0);
             
-            // Проверяем, что есть сниппеты из разных пакетов
+            // Check that there are snippets from different packages
             const folders = new Set(packageSnippets.map(s => s.folder));
             expect(folders.size).toBeGreaterThan(1);
         });
@@ -70,7 +70,7 @@ describe("store/snippets", () => {
             const userSnippets = result.filter(s => s.folder === "user");
             expect(userSnippets).toHaveLength(0);
             
-            // Но должны быть пакетные сниппеты
+            // But should have package snippets
             const packageSnippets = result.filter(s => s.folder.startsWith("builtin-"));
             expect(packageSnippets.length).toBeGreaterThan(0);
         });
