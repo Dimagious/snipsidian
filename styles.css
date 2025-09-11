@@ -490,14 +490,18 @@
 /* -------- Special Section Styling -------- */
 .snipsy-commands-section,
 .snipsy-export-section,
-.snipsy-help-section {
+.snipsy-help-section,
+.snipsy-feedback-section,
+.snipsy-support-section {
   border: 2px solid var(--color-green);
   background: var(--background-primary-alt);
   position: relative;
 }
 .snipsy-commands-section h3,
 .snipsy-export-section h3,
-.snipsy-help-section h3 {
+.snipsy-help-section h3,
+.snipsy-feedback-section h3,
+.snipsy-support-section h3 {
   color: var(--color-green);
 }
 
