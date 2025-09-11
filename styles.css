@@ -496,38 +496,17 @@
 }
 
 /* -------- Special Section Styling -------- */
-.snipsy-export-section {
+.snipsy-commands-section,
+.snipsy-export-section,
+.snipsy-help-section {
   border: 2px solid var(--color-green);
   background: var(--background-primary-alt);
   position: relative;
 }
-.snipsy-export-section::before {
-  content: "💾";
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  font-size: 18px;
-  opacity: 0.7;
-}
-.snipsy-export-section h3 {
-  color: var(--color-green);
-}
-
-.snipsy-help-section {
-  border: 2px solid var(--color-blue);
-  background: var(--background-primary-alt);
-  position: relative;
-}
-.snipsy-help-section::before {
-  content: "❓";
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  font-size: 18px;
-  opacity: 0.7;
-}
+.snipsy-commands-section h3,
+.snipsy-export-section h3,
 .snipsy-help-section h3 {
-  color: var(--color-blue);
+  color: var(--color-green);
 }
 
 .snipsy-catalog-section {
