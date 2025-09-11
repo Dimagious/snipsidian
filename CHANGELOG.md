@@ -132,6 +132,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Package catalog (`PACKAGE_CATALOG`) is now sorted alphabetically by `label` for convenience.
 
+## [0.8.0] - 2025-09-11
+
+### Added
+- **🎯 Snippet Picker Command** - New "Insert Snippet…" command for quick snippet search and insertion
+  - Real-time search by trigger or replacement text
+  - Live preview of snippet content with placeholder highlighting
+  - Keyboard navigation support for accessibility
+  - Smart cursor placement and tabstop detection
+- **⚙️ Commands Section** in Basic settings tab with hotkey configuration
+  - "Set Hotkey" buttons for both main commands
+  - Direct navigation to Obsidian's hotkey settings
+  - Auto-scroll to specific commands for easy configuration
+- **📦 Built-in Markdown Package** with comprehensive markdown snippets
+- **🔧 Enhanced Editor Integration** with improved snippet insertion
+  - Better handling of selected text wrapping
+  - Improved cursor positioning after insertion
+  - Robust error handling for edge cases
+
+### Changed
+- **🎨 Unified Green Styling** across all settings tabs
+  - All sections now use consistent green theme (`var(--color-green)`)
+  - Removed emoji icons from all sections for professional appearance
+  - Clean, modern interface design throughout
+- **📁 Collapsed Groups by Default** - Snippet groups start collapsed to reduce visual clutter
+- **🏗️ Enhanced Architecture** with new core services
+  - `SnippetPickerAPI` for snippet management
+  - `getAllSnippetsFlat` function for efficient data access
+  - Improved type definitions (`SnippetItem`, `SnippetSearchQuery`)
+
+### Fixed
+- **🐛 UI Initialization Error** - Resolved "Cannot access section before initialization" in BasicTab
+- **🔧 TypeScript Errors** - Fixed CI compilation issues with proper type handling
+- **📝 Code Quality** - Translated all Russian comments to English for consistency
+
+### Technical Improvements
+- **🧪 Test Coverage** - All 119 tests passing with 91.89% coverage
+- **📦 Build Optimization** - Maintained efficient bundle size
+- **🔒 Type Safety** - Enhanced TypeScript configuration and error handling
+
+### Notes
+- **Command Palette Integration** - Both commands are now available in Obsidian's Command Palette
+- **Backward Compatibility** - All existing functionality preserved
+- **Performance** - No impact on existing snippet expansion performance
+
 ## [0.7.0] - 2025-01-XX
 
 ### Added
