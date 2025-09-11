@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   loadCommunityPackages,
-  loadBuiltinCommunityPackages,
   loadDynamicCommunityPackages,
   loadAllCommunityPackages,
   loadCommunityPackagesFromVault,
@@ -55,22 +54,7 @@ describe("community-packages", () => {
     });
   });
 
-  describe("loadBuiltinCommunityPackages", () => {
-    it("should return empty array in test environment", async () => {
-      const packages = await loadBuiltinCommunityPackages();
-      expect(packages).toEqual([]);
-    });
-
-    it("should handle errors gracefully", async () => {
-      // Mock console.error to avoid noise in tests
-      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      
-      const packages = await loadBuiltinCommunityPackages();
-      expect(packages).toEqual([]);
-      
-      consoleSpy.mockRestore();
-    });
-  });
+  // loadBuiltinCommunityPackages removed - no built-in packages
 
   describe("loadDynamicCommunityPackages", () => {
     it("should return empty array in test environment", async () => {
@@ -106,7 +90,7 @@ describe("community-packages", () => {
   });
 
   describe("loadAllCommunityPackages", () => {
-    it("should return empty array in test environment", async () => {
+    it("should return empty array when GitHub API is unavailable", async () => {
       const mockApp = {
         vault: {
           getAbstractFileByPath: vi.fn(),
@@ -134,7 +118,7 @@ describe("community-packages", () => {
   });
 
   describe("loadCommunityPackagesFromVault", () => {
-    it("should return built-in packages", async () => {
+    it("should return empty array (deprecated function)", async () => {
       const mockApp = {
         vault: {
           getAbstractFileByPath: vi.fn(),
@@ -143,7 +127,7 @@ describe("community-packages", () => {
       };
       
       const packages = await loadCommunityPackagesFromVault(mockApp);
-      expect(packages).toEqual([]); // In test environment, returns empty array
+      expect(packages).toEqual([]); // Deprecated function returns empty array
     });
   });
 
