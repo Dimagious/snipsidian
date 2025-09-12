@@ -271,9 +271,19 @@ yamllint your-package.yml
 ```
 
 ### Package Submission
+
+#### Method 1: Google Form (Recommended)
+1. **Go to Snipsy Settings → Community Packages**
+2. **Scroll to "Submit New Package"** section
+3. **Paste your YAML** in the text area
+4. **Click "Validate Package"** to check for errors
+5. **Click "Submit Package"** to open Google Form
+6. **Fill in contact information** and submit
+
+#### Method 2: GitHub (Alternative)
 ```bash
 # Fork the repository
-git clone https://github.com/your-username/snipsidian.git
+git clone https://github.com/Dimagious/snipsidian-community.git
 
 # Create package file
 cp templates/basic.yml community-packages/your-package.yml
@@ -316,7 +326,8 @@ cp templates/basic.yml community-packages/your-package.yml
 - **Version control**: Packages work with Git and other VCS
 
 ### Community Integration
-- **GitHub**: Submit packages via pull requests
+- **Google Form**: Submit packages via Google Forms (recommended)
+- **GitHub**: Submit packages via pull requests (alternative)
 - **Documentation**: Include usage examples and tips
 
 ### Third-party Integration
@@ -406,4 +417,4 @@ echo "All packages validated successfully"
 
 **Happy developing!** 🚀
 
-*Last updated: September 2025*
+*Last updated: January 2025*

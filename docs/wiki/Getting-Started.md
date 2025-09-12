@@ -36,6 +36,13 @@ In the **Basic** tab, you can configure hotkeys for:
 3. Click **Install**
 4. Your snippets are now ready to use!
 
+### 4. Browse Community Packages
+1. Go to the **Community Packages** tab
+2. Browse available packages from the community
+3. Use the search bar to find specific packages
+4. Click **Install** next to any package you want
+5. Packages will show **"✓ Installed"** when already installed
+
 ---
 
 ## 🎮 Your First Snippets
@@ -99,6 +106,13 @@ The **Snippet Picker** is a powerful tool for finding and inserting snippets:
 - **Import**: Restore snippets from backup
 - **Sync**: Snippets sync with your vault across devices
 
+### Community Package Management
+- **Browse Packages**: Discover packages created by the community
+- **Search & Filter**: Find packages by name, description, or tags
+- **Install Packages**: One-click installation with conflict resolution
+- **Package Details**: View package information, snippets, and installation status
+- **Auto-updates**: Packages stay up-to-date with community improvements
+
 ---
 
 ## 🔧 Advanced Features
@@ -120,6 +134,44 @@ Snipsy is **markdown-aware** and won't expand inside:
 - **Smart positioning**: Automatic cursor placement for common patterns
 
 ---
+
+## 📦 Submit Your Own Package
+
+Want to share your snippet collection with the community? Here's how:
+
+### Creating a Package
+1. Go to the **Community Packages** tab
+2. Scroll down to **"Submit New Package"**
+3. Paste your package YAML in the text area
+4. Click **"Validate Package"** to check for errors
+5. Click **"Submit Package"** to submit via Google Form
+
+### Package Format
+Your package should include:
+- **name**: Package name
+- **author**: Your name
+- **version**: Package version (e.g., "1.0.0")
+- **description**: What your package does
+- **snippets**: Your snippet collection
+
+### Example Package
+```yaml
+name: "My Awesome Snippets"
+author: "Your Name"
+version: "1.0.0"
+description: "A collection of useful snippets for productivity"
+snippets:
+  ":email": "your@email.com"
+  ":phone": "+1-555-0123"
+  ":signature": "Best regards,\nYour Name"
+```
+
+### Espanso Package Import
+You can also import packages from [Espanso Hub](https://hub.espanso.org/):
+1. Go to **"Install Espanso Package"** section
+2. Copy YAML from any Espanso package
+3. Paste it in the text area
+4. Click **"Install Espanso Package"**
 
 ## 💬 Feedback Tab
 
@@ -150,7 +202,12 @@ The **Feedback** tab provides easy ways to:
 - Perfect when you can't remember the exact trigger
 - Shows previews to help you choose the right snippet
 
-### 5. Backup Your Snippets
+### 5. Explore Community Packages
+- Browse community packages for inspiration
+- Install packages that match your workflow
+- Submit your own packages to help others
+
+### 6. Backup Your Snippets
 - Export your snippets regularly
 - Keep backups in a safe place
 - Test your backups by importing them
@@ -165,12 +222,5 @@ The **Feedback** tab provides easy ways to:
 - **📧 Contact me** via [GitHub Issues](https://github.com/Dimagious/snipsidian/issues)
 
 ---
-
-## 🎉 What's Next?
-
-Now that you're set up, explore:
-- **[Package Creation](Package-Creation)** - Create your own snippet packages
-- **[Community Guidelines](Community-Guidelines)** - Share with the community
-- **[API Reference](API-Reference)** - Advanced technical details
 
 **Happy expanding!** 🚀

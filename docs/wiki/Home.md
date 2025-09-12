@@ -40,12 +40,6 @@
 - Integration guidelines
 - Developer resources
 
-### 🌟 [Community Guidelines](Community-Guidelines)
-- How to contribute
-- Code of conduct
-- Package submission process
-- Community standards
-
 ### ❓ [FAQ](FAQ)
 - Common questions and answers
 - Troubleshooting tips
@@ -76,6 +70,7 @@ Snipsy transforms your Obsidian experience by allowing you to create **text shor
 - **📦 Package Manager** - Install from curated catalog or paste YAML
 - **🔄 Import & Export** - Backup, restore, and sync across devices
 - **💬 Feedback System** - Easy bug reports and feature requests
+- **📝 Google Form Submission** - Submit community packages via Google Forms
 
 ---
 

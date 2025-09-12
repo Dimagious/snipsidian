@@ -3,7 +3,7 @@ import { buildGoogleFormUrl, collectSystemMeta } from "./feedback-form";
 
 // No built-in packages - all packages come from GitHub API
 
-interface PackageItem {
+export interface PackageItem {
     id?: string;
     label: string;
     description?: string;

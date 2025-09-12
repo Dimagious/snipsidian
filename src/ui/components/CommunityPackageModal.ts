@@ -9,7 +9,7 @@ export class CommunityPackageModal extends Modal {
     private searchQuery = "";
 
     constructor(
-        private app: App,
+        public app: App,
         private plugin: SnipSidianPlugin
     ) {
         super(app);
@@ -59,7 +59,7 @@ export class CommunityPackageModal extends Modal {
             this.filteredPackages = this.packages.filter(pkg => 
                 pkg.label.toLowerCase().includes(this.searchQuery) ||
                 pkg.description?.toLowerCase().includes(this.searchQuery) ||
-                pkg.tags?.some(tag => tag.toLowerCase().includes(this.searchQuery))
+                pkg.tags?.some((tag: string) => tag.toLowerCase().includes(this.searchQuery))
             );
         }
     }
@@ -107,7 +107,7 @@ export class CommunityPackageModal extends Modal {
             // Tags
             if (pkg.tags && pkg.tags.length > 0) {
                 const tags = info.createDiv({ cls: "package-tags" });
-                pkg.tags.forEach(tag => {
+                pkg.tags.forEach((tag: string) => {
                     tags.createEl("span", { text: tag, cls: "package-tag" });
                 });
             }

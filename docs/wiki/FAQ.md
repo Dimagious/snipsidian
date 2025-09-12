@@ -69,18 +69,20 @@ Your Name
 
 ### Q: How do I install a community package?
 **A:** 
-1. Go to **Settings** → **Snipsy** → **Packages**
-2. Choose a package from the dropdown
-3. Click **Install**
+1. Go to **Settings** → **Snipsy** → **Community Packages**
+2. Browse available packages or use the search bar
+3. Click **Install** next to any package you want
+4. Packages will show **"✓ Installed"** when already installed
 
 ### Q: Can I create my own packages?
 **A:** Yes! See our [Package Creation Guide](Package-Creation) for detailed instructions.
 
 ### Q: How do I share my packages with others?
 **A:** You can:
-- Submit to the community catalog via GitHub
-- Share YAML files directly
-- Create a repository with your packages
+- **Submit via Google Form** (Recommended) - Go to Community Packages tab → Submit New Package
+- **Submit via GitHub** - Create a pull request to the community repository
+- **Share YAML files** directly with other users
+- **Create a repository** with your packages
 
 ---
 
@@ -113,9 +115,10 @@ Your Name
 
 ### Q: Can I import snippets from other tools?
 **A:** Yes! Snipsy supports:
-- **Espanso YAML** - Paste directly into the Packages tab
+- **Espanso YAML** - Paste directly into the Community Packages tab → Install Espanso Package
 - **JSON import** - Use the Import feature in settings
 - **Manual creation** - Create snippets one by one
+- **Community packages** - Install packages created by other users
 
 ### Q: How do I backup my snippets?
 **A:** 
@@ -185,16 +188,18 @@ Your Name
 ### Q: How do I share my snippets with others?
 **A:** You can:
 - **Export and share** JSON files
-- **Create packages** and submit to community
+- **Create packages** and submit via Google Form (recommended)
+- **Submit packages** via GitHub pull requests
 - **Share YAML** directly with other users
 - **Publish packages** on GitHub or other platforms
 
 ### Q: Can I use snippets from other users?
 **A:** Yes! You can:
-- **Install community packages** from the catalog
+- **Browse community packages** in the Community Packages tab
+- **Install community packages** with one click
+- **Search packages** by name, description, or tags
 - **Import YAML** from other users
 - **Copy snippets** from shared JSON files
-- **Browse community packages** for inspiration
 
 ### Q: How do I report bugs or suggest features?
 **A:** Use the **Feedback tab** in Snipsy settings:
@@ -283,4 +288,4 @@ Replacement: ## Meeting Notes\n\n**Date:** CURSOR_PLACEHOLDER\n**Attendees:** \n
 
 **Happy expanding!** 🎯
 
-*Last updated: September 2025*
+*Last updated: January 2025*

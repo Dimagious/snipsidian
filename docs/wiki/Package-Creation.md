@@ -105,10 +105,12 @@ snippets:
 
 ### Step 3: Test Your Package
 1. **Copy the YAML** to your clipboard
-2. **Go to Snipsy Settings → Packages**
-3. **Paste YAML** in the text area
-4. **Click Install** and test your snippets
-5. **Refine** based on your testing
+2. **Go to Snipsy Settings → Community Packages**
+3. **Scroll to "Submit New Package"** section
+4. **Paste YAML** in the text area
+5. **Click "Validate Package"** to check for errors
+6. **Test your snippets** by installing them locally
+7. **Refine** based on your testing
 
 ---
 
@@ -175,11 +177,14 @@ Escape special characters in YAML:
 - **Choose appropriate category** and tags
 - **Follow naming conventions**
 
-### 2. Submit via GitHub
-1. **Fork** the [Snipsy repository](https://github.com/Dimagious/snipsidian)
-2. **Create** a new file in `community-packages/`
-3. **Name it** `your-package-name.yml`
-4. **Submit** a pull request with your package
+### 2. Submit via Google Form (Recommended)
+1. **Go to Snipsy Settings → Community Packages**
+2. **Scroll to "Submit New Package"** section
+3. **Paste your YAML** in the text area
+4. **Click "Validate Package"** to check for errors
+5. **Click "Submit Package"** to open Google Form
+6. **Fill in your contact information** (name, email)
+7. **Submit the form** - your package will be reviewed
 
 ### 3. Community Review
 - **Moderation**: Packages are reviewed for quality and appropriateness
@@ -285,6 +290,7 @@ Now you have everything you need to create amazing snippet packages!
 1. **Plan your package** - What problem will it solve?
 2. **Write your YAML** - Follow the format specification
 3. **Test thoroughly** - Make sure everything works
-4. **Submit to community** - Share your creation with others
+4. **Submit to community** - Use Google Form for easy submission
+5. **Share with others** - Help the community grow!
 
 **Happy creating!** 🚀

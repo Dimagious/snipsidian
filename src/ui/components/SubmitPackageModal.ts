@@ -5,13 +5,13 @@ import { processPackageSubmission } from "../../services/community-packages";
 import * as yaml from "js-yaml";
 
 export class SubmitPackageModal extends Modal {
-    private yamlTextarea: HTMLTextAreaElement;
-    private validationContainer: HTMLElement;
-    private submitBtn: HTMLButtonElement;
+    private yamlTextarea!: HTMLTextAreaElement;
+    private validationContainer!: HTMLElement;
+    private submitBtn!: HTMLButtonElement;
     private validationResult: any = null;
 
     constructor(
-        private app: App,
+        public app: App,
         private plugin: SnipSidianPlugin
     ) {
         super(app);
@@ -102,7 +102,7 @@ export class SubmitPackageModal extends Modal {
             }
 
             // Check if it looks like a community package
-            if (!packageData.name || !packageData.author || !packageData.version || !packageData.snippets) {
+            if (!(packageData as any).name || !(packageData as any).author || !(packageData as any).version || !(packageData as any).snippets) {
                 this.showValidationResult({
                     isValid: false,
                     errors: ["This doesn't look like a community package. Make sure it has name, author, version, and snippets fields."],
@@ -178,7 +178,7 @@ export class SubmitPackageModal extends Modal {
             const packageData = yaml.load(yamlContent);
             
             // Generate a temporary filename
-            const packageId = this.generatePackageId(packageData.name);
+            const packageId = this.generatePackageId((packageData as any).name);
             const fileName = `${packageId}.yml`;
             
             // Submit to pending folder
