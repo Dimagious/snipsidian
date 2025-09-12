@@ -12,7 +12,11 @@ import {
 
 // Mock the package validator
 vi.mock("./package-validator", () => ({
-  validatePackage: vi.fn(),
+  validatePackage: vi.fn().mockReturnValue({
+    isValid: true,
+    errors: [],
+    warnings: []
+  }),
   validatePackageFile: vi.fn()
 }));
 
@@ -506,4 +510,5 @@ snippets: []
       expect(mockPlugin.saveSettings).toHaveBeenCalled();
     });
   });
+
 });

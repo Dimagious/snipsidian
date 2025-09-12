@@ -311,5 +311,118 @@ describe('package-submission-form', () => {
       expect(result.isValid).toBe(false);
       expect(result.errors).toContain('Package must contain at least one snippet');
     });
+
+    it('should validate package with missing name', () => {
+      const packageData = {
+        name: '', // Empty name
+        author: 'Test Author',
+        version: '1.0.0',
+        description: 'A test package',
+        snippets: [{ trigger: 'test', replace: 'value' }]
+      };
+
+      const result = validatePackageForSubmission(packageData);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('Package name is required');
+    });
+
+    it('should validate package with missing author', () => {
+      const packageData = {
+        name: 'Test Package',
+        author: '', // Empty author
+        version: '1.0.0',
+        description: 'A test package',
+        snippets: [{ trigger: 'test', replace: 'value' }]
+      };
+
+      const result = validatePackageForSubmission(packageData);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('Package author is required');
+    });
+
+    it('should validate package with missing version', () => {
+      const packageData = {
+        name: 'Test Package',
+        author: 'Test Author',
+        version: '', // Empty version
+        description: 'A test package',
+        snippets: [{ trigger: 'test', replace: 'value' }]
+      };
+
+      const result = validatePackageForSubmission(packageData);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('Package version is required');
+    });
+
+    it('should validate package with missing description', () => {
+      const packageData = {
+        name: 'Test Package',
+        author: 'Test Author',
+        version: '1.0.0',
+        description: '', // Empty description
+        snippets: [{ trigger: 'test', replace: 'value' }]
+      };
+
+      const result = validatePackageForSubmission(packageData);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('Package description is required');
+    });
+
+    it('should validate package with invalid snippet structure', () => {
+      const packageData = {
+        name: 'Test Package',
+        author: 'Test Author',
+        version: '1.0.0',
+        description: 'A test package',
+        snippets: [
+          { trigger: '', replace: 'value' }, // Empty trigger
+          { trigger: 'test', replace: '' }   // Empty replace
+        ]
+      };
+
+      const result = validatePackageForSubmission(packageData);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('Snippet 1: trigger is required');
+      expect(result.errors).toContain('Snippet 2: replace text is required');
+    });
+  });
+
+  describe('validateAndPreparePackageData edge cases', () => {
+    it('should handle validation errors in validateAndPreparePackageData', async () => {
+      const invalidPackageData = 'invalid yaml content';
+      
+      const result = await validateAndPreparePackageData(invalidPackageData, 'test@example.com', 'Test User');
+      
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('Invalid package data format');
+    });
+
+    it('should handle missing required fields in validateAndPreparePackageData', async () => {
+      // Mock validatePackage to return validation errors
+      const { validatePackage } = await import('./package-validator');
+      vi.mocked(validatePackage).mockReturnValueOnce({
+        isValid: false,
+        errors: ['Package name is required'],
+        warnings: []
+      });
+      
+      const packageData = {
+        name: '', // Empty name
+        author: 'Test Author',
+        version: '1.0.0',
+        description: 'Test description',
+        snippets: [{ trigger: 'test', replace: 'value' }]
+      };
+      
+      const result = await validateAndPreparePackageData(packageData, 'test@example.com', 'Test User');
+      
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('Package name is required');
+    });
   });
 });
