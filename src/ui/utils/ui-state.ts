@@ -1,6 +1,6 @@
 import type { SnipSidianSettings } from "../../types";
 
-export type TabId = "basic" | "packages" | "snippets" | "feedback";
+export type TabId = "basic" | "snippets" | "community" | "feedback";
 
 export class UIStateManager {
     private activeTab: TabId = "basic";
@@ -41,7 +41,7 @@ export class UIStateManager {
     loadActiveTab(): TabId {
         this.ensureUiState();
         const v = this.settings.ui!.activeTab;
-        if (v === "basic" || v === "packages" || v === "snippets") return v;
+        if (v === "basic" || v === "snippets" || v === "community" || v === "feedback") return v;
         return "basic";
     }
 

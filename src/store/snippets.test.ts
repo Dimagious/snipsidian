@@ -44,16 +44,16 @@ describe("store/snippets", () => {
             expect(helloSnippet?.id).toBe("user:hello");
         });
 
-        it("should include builtin package snippets", () => {
+        it("should return only user snippets", () => {
             const result = getAllSnippetsFlat(mockSettings);
             
-            // Should have package snippets
-            const packageSnippets = result.filter(s => s.folder.startsWith("builtin-"));
-            expect(packageSnippets.length).toBeGreaterThan(0);
+            // Should only have user snippets
+            const userSnippets = result.filter(s => s.folder === "user");
+            expect(userSnippets).toHaveLength(2);
             
-            // Check that there are snippets from different packages
-            const folders = new Set(packageSnippets.map(s => s.folder));
-            expect(folders.size).toBeGreaterThan(1);
+            // Should not have any package snippets
+            const packageSnippets = result.filter(s => s.folder.startsWith("builtin-"));
+            expect(packageSnippets.length).toBe(0);
         });
 
         it("should have unique IDs", () => {
@@ -70,9 +70,9 @@ describe("store/snippets", () => {
             const userSnippets = result.filter(s => s.folder === "user");
             expect(userSnippets).toHaveLength(0);
             
-            // But should have package snippets
+            // Should not have any package snippets
             const packageSnippets = result.filter(s => s.folder.startsWith("builtin-"));
-            expect(packageSnippets.length).toBeGreaterThan(0);
+            expect(packageSnippets.length).toBe(0);
         });
     });
 });

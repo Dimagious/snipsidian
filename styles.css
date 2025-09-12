@@ -1,411 +1,64 @@
-/* ============ Modals ============ */
-.modal .snipsidian-modal {
-  width: min(500px, 90vw);
-  max-width: 90vw;
-  overflow-x: hidden !important;
+/* ============ Snipsidian CSS Modules ============ */
+/* Главный файл для импорта всех CSS модулей */
+
+/* 1. Variables - CSS переменные и константы */
+/* ============ CSS Variables ============ */
+/* Цвета */
+:root {
+  --color-green: #4CAF50;
+  --color-green-dark: #45a049;
+  --color-green-rgb: 76, 175, 80;
+  
+  --color-blue: #2196F3;
+  --color-blue-dark: #1976D2;
+  --color-blue-rgb: 33, 150, 243;
+  
+  --color-red: #f44336;
+  --color-red-dark: #d32f2f;
+  --color-red-rgb: 244, 67, 54;
+  
+  --color-orange: #ff9800;
+  --color-orange-dark: #f57c00;
+  --color-orange-rgb: 255, 152, 0;
+  
+  --color-yellow: #ffeb3b;
+  --color-yellow-rgb: 255, 235, 59;
+  
+  /* Размеры */
+  --border-radius: 6px;
+  --border-radius-lg: 8px;
+  --border-radius-xl: 10px;
+  
+  /* Отступы */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
+  --spacing-xxl: 24px;
+  
+  /* Тени */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.2);
+  
+  /* Переходы */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
 }
-.modal .snipsidian-modal * {
+
+
+/* 2. Base - Базовые стили и сброс */
+/* ============ Base Styles ============ */
+/* Общие стили для всех элементов */
+
+/* Box sizing */
+.mod-settings .snipsidian-settings * {
   box-sizing: border-box;
 }
 
-/* Kill horizontal scroll on Obsidian modal wrapper - only for our modals */
-.modal .snipsidian-modal .modal-content { overflow-x: hidden !important; }
-
-/* Prompt (rename, etc.) layout */
-.modal .snipsidian-prompt .setting-item { 
-  margin: 0 0 10px; 
-  padding-left: 0; 
-  padding-right: 0; 
-}
-.modal .snipsidian-prompt .setting-item-info { width: auto; flex: 0 0 auto; }
-.modal .snipsidian-prompt .setting-item-control { width: 100%; flex: 1 1 auto; }
-.modal .snipsidian-modal .modal-title {
-  font-weight: 600;
-  font-size: 1.05em;
-  margin-bottom: 8px;
-  white-space: normal;
-}
-.modal .snipsidian-modal input[type="text"],
-.modal .snipsidian-modal textarea {
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-.modal .snipsidian-modal.snipsidian-prompt {
-  width: min(400px, 90vw);
-}
-
-/* ============ Preview table ============ */
-.snipsidian-preview-table {
-  display: table;
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1em 0;
-  font-size: 0.85em;
-  border-radius: 6px;
-  table-layout: fixed;
-}
-.snipsidian-preview-table th,
-.snipsidian-preview-table td {
-  border-bottom: 1px solid var(--background-modifier-border);
-  padding: 6px 8px;
-  vertical-align: middle;
-  word-wrap: break-word;
-  word-break: break-word;
-}
-.snipsidian-preview-table td:nth-child(1) { width: 20%; } /* Trigger */
-.snipsidian-preview-table td:nth-child(2) { width: 30%; } /* Current */
-.snipsidian-preview-table td:nth-child(3) { width: 30%; } /* Incoming */
-.snipsidian-preview-table td:nth-child(4) { width: 20%; } /* Action */
-.snipsidian-preview-table th {
-  text-align: left;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-.snipsidian-preview-table tr:hover td {
-  background: var(--background-secondary);
-}
-.snipsidian-preview-table td:nth-child(1) { width: 20%; } /* Trigger */
-.snipsidian-preview-table td:nth-child(2) { width: 30%; } /* Current */
-.snipsidian-preview-table td:nth-child(3) { width: 30%; } /* Incoming */
-.snipsidian-preview-table td:nth-child(4) { width: 20%; } /* Action */
-.snipsidian-preview-table td:nth-child(2),
-.snipsidian-preview-table td:nth-child(3) {
-  font-family: var(--font-monospace);
-  white-space: pre-wrap;
-  font-size: 0.8em;
-}
-.snipsidian-preview-table .conflict-action select {
-  font-size: 0.8em;
-  padding: 2px 4px;
-  width: 100%;
-}
-.snipsidian-bulk-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5em;
-  margin-top: 0.75em;
-}
-.snipsidian-bulk-actions button {
-  padding: 0.4em 1em;
-  border-radius: 6px;
-  border: 1px solid var(--background-modifier-border);
-  background: var(--background-secondary);
-  color: var(--text-normal);
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-.snipsidian-bulk-actions button:hover {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
-  border-color: var(--interactive-accent);
-}
-
-/* Modal footer */
-.modal .snipsidian-modal .modal-button-container {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75em;
-  margin-top: 1em;
-  padding-top: 0.75em;
-  border-top: 1px solid var(--background-modifier-border);
-  flex-wrap: wrap;
-  padding-left: 0;
-  padding-right: 0;
-}
-.modal .snipsidian-modal .modal-button-container button { white-space: nowrap; }
-
-/* Move-to modal: full-width controls */
-.modal .snipsidian-move-modal {
-  width: min(400px, 90vw);
-}
-.modal .snipsidian-move-modal select,
-.modal .snipsidian-move-modal input[type="text"],
-.modal .snipsidian-move-modal textarea {
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-.modal .snipsidian-move-modal .snipsidian-move-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.modal .snipsidian-move-modal .snipsidian-newgroup-wrap {
-  margin-top: 8px;
-}
-
-/* ============ Settings panel (legacy bits) ============ */
-.mod-settings .snipsidian-settings {
-  --snip-h2-mb: 6px;
-  --snip-h3-mt: 18px;
-  --snip-h3-mb: 6px;
-}
-.mod-settings .snipsidian-settings h2 {
-  margin-top: 0;
-  margin-bottom: var(--snip-h2-mb);
-}
-.mod-settings .snipsidian-settings .snipsidian-subtitle {
-  margin-top: 0;
-  margin-bottom: 14px;
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-.mod-settings .snipsidian-settings h3 {
-  margin-top: var(--snip-h3-mt);
-  margin-bottom: var(--snip-h3-mb);
-}
-.mod-settings .snipsidian-settings .setting-item {
-  padding-top: 8px;
-  padding-bottom: 8px;
-}
-.mod-settings .snipsidian-settings h3 + .setting-item {
-  margin-top: 2px;
-}
-
-/* Snippets list bits */
-.snipsidian-prefix {
-  margin-right: 6px;
-  opacity: 0.7;
-  font-family: var(--font-monospace);
-  white-space: nowrap;
-}
-.snipsidian-bulkbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 10px;
-  margin: 8px 0 6px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
-  background: var(--background-primary-alt);
-}
-.snipsidian-bulkbar button { padding: 4px 10px; border-radius: 6px; }
-.snipsidian-group-header { display: flex; align-items: center; gap: 8px; }
-.snipsidian-group-checkbox { margin-left: 4px; }
-.snipsidian-row-checkbox { margin-right: 8px; }
-.snipsidian-row-checkbox,
-.snipsidian-group-checkbox {
-  appearance: checkbox; 
-  -webkit-appearance: checkbox;
-  width: 14px; 
-  height: 14px;
-}
-.snipsidian-options > summary {
-  cursor: pointer;
-  margin: 6px 0 8px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-/* Layout helpers */
-.mod-settings .snipsidian-settings .snipsy-flex-spacer { flex: 1; }
-.mod-settings .snipsidian-settings .snipsidian-bulkbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* JSON editor area inside the generic Snipsy modal */
-.modal .snipsidian-modal .snipsidian-json-input {
-  min-height: 200px;
-  max-height: 50vh;
-  resize: vertical;
-}
-
-/* Error text in prompt modal */
-.modal .snipsidian-modal .snipsidian-error {
-  color: var(--text-error);
-  font-size: 0.9em;
-  margin: 4px 0 0;
-}
-
-/* Settings bulk bar spacer */
-.mod-settings .snipsidian-settings .snipsy-flex-spacer { flex: 1; }
-
-/* -------- Header & Tabs -------- */
-.snipsy-header {
-  margin-bottom: 8px;
-}
-.snipsy-header h2 {
-  font-size: 20px;
-  line-height: 1.2;
-  margin: 0;
-}
-.snipsy-version {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.snipsy-tabs {
-  margin: 6px 0 14px;
-  border-bottom: 1px solid var(--background-modifier-border);
-  padding-bottom: 6px;
-}
-.snipsy-tabs .tab-buttons {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-.snipsy-tabs .tab-button {
-  padding: 6px 10px;
-  border-radius: 6px;
-  background: transparent;
-  border: 1px solid transparent;
-  cursor: pointer;
-  color: var(--text-normal);
-}
-.snipsy-tabs .tab-button.active {
-  border-color: var(--background-modifier-border);
-  background: var(--background-secondary);
-}
-.snipsy-tabs .tab-content {
-  display: grid;
-  gap: 12px;
-}
-
-/* -------- Section cards -------- */
-.snipsy-section {
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 10px;
-  padding: 16px;
-  background: var(--background-primary);
-  margin-bottom: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-.snipsy-section h3 {
-  margin: 0 0 8px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-normal);
-}
-.snipsy-section .snipsy-hint {
-  margin: 0 0 12px;
-  color: var(--text-muted);
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-/* -------- Packages: YAML three-column row -------- */
-.snipsy-row-3 {
-  display: grid;
-  grid-template-columns: 280px 1fr 220px; /* label / textarea / actions */
-  gap: 12px;
-  align-items: start;
-}
-@media (max-width: 900px) {
-  .snipsy-row-3 {
-    grid-template-columns: 1fr;
-  }
-}
-.snipsy-col-actions .setting-item {
-  justify-content: flex-end;
-}
-.snipsy-inline-setting .setting-item {
-  padding-top: 0;
-  padding-bottom: 0;
-}
-
-/* -------- Snippets: group header right-aligned actions -------- */
-.snipsy-group-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 8px;
-  margin-bottom: 4px;
-}
-.snipsy-group-left { display: flex; align-items: center; gap: 8px; }
-.snipsy-group-right { display: flex; gap: 6px; }
-
-/* Group header styling */
-.group-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-}
-
-/* Group actions styling */
-.group-actions {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  margin-left: auto;
-}
-.group-action-btn {
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 6px 8px;
-  font-size: 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  opacity: 0.5;
-  min-width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-}
-.group-action-btn:hover {
-  opacity: 1;
-  background: var(--background-modifier-hover);
-  border-color: var(--background-modifier-border);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-.group-action-btn.rename-btn:hover {
-  background: var(--color-blue);
-  color: white;
-  border-color: var(--color-blue);
-  box-shadow: 0 2px 8px rgba(var(--color-blue-rgb), 0.3);
-}
-.group-action-btn.delete-btn:hover {
-  background: var(--color-red);
-  color: white;
-  border-color: var(--color-red);
-  box-shadow: 0 2px 8px rgba(var(--color-red-rgb), 0.3);
-}
-
-/* Existing helpers kept */
-.mod-settings .snipsidian-settings .snipsy-flex-spacer { flex: 1; }
-
-/* 2-колоночная раскладка для YAML секции */
-.snipsy-row-2 {
-  display: grid;
-  grid-template-columns: 300px 1fr; /* Folder name / YAML+button */
-  gap: 12px;
-  align-items: start;
-}
-@media (max-width: 900px) {
-  .snipsy-row-2 { grid-template-columns: 1fr; }
-}
-.snipsy-col-yaml .setting-item {
-  align-items: flex-start;
-  gap: 12px;
-}
-.snipsy-col-yaml .setting-item-control {
-  width: 100%;
-}
-.snipsy-col-yaml textarea {
-  width: 100%;
-  max-width: 100%;
-}
-
-/* слот под GIF-демо */
-.snipsy-gif-slot {
-  margin-top: 12px;
-  text-align: center;
-}
-.snipsy-gif-slot img.snipsy-gif {
-  max-width: 100%;
-  border-radius: 6px;
-  border: 1px solid var(--background-modifier-border);
-}
-
-/* -------- Text overflow and horizontal scroll fixes -------- */
+/* Text overflow and horizontal scroll fixes */
 .mod-settings .snipsidian-settings {
   overflow-x: hidden;
   word-wrap: break-word;
@@ -450,216 +103,356 @@
   overflow-x: hidden;
 }
 
-/* -------- Selection Mode Styling -------- */
-.snipsy-selection-mode-section {
-  border: 2px solid var(--color-green);
-  background: var(--background-primary-alt);
-  position: relative;
-}
-.snipsy-selection-mode-section h3 {
-  color: var(--color-green);
-}
-.snipsy-selection-mode-section .snipsy-hint {
-  color: var(--text-accent);
-  font-weight: 500;
+/* Layout helpers */
+.mod-settings .snipsidian-settings .snipsy-flex-spacer { 
+  flex: 1; 
 }
 
-
-/* -------- Bulk Operations Styling -------- */
-.snipsy-bulk-operations {
-  border: 2px solid var(--text-accent);
-  background: var(--background-primary-alt);
-  position: relative;
-}
-.snipsy-bulk-operations::before {
-  content: "📦";
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  font-size: 18px;
+/* Snippets list bits */
+.snipsidian-prefix {
+  margin-right: 6px;
   opacity: 0.7;
-}
-.snipsy-bulk-operations h3 {
-  color: var(--text-accent);
-}
-.snipsy-bulk-operations .setting-item-name {
-  color: var(--text-accent);
-  font-weight: 600;
+  font-family: var(--font-monospace);
+  white-space: nowrap;
 }
 
-/* -------- Special Section Styling -------- */
-.snipsy-commands-section,
-.snipsy-export-section,
-.snipsy-help-section,
-.snipsy-feedback-section,
-.snipsy-support-section {
-  border: 2px solid var(--color-green);
-  background: var(--background-primary-alt);
-  position: relative;
-}
-.snipsy-commands-section h3,
-.snipsy-export-section h3,
-.snipsy-help-section h3,
-.snipsy-feedback-section h3,
-.snipsy-support-section h3 {
-  color: var(--color-green);
-}
-
-.snipsy-catalog-section,
-.snipsy-yaml-section,
-.snipsy-snippet-manager {
-  border: 2px solid var(--color-green);
-  background: var(--background-primary-alt);
-  position: relative;
-}
-.snipsy-catalog-section h3,
-.snipsy-yaml-section h3,
-.snipsy-snippet-manager h3 {
-  color: var(--color-green);
-}
-
-/* Subsections within snippet manager */
-.snipsy-subsection {
-  margin: 16px 0;
-  padding: 12px;
-  background: var(--background-primary);
-  border-radius: 8px;
+.snipsidian-bulkbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  margin: 8px 0 6px;
   border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius);
+  background: var(--background-primary-alt);
 }
-.snipsy-subsection h4 {
-  margin: 0 0 8px;
-  font-size: 14px;
+
+.snipsidian-bulkbar button { 
+  padding: 4px 10px; 
+  border-radius: var(--border-radius); 
+}
+
+.snipsidian-group-header { 
+  display: flex; 
+  align-items: center; 
+  gap: 8px; 
+}
+
+.snipsidian-group-checkbox { 
+  margin-left: 4px; 
+}
+
+.snipsidian-row-checkbox { 
+  margin-right: 8px; 
+}
+
+.snipsidian-row-checkbox,
+.snipsidian-group-checkbox {
+  appearance: checkbox; 
+  -webkit-appearance: checkbox;
+  width: 14px; 
+  height: 14px;
+}
+
+.snipsidian-options > summary {
+  cursor: pointer;
+  margin: 6px 0 8px;
   font-weight: 600;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+}
+
+
+/* 3. Layout - Стили макета и структуры */
+/* ============ Layout Styles ============ */
+/* Стили для макета и структуры */
+
+/* Header & Tabs */
+.snipsy-header {
+  margin-bottom: var(--spacing-sm);
+}
+
+.snipsy-header h2 {
+  font-size: 20px;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.snipsy-version {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.snipsy-tabs {
+  margin: 6px 0 14px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 6px;
+}
+
+.snipsy-tabs .tab-buttons {
+  display: flex;
+  gap: 6px;
+  margin-bottom: var(--spacing-md);
+}
+
+.snipsy-tabs .tab-button {
+  padding: 6px 10px;
+  border-radius: var(--border-radius);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  color: var(--text-normal);
+}
+
+.snipsy-tabs .tab-button.active {
+  border-color: var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.snipsy-tabs .tab-content {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+/* Section cards */
+.snipsy-section {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius-xl);
+  padding: var(--spacing-lg);
+  background: var(--background-primary);
+  margin-bottom: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.snipsy-section h3 {
+  margin: 0 0 var(--spacing-sm);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.snipsy-section .snipsy-hint {
+  margin: 0 0 var(--spacing-md);
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* Grid layouts */
+.snipsy-row-3 {
+  display: grid;
+  grid-template-columns: 280px 1fr 220px; /* label / textarea / actions */
+  gap: var(--spacing-md);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .snipsy-row-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.snipsy-row-2 {
+  display: grid;
+  grid-template-columns: 300px 1fr; /* Folder name / YAML+button */
+  gap: var(--spacing-md);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .snipsy-row-2 { 
+    grid-template-columns: 1fr; 
+  }
+}
+
+.snipsy-col-actions .setting-item {
+  justify-content: flex-end;
+}
+
+.snipsy-inline-setting .setting-item {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.snipsy-col-yaml .setting-item {
+  align-items: flex-start;
+  gap: var(--spacing-md);
+}
+
+.snipsy-col-yaml .setting-item-control {
+  width: 100%;
+}
+
+.snipsy-col-yaml textarea {
+  width: 100%;
+  max-width: 100%;
 }
 
 /* Controls row layout */
 .snipsy-controls-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-top: 8px;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-sm);
 }
+
 .snipsy-control-item {
   background: var(--background-secondary);
-  border-radius: 6px;
-  padding: 8px;
+  border-radius: var(--border-radius);
+  padding: var(--spacing-sm);
   border: 1px solid var(--background-modifier-border);
 }
+
 .snipsy-control-item .setting-item {
   margin: 0;
   padding: 0;
 }
+
 .snipsy-control-item .setting-item-name {
   font-size: 13px;
   font-weight: 500;
 }
+
 .snipsy-control-item .setting-item-description {
   font-size: 12px;
   margin-top: 2px;
 }
 
-/* Add snippet button in management tools */
-.snipsy-add-snippet {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--background-modifier-border);
-}
-.snipsy-add-snippet .setting-item {
-  margin: 0;
-}
-.snipsy-add-snippet .setting-item-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-accent);
-}
-.snipsy-add-snippet .setting-item-description {
-  font-size: 12px;
-  margin-top: 4px;
-}
-.snipsy-add-snippet .mod-cta {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
+
+/* 4. Components - Переиспользуемые компоненты */
+/* ============ Button Components ============ */
+
+/* Common button styles */
+.snipsy-btn {
   border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-.snipsy-add-snippet .mod-cta:hover {
-  background: var(--interactive-accent-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-/* Group picker modal improvements */
-.snipsy-group-select {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
-  background: var(--background-primary);
-  color: var(--text-normal);
+  padding: 10px 20px;
+  border-radius: var(--border-radius);
   font-size: 14px;
-  margin: 8px 0;
-}
-.snipsy-group-select:focus {
-  border-color: var(--interactive-accent);
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
-}
-.snipsy-group-select option {
-  padding: 4px 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
 }
 
-/* Snippet actions styling */
-.snippet-actions {
-  display: flex;
-  gap: 4px;
-  align-items: center;
+.snipsy-btn:hover {
+  transform: translateY(-1px);
 }
+
+.snipsy-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Button variants */
+.snipsy-btn--primary {
+  background: var(--color-green);
+  color: white;
+}
+
+.snipsy-btn--primary:hover:not(:disabled) {
+  background: var(--color-green-dark);
+  box-shadow: 0 2px 8px rgba(var(--color-green-rgb), 0.3);
+}
+
+.snipsy-btn--secondary {
+  background: var(--color-blue);
+  color: white;
+}
+
+.snipsy-btn--secondary:hover:not(:disabled) {
+  background: var(--color-blue-dark);
+  box-shadow: 0 2px 8px rgba(var(--color-blue-rgb), 0.3);
+}
+
+.snipsy-btn--danger {
+  background: var(--color-red);
+  color: white;
+}
+
+.snipsy-btn--danger:hover:not(:disabled) {
+  background: var(--color-red-dark);
+  box-shadow: 0 2px 8px rgba(var(--color-red-rgb), 0.3);
+}
+
+.snipsy-btn--warning {
+  background: var(--color-orange);
+  color: white;
+}
+
+.snipsy-btn--warning:hover:not(:disabled) {
+  background: var(--color-orange-dark);
+  box-shadow: 0 2px 8px rgba(var(--color-orange-rgb), 0.3);
+}
+
+.snipsy-btn--disabled {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+}
+
+/* Button sizes */
+.snipsy-btn--sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.snipsy-btn--lg {
+  padding: 12px 24px;
+  font-size: 16px;
+}
+
+/* Action buttons */
+.group-action-btn,
 .snippet-action {
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--border-radius);
   padding: 6px 8px;
-  font-size: 14px;
+  font-size: 16px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-normal);
+  opacity: 0.5;
   min-width: 32px;
   height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.5;
+  position: relative;
 }
+
+.group-action-btn:hover,
 .snippet-action:hover {
   opacity: 1;
   background: var(--background-modifier-hover);
   border-color: var(--background-modifier-border);
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
+
+.group-action-btn.rename-btn:hover,
 .snippet-action.edit-btn:hover {
   background: var(--color-blue);
   color: white;
   border-color: var(--color-blue);
   box-shadow: 0 2px 8px rgba(var(--color-blue-rgb), 0.3);
 }
+
+.group-action-btn.delete-btn:hover,
 .snippet-action.delete-btn:hover {
   background: var(--color-red);
   color: white;
   border-color: var(--color-red);
   box-shadow: 0 2px 8px rgba(var(--color-red-rgb), 0.3);
 }
+
 .snippet-action.save-btn:hover {
   background: var(--color-green);
   color: white;
   border-color: var(--color-green);
   box-shadow: 0 2px 8px rgba(var(--color-green-rgb), 0.3);
 }
+
 .snippet-action.cancel-btn:hover {
   background: var(--color-orange);
   color: white;
@@ -667,8 +460,106 @@
   box-shadow: 0 2px 8px rgba(var(--color-orange-rgb), 0.3);
 }
 
+/* ============ Form Components ============ */
 
-/* Snippet edit mode styling */
+/* Input styles */
+.snipsy-input {
+  width: 100%;
+  padding: 10px 15px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius-lg);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 14px;
+  transition: all var(--transition-normal);
+  box-sizing: border-box;
+}
+
+.snipsy-input:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.snipsy-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Textarea styles */
+.snipsy-textarea {
+  width: 100%;
+  padding: 15px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius-lg);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+  line-height: 1.4;
+  resize: vertical;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  transition: all var(--transition-normal);
+}
+
+.snipsy-textarea:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.snipsy-textarea--monospace {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+/* Select styles */
+.snipsy-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 14px;
+  margin: var(--spacing-sm) 0;
+}
+
+.snipsy-select:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.snipsy-select option {
+  padding: 4px 8px;
+}
+
+/* Form groups */
+.snipsy-form-group {
+  margin-bottom: var(--spacing-lg);
+}
+
+.snipsy-form-label {
+  display: block;
+  margin-bottom: var(--spacing-xs);
+  font-weight: 500;
+  color: var(--text-normal);
+  font-size: 14px;
+}
+
+.snipsy-form-help {
+  margin-top: var(--spacing-xs);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.snipsy-form-error {
+  margin-top: var(--spacing-xs);
+  color: var(--color-red);
+  font-size: 12px;
+}
+
+/* Edit mode inputs */
 .snippet-edit-input {
   width: 100%;
   padding: 6px 8px;
@@ -679,11 +570,13 @@
   font-size: 13px;
   margin-bottom: 4px;
 }
+
 .snippet-edit-input:focus {
   border-color: var(--interactive-accent);
   outline: none;
   box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
 }
+
 .snippet-edit-textarea {
   width: 100%;
   min-height: 60px;
@@ -694,12 +587,1044 @@
   color: var(--text-normal);
   font-size: 13px;
   resize: vertical;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-sm);
   font-family: var(--font-monospace);
 }
+
 .snippet-edit-textarea:focus {
   border-color: var(--interactive-accent);
   outline: none;
   box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
 }
 
+/* Google Form Package Submission Styles */
+.contact-section {
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md);
+  background: var(--background-secondary);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--background-modifier-border);
+}
+
+/* Validation Hint Styles */
+.validation-hint {
+  margin: var(--spacing-md) 0;
+  padding: var(--spacing-md);
+  background: linear-gradient(135deg, rgba(66, 133, 244, 0.1) 0%, rgba(52, 168, 83, 0.1) 100%);
+  border: 1px solid rgba(66, 133, 244, 0.2);
+  border-radius: var(--border-radius-lg);
+  border-left: 4px solid var(--interactive-accent);
+}
+
+.hint-text {
+  font-weight: 500;
+  color: var(--text-normal);
+  font-size: 14px;
+  margin-bottom: var(--spacing-xs);
+}
+
+.hint-subtext {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.contact-section h3 {
+  margin: 0 0 var(--spacing-md) 0;
+  color: var(--text-normal);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.contact-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+}
+
+.input-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.input-label {
+  margin-bottom: var(--spacing-xs);
+  font-weight: 500;
+  color: var(--text-normal);
+  font-size: 14px;
+}
+
+.input-field {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 14px;
+  transition: all var(--transition-normal);
+  box-sizing: border-box;
+}
+
+.input-field:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.input-field::placeholder {
+  color: var(--text-muted);
+}
+
+/* Google Form Button Styles */
+.google-form-btn {
+  background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: var(--border-radius);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+
+.google-form-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #3367d6 0%, #2d8f47 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
+}
+
+.google-form-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(66, 133, 244, 0.3);
+}
+
+.google-form-btn:disabled {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+
+.google-form-btn::before {
+  content: "📝";
+  font-size: 16px;
+}
+
+
+/* Modal specific styles for Google Form integration */
+.snipsy-submit-modal .contact-section {
+  margin: var(--spacing-lg) 0;
+}
+
+/* Textarea height utilities */
+.textarea-medium {
+  height: 200px;
+}
+
+.textarea-small {
+  height: 120px;
+}
+
+/* Package display styles */
+.package-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.package-tags-container {
+  margin-top: 12px;
+}
+
+.package-tags-label {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.package-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.package-tag {
+  background: var(--background-secondary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.package-snippets-container {
+  margin-top: 16px;
+}
+
+.package-snippets-label {
+  font-weight: 600;
+  margin-bottom: 8px;
+  margin-top: 16px;
+}
+
+.package-snippets-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 8px;
+  background: var(--background-secondary);
+}
+
+.snippet-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: 13px;
+}
+
+.snippet-trigger {
+  font-family: var(--font-monospace);
+  background: var(--background-primary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.snippet-arrow {
+  margin: 0 8px;
+  color: var(--text-muted);
+}
+
+.snippet-replacement {
+  font-family: var(--font-monospace);
+  background: var(--background-primary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal-button-container {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.install-btn.installed {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.close-btn {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.verified-badge {
+  margin-left: 8px;
+}
+
+.snipsy-submit-modal .button-container {
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.snipsy-submit-modal .google-form-btn {
+  flex: 1;
+  min-width: 180px;
+}
+
+/* Responsive design for contact grid */
+@media (max-width: 600px) {
+  .contact-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-sm);
+  }
+  
+  .snipsy-submit-modal .button-container {
+    flex-direction: column;
+  }
+  
+  .snipsy-submit-modal .google-form-btn {
+    min-width: auto;
+  }
+}
+
+/* ============ Modal Components ============ */
+
+/* Modal base styles */
+.modal .snipsidian-modal {
+  width: min(500px, 90vw);
+  max-width: 90vw;
+  overflow-x: hidden !important;
+}
+
+.modal .snipsidian-modal * {
+  box-sizing: border-box;
+}
+
+/* Kill horizontal scroll on Obsidian modal wrapper - only for our modals */
+.modal .snipsidian-modal .modal-content { 
+  overflow-x: hidden !important; 
+}
+
+/* Modal title */
+.modal .snipsidian-modal .modal-title {
+  font-weight: 600;
+  font-size: 1.05em;
+  margin-bottom: var(--spacing-sm);
+  white-space: normal;
+}
+
+/* Modal inputs */
+.modal .snipsidian-modal input[type="text"],
+.modal .snipsidian-modal textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Prompt modal */
+.modal .snipsidian-modal.snipsidian-prompt {
+  width: min(400px, 90vw);
+}
+
+.modal .snipsidian-prompt .setting-item { 
+  margin: 0 0 10px; 
+  padding-left: 0; 
+  padding-right: 0; 
+}
+
+.modal .snipsidian-prompt .setting-item-info { 
+  width: auto; 
+  flex: 0 0 auto; 
+}
+
+.modal .snipsidian-prompt .setting-item-control { 
+  width: 100%; 
+  flex: 1 1 auto; 
+}
+
+/* Move-to modal */
+.modal .snipsidian-move-modal {
+  width: min(400px, 90vw);
+}
+
+.modal .snipsidian-move-modal select,
+.modal .snipsidian-move-modal input[type="text"],
+.modal .snipsidian-move-modal textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.modal .snipsidian-move-modal .snipsidian-move-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.modal .snipsidian-move-modal .snipsidian-newgroup-wrap {
+  margin-top: var(--spacing-sm);
+}
+
+/* Modal footer */
+.modal .snipsidian-modal .modal-button-container {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75em;
+  margin-top: 1em;
+  padding-top: 0.75em;
+  border-top: 1px solid var(--background-modifier-border);
+  flex-wrap: wrap;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.modal .snipsidian-modal .modal-button-container button { 
+  white-space: nowrap; 
+}
+
+/* JSON editor area inside the generic Snipsy modal */
+.modal .snipsidian-modal .snipsidian-json-input {
+  min-height: 200px;
+  max-height: 50vh;
+  resize: vertical;
+}
+
+/* Error text in prompt modal */
+.modal .snipsidian-modal .snipsidian-error {
+  color: var(--text-error);
+  font-size: 0.9em;
+  margin: 4px 0 0;
+}
+
+/* Community Package Modal */
+.snipsy-community-modal {
+  width: 90vw;
+  max-width: none;
+  overflow-x: hidden;
+}
+
+.snipsy-community-modal * {
+  box-sizing: border-box;
+}
+
+.snipsy-community-modal .modal-header {
+  margin-bottom: var(--spacing-xl);
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 15px;
+}
+
+.snipsy-community-modal .search-container {
+  margin-bottom: var(--spacing-xl);
+}
+
+.snipsy-community-modal .search-input {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 14px;
+}
+
+.snipsy-community-modal .search-input:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.snipsy-community-modal .packages-container {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.snipsy-community-modal .package-item {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius-lg);
+  padding: 15px;
+  margin-bottom: 15px;
+  background: var(--background-primary);
+  transition: all var(--transition-normal);
+}
+
+.snipsy-community-modal .package-item:hover {
+  border-color: var(--color-green);
+  box-shadow: 0 2px 8px rgba(var(--color-green-rgb), 0.1);
+}
+
+.snipsy-community-modal .package-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.snipsy-community-modal .package-title {
+  margin: 0;
+  color: var(--text-normal);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.snipsy-community-modal .verified-badge {
+  background: var(--color-green);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.snipsy-community-modal .package-description {
+  margin: 0 0 10px 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.snipsy-community-modal .package-meta {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.snipsy-community-modal .package-author {
+  font-weight: 500;
+}
+
+.snipsy-community-modal .package-version {
+  background: var(--background-secondary);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.snipsy-community-modal .package-downloads {
+  color: var(--text-muted);
+}
+
+.snipsy-community-modal .package-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 15px;
+}
+
+.snipsy-community-modal .package-tag {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+
+.snipsy-community-modal .install-btn {
+  background: var(--color-green);
+  color: white;
+  border: none;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-radius: var(--border-radius);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.snipsy-community-modal .install-btn:hover {
+  background: var(--color-green-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(var(--color-green-rgb), 0.3);
+}
+
+.snipsy-community-modal .no-packages,
+.snipsy-community-modal .error-message {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 40px var(--spacing-xl);
+  font-style: italic;
+}
+
+
+/* 5. Sections - Стили для конкретных секций */
+.snipsy-section{display:block;border:1px solid var(--background-modifier-border);border-radius:10px;padding:14px;background:var(--background-primary);margin-bottom:12px}
+.section-title{margin:0 0 6px;font-size:14px;font-weight:600;color:var(--text-normal)}
+.section-description{margin:0;color:var(--text-muted);font-size:12px}
+.snipsy-compact .snipsy-section{padding:12px;margin-bottom:10px;border-radius:8px}
+.snipsy-compact .section-title{font-size:14px}
+.snipsy-compact .section-description{font-size:12px}
+
+.snipsy-community-browse-section .section-header-row{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:12px}
+.snipsy-community-browse-section .section-title-container{flex:1;min-width:0}
+.snipsy-community-browse-section .search-container{flex:0 0 auto;display:flex;gap:8px;align-items:center}
+.snipsy-community-browse-section .search-input{width:300px;padding:6px 10px;border:1px solid var(--background-modifier-border);border-radius:8px;background:var(--background-primary);color:var(--text-normal);font-size:13px}
+.snipsy-community-browse-section .refresh-btn{padding:6px 10px;border:1px solid var(--background-modifier-border);border-radius:8px;background:var(--background-primary);color:var(--text-normal);font-size:13px;cursor:pointer;transition:all var(--transition-normal)}
+.snipsy-community-browse-section .refresh-btn:hover{background:var(--background-secondary);border-color:var(--interactive-accent)}
+.snipsy-community-browse-section .packages-container{width:100%}
+.snipsy-community-browse-section .error-message{color:var(--text-error);font-weight:600;margin-bottom:8px}
+.snipsy-community-browse-section .error-reasons{margin:8px 0;padding-left:20px;color:var(--text-muted)}
+.snipsy-community-browse-section .error-reasons li{margin-bottom:4px}
+.snipsy-community-browse-section .error-hint{color:var(--text-muted);font-size:12px;margin-top:8px;font-style:italic}
+
+.snipsy-community-browse-section .packages-table{width:100%;border-collapse:collapse;background:var(--background-primary);border-radius:8px;overflow:hidden;table-layout:fixed}
+.snipsy-community-browse-section .packages-table thead{background:var(--background-secondary)}
+.snipsy-community-browse-section .packages-table th{padding:10px 12px;text-align:left;font-weight:600;color:var(--text-normal);border-bottom:1px solid var(--background-modifier-border);font-size:13px;white-space:nowrap;cursor:pointer;user-select:none;transition:color var(--transition-normal)}
+.snipsy-community-browse-section .packages-table th:hover{color:var(--interactive-accent)}
+.snipsy-community-browse-section .packages-table th.sortable::after{content:" ↕";opacity:0.5;font-size:12px;margin-left:4px}
+.snipsy-community-browse-section .packages-table th.sort-asc::after{content:" ↑";opacity:1;color:var(--interactive-accent)}
+.snipsy-community-browse-section .packages-table th.sort-desc::after{content:" ↓";opacity:1;color:var(--interactive-accent)}
+.snipsy-community-browse-section .packages-table td{padding:10px 12px;border-bottom:1px solid var(--background-modifier-border);vertical-align:middle;font-size:13px}
+.snipsy-community-browse-section .packages-table tbody tr:hover{background:var(--background-secondary)}
+.snipsy-community-browse-section .packages-table tbody tr:last-child td{border-bottom:none}
+
+/* Column widths */
+.snipsy-community-browse-section .packages-table th:nth-child(1),
+.snipsy-community-browse-section .packages-table td:nth-child(1) { width: 50%; } /* Package name */
+.snipsy-community-browse-section .packages-table th:nth-child(2),
+.snipsy-community-browse-section .packages-table td:nth-child(2) { width: 20%; } /* Downloads */
+.snipsy-community-browse-section .packages-table th:nth-child(3),
+.snipsy-community-browse-section .packages-table td:nth-child(3) { width: 20%; } /* Rating */
+.snipsy-community-browse-section .packages-table th:nth-child(4),
+.snipsy-community-browse-section .packages-table td:nth-child(4) { width: 10%; } /* Actions */
+
+.snipsy-community-browse-section .package-label-link{color:var(--interactive-accent);text-decoration:none;font-weight:500}
+.snipsy-community-browse-section .package-label-link:hover{color:var(--interactive-accent-hover);text-decoration:underline}
+.snipsy-community-browse-section .verified-badge{color:var(--color-green);font-weight:700;margin-left:4px}
+.snipsy-community-browse-section .package-rating-cell{text-align:center}
+.snipsy-community-browse-section .rating-container{display:flex;align-items:center;justify-content:center;gap:6px}
+.snipsy-community-browse-section .rating-btn{background:none;border:none;cursor:pointer;font-size:16px;padding:2px 4px;border-radius:4px;opacity:.8}
+.snipsy-community-browse-section .rating-btn:hover{opacity:1;background:var(--background-secondary)}
+.snipsy-community-browse-section .rating-value{font-weight:600;color:var(--text-normal);min-width:20px;text-align:center}
+.snipsy-community-browse-section .package-actions-cell{text-align:center}
+.snipsy-community-browse-section .install-btn{background:var(--color-green);color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer}
+.snipsy-community-browse-section .install-btn.installed{background:var(--background-secondary);color:var(--text-muted);cursor:default}
+.snipsy-community-browse-section .install-btn.installed:disabled{opacity:1}
+
+.snipsy-community-browse-section .no-packages,.snipsy-community-browse-section .error-message{text-align:center;color:var(--text-muted);padding:28px 16px;font-style:italic}
+
+/* Pagination */
+.snipsy-community-browse-section .pagination-container{display:flex;justify-content:center;align-items:center;gap:8px;margin-top:16px;padding:12px 0}
+.snipsy-community-browse-section .pagination-info{color:var(--text-muted);font-size:13px;margin-right:16px}
+.snipsy-community-browse-section .pagination-btn{background:var(--background-primary);border:1px solid var(--background-modifier-border);color:var(--text-normal);padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer;transition:all var(--transition-normal);min-width:32px;text-align:center}
+.snipsy-community-browse-section .pagination-btn:hover:not(:disabled){background:var(--background-secondary);border-color:var(--interactive-accent)}
+.snipsy-community-browse-section .pagination-btn:disabled{opacity:0.5;cursor:not-allowed}
+.snipsy-community-browse-section .pagination-btn.active{background:var(--interactive-accent);color:white;border-color:var(--interactive-accent)}
+.snipsy-community-browse-section .pagination-ellipsis{color:var(--text-muted);padding:6px 4px;font-size:13px}
+
+.snipsy-community-submit-section .section-title,
+.snipsy-espanso-section .section-title{margin:0 0 8px;color:var(--text-normal);font-size:14px;font-weight:600}
+.snipsy-community-submit-section .help-text,
+.snipsy-espanso-section .help-text{background:var(--background-secondary);padding:10px 12px;border-radius:8px;margin:0 0 10px;border-left:3px solid var(--color-green)}
+.snipsy-community-submit-section .help-link,
+.snipsy-espanso-section .snipsy-link{color:var(--color-green);text-decoration:none;font-weight:500}
+.snipsy-community-submit-section .yaml-input-row,
+.snipsy-espanso-section .yaml-input-row{margin:0 0 10px}
+.snipsy-community-submit-section .yaml-instruction,
+.snipsy-espanso-section .yaml-instruction{margin:0 0 8px;color:var(--text-muted);font-size:12.5px}
+.snipsy-community-submit-section .yaml-textarea,
+.snipsy-espanso-section .yaml-textarea{width:100%;padding:10px;border:1px solid var(--background-modifier-border);border-radius:8px;background:var(--background-primary);color:var(--text-normal);font-family:var(--font-monospace);font-size:12.5px;line-height:1.4;resize:vertical;box-sizing:border-box}
+.snipsy-community-submit-section .yaml-textarea{min-height:180px;max-height:360px}
+.snipsy-espanso-section .yaml-textarea{min-height:120px;max-height:300px}
+.snipsy-community-submit-section .validation-container{min-height:0}
+.snipsy-community-submit-section .validation-success,
+.snipsy-community-submit-section .validation-error{padding:10px;border-radius:6px}
+.snipsy-community-submit-section .validation-title{font-weight:600;margin-bottom:6px}
+.snipsy-community-submit-section .button-row,
+.snipsy-espanso-section .button-row{display:flex;gap:8px;justify-content:flex-end;margin-top:8px;padding-top:8px;border-top:1px solid var(--background-modifier-border)}
+.snipsy-community-submit-section .validate-btn,
+.snipsy-community-submit-section .submit-btn,
+.snipsy-espanso-section .install-btn{border:none;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer}
+.snipsy-community-submit-section .validate-btn{background:var(--color-blue);color:#fff}
+.snipsy-community-submit-section .submit-btn,
+.snipsy-espanso-section .install-btn{background:var(--color-green);color:#fff}
+.snipsy-community-submit-section .submit-btn:disabled{background:var(--background-secondary);color:var(--text-muted);cursor:not-allowed;opacity:.6}
+
+/* Package Details Modal */
+.package-details-info h3{margin:0 0 12px 0;color:var(--text-normal);font-size:18px;font-weight:600}
+.package-details-info .package-description{margin:0 0 16px 0;color:var(--text-muted);font-size:14px;line-height:1.5}
+.package-details-info .package-meta div{margin:4px 0;color:var(--text-normal);font-size:14px}
+.package-details-info .package-tags{margin-top:16px}
+.package-details-info .package-tags span{display:inline-block;background:var(--background-secondary);color:var(--text-normal);padding:2px 6px;border-radius:4px;font-size:12px;margin:2px}
+
+/* Snippets in modal */
+.package-details-info .package-snippets{margin-top:16px}
+.package-details-info .snippets-list{max-height:200px;overflow-y:auto;border:1px solid var(--background-modifier-border);border-radius:6px;padding:8px;background:var(--background-secondary)}
+.package-details-info .snippet-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--background-modifier-border);font-size:13px}
+.package-details-info .snippet-row:last-child{border-bottom:none}
+.package-details-info .snippet-trigger{font-family:var(--font-monospace);background:var(--background-primary);padding:2px 6px;border-radius:4px;border:1px solid var(--background-modifier-border);color:var(--text-accent)}
+.package-details-info .snippet-arrow{margin:0 8px;color:var(--text-muted)}
+.package-details-info .snippet-replacement{font-family:var(--font-monospace);background:var(--background-primary);padding:2px 6px;border-radius:4px;border:1px solid var(--background-modifier-border);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-normal)}
+
+@media (max-width:768px){
+  .snipsy-community-browse-section .section-header-row{flex-direction:column;align-items:stretch}
+  .snipsy-community-browse-section .search-input{width:100%}
+  .snipsy-community-browse-section .packages-table th,
+  .snipsy-community-browse-section .packages-table td{padding:8px 10px}
+}
+
+
+/* ============ Legacy Styles (временно) ============ */
+/* Эти стили будут постепенно перенесены в модули */
+
+/* Settings panel (legacy bits) */
+.mod-settings .snipsidian-settings {
+  --snip-h2-mb: 6px;
+  --snip-h3-mt: 18px;
+  --snip-h3-mb: 6px;
+}
+
+.mod-settings .snipsidian-settings h2 {
+  margin-top: 0;
+  margin-bottom: var(--snip-h2-mb);
+}
+
+.mod-settings .snipsidian-settings .snipsidian-subtitle {
+  margin-top: 0;
+  margin-bottom: 14px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.mod-settings .snipsidian-settings h3 {
+  margin-top: var(--snip-h3-mt);
+  margin-bottom: var(--snip-h3-mb);
+}
+
+.mod-settings .snipsidian-settings .setting-item {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.mod-settings .snipsidian-settings h3 + .setting-item {
+  margin-top: 2px;
+}
+
+/* Preview table */
+.snipsidian-preview-table {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 0.85em;
+  border-radius: var(--border-radius);
+  table-layout: fixed;
+}
+
+.snipsidian-preview-table th,
+.snipsidian-preview-table td {
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding: 6px 8px;
+  vertical-align: middle;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+.snipsidian-preview-table td:nth-child(1) { width: 20%; } /* Trigger */
+.snipsidian-preview-table td:nth-child(2) { width: 30%; } /* Current */
+.snipsidian-preview-table td:nth-child(3) { width: 30%; } /* Incoming */
+.snipsidian-preview-table td:nth-child(4) { width: 20%; } /* Action */
+
+.snipsidian-preview-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.snipsidian-preview-table tr:hover td {
+  background: var(--background-secondary);
+}
+
+.snipsidian-preview-table td:nth-child(2),
+.snipsidian-preview-table td:nth-child(3) {
+  font-family: var(--font-monospace);
+  white-space: pre-wrap;
+  font-size: 0.8em;
+}
+
+.snipsidian-preview-table .conflict-action select {
+  font-size: 0.8em;
+  padding: 2px 4px;
+  width: 100%;
+}
+
+.snipsidian-bulk-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5em;
+  margin-top: 0.75em;
+}
+
+.snipsidian-bulk-actions button {
+  padding: 0.4em 1em;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  font-weight: 500;
+  transition: all var(--transition-normal);
+}
+
+.snipsidian-bulk-actions button:hover {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+/* Group header styling */
+.group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.group-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* Special Section Styling */
+.snipsy-commands-section,
+.snipsy-export-section,
+.snipsy-help-section,
+.snipsy-feedback-section,
+.snipsy-support-section {
+  border: 2px solid var(--color-green);
+  background: var(--background-primary-alt);
+  position: relative;
+}
+
+.snipsy-commands-section h3,
+.snipsy-export-section h3,
+.snipsy-help-section h3,
+.snipsy-feedback-section h3,
+.snipsy-support-section h3 {
+  color: var(--color-green);
+}
+
+/* Common section styling */
+.snipsy-catalog-section,
+.snipsy-community-catalog-section,
+.snipsy-community-browse-section,
+.snipsy-community-submit-section,
+.snipsy-community-section,
+.snipsy-espanso-section,
+.snipsy-espanso-link-section,
+.snipsy-snippet-manager {
+  border: 2px solid var(--color-green);
+  background: var(--background-primary-alt);
+  position: relative;
+}
+
+.snipsy-catalog-section h3,
+.snipsy-community-catalog-section h3,
+.snipsy-community-browse-section h3,
+.snipsy-community-submit-section h3,
+.snipsy-community-section h3,
+.snipsy-espanso-section h3,
+.snipsy-snippet-manager h3 {
+  color: var(--color-green);
+}
+
+/* Espanso link section styling */
+.snipsy-espanso-link-section {
+  border: none;
+  background: transparent;
+  text-align: center;
+  padding: 10px 0;
+}
+
+.snipsy-espanso-link-section p {
+  margin: 0;
+  display: inline;
+}
+
+.snipsy-link {
+  color: var(--color-green);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.snipsy-link:hover {
+  text-decoration: underline;
+}
+
+/* Selection Mode Styling */
+.snipsy-selection-mode-section {
+  border: 2px solid var(--color-green);
+  background: var(--background-primary-alt);
+  position: relative;
+}
+
+.snipsy-selection-mode-section h3 {
+  color: var(--color-green);
+}
+
+.snipsy-selection-mode-section .snipsy-hint {
+  color: var(--text-accent);
+  font-weight: 500;
+}
+
+/* Bulk Operations Styling */
+.snipsy-bulk-operations {
+  border: 2px solid var(--text-accent);
+  background: var(--background-primary-alt);
+  position: relative;
+}
+
+.snipsy-bulk-operations::before {
+  content: "📦";
+  position: absolute;
+  top: var(--spacing-lg);
+  right: var(--spacing-lg);
+  font-size: 18px;
+  opacity: 0.7;
+}
+
+.snipsy-bulk-operations h3 {
+  color: var(--text-accent);
+}
+
+.snipsy-bulk-operations .setting-item-name {
+  color: var(--text-accent);
+  font-weight: 600;
+}
+
+/* Subsections within snippet manager */
+.snipsy-subsection {
+  margin: var(--spacing-lg) 0;
+  padding: var(--spacing-md);
+  background: var(--background-primary);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.snipsy-subsection h4 {
+  margin: 0 0 var(--spacing-sm);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Add snippet button in management tools */
+.snipsy-add-snippet {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.snipsy-add-snippet .setting-item {
+  margin: 0;
+}
+
+.snipsy-add-snippet .setting-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-accent);
+}
+
+.snipsy-add-snippet .setting-item-description {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.snipsy-add-snippet .mod-cta {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: var(--border-radius);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  font-weight: 500;
+  transition: all var(--transition-normal);
+}
+
+.snipsy-add-snippet .mod-cta:hover {
+  background: var(--interactive-accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Snippet actions styling */
+.snippet-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+/* GIF slot */
+.snipsy-gif-slot {
+  margin-top: var(--spacing-md);
+  text-align: center;
+}
+
+.snipsy-gif-slot img.snipsy-gif {
+  max-width: 100%;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--background-modifier-border);
+}
+
+/* Package Details Modal */
+.package-details-info {
+  margin-bottom: var(--spacing-xl);
+}
+
+.package-details-info h3 {
+  margin: 0 0 10px 0;
+  color: var(--text-normal);
+}
+
+.package-details-info .package-description {
+  margin: 0 0 15px 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.package-details-info .package-meta {
+  display: flex;
+  gap: var(--spacing-xl);
+  margin-bottom: 15px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.package-details-info .package-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.package-details-info .package-tag {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.package-snippets {
+  margin-top: var(--spacing-xl);
+}
+
+.package-snippets h4 {
+  margin: 0 0 15px 0;
+  color: var(--text-normal);
+}
+
+.snippets-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--background-primary);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+.snippets-table th,
+.snippets-table td {
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: 13px;
+}
+
+.snippets-table th {
+  background: var(--background-secondary);
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.snippets-table td {
+  color: var(--text-muted);
+  font-family: var(--font-monospace);
+}
+
+.modal-button-container {
+  margin-top: var(--spacing-xl);
+  text-align: right;
+}

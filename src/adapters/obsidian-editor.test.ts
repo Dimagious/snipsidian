@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { makeExpandInput, makeContext, applyEditPlan, tryExpandAtSeparator, insertSnippetAtCursor, wrapSelectionWithSnippet } from "./obsidian-editor";
 import type { Dict } from "../engine/types";
 
@@ -15,9 +15,6 @@ class MockEditor {
         this.lines = text.split("\n");
     }
 
-    getCursor() {
-        return { ...this.cursor };
-    }
 
     setCursor(pos: { line: number; ch: number }) {
         this.cursor = { line: pos.line, ch: pos.ch };
@@ -52,6 +49,16 @@ class MockEditor {
             this.replaceRange(text, cursor, cursor);
             // Курсор уже обновлен в replaceRange
         }
+    }
+
+    getCursor(mode?: string) {
+        if (mode === 'from') {
+            return { ...this.cursor };
+        }
+        if (mode === 'to') {
+            return { ...this.cursor };
+        }
+        return { ...this.cursor };
     }
 
     /**
@@ -257,5 +264,73 @@ describe("adapters/obsidian-editor: wrapSelectionWithSnippet", () => {
         wrapSelectionWithSnippet(ed as any, "beautiful ");
         
         expect(ed.getLine(0)).toBe("Hello beautiful world");
+    });
+
+    it("should handle setCursor errors gracefully in insertSnippetAtCursor", () => {
+        const ed = new MockEditor("Hello world");
+        ed.setCursor({ line: 0, ch: 6 });
+        
+        // Mock setCursor to throw an error
+        const originalSetCursor = ed.setCursor;
+        ed.setCursor = vi.fn().mockImplementation(() => {
+            throw new Error("Cursor error");
+        });
+        
+        // Mock console.warn to avoid noise in tests
+        const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        
+        insertSnippetAtCursor(ed as any, "beautiful $| universe");
+        
+        expect(consoleSpy).toHaveBeenCalledWith("Failed to set cursor position:", expect.any(Error));
+        
+        // Restore
+        ed.setCursor = originalSetCursor;
+        consoleSpy.mockRestore();
+    });
+
+    it("should handle setCursor errors gracefully in insertSnippetAtCursor with selection", () => {
+        const ed = new MockEditor("Hello world");
+        ed.setCursor({ line: 0, ch: 6 });
+        ed.selection = "world";
+        
+        // Mock setCursor to throw an error
+        const originalSetCursor = ed.setCursor;
+        ed.setCursor = vi.fn().mockImplementation(() => {
+            throw new Error("Cursor error");
+        });
+        
+        // Mock console.warn to avoid noise in tests
+        const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        
+        insertSnippetAtCursor(ed as any, "beautiful $| universe");
+        
+        expect(consoleSpy).toHaveBeenCalledWith("Failed to set cursor position:", expect.any(Error));
+        
+        // Restore
+        ed.setCursor = originalSetCursor;
+        consoleSpy.mockRestore();
+    });
+
+    it("should handle setCursor errors gracefully in wrapSelectionWithSnippet", () => {
+        const ed = new MockEditor("Hello world");
+        ed.setCursor({ line: 0, ch: 6 });
+        ed.selection = "world";
+        
+        // Mock setCursor to throw an error
+        const originalSetCursor = ed.setCursor;
+        ed.setCursor = vi.fn().mockImplementation(() => {
+            throw new Error("Cursor error");
+        });
+        
+        // Mock console.warn to avoid noise in tests
+        const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        
+        wrapSelectionWithSnippet(ed as any, "beautiful $| universe");
+        
+        expect(consoleSpy).toHaveBeenCalledWith("Failed to set cursor position:", expect.any(Error));
+        
+        // Restore
+        ed.setCursor = originalSetCursor;
+        consoleSpy.mockRestore();
     });
 });

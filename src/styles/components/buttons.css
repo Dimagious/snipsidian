@@ -1,0 +1,140 @@
+/* ============ Button Components ============ */
+
+/* Common button styles */
+.snipsy-btn {
+  border: none;
+  padding: 10px 20px;
+  border-radius: var(--border-radius);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+}
+
+.snipsy-btn:hover {
+  transform: translateY(-1px);
+}
+
+.snipsy-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Button variants */
+.snipsy-btn--primary {
+  background: var(--color-green);
+  color: white;
+}
+
+.snipsy-btn--primary:hover:not(:disabled) {
+  background: var(--color-green-dark);
+  box-shadow: 0 2px 8px rgba(var(--color-green-rgb), 0.3);
+}
+
+.snipsy-btn--secondary {
+  background: var(--color-blue);
+  color: white;
+}
+
+.snipsy-btn--secondary:hover:not(:disabled) {
+  background: var(--color-blue-dark);
+  box-shadow: 0 2px 8px rgba(var(--color-blue-rgb), 0.3);
+}
+
+.snipsy-btn--danger {
+  background: var(--color-red);
+  color: white;
+}
+
+.snipsy-btn--danger:hover:not(:disabled) {
+  background: var(--color-red-dark);
+  box-shadow: 0 2px 8px rgba(var(--color-red-rgb), 0.3);
+}
+
+.snipsy-btn--warning {
+  background: var(--color-orange);
+  color: white;
+}
+
+.snipsy-btn--warning:hover:not(:disabled) {
+  background: var(--color-orange-dark);
+  box-shadow: 0 2px 8px rgba(var(--color-orange-rgb), 0.3);
+}
+
+.snipsy-btn--disabled {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+}
+
+/* Button sizes */
+.snipsy-btn--sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.snipsy-btn--lg {
+  padding: 12px 24px;
+  font-size: 16px;
+}
+
+/* Action buttons */
+.group-action-btn,
+.snippet-action {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--border-radius);
+  padding: 6px 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  opacity: 0.5;
+  min-width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.group-action-btn:hover,
+.snippet-action:hover {
+  opacity: 1;
+  background: var(--background-modifier-hover);
+  border-color: var(--background-modifier-border);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.group-action-btn.rename-btn:hover,
+.snippet-action.edit-btn:hover {
+  background: var(--color-blue);
+  color: white;
+  border-color: var(--color-blue);
+  box-shadow: 0 2px 8px rgba(var(--color-blue-rgb), 0.3);
+}
+
+.group-action-btn.delete-btn:hover,
+.snippet-action.delete-btn:hover {
+  background: var(--color-red);
+  color: white;
+  border-color: var(--color-red);
+  box-shadow: 0 2px 8px rgba(var(--color-red-rgb), 0.3);
+}
+
+.snippet-action.save-btn:hover {
+  background: var(--color-green);
+  color: white;
+  border-color: var(--color-green);
+  box-shadow: 0 2px 8px rgba(var(--color-green-rgb), 0.3);
+}
+
+.snippet-action.cancel-btn:hover {
+  background: var(--color-orange);
+  color: white;
+  border-color: var(--color-orange);
+  box-shadow: 0 2px 8px rgba(var(--color-orange-rgb), 0.3);
+}

@@ -1,0 +1,257 @@
+/* ============ Modal Components ============ */
+
+/* Modal base styles */
+.modal .snipsidian-modal {
+  width: min(500px, 90vw);
+  max-width: 90vw;
+  overflow-x: hidden !important;
+}
+
+.modal .snipsidian-modal * {
+  box-sizing: border-box;
+}
+
+/* Kill horizontal scroll on Obsidian modal wrapper - only for our modals */
+.modal .snipsidian-modal .modal-content { 
+  overflow-x: hidden !important; 
+}
+
+/* Modal title */
+.modal .snipsidian-modal .modal-title {
+  font-weight: 600;
+  font-size: 1.05em;
+  margin-bottom: var(--spacing-sm);
+  white-space: normal;
+}
+
+/* Modal inputs */
+.modal .snipsidian-modal input[type="text"],
+.modal .snipsidian-modal textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Prompt modal */
+.modal .snipsidian-modal.snipsidian-prompt {
+  width: min(400px, 90vw);
+}
+
+.modal .snipsidian-prompt .setting-item { 
+  margin: 0 0 10px; 
+  padding-left: 0; 
+  padding-right: 0; 
+}
+
+.modal .snipsidian-prompt .setting-item-info { 
+  width: auto; 
+  flex: 0 0 auto; 
+}
+
+.modal .snipsidian-prompt .setting-item-control { 
+  width: 100%; 
+  flex: 1 1 auto; 
+}
+
+/* Move-to modal */
+.modal .snipsidian-move-modal {
+  width: min(400px, 90vw);
+}
+
+.modal .snipsidian-move-modal select,
+.modal .snipsidian-move-modal input[type="text"],
+.modal .snipsidian-move-modal textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.modal .snipsidian-move-modal .snipsidian-move-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.modal .snipsidian-move-modal .snipsidian-newgroup-wrap {
+  margin-top: var(--spacing-sm);
+}
+
+/* Modal footer */
+.modal .snipsidian-modal .modal-button-container {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75em;
+  margin-top: 1em;
+  padding-top: 0.75em;
+  border-top: 1px solid var(--background-modifier-border);
+  flex-wrap: wrap;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.modal .snipsidian-modal .modal-button-container button { 
+  white-space: nowrap; 
+}
+
+/* JSON editor area inside the generic Snipsy modal */
+.modal .snipsidian-modal .snipsidian-json-input {
+  min-height: 200px;
+  max-height: 50vh;
+  resize: vertical;
+}
+
+/* Error text in prompt modal */
+.modal .snipsidian-modal .snipsidian-error {
+  color: var(--text-error);
+  font-size: 0.9em;
+  margin: 4px 0 0;
+}
+
+/* Community Package Modal */
+.snipsy-community-modal {
+  width: 90vw;
+  max-width: none;
+  overflow-x: hidden;
+}
+
+.snipsy-community-modal * {
+  box-sizing: border-box;
+}
+
+.snipsy-community-modal .modal-header {
+  margin-bottom: var(--spacing-xl);
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 15px;
+}
+
+.snipsy-community-modal .search-container {
+  margin-bottom: var(--spacing-xl);
+}
+
+.snipsy-community-modal .search-input {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 14px;
+}
+
+.snipsy-community-modal .search-input:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.snipsy-community-modal .packages-container {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.snipsy-community-modal .package-item {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius-lg);
+  padding: 15px;
+  margin-bottom: 15px;
+  background: var(--background-primary);
+  transition: all var(--transition-normal);
+}
+
+.snipsy-community-modal .package-item:hover {
+  border-color: var(--color-green);
+  box-shadow: 0 2px 8px rgba(var(--color-green-rgb), 0.1);
+}
+
+.snipsy-community-modal .package-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.snipsy-community-modal .package-title {
+  margin: 0;
+  color: var(--text-normal);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.snipsy-community-modal .verified-badge {
+  background: var(--color-green);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.snipsy-community-modal .package-description {
+  margin: 0 0 10px 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.snipsy-community-modal .package-meta {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.snipsy-community-modal .package-author {
+  font-weight: 500;
+}
+
+.snipsy-community-modal .package-version {
+  background: var(--background-secondary);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.snipsy-community-modal .package-downloads {
+  color: var(--text-muted);
+}
+
+.snipsy-community-modal .package-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 15px;
+}
+
+.snipsy-community-modal .package-tag {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+
+.snipsy-community-modal .install-btn {
+  background: var(--color-green);
+  color: white;
+  border: none;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-radius: var(--border-radius);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.snipsy-community-modal .install-btn:hover {
+  background: var(--color-green-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(var(--color-green-rgb), 0.3);
+}
+
+.snipsy-community-modal .no-packages,
+.snipsy-community-modal .error-message {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 40px var(--spacing-xl);
+  font-style: italic;
+}

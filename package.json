@@ -5,7 +5,8 @@
     "type": "module",
     "license": "MIT",
     "scripts": {
-        "build": "esbuild src/main.ts --bundle --outfile=main.js --minify --platform=node --format=cjs --target=es2020 --external:obsidian --external:electron --external:@codemirror/state --external:@codemirror/view --footer:js=\"module.exports = module.exports.default || module.exports;\"",
+        "build": "npm run build:css && esbuild src/main.ts --bundle --outfile=main.js --minify --platform=node --format=cjs --target=es2020 --external:obsidian --external:electron --external:@codemirror/state --external:@codemirror/view --footer:js=\"module.exports = module.exports.default || module.exports;\"",
+        "build:css": "node scripts/build-css.cjs",
         "build:vault": "node scripts/build-vault.cjs",
         "dev:vault": "node scripts/build-vault.cjs --watch",
         "test": "vitest run --coverage",

@@ -3,6 +3,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/Dimagious/snipsidian/ci.yml?branch=main&label=ci)](https://github.com/Dimagious/snipsidian/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/Dimagious/snipsidian/branch/main/graph/badge.svg)](https://codecov.io/gh/Dimagious/snipsidian)
 [![Release](https://img.shields.io/github/v/release/Dimagious/snipsidian)](https://github.com/Dimagious/snipsidian/releases)
+[![Stable](https://img.shields.io/badge/status-stable-brightgreen)](https://github.com/Dimagious/snipsidian/releases)
 ![Obsidian ≥ 1.5.0](https://img.shields.io/badge/obsidian-%E2%89%A5%201.5.0-7c3aed)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 ![TypeScript](https://img.shields.io/badge/typescript-5.x-3178c6)
@@ -10,7 +11,9 @@
 ![esbuild](https://img.shields.io/badge/bundler-esbuild-fbbf24)
 [![Buy Me A Coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-☕-ff813f?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/dimagious)
 
-> **Snipsy** is a powerful text expansion plugin for Obsidian that brings **hotstrings** and **snippet management** to your note-taking workflow. Transform your typing with intelligent text expansion, organized snippet libraries, and seamless integration with your favorite markdown editor.
+> **Snipsy** is a powerful, stable text expansion plugin for Obsidian that brings **hotstrings** and **snippet management** to your note-taking workflow. Transform your typing with intelligent text expansion, organized snippet libraries, and seamless integration with your favorite markdown editor.
+
+> **🎉 Version 1.0.0** - First stable release! After extensive development and testing, Snipsy is now production-ready with comprehensive features, excellent test coverage, and a thriving community.
 
 ---
 
@@ -50,7 +53,8 @@ Snipsy transforms your Obsidian experience by allowing you to create **text shor
 - **Expand/collapse** - Collapsed groups by default for cleaner interface
 
 ### 📦 **Package Manager**
-- **Curated catalog** - Install from built-in, Obsidian-optimized packages
+- **Community packages** - Browse and install packages created by the community
+- **Google Form submission** - Submit your own packages via Google Forms
 - **Espanso compatibility** - Paste any YAML from [Espanso Hub](https://hub.espanso.org/)
 - **Conflict resolution** - Preview and resolve conflicts before installation
 - **One-click install** - Streamlined package installation process
@@ -91,7 +95,7 @@ Snipsy comes with a comprehensive collection of ready-to-use snippets:
 ### 2. First Steps
 1. Go to **Settings → Snipsy** to open the plugin settings
 2. Try the **Snippet Picker** command from the Command Palette (`Ctrl/Cmd + P`)
-3. Install a package from the **Packages** tab
+3. Install a package from the **Community Packages** tab
 4. Start typing triggers in your notes!
 
 ### 3. Create Your First Snippet
@@ -243,7 +247,7 @@ npm run release:zip     # Create release package
 ```
 
 ### Testing
-- **119 tests** with **91.89% coverage**
+- **221 tests** with **87.92% coverage**
 - **Vitest** test runner with **jsdom** environment
 - **TypeScript** strict mode enabled
 - **CI/CD** with GitHub Actions
@@ -309,10 +313,10 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 ## 📊 Project Stats
 
-- **Test Coverage**: 91.89%
-- **Bundle Size**: ~76.6kb
+- **Test Coverage**: 87.92%
+- **Bundle Size**: ~102.9kb
 - **TypeScript**: Strict mode enabled
-- **Tests**: 119 passing tests
+- **Tests**: 221 passing tests
 - **Dependencies**: Minimal and well-maintained
 
 ---

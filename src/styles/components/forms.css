@@ -1,0 +1,409 @@
+/* ============ Form Components ============ */
+
+/* Input styles */
+.snipsy-input {
+  width: 100%;
+  padding: 10px 15px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius-lg);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 14px;
+  transition: all var(--transition-normal);
+  box-sizing: border-box;
+}
+
+.snipsy-input:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.snipsy-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Textarea styles */
+.snipsy-textarea {
+  width: 100%;
+  padding: 15px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius-lg);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+  line-height: 1.4;
+  resize: vertical;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  transition: all var(--transition-normal);
+}
+
+.snipsy-textarea:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.snipsy-textarea--monospace {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+/* Select styles */
+.snipsy-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 14px;
+  margin: var(--spacing-sm) 0;
+}
+
+.snipsy-select:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.snipsy-select option {
+  padding: 4px 8px;
+}
+
+/* Form groups */
+.snipsy-form-group {
+  margin-bottom: var(--spacing-lg);
+}
+
+.snipsy-form-label {
+  display: block;
+  margin-bottom: var(--spacing-xs);
+  font-weight: 500;
+  color: var(--text-normal);
+  font-size: 14px;
+}
+
+.snipsy-form-help {
+  margin-top: var(--spacing-xs);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.snipsy-form-error {
+  margin-top: var(--spacing-xs);
+  color: var(--color-red);
+  font-size: 12px;
+}
+
+/* Edit mode inputs */
+.snippet-edit-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.snippet-edit-input:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.snippet-edit-textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 6px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+  resize: vertical;
+  margin-bottom: var(--spacing-sm);
+  font-family: var(--font-monospace);
+}
+
+.snippet-edit-textarea:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+/* Google Form Package Submission Styles */
+.contact-section {
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md);
+  background: var(--background-secondary);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--background-modifier-border);
+}
+
+/* Validation Hint Styles */
+.validation-hint {
+  margin: var(--spacing-md) 0;
+  padding: var(--spacing-md);
+  background: linear-gradient(135deg, rgba(66, 133, 244, 0.1) 0%, rgba(52, 168, 83, 0.1) 100%);
+  border: 1px solid rgba(66, 133, 244, 0.2);
+  border-radius: var(--border-radius-lg);
+  border-left: 4px solid var(--interactive-accent);
+}
+
+.hint-text {
+  font-weight: 500;
+  color: var(--text-normal);
+  font-size: 14px;
+  margin-bottom: var(--spacing-xs);
+}
+
+.hint-subtext {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.contact-section h3 {
+  margin: 0 0 var(--spacing-md) 0;
+  color: var(--text-normal);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.contact-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+}
+
+.input-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.input-label {
+  margin-bottom: var(--spacing-xs);
+  font-weight: 500;
+  color: var(--text-normal);
+  font-size: 14px;
+}
+
+.input-field {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 14px;
+  transition: all var(--transition-normal);
+  box-sizing: border-box;
+}
+
+.input-field:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.input-field::placeholder {
+  color: var(--text-muted);
+}
+
+/* Google Form Button Styles */
+.google-form-btn {
+  background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: var(--border-radius);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+
+.google-form-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #3367d6 0%, #2d8f47 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
+}
+
+.google-form-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(66, 133, 244, 0.3);
+}
+
+.google-form-btn:disabled {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+
+.google-form-btn::before {
+  content: "📝";
+  font-size: 16px;
+}
+
+
+/* Modal specific styles for Google Form integration */
+.snipsy-submit-modal .contact-section {
+  margin: var(--spacing-lg) 0;
+}
+
+/* Textarea height utilities */
+.textarea-medium {
+  height: 200px;
+}
+
+.textarea-small {
+  height: 120px;
+}
+
+/* Package display styles */
+.package-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.package-tags-container {
+  margin-top: 12px;
+}
+
+.package-tags-label {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.package-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.package-tag {
+  background: var(--background-secondary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.package-snippets-container {
+  margin-top: 16px;
+}
+
+.package-snippets-label {
+  font-weight: 600;
+  margin-bottom: 8px;
+  margin-top: 16px;
+}
+
+.package-snippets-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 8px;
+  background: var(--background-secondary);
+}
+
+.snippet-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: 13px;
+}
+
+.snippet-trigger {
+  font-family: var(--font-monospace);
+  background: var(--background-primary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.snippet-arrow {
+  margin: 0 8px;
+  color: var(--text-muted);
+}
+
+.snippet-replacement {
+  font-family: var(--font-monospace);
+  background: var(--background-primary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal-button-container {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.install-btn.installed {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.close-btn {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.verified-badge {
+  margin-left: 8px;
+}
+
+.snipsy-submit-modal .button-container {
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.snipsy-submit-modal .google-form-btn {
+  flex: 1;
+  min-width: 180px;
+}
+
+/* Responsive design for contact grid */
+@media (max-width: 600px) {
+  .contact-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-sm);
+  }
+  
+  .snipsy-submit-modal .button-container {
+    flex-direction: column;
+  }
+  
+  .snipsy-submit-modal .google-form-btn {
+    min-width: auto;
+  }
+}

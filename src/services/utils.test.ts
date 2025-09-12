@@ -60,12 +60,19 @@ describe("utils.isBadTrigger", () => {
         expect(isBadTrigger("a/b")).toBe(true);   // slash
         expect(isBadTrigger("a-b")).toBe(true);   // hyphen
         expect(isBadTrigger("(")).toBe(true);
+        expect(isBadTrigger("a:b")).toBe(true);   // colon in middle
     });
     it("accepts simple word-like triggers (latin or unicode letters)", () => {
         expect(isBadTrigger("ab")).toBe(false);
         expect(isBadTrigger("пр")).toBe(false);   // cyrillic is allowed
         expect(isBadTrigger("_ab")).toBe(false);  // underscore ok
         expect(isBadTrigger("a1")).toBe(false);
+    });
+    it("accepts triggers starting with colon", () => {
+        expect(isBadTrigger(":plot")).toBe(false);
+        expect(isBadTrigger(":scene")).toBe(false);
+        expect(isBadTrigger(":character")).toBe(false);
+        expect(isBadTrigger(":email")).toBe(false);
     });
 });
 
