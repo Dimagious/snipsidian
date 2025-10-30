@@ -3,7 +3,7 @@
   "id": "snipsidian",
   "version": "1.0.0",
   "minAppVersion": "1.5.0",
-  "description": "Text expansion with hotstrings (trigger → replacement) inside Obsidian editor.",
+  "description": "Snipsy adds hotstrings/text expansion to the editor — folders, bulk editing, and Espanso-compatible packs.",
   "author": "Dimagious",
   "authorUrl": "https://github.com/Dimagious",
   "fundingUrl": "https://buymeacoffee.com/dimagious",
