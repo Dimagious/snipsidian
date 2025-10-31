@@ -400,9 +400,6 @@ export class SnippetsTab {
             cls: "snippet-edit-textarea"
         });
         replacementInput.value = actualReplacement;
-        console.log("Textarea created with value:", replacementInput.value);
-        console.log("Textarea element:", replacementInput);
-        console.log("Textarea innerHTML:", replacementInput.innerHTML);
         
         // Add action buttons
         const actionsContainer = row.controlEl.createDiv({ cls: "snippet-actions" });

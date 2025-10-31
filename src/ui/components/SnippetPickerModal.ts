@@ -77,10 +77,16 @@ export class SnippetPickerModal extends Modal {
         hints.style.borderRadius = "4px";
         hints.style.fontSize = "11px";
         hints.style.color = "var(--text-muted)";
-        hints.innerHTML = `
-            <strong>Navigation:</strong> ↑/↓ to navigate, <strong>Enter</strong> to insert, <strong>Esc</strong> to close<br>
-            <strong>Click</strong> any snippet to insert it directly
-        `;
+        
+        const navStrong = hints.createEl("strong", { text: "Navigation:" });
+        const navText = hints.createTextNode(" ↑/↓ to navigate, ");
+        const enterStrong = hints.createEl("strong", { text: "Enter" });
+        const enterText = hints.createTextNode(" to insert, ");
+        const escStrong = hints.createEl("strong", { text: "Esc" });
+        const escText = hints.createTextNode(" to close");
+        hints.createEl("br");
+        const clickStrong = hints.createEl("strong", { text: "Click" });
+        const clickText = hints.createTextNode(" any snippet to insert it directly");
 
         // Event handlers
         this.setupEventHandlers();
@@ -257,6 +263,8 @@ export class SnippetPickerModal extends Modal {
     }
 
     private updatePreview(): void {
+        this.previewDiv.empty();
+        
         if (this.selectedIndex >= 0 && this.selectedIndex < this.searchResults.length) {
             const selectedSnippet = this.searchResults[this.selectedIndex];
             if (!selectedSnippet) return;
@@ -264,28 +272,99 @@ export class SnippetPickerModal extends Modal {
             const preview = this.api.preview(selectedSnippet);
             
             // Create informative preview
-            let previewHTML = `<div style="margin-bottom: 8px; font-size: 11px; color: var(--text-muted);">`;
-            previewHTML += `<strong>Trigger:</strong> ${selectedSnippet.trigger} | <strong>Folder:</strong> ${selectedSnippet.folder}`;
-            previewHTML += `</div>`;
+            const metaDiv = this.previewDiv.createDiv();
+            metaDiv.style.marginBottom = "8px";
+            metaDiv.style.fontSize = "11px";
+            metaDiv.style.color = "var(--text-muted)";
             
-            // Highlight placeholders
-            let displayText = preview.text;
+            const triggerStrong = metaDiv.createEl("strong", { text: "Trigger:" });
+            metaDiv.createTextNode(` ${selectedSnippet.trigger} | `);
+            const folderStrong = metaDiv.createEl("strong", { text: "Folder:" });
+            metaDiv.createTextNode(` ${selectedSnippet.folder}`);
+            
+            // Create preview text with highlighting
+            const previewTextDiv = this.previewDiv.createDiv();
+            previewTextDiv.style.whiteSpace = "pre-wrap";
+            previewTextDiv.style.wordBreak = "break-all";
+            
+            // Process text with placeholders and tabstops
+            let text = preview.text;
+            
+            // Collect all markers (cursor and tabstops) with their positions
+            interface Marker {
+                index: number;
+                length: number;
+                type: 'cursor' | 'tabstop';
+                text: string;
+            }
+            
+            const markers: Marker[] = [];
+            
+            // Find cursor placeholder
             if (preview.cursorIdx !== undefined) {
-                displayText = displayText.replace(/\$\|/g, '<span style="background: var(--text-accent); color: var(--text-on-accent); padding: 1px 2px; border-radius: 2px;">$|</span>');
+                const cursorRegex = /\$\|/g;
+                let match;
+                while ((match = cursorRegex.exec(text)) !== null) {
+                    markers.push({
+                        index: match.index,
+                        length: match[0].length,
+                        type: 'cursor',
+                        text: match[0]
+                    });
+                }
             }
             
-            // Highlight tabstops
-            if (preview.tabstops) {
-                preview.tabstops.forEach(tabstop => {
+            // Find tabstops
+            if (preview.tabstops && preview.tabstops.length > 0) {
+                for (const tabstop of preview.tabstops) {
                     const regex = new RegExp(`\\$${tabstop}`, 'g');
-                    displayText = displayText.replace(regex, `<span style="background: var(--background-modifier-border); padding: 1px 2px; border-radius: 2px;">$${tabstop}</span>`);
-                });
+                    let match;
+                    while ((match = regex.exec(text)) !== null) {
+                        markers.push({
+                            index: match.index,
+                            length: match[0].length,
+                            type: 'tabstop',
+                            text: match[0]
+                        });
+                    }
+                }
             }
-
-            previewHTML += `<div style="white-space: pre-wrap; word-break: break-all;">${displayText}</div>`;
-            this.previewDiv.innerHTML = previewHTML;
+            
+            // Sort markers by position
+            markers.sort((a, b) => a.index - b.index);
+            
+            // Build DOM elements sequentially
+            let lastIndex = 0;
+            for (const marker of markers) {
+                // Add text before marker
+                if (marker.index > lastIndex) {
+                    previewTextDiv.createTextNode(text.substring(lastIndex, marker.index));
+                }
+                
+                // Add highlighted marker
+                const span = previewTextDiv.createEl("span");
+                span.textContent = marker.text;
+                if (marker.type === 'cursor') {
+                    span.style.background = "var(--text-accent)";
+                    span.style.color = "var(--text-on-accent)";
+                } else {
+                    span.style.background = "var(--background-modifier-border)";
+                }
+                span.style.padding = "1px 2px";
+                span.style.borderRadius = "2px";
+                
+                lastIndex = marker.index + marker.length;
+            }
+            
+            // Add remaining text
+            if (lastIndex < text.length) {
+                previewTextDiv.createTextNode(text.substring(lastIndex));
+            }
         } else {
-            this.previewDiv.innerHTML = '<div style="color: var(--text-muted); font-style: italic;">Select a snippet to preview</div>';
+            const emptyDiv = this.previewDiv.createDiv();
+            emptyDiv.style.color = "var(--text-muted)";
+            emptyDiv.style.fontStyle = "italic";
+            emptyDiv.textContent = "Select a snippet to preview";
         }
     }
 
