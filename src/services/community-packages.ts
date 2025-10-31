@@ -64,7 +64,6 @@ export async function loadDynamicCommunityPackages(app: any): Promise<PackageIte
     const dynamicFolder = app.vault.getAbstractFileByPath(dynamicPath);
     
     if (!dynamicFolder || !dynamicFolder.children) {
-      console.log("No dynamic community packages found");
       return packages;
     }
     
@@ -97,7 +96,6 @@ export async function loadDynamicCommunityPackages(app: any): Promise<PackageIte
       }
     }
     
-    console.log("Loaded", packages.length, "dynamic community packages");
     return packages;
   } catch (error) {
     console.error("Failed to load dynamic community packages:", error);
@@ -152,7 +150,6 @@ export async function loadCommunityPackagesFromGitHub(): Promise<PackageItem[]> 
     
     if (!response.ok) {
       if (response.status === 404) {
-        console.log('GitHub repository or approved directory not found yet. Using built-in packages only.');
         return [];
       }
       throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
@@ -162,7 +159,6 @@ export async function loadCommunityPackagesFromGitHub(): Promise<PackageItem[]> 
     
     // Handle case where directory exists but is empty
     if (!Array.isArray(files) || files.length === 0) {
-      console.log('No approved packages found in GitHub repository yet.');
       return [];
     }
 
@@ -176,18 +172,7 @@ export async function loadCommunityPackagesFromGitHub(): Promise<PackageItem[]> 
           const packageData = yaml.load(content) as any;
 
           if (packageData && packageData.name && packageData.snippets) {
-            console.log(`Processing package "${packageData.name}":`, {
-              snippetsType: Array.isArray(packageData.snippets) ? 'array' : typeof packageData.snippets,
-              snippetsCount: Array.isArray(packageData.snippets) ? packageData.snippets.length : Object.keys(packageData.snippets).length,
-              sampleSnippets: Array.isArray(packageData.snippets) ? packageData.snippets.slice(0, 2) : Object.entries(packageData.snippets).slice(0, 2)
-            });
-            
             const snippets = convertSnippetsToObject(packageData.snippets);
-            
-            console.log(`Converted snippets for "${packageData.name}":`, {
-              convertedCount: Object.keys(snippets).length,
-              sampleConverted: Object.entries(snippets).slice(0, 2)
-            });
             
             // Only add package if it has snippets
             if (Object.keys(snippets).length > 0) {
@@ -205,16 +190,7 @@ export async function loadCommunityPackagesFromGitHub(): Promise<PackageItem[]> 
               };
 
               packages.push(packageItem);
-              console.log(`✅ Successfully added package "${packageData.name}" with ${Object.keys(snippets).length} snippets`);
-            } else {
-              console.log(`❌ Package "${packageData.name}" has no valid snippets after conversion - skipping`);
             }
-          } else {
-            console.log(`❌ Package file "${file.name}" is missing required fields:`, {
-              hasName: !!packageData?.name,
-              hasSnippets: !!packageData?.snippets,
-              packageData: packageData ? Object.keys(packageData) : 'null'
-            });
           }
         } catch (error) {
           console.error(`Failed to load package ${file.name}:`, error);
@@ -222,7 +198,6 @@ export async function loadCommunityPackagesFromGitHub(): Promise<PackageItem[]> 
       }
     }
 
-    console.log(`Loaded ${packages.length} packages from GitHub repository`);
     return packages;
   } catch (error) {
     console.error('Failed to load community packages from GitHub:', error);
@@ -240,13 +215,11 @@ export async function loadCommunityPackagesWithCache(plugin: any): Promise<Packa
   // Check if we have valid cache
   const cache = plugin.settings.communityPackages?.cache;
   if (cache && (now - cache.lastUpdated) < CACHE_DURATION) {
-    console.log('Loading community packages from cache');
     return cache.packages;
   }
   
   try {
     // Load from GitHub
-    console.log('Loading community packages from GitHub');
     const packages = await loadCommunityPackagesFromGitHub();
     
     // Update cache (even if empty, to avoid repeated 404 requests)
@@ -264,12 +237,10 @@ export async function loadCommunityPackagesWithCache(plugin: any): Promise<Packa
     
     // Fallback to cache if available
     if (cache && cache.packages.length > 0) {
-      console.log('Using cached packages as fallback');
       return cache.packages;
     }
     
     // No fallback - return empty array if GitHub is unavailable
-    console.log('GitHub API unavailable - no community packages available');
     return [];
   }
 }
@@ -282,7 +253,6 @@ export async function loadAllCommunityPackages(app: any, plugin?: any): Promise<
     // Load packages from GitHub API with caching
     const packages = plugin ? await loadCommunityPackagesWithCache(plugin) : await loadDynamicCommunityPackages(app);
     
-    console.log(`Loaded ${packages.length} community packages from GitHub`);
     return packages;
   } catch (error) {
     console.error("Failed to load community packages:", error);
@@ -297,7 +267,6 @@ export async function loadAllCommunityPackages(app: any, plugin?: any): Promise<
  */
 export async function loadCommunityPackagesFromVault(app: any): Promise<PackageItem[]> {
   // Deprecated - use GitHub API instead
-  console.log('loadCommunityPackagesFromVault is deprecated - use GitHub API instead');
   return [];
 }
 
@@ -409,8 +378,6 @@ export async function processPackageSubmission(
         
         // Save the package file
         await app.vault.create(fullPath, yamlContent);
-        
-        console.log(`Package submission saved to: ${fullPath}`);
       } catch (fileError) {
         console.error("Failed to save package to vault:", fileError);
         errors.push(`Failed to save package: ${fileError}`);

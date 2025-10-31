@@ -376,14 +376,8 @@ export class SnippetsTab {
         // Clear existing controls
         row.controlEl.empty();
         
-        // Debug: log the values
-        console.log("Entering edit mode:", { trigger, triggerName, replacement });
-        console.log("Plugin settings snippets:", this.plugin.settings.snippets);
-        console.log("Snippet from settings:", this.plugin.settings.snippets[trigger]);
-        
         // Get the actual replacement from settings if it's not provided
         const actualReplacement = replacement || this.plugin.settings.snippets[trigger] || "";
-        console.log("Actual replacement:", actualReplacement);
         
         // Add trigger input
         const triggerInput = row.controlEl.createEl("input", {
@@ -392,7 +386,6 @@ export class SnippetsTab {
             cls: "snippet-edit-input"
         });
         triggerInput.value = triggerName || "";
-        console.log("Input created with value:", triggerInput.value);
         
         // Add replacement textarea
         const replacementInput = row.controlEl.createEl("textarea", {

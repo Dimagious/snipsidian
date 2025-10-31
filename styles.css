@@ -1128,6 +1128,151 @@
   font-style: italic;
 }
 
+/* Snippet Picker Modal */
+.snippet-picker-modal .search-input {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--border-radius);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 14px;
+}
+
+.snippet-picker-modal .search-input:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+}
+
+.snippet-picker-modal .snippet-results {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.snippet-picker-modal .preview-label {
+  display: block;
+  margin-top: 10px;
+  margin-bottom: 4px;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--text-normal);
+}
+
+.snippet-picker-modal .snippet-preview {
+  padding: 8px;
+  background-color: var(--background-secondary);
+  border-radius: 4px;
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  min-height: 40px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.snippet-picker-modal .snippet-hints {
+  margin-top: 10px;
+  padding: 8px;
+  background-color: var(--background-secondary);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.snippet-picker-modal .empty-state {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-muted);
+}
+
+.snippet-picker-modal .snippet-item {
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+  margin-bottom: 2px;
+}
+
+.snippet-picker-modal .snippet-item:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+.snippet-picker-modal .snippet-item.selected {
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.snippet-picker-modal .snippet-name {
+  font-weight: 500;
+}
+
+.snippet-picker-modal .snippet-folder {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.snippet-picker-modal .snippet-preview-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-family: var(--font-monospace);
+}
+
+.snippet-picker-modal .snippet-preview-meta {
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.snippet-picker-modal .snippet-preview-text-container {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.snippet-picker-modal .snippet-preview-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.snippet-picker-modal .snippet-highlight-cursor {
+  background: var(--text-accent);
+  color: var(--text-on-accent);
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+
+.snippet-picker-modal .snippet-highlight-tabstop {
+  background: var(--background-modifier-border);
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+
+/* Package Details Modal Buttons */
+.package-details-info .modal-button-container {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.package-details-info .modal-button-container .install-btn.installed {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.package-details-info .modal-button-container button:not(.install-btn) {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-normal);
+}
+
 
 /* 5. Sections - Стили для конкретных секций */
 .snipsy-section{display:block;border:1px solid var(--background-modifier-border);border-radius:10px;padding:14px;background:var(--background-primary);margin-bottom:12px}
@@ -1206,8 +1351,9 @@
 .snipsy-espanso-section .yaml-instruction{margin:0 0 8px;color:var(--text-muted);font-size:12.5px}
 .snipsy-community-submit-section .yaml-textarea,
 .snipsy-espanso-section .yaml-textarea{width:100%;padding:10px;border:1px solid var(--background-modifier-border);border-radius:8px;background:var(--background-primary);color:var(--text-normal);font-family:var(--font-monospace);font-size:12.5px;line-height:1.4;resize:vertical;box-sizing:border-box}
-.snipsy-community-submit-section .yaml-textarea{min-height:180px;max-height:360px}
-.snipsy-espanso-section .yaml-textarea{min-height:120px;max-height:300px}
+.snipsy-community-submit-section .yaml-textarea{min-height:180px;max-height:360px;height:200px}
+.snipsy-espanso-section .yaml-textarea{min-height:120px;max-height:300px;height:120px}
+.snipsy-submit-modal .yaml-textarea{min-height:180px;max-height:360px;height:200px}
 .snipsy-community-submit-section .validation-container{min-height:0}
 .snipsy-community-submit-section .validation-success,
 .snipsy-community-submit-section .validation-error{padding:10px;border-radius:6px}
@@ -1225,9 +1371,14 @@
 /* Package Details Modal */
 .package-details-info h3{margin:0 0 12px 0;color:var(--text-normal);font-size:18px;font-weight:600}
 .package-details-info .package-description{margin:0 0 16px 0;color:var(--text-muted);font-size:14px;line-height:1.5}
+.package-details-info .package-meta{display:flex;flex-direction:column;gap:8px;margin-top:16px}
 .package-details-info .package-meta div{margin:4px 0;color:var(--text-normal);font-size:14px}
 .package-details-info .package-tags{margin-top:16px}
-.package-details-info .package-tags span{display:inline-block;background:var(--background-secondary);color:var(--text-normal);padding:2px 6px;border-radius:4px;font-size:12px;margin:2px}
+.package-details-info .package-tags-label{font-weight:600;margin-bottom:4px}
+.package-details-info .package-tags-list{display:flex;flex-wrap:wrap;gap:4px}
+.package-details-info .package-tags span{display:inline-block;background:var(--background-secondary);color:var(--text-normal);padding:2px 6px;border-radius:4px;font-size:12px}
+.package-details-info .snippets-label{font-weight:600;margin-bottom:8px;margin-top:16px}
+.package-details-info .modal-button-container{display:flex;gap:12px;justify-content:flex-end;margin-top:16px}
 
 /* Snippets in modal */
 .package-details-info .package-snippets{margin-top:16px}

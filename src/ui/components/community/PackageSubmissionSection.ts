@@ -39,7 +39,6 @@ export class PackageSubmissionSection {
       placeholder: "Paste your community package YAML here…",
       cls: "yaml-textarea",
     }) as HTMLTextAreaElement;
-    yamlTextarea.style.height = "200px";
 
     const validationContainer = submitSection.createDiv({ cls: "validation-container" });
 

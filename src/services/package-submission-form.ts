@@ -141,15 +141,6 @@ export async function submitPackageViaGoogleForm(
       meta
     );
     
-    // Debug: log the form URL to see what's being sent
-    console.log('Generated form URL:', formUrl);
-    console.log('Package data:', validation.preparedData);
-    console.log('Meta data:', meta);
-    
-    // Test URL parsing
-    const testUrl = new URL(formUrl);
-    console.log('URL search params:', Object.fromEntries(testUrl.searchParams));
-    
     return {
       success: true,
       formUrl

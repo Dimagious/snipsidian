@@ -55,7 +55,6 @@ export class SubmitPackageModal extends Modal {
             placeholder: "Paste your community package YAML here...",
             cls: "yaml-textarea"
         });
-        this.yamlTextarea.style.height = "200px";
 
         // Validation container
         this.validationContainer = contentEl.createDiv({ cls: "validation-container" });
