@@ -31,7 +31,6 @@ export class EspansoSection {
       placeholder: "Paste Espanso YAML here…",
       cls: "yaml-textarea",
     }) as HTMLTextAreaElement;
-    espansoTextarea.style.height = "120px";
 
     const espansoButtonRow = espansoSection.createDiv({ cls: "button-row" });
     const espansoInstallBtn = espansoButtonRow.createEl("button", { text: "Install Espanso Package", cls: "install-btn" });

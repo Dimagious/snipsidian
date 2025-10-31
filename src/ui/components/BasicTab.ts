@@ -143,7 +143,7 @@ export class BasicTab {
                                 const adapter: any = this.app.vault.adapter as any;
                                 if (typeof adapter.getBasePath !== "function") throw new Error("Not supported on this platform");
                                 const base: string = adapter.getBasePath();
-                                const configDir: string = (this.app.vault as any).configDir ?? ".obsidian";
+                                const configDir: string = this.app.vault.configDir;
                                 const path = `${base}/${configDir}/plugins/snipsidian/data.json`;
                                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                 const electron = (window as any).require?.("electron");
@@ -197,7 +197,7 @@ export class BasicTab {
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             const adapter: any = this.app.vault.adapter as any;
                             const base: string = adapter?.getBasePath?.() ?? "";
-                            const configDir: string = (this.app.vault as any).configDir ?? ".obsidian";
+                            const configDir: string = this.app.vault.configDir;
                             const absPath = `${base}/${configDir}/plugins/snipsidian/docs/screens/espanso-demo.gif`;
                             window.open(absPath, "_blank");
                         } catch (err) {

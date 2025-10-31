@@ -39,7 +39,6 @@ export class PackageSubmissionSection {
       placeholder: "Paste your community package YAML here…",
       cls: "yaml-textarea",
     }) as HTMLTextAreaElement;
-    yamlTextarea.style.height = "200px";
 
     const validationContainer = submitSection.createDiv({ cls: "validation-container" });
 
@@ -110,7 +109,7 @@ export class PackageSubmissionSection {
       const packageData = yaml.load(yamlContent) as any;
       
       // Create Issue via GitHub API
-      const result = await createPackageIssue(packageData, { author: packageData.author });
+      const result = await createPackageIssue(this.app, packageData, { author: packageData.author });
       
       if (result.success && result.issueUrl) {
         // Show notification with Issue link

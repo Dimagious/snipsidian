@@ -21,3 +21,5 @@ main.js
 # Env
 .env
 .env.*
+
+/.bmad-core

@@ -22,65 +22,40 @@ export class SnippetPickerModal extends Modal {
     onOpen(): void {
         const { contentEl } = this;
         contentEl.empty();
+        contentEl.addClass("snippet-picker-modal");
 
         // Title
         const title = contentEl.createEl("h2", { text: "Insert Snippet" });
-        title.style.marginTop = "0";
 
         // Search field with label
         const searchLabel = contentEl.createEl("label", { text: "Search Snippet" });
-        searchLabel.style.display = "block";
-        searchLabel.style.marginBottom = "4px";
-        searchLabel.style.fontWeight = "500";
-        searchLabel.style.fontSize = "12px";
-        searchLabel.style.color = "var(--text-normal)";
 
         this.searchInput = contentEl.createEl("input", {
             type: "text",
             placeholder: "Type to search snippets...",
-            cls: "prompt-input"
+            cls: "search-input"
         });
-        this.searchInput.style.width = "100%";
-        this.searchInput.style.marginBottom = "10px";
 
         // Results list
         this.resultsList = contentEl.createDiv("snippet-results");
-        this.resultsList.style.maxHeight = "300px";
-        this.resultsList.style.overflowY = "auto";
-        this.resultsList.style.border = "1px solid var(--background-modifier-border)";
-        this.resultsList.style.borderRadius = "4px";
-        this.resultsList.style.padding = "8px";
 
         // Preview with label
-        const previewLabel = contentEl.createEl("label", { text: "Preview" });
-        previewLabel.style.display = "block";
-        previewLabel.style.marginTop = "10px";
-        previewLabel.style.marginBottom = "4px";
-        previewLabel.style.fontWeight = "500";
-        previewLabel.style.fontSize = "12px";
-        previewLabel.style.color = "var(--text-normal)";
+        const previewLabel = contentEl.createEl("label", { text: "Preview", cls: "preview-label" });
 
         this.previewDiv = contentEl.createDiv("snippet-preview");
-        this.previewDiv.style.padding = "8px";
-        this.previewDiv.style.backgroundColor = "var(--background-secondary)";
-        this.previewDiv.style.borderRadius = "4px";
-        this.previewDiv.style.fontFamily = "var(--font-monospace)";
-        this.previewDiv.style.fontSize = "12px";
-        this.previewDiv.style.minHeight = "40px";
-        this.previewDiv.style.border = "1px solid var(--background-modifier-border)";
 
         // Hints
         const hints = contentEl.createDiv("snippet-hints");
-        hints.style.marginTop = "10px";
-        hints.style.padding = "8px";
-        hints.style.backgroundColor = "var(--background-secondary)";
-        hints.style.borderRadius = "4px";
-        hints.style.fontSize = "11px";
-        hints.style.color = "var(--text-muted)";
-        hints.innerHTML = `
-            <strong>Navigation:</strong> ↑/↓ to navigate, <strong>Enter</strong> to insert, <strong>Esc</strong> to close<br>
-            <strong>Click</strong> any snippet to insert it directly
-        `;
+        
+        const navStrong = hints.createEl("strong", { text: "Navigation:" });
+        hints.appendChild(document.createTextNode(" ↑/↓ to navigate, "));
+        const enterStrong = hints.createEl("strong", { text: "Enter" });
+        hints.appendChild(document.createTextNode(" to insert, "));
+        const escStrong = hints.createEl("strong", { text: "Esc" });
+        hints.appendChild(document.createTextNode(" to close"));
+        hints.createEl("br");
+        const clickStrong = hints.createEl("strong", { text: "Click" });
+        hints.appendChild(document.createTextNode(" any snippet to insert it directly"));
 
         // Event handlers
         this.setupEventHandlers();
@@ -166,31 +141,20 @@ export class SnippetPickerModal extends Modal {
         if (this.searchResults.length === 0) {
             const emptyState = this.resultsList.createDiv("empty-state");
             emptyState.textContent = "No snippets found";
-            emptyState.style.textAlign = "center";
-            emptyState.style.padding = "20px";
-            emptyState.style.color = "var(--text-muted)";
             return;
         }
 
         this.searchResults.forEach((snippet, index) => {
             const item = this.resultsList.createDiv("snippet-item");
             item.setAttribute("data-index", index.toString());
-            item.style.padding = "6px 8px";
-            item.style.cursor = "pointer";
-            item.style.borderRadius = "3px";
-            item.style.marginBottom = "2px";
 
             // Name (trigger)
             const name = item.createDiv("snippet-name");
             name.textContent = snippet.trigger;
-            name.style.fontWeight = "500";
 
             // Folder
             const folder = item.createDiv("snippet-folder");
             folder.textContent = `(${snippet.folder})`;
-            folder.style.fontSize = "11px";
-            folder.style.color = "var(--text-muted)";
-            folder.style.marginTop = "2px";
 
             // Preview (first characters)
             const preview = item.createDiv("snippet-preview-text");
@@ -198,10 +162,6 @@ export class SnippetPickerModal extends Modal {
                 ? snippet.replacement.substring(0, 50) + "..." 
                 : snippet.replacement;
             preview.textContent = previewText;
-            preview.style.fontSize = "11px";
-            preview.style.color = "var(--text-muted)";
-            preview.style.marginTop = "2px";
-            preview.style.fontFamily = "var(--font-monospace)";
 
             // Click to select
             item.addEventListener("click", (e) => {
@@ -216,15 +176,7 @@ export class SnippetPickerModal extends Modal {
                 this.insertSelectedSnippet();
             });
 
-            // Hover effect
-            item.addEventListener("mouseenter", () => {
-                (item as HTMLElement).style.backgroundColor = "var(--background-modifier-hover)";
-            });
-            item.addEventListener("mouseleave", () => {
-                if (index !== this.selectedIndex) {
-                    (item as HTMLElement).style.backgroundColor = "";
-                }
-            });
+            // Hover effect is handled by CSS
         });
 
         this.updateSelection();
@@ -247,16 +199,16 @@ export class SnippetPickerModal extends Modal {
         const items = this.resultsList.querySelectorAll(".snippet-item");
         items.forEach((item, index) => {
             if (index === this.selectedIndex) {
-                (item as HTMLElement).style.backgroundColor = "var(--interactive-accent)";
-                (item as HTMLElement).style.color = "var(--text-on-accent)";
+                item.addClass("selected");
             } else {
-                (item as HTMLElement).style.backgroundColor = "";
-                (item as HTMLElement).style.color = "";
+                item.removeClass("selected");
             }
         });
     }
 
     private updatePreview(): void {
+        this.previewDiv.empty();
+        
         if (this.selectedIndex >= 0 && this.selectedIndex < this.searchResults.length) {
             const selectedSnippet = this.searchResults[this.selectedIndex];
             if (!selectedSnippet) return;
@@ -264,28 +216,86 @@ export class SnippetPickerModal extends Modal {
             const preview = this.api.preview(selectedSnippet);
             
             // Create informative preview
-            let previewHTML = `<div style="margin-bottom: 8px; font-size: 11px; color: var(--text-muted);">`;
-            previewHTML += `<strong>Trigger:</strong> ${selectedSnippet.trigger} | <strong>Folder:</strong> ${selectedSnippet.folder}`;
-            previewHTML += `</div>`;
+            const metaDiv = this.previewDiv.createDiv("snippet-preview-meta");
             
-            // Highlight placeholders
-            let displayText = preview.text;
+            const triggerStrong = metaDiv.createEl("strong", { text: "Trigger:" });
+            metaDiv.appendChild(document.createTextNode(` ${selectedSnippet.trigger} | `));
+            const folderStrong = metaDiv.createEl("strong", { text: "Folder:" });
+            metaDiv.appendChild(document.createTextNode(` ${selectedSnippet.folder}`));
+            
+            // Create preview text with highlighting
+            const previewTextDiv = this.previewDiv.createDiv("snippet-preview-text-container");
+            
+            // Process text with placeholders and tabstops
+            let text = preview.text;
+            
+            // Collect all markers (cursor and tabstops) with their positions
+            interface Marker {
+                index: number;
+                length: number;
+                type: 'cursor' | 'tabstop';
+                text: string;
+            }
+            
+            const markers: Marker[] = [];
+            
+            // Find cursor placeholder
             if (preview.cursorIdx !== undefined) {
-                displayText = displayText.replace(/\$\|/g, '<span style="background: var(--text-accent); color: var(--text-on-accent); padding: 1px 2px; border-radius: 2px;">$|</span>');
+                const cursorRegex = /\$\|/g;
+                let match;
+                while ((match = cursorRegex.exec(text)) !== null) {
+                    markers.push({
+                        index: match.index,
+                        length: match[0].length,
+                        type: 'cursor',
+                        text: match[0]
+                    });
+                }
             }
             
-            // Highlight tabstops
-            if (preview.tabstops) {
-                preview.tabstops.forEach(tabstop => {
+            // Find tabstops
+            if (preview.tabstops && preview.tabstops.length > 0) {
+                for (const tabstop of preview.tabstops) {
                     const regex = new RegExp(`\\$${tabstop}`, 'g');
-                    displayText = displayText.replace(regex, `<span style="background: var(--background-modifier-border); padding: 1px 2px; border-radius: 2px;">$${tabstop}</span>`);
-                });
+                    let match;
+                    while ((match = regex.exec(text)) !== null) {
+                        markers.push({
+                            index: match.index,
+                            length: match[0].length,
+                            type: 'tabstop',
+                            text: match[0]
+                        });
+                    }
+                }
             }
-
-            previewHTML += `<div style="white-space: pre-wrap; word-break: break-all;">${displayText}</div>`;
-            this.previewDiv.innerHTML = previewHTML;
+            
+            // Sort markers by position
+            markers.sort((a, b) => a.index - b.index);
+            
+            // Build DOM elements sequentially
+            let lastIndex = 0;
+            for (const marker of markers) {
+                // Add text before marker
+                if (marker.index > lastIndex) {
+                    previewTextDiv.appendChild(document.createTextNode(text.substring(lastIndex, marker.index)));
+                }
+                
+                // Add highlighted marker
+                const span = previewTextDiv.createEl("span", {
+                    cls: marker.type === 'cursor' ? "snippet-highlight-cursor" : "snippet-highlight-tabstop"
+                });
+                span.textContent = marker.text;
+                
+                lastIndex = marker.index + marker.length;
+            }
+            
+            // Add remaining text
+            if (lastIndex < text.length) {
+                previewTextDiv.appendChild(document.createTextNode(text.substring(lastIndex)));
+            }
         } else {
-            this.previewDiv.innerHTML = '<div style="color: var(--text-muted); font-style: italic;">Select a snippet to preview</div>';
+            const emptyDiv = this.previewDiv.createDiv("snippet-preview-empty");
+            emptyDiv.textContent = "Select a snippet to preview";
         }
     }
 
@@ -310,10 +320,6 @@ export class SnippetPickerModal extends Modal {
                 
                 const editor = activeView.editor;
                 const selection = editor.getSelection();
-                
-                console.log('Inserting snippet:', selectedSnippet.trigger);
-                console.log('Replacement:', selectedSnippet.replacement);
-                console.log('Selection:', selection);
                 
                 try {
                     if (selection) {

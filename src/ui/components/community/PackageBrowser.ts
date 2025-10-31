@@ -162,9 +162,6 @@ export class PackageBrowser {
       
       if (isInstalled) {
         const installedBtn = actionsCell.createEl("button", { text: "✓ Installed", cls: "install-btn installed" });
-        installedBtn.style.background = "var(--background-secondary)";
-        installedBtn.style.color = "var(--text-muted)";
-        installedBtn.style.cursor = "default";
         installedBtn.disabled = true;
       } else {
         const installBtn = actionsCell.createEl("button", { text: "Install", cls: "install-btn" });
@@ -264,7 +261,6 @@ export class PackageBrowser {
     
     // If package has no snippets, it's not installed
     if (packageTriggers.length === 0) {
-      console.log(`Package "${pkg.label}" has no snippets - not installed`);
       return false;
     }
     
@@ -275,17 +271,6 @@ export class PackageBrowser {
     });
     
     const isInstalled = installedTriggers.length >= packageTriggers.length * 0.8;
-    
-    // Debug logging to help troubleshoot
-    console.log(`Checking if package "${pkg.label}" is installed:`, {
-      totalTriggers: packageTriggers.length,
-      installedTriggers: installedTriggers.length,
-      percentage: packageTriggers.length > 0 ? (installedTriggers.length / packageTriggers.length * 100).toFixed(1) + '%' : '0%',
-      isInstalled: isInstalled,
-      packageGroup: packageGroup,
-      sampleTriggers: packageTriggers.slice(0, 3),
-      sampleGroupedKeys: packageTriggers.slice(0, 3).map(t => joinKey(packageGroup, t))
-    });
     
     return isInstalled;
   }
@@ -342,7 +327,6 @@ export class PackageBrowser {
     
     if (pkg.verified) {
       const verifiedBadge = infoSection.createEl("span", { text: " ✓ Verified", cls: "verified-badge" });
-      verifiedBadge.style.marginLeft = "8px";
     }
     
     if (pkg.description) {
@@ -350,30 +334,17 @@ export class PackageBrowser {
     }
     
     const meta = infoSection.createDiv({ cls: "package-meta" });
-    meta.style.display = "flex";
-    meta.style.flexDirection = "column";
-    meta.style.gap = "8px";
-    meta.style.marginTop = "16px";
     
     meta.createEl("div", { text: `Author: ${pkg.author || "Unknown"}` });
     meta.createEl("div", { text: `Version: ${pkg.version || "1.0.0"}` });
     
     if (pkg.tags && pkg.tags.length > 0) {
       const tagsContainer = infoSection.createDiv({ cls: "package-tags" });
-      const tagsLabel = tagsContainer.createEl("div", { text: "Tags:" });
-      tagsLabel.style.fontWeight = "600";
-      tagsLabel.style.marginBottom = "4px";
-      const tagsList = tagsContainer.createDiv();
-      tagsList.style.display = "flex";
-      tagsList.style.flexWrap = "wrap";
-      tagsList.style.gap = "4px";
+      const tagsLabel = tagsContainer.createEl("div", { text: "Tags:", cls: "package-tags-label" });
+      const tagsList = tagsContainer.createDiv({ cls: "package-tags-list" });
       
       pkg.tags.forEach(tag => {
-        const tagEl = tagsList.createEl("span", { text: tag });
-        tagEl.style.background = "var(--background-secondary)";
-        tagEl.style.padding = "2px 6px";
-        tagEl.style.borderRadius = "4px";
-        tagEl.style.fontSize = "12px";
+        tagsList.createEl("span", { text: tag });
       });
     }
     
@@ -381,75 +352,36 @@ export class PackageBrowser {
     if (pkg.snippets && Object.keys(pkg.snippets).length > 0) {
       const snippetsContainer = infoSection.createDiv({ cls: "package-snippets" });
       const snippetsLabel = snippetsContainer.createEl("div", { 
-        text: `Snippets (${Object.keys(pkg.snippets).length}):`
+        text: `Snippets (${Object.keys(pkg.snippets).length}):`,
+        cls: "snippets-label"
       });
-      snippetsLabel.style.fontWeight = "600";
-      snippetsLabel.style.marginBottom = "8px";
-      snippetsLabel.style.marginTop = "16px";
       
       const snippetsList = snippetsContainer.createDiv({ cls: "snippets-list" });
-      snippetsList.style.maxHeight = "200px";
-      snippetsList.style.overflowY = "auto";
-      snippetsList.style.border = "1px solid var(--background-modifier-border)";
-      snippetsList.style.borderRadius = "6px";
-      snippetsList.style.padding = "8px";
-      snippetsList.style.background = "var(--background-secondary)";
       
       Object.entries(pkg.snippets).forEach(([trigger, replacement]) => {
         const snippetRow = snippetsList.createDiv({ cls: "snippet-row" });
-        snippetRow.style.display = "flex";
-        snippetRow.style.justifyContent = "space-between";
-        snippetRow.style.alignItems = "center";
-        snippetRow.style.padding = "4px 0";
-        snippetRow.style.borderBottom = "1px solid var(--background-modifier-border)";
-        snippetRow.style.fontSize = "13px";
         
         const triggerEl = snippetRow.createDiv({ cls: "snippet-trigger" });
-        triggerEl.style.fontFamily = "var(--font-monospace)";
-        triggerEl.style.background = "var(--background-primary)";
-        triggerEl.style.padding = "2px 6px";
-        triggerEl.style.borderRadius = "4px";
-        triggerEl.style.border = "1px solid var(--background-modifier-border)";
         triggerEl.textContent = trigger;
         
         const arrowEl = snippetRow.createDiv({ cls: "snippet-arrow" });
-        arrowEl.style.margin = "0 8px";
-        arrowEl.style.color = "var(--text-muted)";
         arrowEl.textContent = "→";
         
         const replacementEl = snippetRow.createDiv({ cls: "snippet-replacement" });
-        replacementEl.style.fontFamily = "var(--font-monospace)";
-        replacementEl.style.background = "var(--background-primary)";
-        replacementEl.style.padding = "2px 6px";
-        replacementEl.style.borderRadius = "4px";
-        replacementEl.style.border = "1px solid var(--background-modifier-border)";
-        replacementEl.style.maxWidth = "200px";
-        replacementEl.style.overflow = "hidden";
-        replacementEl.style.textOverflow = "ellipsis";
-        replacementEl.style.whiteSpace = "nowrap";
         replacementEl.textContent = replacement;
         replacementEl.title = replacement; // Show full text on hover
       });
     }
     
     const buttonContainer = content.createDiv({ cls: "modal-button-container" });
-    buttonContainer.style.display = "flex";
-    buttonContainer.style.gap = "12px";
-    buttonContainer.style.justifyContent = "flex-end";
-    buttonContainer.style.marginTop = "24px";
-    buttonContainer.style.paddingTop = "16px";
-    buttonContainer.style.borderTop = "1px solid var(--background-modifier-border)";
     
     const isInstalled = this.isPackageInstalled(pkg);
     const installBtn = buttonContainer.createEl("button", { 
       text: isInstalled ? "✓ Already Installed" : "Install Package", 
-      cls: "install-btn" 
+      cls: isInstalled ? "install-btn installed" : "install-btn"
     });
     
     if (isInstalled) {
-      installBtn.style.background = "var(--background-secondary)";
-      installBtn.style.color = "var(--text-muted)";
-      installBtn.style.cursor = "default";
       installBtn.disabled = true;
     } else {
       installBtn.onclick = () => {
@@ -459,11 +391,6 @@ export class PackageBrowser {
     }
     
     const closeBtn = buttonContainer.createEl("button", { text: "Close" });
-    closeBtn.style.background = "var(--background-secondary)";
-    closeBtn.style.border = "1px solid var(--background-modifier-border)";
-    closeBtn.style.padding = "8px 16px";
-    closeBtn.style.borderRadius = "6px";
-    closeBtn.style.cursor = "pointer";
     closeBtn.onclick = () => modal.close();
     
     modal.open();

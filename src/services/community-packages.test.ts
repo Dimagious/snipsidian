@@ -1,14 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  loadCommunityPackages,
-  loadDynamicCommunityPackages,
-  loadAllCommunityPackages,
-  loadCommunityPackagesFromVault,
-  processPackageSubmission,
-  loadCommunityPackagesFromGitHub,
-  createPackageIssue,
-  loadCommunityPackagesWithCache
-} from "./community-packages";
 
 // Mock the package validator
 vi.mock("./package-validator", () => ({
@@ -20,8 +10,27 @@ vi.mock("./package-validator", () => ({
   validatePackageFile: vi.fn()
 }));
 
-// Mock fetch API
-global.fetch = vi.fn();
+// Mock requestUrl from obsidian - must be before imports
+vi.mock("obsidian", async () => {
+  const actual = await vi.importActual("../test/stubs/obsidian");
+  return {
+    ...actual,
+    requestUrl: vi.fn()
+  };
+});
+
+import {
+  loadCommunityPackages,
+  loadDynamicCommunityPackages,
+  loadAllCommunityPackages,
+  loadCommunityPackagesFromVault,
+  processPackageSubmission,
+  loadCommunityPackagesFromGitHub,
+  createPackageIssue,
+  loadCommunityPackagesWithCache
+} from "./community-packages";
+
+import { requestUrl } from "obsidian";
 
 describe("community-packages", () => {
   beforeEach(() => {
@@ -264,17 +273,19 @@ snippets:
     replace: "❤️"
 `;
 
-      vi.mocked(fetch)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockFiles
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          text: async () => mockYamlContent
-        } as Response);
+      const mockApp = { vault: {} } as any;
 
-      const packages = await loadCommunityPackagesFromGitHub();
+      vi.mocked(requestUrl)
+        .mockResolvedValueOnce({
+          status: 200,
+          text: JSON.stringify(mockFiles)
+        })
+        .mockResolvedValueOnce({
+          status: 200,
+          text: mockYamlContent
+        });
+
+      const packages = await loadCommunityPackagesFromGitHub(mockApp);
 
       expect(packages).toHaveLength(1);
       expect(packages[0].label).toBe("Basic Emojis");
@@ -282,14 +293,14 @@ snippets:
     });
 
     it("should handle GitHub API errors gracefully", async () => {
-      vi.mocked(fetch).mockResolvedValue({
-        ok: false,
-        status: 404,
-        statusText: "Not Found",
-        json: async () => []
-      } as Response);
+      const mockApp = { vault: {} } as any;
 
-      const packages = await loadCommunityPackagesFromGitHub();
+      vi.mocked(requestUrl).mockResolvedValue({
+        status: 404,
+        text: ""
+      });
+
+      const packages = await loadCommunityPackagesFromGitHub(mockApp);
 
       expect(packages).toEqual([]);
     });
@@ -298,9 +309,11 @@ snippets:
       // Mock console.error to avoid noise in tests
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       
-      vi.mocked(fetch).mockRejectedValue(new Error("Network error"));
+      const mockApp = { vault: {} } as any;
 
-      const packages = await loadCommunityPackagesFromGitHub();
+      vi.mocked(requestUrl).mockRejectedValue(new Error("Network error"));
+
+      const packages = await loadCommunityPackagesFromGitHub(mockApp);
 
       expect(packages).toEqual([]);
       
@@ -315,17 +328,19 @@ snippets:
         }
       ];
 
-      vi.mocked(fetch)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockFiles
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          text: async () => "invalid: yaml: content: ["
-        } as Response);
+      const mockApp = { vault: {} } as any;
 
-      const packages = await loadCommunityPackagesFromGitHub();
+      vi.mocked(requestUrl)
+        .mockResolvedValueOnce({
+          status: 200,
+          text: JSON.stringify(mockFiles)
+        })
+        .mockResolvedValueOnce({
+          status: 200,
+          text: "invalid: yaml: content: ["
+        });
+
+      const packages = await loadCommunityPackagesFromGitHub(mockApp);
 
       expect(packages).toEqual([]);
     });
@@ -346,17 +361,19 @@ description: "Package with no snippets"
 snippets: []
 `;
 
-      vi.mocked(fetch)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockFiles
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          text: async () => mockYamlContent
-        } as Response);
+      const mockApp = { vault: {} } as any;
 
-      const packages = await loadCommunityPackagesFromGitHub();
+      vi.mocked(requestUrl)
+        .mockResolvedValueOnce({
+          status: 200,
+          text: JSON.stringify(mockFiles)
+        })
+        .mockResolvedValueOnce({
+          status: 200,
+          text: mockYamlContent
+        });
+
+      const packages = await loadCommunityPackagesFromGitHub(mockApp);
 
       expect(packages).toEqual([]);
     });
@@ -368,10 +385,12 @@ snippets: []
         html_url: "https://github.com/Dimagious/snipsidian-community/issues/123"
       };
 
-      vi.mocked(fetch).mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse
-      } as Response);
+      const mockApp = { vault: {} } as any;
+
+      vi.mocked(requestUrl).mockResolvedValue({
+        status: 201,
+        text: JSON.stringify(mockResponse)
+      });
 
       const packageData = {
         name: "Test Package",
@@ -385,36 +404,38 @@ snippets: []
         version: "1.0.0"
       };
 
-      const result = await createPackageIssue(packageData, userInfo);
+      const result = await createPackageIssue(mockApp, packageData, userInfo);
 
       expect(result.success).toBe(true);
       expect(result.issueUrl).toBe("https://github.com/Dimagious/snipsidian-community/issues/123");
     });
 
     it("should handle GitHub API errors", async () => {
-      vi.mocked(fetch).mockResolvedValue({
-        ok: false,
+      const mockApp = { vault: {} } as any;
+
+      vi.mocked(requestUrl).mockResolvedValue({
         status: 422,
-        statusText: "Unprocessable Entity",
-        json: async () => ({})
-      } as Response);
+        text: ""
+      });
 
       const packageData = { name: "Test Package" };
       const userInfo = { platform: "obsidian" };
 
-      const result = await createPackageIssue(packageData, userInfo);
+      const result = await createPackageIssue(mockApp, packageData, userInfo);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("GitHub API error: 422");
     });
 
     it("should handle network errors", async () => {
-      vi.mocked(fetch).mockRejectedValue(new Error("Network error"));
+      const mockApp = { vault: {} } as any;
+
+      vi.mocked(requestUrl).mockRejectedValue(new Error("Network error"));
 
       const packageData = { name: "Test Package" };
       const userInfo = { platform: "obsidian" };
 
-      const result = await createPackageIssue(packageData, userInfo);
+      const result = await createPackageIssue(mockApp, packageData, userInfo);
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("Network error");
@@ -446,11 +467,12 @@ snippets: []
 
       expect(packages).toHaveLength(1);
       expect(packages[0].label).toBe("Cached Package");
-      expect(fetch).not.toHaveBeenCalled();
+      expect(requestUrl).not.toHaveBeenCalled();
     });
 
     it("should fetch from GitHub when cache is expired", async () => {
       const mockPlugin = {
+        app: { vault: {} },
         settings: {
           communityPackages: {
             cache: {
@@ -462,47 +484,48 @@ snippets: []
         saveSettings: vi.fn()
       };
 
-      vi.mocked(fetch).mockResolvedValue({
-        ok: true,
-        json: async () => []
-      } as Response);
+      vi.mocked(requestUrl).mockResolvedValue({
+        status: 200,
+        text: JSON.stringify([])
+      });
 
       const packages = await loadCommunityPackagesWithCache(mockPlugin);
 
       expect(packages).toEqual([]);
-      expect(fetch).toHaveBeenCalled();
+      expect(requestUrl).toHaveBeenCalled();
       expect(mockPlugin.saveSettings).toHaveBeenCalled();
     });
 
     it("should fetch from GitHub when no cache exists", async () => {
       const mockPlugin = {
+        app: { vault: {} },
         settings: {},
         saveSettings: vi.fn()
       };
 
-      vi.mocked(fetch).mockResolvedValue({
-        ok: true,
-        json: async () => []
-      } as Response);
+      vi.mocked(requestUrl).mockResolvedValue({
+        status: 200,
+        text: JSON.stringify([])
+      });
 
       const packages = await loadCommunityPackagesWithCache(mockPlugin);
 
       expect(packages).toEqual([]);
-      expect(fetch).toHaveBeenCalled();
+      expect(requestUrl).toHaveBeenCalled();
       expect(mockPlugin.saveSettings).toHaveBeenCalled();
     });
 
     it("should handle GitHub API errors gracefully", async () => {
       const mockPlugin = {
+        app: { vault: {} },
         settings: {},
         saveSettings: vi.fn()
       };
 
-      vi.mocked(fetch).mockResolvedValue({
-        ok: false,
+      vi.mocked(requestUrl).mockResolvedValue({
         status: 404,
-        statusText: "Not Found"
-      } as Response);
+        text: ""
+      });
 
       const packages = await loadCommunityPackagesWithCache(mockPlugin);
 

@@ -35,3 +35,44 @@ export class Modal {
     open() { }
     close() { }
 }
+
+export class TFolder {
+    children?: any[];
+    path: string;
+    constructor(path: string) {
+        this.path = path;
+    }
+}
+
+export class TFile {
+    path: string;
+    basename: string;
+    extension: string;
+    constructor(path: string, basename: string, extension: string) {
+        this.path = path;
+        this.basename = basename;
+        this.extension = extension;
+    }
+}
+
+export const requestUrl = async (options: {
+    url: string;
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+}): Promise<{
+    status: number;
+    text: string;
+}> => {
+    // Mock implementation for tests
+    if (options.url.includes('api.github.com')) {
+        return {
+            status: 200,
+            text: JSON.stringify([])
+        };
+    }
+    return {
+        status: 200,
+        text: ''
+    };
+};

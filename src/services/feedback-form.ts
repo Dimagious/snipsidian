@@ -3,6 +3,8 @@
  * Handles URL generation with pre-filled data for different feedback types
  */
 
+import { App } from "obsidian";
+
 export const entryIdMap = {
   // Основные поля формы
   TYPE:           "entry.1624430534", // What would you like to submit? (Bug report / Feature request / General feedback)
@@ -144,7 +146,7 @@ export function buildPackageFormUrl(
  * @param pluginVersion - Plugin version from manifest
  * @returns Collected metadata object
  */
-export function collectSystemMeta(app: any, pluginVersion: string): FeedbackMeta {
+export function collectSystemMeta(app: App, pluginVersion: string): FeedbackMeta {
   // @ts-ignore - Obsidian API works correctly at runtime
   const obsidianVersion = app.version || "Unknown";
   
@@ -181,7 +183,7 @@ export function collectSystemMeta(app: any, pluginVersion: string): FeedbackMeta
  * @returns Collected metadata object for package form
  */
 export function collectPackageFormMeta(
-  app: any, 
+  app: App, 
   pluginVersion: string, 
   submitterName?: string, 
   submitterEmail?: string
