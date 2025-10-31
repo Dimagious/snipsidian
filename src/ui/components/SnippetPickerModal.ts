@@ -48,14 +48,14 @@ export class SnippetPickerModal extends Modal {
         const hints = contentEl.createDiv("snippet-hints");
         
         const navStrong = hints.createEl("strong", { text: "Navigation:" });
-        const navText = hints.createTextNode(" ↑/↓ to navigate, ");
+        hints.appendChild(document.createTextNode(" ↑/↓ to navigate, "));
         const enterStrong = hints.createEl("strong", { text: "Enter" });
-        const enterText = hints.createTextNode(" to insert, ");
+        hints.appendChild(document.createTextNode(" to insert, "));
         const escStrong = hints.createEl("strong", { text: "Esc" });
-        const escText = hints.createTextNode(" to close");
+        hints.appendChild(document.createTextNode(" to close"));
         hints.createEl("br");
         const clickStrong = hints.createEl("strong", { text: "Click" });
-        const clickText = hints.createTextNode(" any snippet to insert it directly");
+        hints.appendChild(document.createTextNode(" any snippet to insert it directly"));
 
         // Event handlers
         this.setupEventHandlers();
@@ -219,9 +219,9 @@ export class SnippetPickerModal extends Modal {
             const metaDiv = this.previewDiv.createDiv("snippet-preview-meta");
             
             const triggerStrong = metaDiv.createEl("strong", { text: "Trigger:" });
-            metaDiv.createTextNode(` ${selectedSnippet.trigger} | `);
+            metaDiv.appendChild(document.createTextNode(` ${selectedSnippet.trigger} | `));
             const folderStrong = metaDiv.createEl("strong", { text: "Folder:" });
-            metaDiv.createTextNode(` ${selectedSnippet.folder}`);
+            metaDiv.appendChild(document.createTextNode(` ${selectedSnippet.folder}`));
             
             // Create preview text with highlighting
             const previewTextDiv = this.previewDiv.createDiv("snippet-preview-text-container");
@@ -277,7 +277,7 @@ export class SnippetPickerModal extends Modal {
             for (const marker of markers) {
                 // Add text before marker
                 if (marker.index > lastIndex) {
-                    previewTextDiv.createTextNode(text.substring(lastIndex, marker.index));
+                    previewTextDiv.appendChild(document.createTextNode(text.substring(lastIndex, marker.index)));
                 }
                 
                 // Add highlighted marker
@@ -291,7 +291,7 @@ export class SnippetPickerModal extends Modal {
             
             // Add remaining text
             if (lastIndex < text.length) {
-                previewTextDiv.createTextNode(text.substring(lastIndex));
+                previewTextDiv.appendChild(document.createTextNode(text.substring(lastIndex)));
             }
         } else {
             const emptyDiv = this.previewDiv.createDiv("snippet-preview-empty");

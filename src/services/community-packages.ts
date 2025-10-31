@@ -1,6 +1,7 @@
 import * as yaml from "js-yaml";
-import { App } from "obsidian";
+import { App, TFolder, TFile, requestUrl } from "obsidian";
 import { buildGoogleFormUrl, collectSystemMeta } from "./feedback-form";
+import { validatePackage, validatePackageFile } from "./package-validator";
 
 // No built-in packages - all packages come from GitHub API
 
@@ -63,26 +64,27 @@ export async function loadDynamicCommunityPackages(app: App): Promise<PackageIte
     const dynamicPath = "Snipsidian/community-packages/approved";
     const dynamicFolder = app.vault.getAbstractFileByPath(dynamicPath);
     
-    if (!dynamicFolder || !dynamicFolder.children) {
+    if (!dynamicFolder || !(dynamicFolder instanceof TFolder) || !dynamicFolder.children) {
       return packages;
     }
     
     // Load all YAML files from the dynamic directory
     for (const file of dynamicFolder.children) {
-      if (file.path.endsWith('.yml') || file.path.endsWith('.yaml')) {
+      if (file instanceof TFile && (file.path.endsWith('.yml') || file.path.endsWith('.yaml'))) {
         try {
           const content = await app.vault.read(file);
-          const packageData = yaml.load(content) as any;
+          const packageData = yaml.load(content) as Record<string, unknown>;
           
-          if (packageData && packageData.name) {
+          if (packageData && typeof packageData === 'object' && 'name' in packageData && typeof packageData.name === 'string') {
+            const tags = Array.isArray(packageData.tags) ? packageData.tags.filter((t): t is string => typeof t === 'string') : [];
             const packageItem: PackageItem = {
               id: file.basename,
               label: packageData.name,
-              description: packageData.description,
-              author: packageData.author,
-              version: packageData.version,
+              description: typeof packageData.description === 'string' ? packageData.description : undefined,
+              author: typeof packageData.author === 'string' ? packageData.author : undefined,
+              version: typeof packageData.version === 'string' ? packageData.version : undefined,
               downloads: 0, // Will be updated when packages are actually downloaded
-              tags: packageData.tags || [],
+              tags: tags,
               verified: true, // Dynamic packages are also verified
               rating: 0, // Will be updated based on actual user ratings
               snippets: packageData.snippets ? convertSnippetsToObject(packageData.snippets) : {}
@@ -115,7 +117,7 @@ export async function createPackageIssue(app: App, packageData: any, userInfo: a
       labels: ['package-submission', 'pending-review']
     };
 
-    const response = await app.requestUrl({
+    const response = await requestUrl({
       url: 'https://api.github.com/repos/Dimagious/snipsidian-community/issues',
       method: 'POST',
       headers: {
@@ -147,7 +149,7 @@ export async function createPackageIssue(app: App, packageData: any, userInfo: a
  */
 export async function loadCommunityPackagesFromGitHub(app: App): Promise<PackageItem[]> {
   try {
-    const response = await app.requestUrl({
+    const response = await requestUrl({
       url: 'https://api.github.com/repos/Dimagious/snipsidian-community/contents/community-packages/approved'
     });
     
@@ -170,7 +172,7 @@ export async function loadCommunityPackagesFromGitHub(app: App): Promise<Package
     for (const file of files) {
       if (file.name.endsWith('.yml') || file.name.endsWith('.yaml')) {
         try {
-          const contentResponse = await app.requestUrl({
+          const contentResponse = await requestUrl({
             url: file.download_url
           });
           const content = contentResponse.text;
