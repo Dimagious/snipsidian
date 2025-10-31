@@ -1,4 +1,5 @@
 import * as yaml from "js-yaml";
+import { App } from "obsidian";
 import { buildGoogleFormUrl, collectSystemMeta } from "./feedback-form";
 
 // No built-in packages - all packages come from GitHub API
@@ -18,7 +19,6 @@ export interface PackageItem {
     lastUpdated?: string;
     snippets?: { [trigger: string]: string };
 }
-import { validatePackage, validatePackageFile } from "./package-validator";
 
 
 /**
@@ -50,7 +50,7 @@ export async function loadCommunityPackages(): Promise<PackageItem[]> {
  * Loads dynamic community packages from user's vault
  * These are packages that users have submitted and are stored locally
  */
-export async function loadDynamicCommunityPackages(app: any): Promise<PackageItem[]> {
+export async function loadDynamicCommunityPackages(app: App): Promise<PackageItem[]> {
   const packages: PackageItem[] = [];
   
   try {
@@ -107,7 +107,7 @@ export async function loadDynamicCommunityPackages(app: any): Promise<PackageIte
 /**
  * Creates a GitHub Issue for package submission
  */
-export async function createPackageIssue(packageData: any, userInfo: any): Promise<{ success: boolean; issueUrl?: string; error?: string }> {
+export async function createPackageIssue(app: App, packageData: any, userInfo: any): Promise<{ success: boolean; issueUrl?: string; error?: string }> {
   try {
     const issue = {
       title: `[Package Submission] ${packageData.name}`,
@@ -115,7 +115,8 @@ export async function createPackageIssue(packageData: any, userInfo: any): Promi
       labels: ['package-submission', 'pending-review']
     };
 
-    const response = await fetch('https://api.github.com/repos/Dimagious/snipsidian-community/issues', {
+    const response = await app.requestUrl({
+      url: 'https://api.github.com/repos/Dimagious/snipsidian-community/issues',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -124,17 +125,17 @@ export async function createPackageIssue(packageData: any, userInfo: any): Promi
       body: JSON.stringify(issue)
     });
 
-    if (!response.ok) {
+    if (response.status !== 201 && response.status !== 200) {
       if (response.status === 404) {
         return { 
           success: false, 
           error: 'Community repository not found. Please contact the maintainer to set up the community packages repository.' 
         };
       }
-      throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+      throw new Error(`GitHub API error: ${response.status}`);
     }
 
-    const result = await response.json();
+    const result = JSON.parse(response.text);
     return { success: true, issueUrl: result.html_url };
   } catch (error) {
     return { success: false, error: (error as Error).message };
@@ -144,18 +145,20 @@ export async function createPackageIssue(packageData: any, userInfo: any): Promi
 /**
  * Loads community packages from GitHub API
  */
-export async function loadCommunityPackagesFromGitHub(): Promise<PackageItem[]> {
+export async function loadCommunityPackagesFromGitHub(app: App): Promise<PackageItem[]> {
   try {
-    const response = await fetch('https://api.github.com/repos/Dimagious/snipsidian-community/contents/community-packages/approved');
+    const response = await app.requestUrl({
+      url: 'https://api.github.com/repos/Dimagious/snipsidian-community/contents/community-packages/approved'
+    });
     
-    if (!response.ok) {
+    if (response.status !== 200) {
       if (response.status === 404) {
         return [];
       }
-      throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+      throw new Error(`GitHub API error: ${response.status}`);
     }
 
-    const files = await response.json();
+    const files = JSON.parse(response.text);
     
     // Handle case where directory exists but is empty
     if (!Array.isArray(files) || files.length === 0) {
@@ -167,9 +170,11 @@ export async function loadCommunityPackagesFromGitHub(): Promise<PackageItem[]> 
     for (const file of files) {
       if (file.name.endsWith('.yml') || file.name.endsWith('.yaml')) {
         try {
-          const contentResponse = await fetch(file.download_url);
-          const content = await contentResponse.text();
-          const packageData = yaml.load(content) as any;
+          const contentResponse = await app.requestUrl({
+            url: file.download_url
+          });
+          const content = contentResponse.text;
+          const packageData = yaml.load(content) as Record<string, any>;
 
           if (packageData && packageData.name && packageData.snippets) {
             const snippets = convertSnippetsToObject(packageData.snippets);
@@ -208,7 +213,20 @@ export async function loadCommunityPackagesFromGitHub(): Promise<PackageItem[]> 
 /**
  * Loads community packages with caching
  */
-export async function loadCommunityPackagesWithCache(plugin: any): Promise<PackageItem[]> {
+interface PluginWithApp {
+  app: App;
+  settings: {
+    communityPackages?: {
+      cache?: {
+        packages: PackageItem[];
+        lastUpdated: number;
+      };
+    };
+  };
+  saveSettings: () => Promise<void>;
+}
+
+export async function loadCommunityPackagesWithCache(plugin: PluginWithApp): Promise<PackageItem[]> {
   const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
   const now = Date.now();
   
@@ -220,7 +238,7 @@ export async function loadCommunityPackagesWithCache(plugin: any): Promise<Packa
   
   try {
     // Load from GitHub
-    const packages = await loadCommunityPackagesFromGitHub();
+    const packages = await loadCommunityPackagesFromGitHub(plugin.app);
     
     // Update cache (even if empty, to avoid repeated 404 requests)
     plugin.settings.communityPackages = {
@@ -248,7 +266,7 @@ export async function loadCommunityPackagesWithCache(plugin: any): Promise<Packa
 /**
  * Loads all community packages from GitHub API
  */
-export async function loadAllCommunityPackages(app: any, plugin?: any): Promise<PackageItem[]> {
+export async function loadAllCommunityPackages(app: App, plugin?: PluginWithApp): Promise<PackageItem[]> {
   try {
     // Load packages from GitHub API with caching
     const packages = plugin ? await loadCommunityPackagesWithCache(plugin) : await loadDynamicCommunityPackages(app);
@@ -265,7 +283,7 @@ export async function loadAllCommunityPackages(app: any, plugin?: any): Promise<
  * This function should be called from UI components that have access to the app instance
  * @deprecated Use loadCommunityPackagesWithCache() instead
  */
-export async function loadCommunityPackagesFromVault(app: any): Promise<PackageItem[]> {
+export async function loadCommunityPackagesFromVault(app: App): Promise<PackageItem[]> {
   // Deprecated - use GitHub API instead
   return [];
 }

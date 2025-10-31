@@ -4,6 +4,7 @@
  */
 
 import * as yaml from "js-yaml";
+import { App } from "obsidian";
 import { 
   buildPackageFormUrl, 
   collectPackageFormMeta, 
@@ -114,8 +115,8 @@ export function validateAndPreparePackageData(
  * @returns Submission result with form URL
  */
 export async function submitPackageViaGoogleForm(
-  packageData: any,
-  app: any,
+  packageData: Record<string, unknown>,
+  app: App,
   pluginVersion: string,
   submitterEmail?: string,
   submitterName?: string
@@ -164,8 +165,8 @@ export async function submitPackageViaGoogleForm(
  * @returns Promise that resolves when form is opened
  */
 export async function openPackageSubmissionForm(
-  packageData: any,
-  app: any,
+  packageData: Record<string, unknown>,
+  app: App,
   pluginVersion: string,
   submitterEmail?: string,
   submitterName?: string
