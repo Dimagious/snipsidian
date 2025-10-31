@@ -33,7 +33,7 @@ export default defineConfig({
     resolve: {
         alias: {
             // Route 'obsidian' imports to our test stub
-            obsidian: fileURLToPath(new URL("./test/stubs/obsidian.ts", import.meta.url)),
+            obsidian: fileURLToPath(new URL("./src/test/stubs/obsidian.ts", import.meta.url)),
         },
     },
 });
