@@ -86,16 +86,27 @@ export class PackageSubmissionSection {
     container.empty();
     if (validation.isValid) {
       const successEl = container.createDiv({ cls: "validation-success" });
-      successEl.createEl("div", { text: "✅ Package is valid!", cls: "validation-title" });
+      successEl.createEl("div", { 
+          // eslint-disable-next-line obsidianmd/ui/sentence-case -- Success validation message
+          text: "✅ Package is valid!", 
+          cls: "validation-title" 
+      });
       if (validation.warnings.length > 0) {
         const warningsEl = successEl.createDiv({ cls: "validation-warnings" });
-        warningsEl.createEl("div", { text: "Warnings:", cls: "warnings-title" });
+        warningsEl.createEl("div", { 
+            // eslint-disable-next-line obsidianmd/ui/sentence-case -- Section header format
+            text: "Warnings:", 
+            cls: "warnings-title" 
+        });
         validation.warnings.forEach((w: string) => warningsEl.createEl("div", { text: `⚠️ ${w}`, cls: "warning-item" }));
       }
     } else {
       const errorEl = container.createDiv({ cls: "validation-error" });
-      // eslint-disable-next-line obsidianmd/ui/sentence-case -- Error message format
-      errorEl.createEl("div", { text: "❌ Validation failed:", cls: "validation-title" });
+      errorEl.createEl("div", { 
+          // eslint-disable-next-line obsidianmd/ui/sentence-case -- Error message format
+          text: "❌ Validation failed:", 
+          cls: "validation-title" 
+      });
       validation.errors.forEach((e: string) => errorEl.createEl("div", { text: `• ${e}`, cls: "error-item" }));
     }
   }

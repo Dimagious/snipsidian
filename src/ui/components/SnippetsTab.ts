@@ -350,6 +350,7 @@ export class SnippetsTab {
             .setName(`Selected: ${selectedCount} snippet${selectedCount === 1 ? '' : 's'}`)
             .setDesc("Perform actions on selected snippets")
             .addButton((btn) => {
+                // eslint-disable-next-line obsidianmd/ui/sentence-case -- Button action text
                 btn.setButtonText("📁 Move to…");
                 btn.onClick(() => {
                     const groups = this.groupManager.allGroupsFrom(this.plugin.settings.snippets);

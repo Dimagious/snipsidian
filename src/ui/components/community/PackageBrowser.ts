@@ -86,8 +86,10 @@ export class PackageBrowser {
       
       const reasonsList = errorContainer.createEl("ul", { cls: "error-reasons" });
       reasonsList.createEl("li", { text: "No internet connection" });
-      // eslint-disable-next-line obsidianmd/ui/sentence-case -- Service name in error message
-      reasonsList.createEl("li", { text: "GitHub API is temporarily unavailable" });
+      reasonsList.createEl("li", { 
+          // eslint-disable-next-line obsidianmd/ui/sentence-case -- Service name in error message
+          text: "GitHub API is temporarily unavailable" 
+      });
       reasonsList.createEl("li", { text: "Community repository is not set up yet" });
       
       errorContainer.createEl("p", {
@@ -139,7 +141,10 @@ export class PackageBrowser {
     const labelHeader = headerRow.createEl("th", { text: "Package", cls: "sortable" });
     labelHeader.onclick = () => this.sortPackages("label");
     
-    headerRow.createEl("th", { text: "Actions" });
+    headerRow.createEl("th", { 
+        // eslint-disable-next-line obsidianmd/ui/sentence-case -- Table header text
+        text: "Actions" 
+    });
 
     const tbody = table.createEl("tbody");
 
