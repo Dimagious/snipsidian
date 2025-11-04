@@ -101,7 +101,6 @@ export class PackageSubmissionSection {
     } else {
       const errorEl = container.createDiv({ cls: "validation-error" });
       errorEl.createEl("div", { 
-          // eslint-disable-next-line obsidianmd/ui/sentence-case -- Error message format
           text: "❌ Validation failed:", 
           cls: "validation-title" 
       });
@@ -124,7 +123,6 @@ export class PackageSubmissionSection {
       
       if (result.success && result.issueUrl) {
         // Show notification with Issue link
-        // eslint-disable-next-line obsidianmd/ui/sentence-case -- Success message with action link
         const notice = new Notice("🎉 Package submitted successfully! Click to view issue.", 10000);
         notice.messageEl.onclick = () => {
           window.open(result.issueUrl, '_blank');
