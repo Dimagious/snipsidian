@@ -144,7 +144,7 @@ export class PackageSubmissionSection {
   }
 
   private showErrorWithFeedbackForm(message: string) {
-    // eslint-disable-next-line obsidianmd/ui/sentence-case -- Error message with action link
+     
     const errorNotice = new Notice(`❌ ${message} Click to report bug.`, 10000);
     errorNotice.messageEl.onclick = () => {
       const pluginVersion = this.plugin.manifest.version;
