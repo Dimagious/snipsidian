@@ -227,7 +227,7 @@ export class SnippetPickerModal extends Modal {
             const previewTextDiv = this.previewDiv.createDiv("snippet-preview-text-container");
             
             // Process text with placeholders and tabstops
-            let text = preview.text;
+            const text = preview.text;
             
             // Collect all markers (cursor and tabstops) with their positions
             interface Marker {

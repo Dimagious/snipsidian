@@ -305,8 +305,8 @@ export class SnippetsTab {
                     
                     // Edit mode state
                     let isEditing = false;
-                    let originalTrigger = triggerName;
-                    let originalReplacement = replacement || "";
+                    const originalTrigger = triggerName;
+                    const originalReplacement = replacement || "";
                     
                     // Edit button click handler
                     editBtn.onclick = () => {
