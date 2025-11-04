@@ -87,13 +87,11 @@ export class PackageBrowser {
       const reasonsList = errorContainer.createEl("ul", { cls: "error-reasons" });
       reasonsList.createEl("li", { text: "No internet connection" });
       reasonsList.createEl("li", { 
-          // eslint-disable-next-line obsidianmd/ui/sentence-case -- Service name in error message
           text: "GitHub API is temporarily unavailable" 
       });
       reasonsList.createEl("li", { text: "Community repository is not set up yet" });
       
       errorContainer.createEl("p", {
-        // eslint-disable-next-line obsidianmd/ui/sentence-case -- Instruction text
         text: "Try clicking the Refresh button above, or check back later.",
         cls: "error-hint",
       });
