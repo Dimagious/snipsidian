@@ -1,4 +1,4 @@
-import { App, PluginSettingTab } from "obsidian";
+import { App, PluginSettingTab, Setting } from "obsidian";
 import type SnipSidianPlugin from "../../main";
 import { BasicTab } from "./BasicTab";
 import { SnippetsTab } from "./SnippetsTab";

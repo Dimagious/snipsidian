@@ -133,13 +133,11 @@ export class BasicTab {
                     .onClick(async () => {
                         try {
                             if (Platform.isDesktop) {
-                                // @ts-expect-error Obsidian internal API - vault.adapter.getBasePath exists at runtime but is not in type definitions
                                 const adapter = this.app.vault.adapter as { getBasePath?: () => string };
                                 if (typeof adapter.getBasePath !== "function") throw new Error("Not supported on this platform");
                                 const base: string = adapter.getBasePath();
                                 const configDir: string = this.app.vault.configDir;
                                 const path = `${base}/${configDir}/plugins/snipsidian/data.json`;
-                                // @ts-expect-error Electron internal API - window.require exists at runtime in Electron environment
                                 const electron = (window as { require?: (module: string) => { shell?: { showItemInFolder?: (path: string) => void } } }).require?.("electron");
                                 if (!electron?.shell?.showItemInFolder) throw new Error("Electron shell not available");
                                 electron.shell.showItemInFolder(path);
@@ -188,7 +186,6 @@ export class BasicTab {
                     .setCta()
                     .onClick(() => {
                         try {
-                            // @ts-expect-error Obsidian internal API - vault.adapter.getBasePath exists at runtime but is not in type definitions
                             const adapter = this.app.vault.adapter as { getBasePath?: () => string };
                             const base: string = adapter?.getBasePath?.() ?? "";
                             const configDir: string = this.app.vault.configDir;

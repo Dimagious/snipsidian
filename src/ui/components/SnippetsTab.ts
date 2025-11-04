@@ -310,10 +310,13 @@ export class SnippetsTab {
                     editBtn.onclick = () => {
                         if (isEditing) {
                             // Save changes
-                            this.saveSnippetChanges(row, trigger, originalTrigger, originalReplacement, root);
+                            const root = document.querySelector('.snipsidian-settings');
+                            if (root) {
+                                void this.saveSnippetChanges(row, trigger, triggerName, replacement, root as HTMLElement);
+                            }
                         } else {
                             // Enter edit mode
-                            this.enterEditMode(row, trigger, triggerName, originalReplacement, editBtn);
+                            this.enterEditMode(row, trigger, triggerName, replacement, editBtn);
                             isEditing = true;
                         }
                     };
