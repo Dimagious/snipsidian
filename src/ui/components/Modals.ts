@@ -221,7 +221,6 @@ export class TextPromptModal extends Modal {
 
         // Error text
         const err = contentEl.createDiv({ cls: "snipsidian-error" });
-        let errText: HTMLSpanElement | null = null;
 
         // Footer
         const footer = contentEl.createDiv({ cls: "modal-button-container" });
@@ -236,14 +235,14 @@ export class TextPromptModal extends Modal {
                 const v = (this.value ?? "").trim();
                 if (!v) {
                     err.empty();
-                    errText = err.createEl("span", { text: "Value cannot be empty." });
+                    err.createEl("span", { text: "Value cannot be empty." });
                     return;
                 }
                 if (this.opts.validate) {
                     const msg = this.opts.validate(v);
                     if (msg) {
                         err.empty();
-                        errText = err.createEl("span", { text: msg });
+                        err.createEl("span", { text: msg });
                         return;
                     }
                 }

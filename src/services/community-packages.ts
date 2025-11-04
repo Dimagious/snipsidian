@@ -152,7 +152,7 @@ export async function createPackageIssue(app: App, packageData: PackageData, use
 /**
  * Loads community packages from GitHub API
  */
-export async function loadCommunityPackagesFromGitHub(app: App): Promise<PackageItem[]> {
+export async function loadCommunityPackagesFromGitHub(_app: App): Promise<PackageItem[]> {
   try {
     const response = await requestUrl({
       url: 'https://api.github.com/repos/Dimagious/snipsidian-community/contents/community-packages/approved'
@@ -295,7 +295,7 @@ export async function loadAllCommunityPackages(app: App, plugin?: PluginWithApp)
  * This function should be called from UI components that have access to the app instance
  * @deprecated Use loadCommunityPackagesWithCache() instead
  */
-export function loadCommunityPackagesFromVault(app: App): PackageItem[] {
+export function loadCommunityPackagesFromVault(_app: App): PackageItem[] {
   // Deprecated - use GitHub API instead
   return [];
 }

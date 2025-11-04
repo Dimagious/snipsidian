@@ -19,7 +19,9 @@ export default [
       parser: tseslint.parser,
       parserOptions: {
         project: './tsconfig.json',
-        tsconfigRootDir: import.meta.dirname || (typeof process !== 'undefined' ? process.cwd() : ''),
+        // Use import.meta.dirname (ESM) or process.cwd() (CJS) for tsconfigRootDir
+        // eslint-disable-next-line no-undef
+        tsconfigRootDir: import.meta.dirname || (typeof process !== 'undefined' ? process.cwd() : import.meta.url ? new URL('.', import.meta.url).pathname : ''),
       },
       globals: {
         process: 'readonly',

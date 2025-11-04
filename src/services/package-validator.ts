@@ -1,21 +1,5 @@
 import type { PackageData } from "./package-types";
 
-// Define PackageItem type locally since catalog was removed
-interface PackageItem {
-    id?: string;
-    label: string;
-    description?: string;
-    author?: string;
-    version?: string;
-    downloads?: number;
-    tags?: string[];
-    verified?: boolean;
-    category?: string;
-    rating?: number;
-    status?: string;
-    lastUpdated?: string;
-}
-
 export interface ValidationResult {
   isValid: boolean;
   errors: string[];
