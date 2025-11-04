@@ -33,8 +33,8 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         }
 
         // Header
-        const header = containerEl.createDiv({ cls: "snipsy-header" });
-        new Setting(header).setHeading().setName("Snipsy settings");
+        const headerDiv = containerEl.createDiv({ cls: "snipsy-header" });
+        new Setting(headerDiv).setHeading().setName("Snipsy settings");
 
         // Tab navigation
         const tabs = [

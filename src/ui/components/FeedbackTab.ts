@@ -77,7 +77,7 @@ export class FeedbackTab {
             .setDesc("Browse existing issues, feature requests, and discussions on our GitHub repository.")
             .addButton((btn) =>
                 btn
-                    .setButtonText("View Issues")
+                    .setButtonText("View issues")
                     .onClick(() => {
                         window.open("https://github.com/Dimagious/snipsidian/issues", "_blank");
                     })
@@ -90,6 +90,7 @@ export class FeedbackTab {
                 btn
                     .setButtonText("Join community")
                     .onClick(() => {
+                        // eslint-disable-next-line obsidianmd/hardcoded-config-path -- This is a URL, not a config path
                         window.open("https://forum.obsidian.md/", "_blank");
                     })
             );

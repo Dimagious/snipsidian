@@ -33,7 +33,7 @@ export class PackageBrowser {
     
     const headerRow = section.createDiv({ cls: "section-header-row" });
     const titleContainer = headerRow.createDiv({ cls: "section-title-container" });
-    titleContainer.createEl("h3", { text: "Browse Community Packages", cls: "section-title" });
+    titleContainer.createEl("h3", { text: "Browse community packages", cls: "section-title" });
     titleContainer.createEl("p", { text: "Browse and install packages from the community.", cls: "section-description" });
 
     const searchContainer = headerRow.createDiv({ cls: "search-container" });
@@ -77,7 +77,7 @@ export class PackageBrowser {
       this.packages.sort((a, b) => a.label.localeCompare(b.label));
       this.filteredPackages = this.packages;
       this.renderPackages(section);
-    } catch (error) {
+    } catch {
       const errorContainer = section.createDiv({ cls: "packages-container" });
       errorContainer.createEl("p", {
         text: "Community packages are temporarily unavailable. This could be due to:",
@@ -89,7 +89,7 @@ export class PackageBrowser {
       reasonsList.createEl("li", { text: "GitHub API is temporarily unavailable" });
       reasonsList.createEl("li", { text: "Community repository is not set up yet" });
       
-      const refreshNote = errorContainer.createEl("p", {
+      errorContainer.createEl("p", {
         text: "Try clicking the Refresh button above, or check back later.",
         cls: "error-hint",
       });
@@ -328,7 +328,7 @@ export class PackageBrowser {
     infoSection.createEl("h3", { text: pkg.label });
     
     if (pkg.verified) {
-      const verifiedBadge = infoSection.createEl("span", { text: " ✓ Verified", cls: "verified-badge" });
+      infoSection.createEl("span", { text: " ✓ Verified", cls: "verified-badge" });
     }
     
     if (pkg.description) {
@@ -342,7 +342,7 @@ export class PackageBrowser {
     
     if (pkg.tags && pkg.tags.length > 0) {
       const tagsContainer = infoSection.createDiv({ cls: "package-tags" });
-      const tagsLabel = tagsContainer.createEl("div", { text: "Tags:", cls: "package-tags-label" });
+      tagsContainer.createEl("div", { text: "Tags:", cls: "package-tags-label" });
       const tagsList = tagsContainer.createDiv({ cls: "package-tags-list" });
       
       pkg.tags.forEach(tag => {
@@ -353,7 +353,7 @@ export class PackageBrowser {
     // Add snippets section
     if (pkg.snippets && Object.keys(pkg.snippets).length > 0) {
       const snippetsContainer = infoSection.createDiv({ cls: "package-snippets" });
-      const snippetsLabel = snippetsContainer.createEl("div", { 
+      snippetsContainer.createEl("div", { 
         text: `Snippets (${Object.keys(pkg.snippets).length}):`,
         cls: "snippets-label"
       });
@@ -422,7 +422,7 @@ export class PackageBrowser {
     // Page numbers with smart ellipsis
     const pages = this.generatePageNumbers(totalPages);
     
-    pages.forEach((page, index) => {
+    pages.forEach((page) => {
       if (page === '...') {
         paginationContainer.createEl("span", {
           text: "...",

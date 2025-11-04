@@ -1,20 +1,30 @@
 // Minimal stub of the 'obsidian' module for tests.
+ 
+
+// Minimal types for test stubs
+interface StubApp {
+    workspace?: { on?: () => void; offref?: () => void };
+    [key: string]: unknown;
+}
+
+type CommandArgs = unknown[];
+type SettingTabArgs = unknown[];
 
 export class Plugin {
-    app: any;
+    app: StubApp;
     // we collect calls so tests can assert them
-    addCommandCalls: any[] = [];
-    addSettingTabCalls: any[] = [];
+    addCommandCalls: CommandArgs[] = [];
+    addSettingTabCalls: SettingTabArgs[] = [];
 
-    constructor(app?: any) {
+    constructor(app?: StubApp) {
         this.app = app ?? { workspace: { on: () => { }, offref: () => { } } };
     }
 
-    addCommand = (...args: any[]) => {
+    addCommand = (...args: CommandArgs) => {
         this.addCommandCalls.push(args);
     };
 
-    addSettingTab = (...args: any[]) => {
+    addSettingTab = (...args: SettingTabArgs) => {
         this.addSettingTabCalls.push(args);
     };
 
@@ -23,7 +33,9 @@ export class Plugin {
 }
 
 // Export the minimal types used in code (optional in tests, but harmless)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Test stub types
 export type App = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Test stub types
 export type Editor = any;
 export type EditorPosition = { line: number; ch: number };
 export class PluginSettingTab { }
@@ -35,15 +47,21 @@ export const Platform = {
     isWin: false,
     isLinux: false
 };
-export class Notice { constructor(_msg: string) { } }
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Parameter kept for API compatibility
+export class Notice { constructor(_msg: string) { 
+    // _msg parameter kept for API compatibility but not used in test stub
+} }
 export class Modal { 
-    constructor(app: any) { }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars -- Test stub constructor, parameter kept for API compatibility
+    constructor(_app: any) { 
+    // _app parameter kept for API compatibility but not used in test stub
+}
     open() { }
     close() { }
 }
 
 export class TFolder {
-    children?: any[];
+    children?: TFile[];
     path: string;
     constructor(path: string) {
         this.path = path;

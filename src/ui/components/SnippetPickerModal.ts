@@ -25,10 +25,10 @@ export class SnippetPickerModal extends Modal {
         contentEl.addClass("snippet-picker-modal");
 
         // Title
-        const title = contentEl.createEl("h2", { text: "Insert snippet" });
+        contentEl.createEl("h2", { text: "Insert snippet" });
 
         // Search field with label
-        const searchLabel = contentEl.createEl("label", { text: "Search snippet" });
+        contentEl.createEl("label", { text: "Search snippet" });
 
         this.searchInput = contentEl.createEl("input", {
             type: "text",
@@ -40,21 +40,21 @@ export class SnippetPickerModal extends Modal {
         this.resultsList = contentEl.createDiv("snippet-results");
 
         // Preview with label
-        const previewLabel = contentEl.createEl("label", { text: "Preview", cls: "preview-label" });
+        contentEl.createEl("label", { text: "Preview", cls: "preview-label" });
 
         this.previewDiv = contentEl.createDiv("snippet-preview");
 
         // Hints
         const hints = contentEl.createDiv("snippet-hints");
         
-        const navStrong = hints.createEl("strong", { text: "Navigation:" });
+        hints.createEl("strong", { text: "Navigation:" });
         hints.appendChild(document.createTextNode(" ↑/↓ to navigate, "));
-        const enterStrong = hints.createEl("strong", { text: "Enter" });
+        hints.createEl("strong", { text: "Enter" });
         hints.appendChild(document.createTextNode(" to insert, "));
-        const escStrong = hints.createEl("strong", { text: "Esc" });
+        hints.createEl("strong", { text: "Esc" });
         hints.appendChild(document.createTextNode(" to close"));
         hints.createEl("br");
-        const clickStrong = hints.createEl("strong", { text: "Click" });
+        hints.createEl("strong", { text: "Click" });
         hints.appendChild(document.createTextNode(" any snippet to insert it directly"));
 
         // Event handlers
@@ -218,9 +218,9 @@ export class SnippetPickerModal extends Modal {
             // Create informative preview
             const metaDiv = this.previewDiv.createDiv("snippet-preview-meta");
             
-            const triggerStrong = metaDiv.createEl("strong", { text: "Trigger:" });
+            metaDiv.createEl("strong", { text: "Trigger:" });
             metaDiv.appendChild(document.createTextNode(` ${selectedSnippet.trigger} | `));
-            const folderStrong = metaDiv.createEl("strong", { text: "Folder:" });
+            metaDiv.createEl("strong", { text: "Folder:" });
             metaDiv.appendChild(document.createTextNode(` ${selectedSnippet.folder}`));
             
             // Create preview text with highlighting
@@ -281,7 +281,7 @@ export class SnippetPickerModal extends Modal {
                 }
                 
                 // Add highlighted marker
-                const span = previewTextDiv.createEl("span", {
+                previewTextDiv.createEl("span", {
                     cls: marker.type === 'cursor' ? "snippet-highlight-cursor" : "snippet-highlight-tabstop",
                     text: marker.text
                 });

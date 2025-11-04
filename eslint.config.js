@@ -56,8 +56,8 @@ export default [
       
       // UI sentence case with custom options
       'obsidianmd/ui/sentence-case': ['warn', {
-        brands: ['Snipsy', 'SnipSidian'],
-        acronyms: ['UI', 'API', 'JSON', 'YAML', 'HTML', 'CSS', 'DOM', 'GitHub'],
+        brands: ['Snipsy', 'SnipSidian', 'GitHub', 'Espanso'],
+        acronyms: ['UI', 'API', 'JSON', 'YAML', 'HTML', 'CSS', 'DOM', 'GIF'],
         enforceCamelCaseLower: true,
       }],
     },
@@ -68,6 +68,7 @@ export default [
     files: ['*.config.ts', '*.config.js', 'vitest.config.ts'],
     languageOptions: {
       parser: tseslint.parser,
+      // No parserOptions.project for config files to avoid parsing errors
     },
     rules: {
       // Disable rules that require type checking for config files
@@ -84,6 +85,7 @@ export default [
       'main.js',
       'scripts/**',
       'src/**/*.test.ts',
+      'vitest.config.ts', // Exclude from type checking to avoid parsing errors
     ],
   },
 ];

@@ -159,7 +159,8 @@ function validatePackageStructure(packageData: PackageData, errors: string[], wa
   }
 }
 
-function validateNamingConventions(packageData: PackageData, errors: string[], warnings: string[]) {
+function validateNamingConventions(packageData: PackageData, errors: string[], _warnings: string[]) {
+  // _warnings parameter kept for consistency with other validation functions but not used here
   // Validate package name
   if (packageData.name) {
     // Hyphen moved to end of character class to avoid escaping

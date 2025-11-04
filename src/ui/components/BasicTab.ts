@@ -168,7 +168,7 @@ export class BasicTab {
             );
 
         new Setting(helpSection)
-            .setName("Espanso Hub")
+            .setName("Espanso hub")
             .setDesc("Browse thousands of community-created packages")
             .addButton((btn) =>
                 btn
