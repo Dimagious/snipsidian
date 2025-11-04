@@ -94,6 +94,7 @@ export class PackageSubmissionSection {
       }
     } else {
       const errorEl = container.createDiv({ cls: "validation-error" });
+      // eslint-disable-next-line obsidianmd/ui/sentence-case -- Error message format
       errorEl.createEl("div", { text: "❌ Validation failed:", cls: "validation-title" });
       validation.errors.forEach((e: string) => errorEl.createEl("div", { text: `• ${e}`, cls: "error-item" }));
     }
@@ -114,6 +115,7 @@ export class PackageSubmissionSection {
       
       if (result.success && result.issueUrl) {
         // Show notification with Issue link
+        // eslint-disable-next-line obsidianmd/ui/sentence-case -- Success message with action link
         const notice = new Notice("🎉 Package submitted successfully! Click to view issue.", 10000);
         notice.messageEl.onclick = () => {
           window.open(result.issueUrl, '_blank');
@@ -135,6 +137,7 @@ export class PackageSubmissionSection {
   }
 
   private showErrorWithFeedbackForm(message: string) {
+    // eslint-disable-next-line obsidianmd/ui/sentence-case -- Error message with action link
     const errorNotice = new Notice(`❌ ${message} Click to report bug.`, 10000);
     errorNotice.messageEl.onclick = () => {
       const pluginVersion = this.plugin.manifest.version;

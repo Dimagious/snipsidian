@@ -346,7 +346,8 @@ export class AddSnippetModal extends Modal {
             .setDesc("The text that will be expanded (e.g., :hello)")
             .addText((text) => {
                 text
-                    .setPlaceholder("e.g., :hello")
+                    // eslint-disable-next-line obsidianmd/ui/sentence-case -- Example placeholder format
+                    .setPlaceholder("e.g.: :hello")
                     .setValue(trigger)
                     .onChange((value) => {
                         trigger = value;
@@ -358,7 +359,8 @@ export class AddSnippetModal extends Modal {
             .setDesc("The text that will replace the trigger")
             .addTextArea((text) => {
                 text
-                    .setPlaceholder("e.g., Hello, world!")
+                    // eslint-disable-next-line obsidianmd/ui/sentence-case -- Example placeholder format
+                    .setPlaceholder("e.g.: hello, world!")
                     .setValue(replacement)
                     .onChange((value) => {
                         replacement = value;
@@ -370,7 +372,8 @@ export class AddSnippetModal extends Modal {
             .setDesc("Optional group name for organization")
             .addText((text) => {
                 text
-                    .setPlaceholder("e.g., greetings")
+                    // eslint-disable-next-line obsidianmd/ui/sentence-case -- Example placeholder format
+                    .setPlaceholder("e.g.: greetings")
                     .setValue(group)
                     .onChange((value) => {
                         group = value;

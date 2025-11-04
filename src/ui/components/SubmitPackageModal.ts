@@ -47,6 +47,7 @@ export class SubmitPackageModal extends Modal {
 
         // YAML input
         const yamlContainer = contentEl.createDiv({ cls: "yaml-container" });
+        // eslint-disable-next-line obsidianmd/ui/sentence-case -- Label format with acronym
         yamlContainer.createEl("label", { 
             text: "Package YAML:",
             cls: "yaml-label"
@@ -63,6 +64,7 @@ export class SubmitPackageModal extends Modal {
         // Buttons
         const buttonContainer = contentEl.createDiv({ cls: "button-container" });
         
+        // eslint-disable-next-line obsidianmd/ui/sentence-case -- Button action text
         const validateBtn = buttonContainer.createEl("button", {
             text: "Validate package",
             cls: "validate-btn"
@@ -90,6 +92,7 @@ export class SubmitPackageModal extends Modal {
         }
 
         try {
+            // eslint-disable-next-line obsidianmd/ui/sentence-case -- YAML parsing error message context
             const packageData = yaml.load(yamlContent);
             
             if (!packageData || typeof packageData !== 'object') {
@@ -205,6 +208,7 @@ export class SubmitPackageModal extends Modal {
         this.validationContainer.empty();
         
         const successEl = this.validationContainer.createDiv({ cls: "submission-success" });
+        // eslint-disable-next-line obsidianmd/ui/sentence-case -- Success celebration message
         successEl.createEl("div", { 
             text: "🎉 Thank you for contributing to the community!",
             cls: "success-title"

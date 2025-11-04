@@ -86,10 +86,12 @@ export class PackageBrowser {
       
       const reasonsList = errorContainer.createEl("ul", { cls: "error-reasons" });
       reasonsList.createEl("li", { text: "No internet connection" });
+      // eslint-disable-next-line obsidianmd/ui/sentence-case -- Service name in error message
       reasonsList.createEl("li", { text: "GitHub API is temporarily unavailable" });
       reasonsList.createEl("li", { text: "Community repository is not set up yet" });
       
       errorContainer.createEl("p", {
+        // eslint-disable-next-line obsidianmd/ui/sentence-case -- Instruction text
         text: "Try clicking the Refresh button above, or check back later.",
         cls: "error-hint",
       });
@@ -328,6 +330,7 @@ export class PackageBrowser {
     infoSection.createEl("h3", { text: pkg.label });
     
     if (pkg.verified) {
+      // eslint-disable-next-line obsidianmd/ui/sentence-case -- Status badge text
       infoSection.createEl("span", { text: " ✓ Verified", cls: "verified-badge" });
     }
     
