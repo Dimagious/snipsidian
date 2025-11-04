@@ -332,7 +332,7 @@ export class PackageBrowser {
     infoSection.createEl("h3", { text: pkg.label });
     
     if (pkg.verified) {
-      // eslint-disable-next-line obsidianmd/ui/sentence-case -- Status badge text
+       
       infoSection.createEl("span", { text: " ✓ Verified", cls: "verified-badge" });
     }
     

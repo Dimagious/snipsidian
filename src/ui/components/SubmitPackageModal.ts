@@ -155,7 +155,7 @@ export class SubmitPackageModal extends Modal {
         } else {
             const errorEl = this.validationContainer.createDiv({ cls: "validation-error" });
             errorEl.createEl("div", { 
-                // eslint-disable-next-line obsidianmd/ui/sentence-case -- Error message format
+                 
                 text: "❌ Validation failed:",
                 cls: "validation-title"
             });
@@ -207,7 +207,7 @@ export class SubmitPackageModal extends Modal {
         
         const successEl = this.validationContainer.createDiv({ cls: "submission-success" });
         successEl.createEl("div", { 
-            // eslint-disable-next-line obsidianmd/ui/sentence-case -- Success celebration message
+             
             text: "🎉 Thank you for contributing to the community!",
             cls: "success-title"
         });
