@@ -1,3 +1,5 @@
+import type { PackageData } from "./package-types";
+
 // Define PackageItem type locally since catalog was removed
 interface PackageItem {
     id?: string;
@@ -31,7 +33,7 @@ export interface PackageValidationOptions {
  * Validates a community package for quality and compliance
  */
 export function validatePackage(
-  packageData: any,
+  packageData: PackageData,
   options: PackageValidationOptions = {}
 ): ValidationResult {
   const {
@@ -79,7 +81,7 @@ export function validatePackage(
   return { isValid, errors, warnings };
 }
 
-function validateRequiredFields(packageData: any, errors: string[]) {
+function validateRequiredFields(packageData: PackageData, errors: string[]) {
   const requiredFields = ["name", "version", "author", "description", "snippets"];
   
   for (const field of requiredFields) {
@@ -89,7 +91,7 @@ function validateRequiredFields(packageData: any, errors: string[]) {
   }
 }
 
-function validateOptionalFields(packageData: any, warnings: string[]) {
+function validateOptionalFields(packageData: PackageData, warnings: string[]) {
   const optionalFields = ["category", "tags", "license", "homepage"];
   
   for (const field of optionalFields) {
@@ -99,7 +101,7 @@ function validateOptionalFields(packageData: any, warnings: string[]) {
   }
 }
 
-function validatePackageStructure(packageData: any, errors: string[], warnings: string[]) {
+function validatePackageStructure(packageData: PackageData, errors: string[], warnings: string[]) {
   // Validate name
   if (packageData.name) {
     if (typeof packageData.name !== "string") {
@@ -173,7 +175,7 @@ function validatePackageStructure(packageData: any, errors: string[], warnings: 
   }
 }
 
-function validateNamingConventions(packageData: any, errors: string[], warnings: string[]) {
+function validateNamingConventions(packageData: PackageData, errors: string[], warnings: string[]) {
   // Validate package name
   if (packageData.name) {
     if (!/^[a-zA-Z0-9\s\-_]+$/.test(packageData.name)) {
@@ -189,7 +191,7 @@ function validateNamingConventions(packageData: any, errors: string[], warnings:
   }
 }
 
-function validateContentQuality(packageData: any, errors: string[], warnings: string[]) {
+function validateContentQuality(packageData: PackageData, errors: string[], warnings: string[]) {
   // Check for inappropriate content
   const inappropriateWords = ["spam", "test", "dummy", "placeholder"];
   
@@ -210,7 +212,7 @@ function validateContentQuality(packageData: any, errors: string[], warnings: st
   }
 }
 
-function validateSnippets(packageData: any, errors: string[], warnings: string[]) {
+function validateSnippets(packageData: PackageData, errors: string[], warnings: string[]) {
   if (!packageData.snippets) {
     errors.push("Package must contain snippets");
     return;
@@ -235,6 +237,10 @@ function validateSnippets(packageData: any, errors: string[], warnings: string[]
 
   for (let i = 0; i < packageData.snippets.length; i++) {
     const snippet = packageData.snippets[i];
+    if (!snippet) {
+      errors.push(`Snippet ${i + 1}: snippet is undefined or null`);
+      continue;
+    }
     const snippetErrors: string[] = [];
     const snippetWarnings: string[] = [];
 
@@ -340,7 +346,7 @@ export function validatePackageFile(filePath: string): ValidationResult {
 /**
  * Validates package metadata for community submission
  */
-export function validatePackageMetadata(packageData: any): ValidationResult {
+export function validatePackageMetadata(packageData: PackageData): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 

@@ -161,7 +161,7 @@ export class PackageBrowser {
       const isInstalled = this.isPackageInstalled(pkg);
       
       if (isInstalled) {
-        const installedBtn = actionsCell.createEl("button", { text: "✓ Installed", cls: "install-btn installed" });
+        const installedBtn = actionsCell.createEl("button", { text: "Installed", cls: "install-btn installed" });
         installedBtn.disabled = true;
       } else {
         const installBtn = actionsCell.createEl("button", { text: "Install", cls: "install-btn" });
@@ -197,11 +197,13 @@ export class PackageBrowser {
           }))
         });
         
-        modal.onConfirm = () => this.performInstallation(pkg);
+        modal.onConfirm = async () => {
+            await this.performInstallation(pkg);
+        };
         modal.open();
       } else {
         // No conflicts, install directly
-        this.performInstallation(pkg);
+        void this.performInstallation(pkg);
       }
     } catch (error) {
       new Notice(`Failed to install package: ${error}`);
@@ -362,13 +364,13 @@ export class PackageBrowser {
         const snippetRow = snippetsList.createDiv({ cls: "snippet-row" });
         
         const triggerEl = snippetRow.createDiv({ cls: "snippet-trigger" });
-        triggerEl.textContent = trigger;
+        triggerEl.createEl("span", { text: trigger });
         
         const arrowEl = snippetRow.createDiv({ cls: "snippet-arrow" });
-        arrowEl.textContent = "→";
+        arrowEl.createEl("span", { text: "→" });
         
         const replacementEl = snippetRow.createDiv({ cls: "snippet-replacement" });
-        replacementEl.textContent = replacement;
+        replacementEl.createEl("span", { text: replacement });
         replacementEl.title = replacement; // Show full text on hover
       });
     }
@@ -377,7 +379,7 @@ export class PackageBrowser {
     
     const isInstalled = this.isPackageInstalled(pkg);
     const installBtn = buttonContainer.createEl("button", { 
-      text: isInstalled ? "✓ Already Installed" : "Install Package", 
+      text: isInstalled ? "Already installed" : "Install package", 
       cls: isInstalled ? "install-btn installed" : "install-btn"
     });
     

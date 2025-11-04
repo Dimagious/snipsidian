@@ -73,7 +73,7 @@ describe("app/plugin", () => {
             (call: any[]) => call[0]?.id === "open-settings"
         );
         expect(openSettingsCommand).toBeDefined();
-        expect(openSettingsCommand[0].name).toBe("Open Snipy Settings");
+        expect(openSettingsCommand[0].name).toBe("Open Snipsy settings");
     });
 
     it("onunload calls disposer", async () => {

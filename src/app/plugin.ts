@@ -7,8 +7,6 @@ import { getDict, getAllSnippetsFlat } from "../store/snippets";
 import { SnippetPickerService } from "../core/snippet-picker";
 import { openSnippetPickerModal } from "../ui/components/SnippetPickerModal";
 
-const DEFAULT_SETTINGS: SnipSidianSettings = { snippets: DEFAULT_SNIPPETS };
-
 export default class HotstringsPlugin extends Plugin {
     settings!: SnipSidianSettings;
     private off?: () => void;
@@ -22,7 +20,7 @@ export default class HotstringsPlugin extends Plugin {
         // Snippet Picker command
         this.addCommand({
             id: "insert-snippet",
-            name: "Insert Snippet…",
+            name: "Insert snippet…",
             callback: () => {
                 const snippets = getAllSnippetsFlat(this.settings);
                 const api = new SnippetPickerService(snippets);
@@ -33,22 +31,24 @@ export default class HotstringsPlugin extends Plugin {
         // Open Settings command
         this.addCommand({
             id: "open-settings",
-            name: "Open Snipy Settings",
+            name: "Open Snipsy settings",
             callback: () => {
-                // @ts-ignore - Obsidian API works correctly at runtime
+                // @ts-ignore Obsidian internal API - setting.open() and openTabById() exist at runtime but are not in type definitions
                 this.app.setting.open();
-                // @ts-ignore - Obsidian API works correctly at runtime
+                // @ts-ignore Obsidian internal API - setting.open() and openTabById() exist at runtime but are not in type definitions
                 this.app.setting.openTabById(this.manifest.id);
             }
         });
 
         this.addSettingTab(new SnipSidianSettingTab(this.app, this));
-        console.log("Snipsy modular plugin loaded");
     }
 
     onunload() {
-        try { this.off?.(); } catch { }
-        console.log("Snipsy modular plugin unloaded");
+        try { 
+            this.off?.(); 
+        } catch {
+            // Ignore errors during cleanup
+        }
     }
 
     async loadSettings() {

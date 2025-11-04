@@ -12,7 +12,7 @@ export class EspansoSection {
 
   render(root: HTMLElement): void {
     const espansoSection = root.createDiv({ cls: "snipsy-section snipsy-espanso-section" });
-    espansoSection.createEl("h3", { text: "Install Espanso Package", cls: "section-title" });
+    espansoSection.createEl("h3", { text: "Install Espanso package", cls: "section-title" });
     const espansoHelpText = espansoSection.createDiv({ cls: "help-text" });
     espansoHelpText.createEl("p", { text: "Paste packages from Espanso Hub." });
     const espansoLinkEl = espansoHelpText.createEl("p", { text: "Browse packages at ", cls: "snipsy-hint" });
@@ -33,7 +33,7 @@ export class EspansoSection {
     }) as HTMLTextAreaElement;
 
     const espansoButtonRow = espansoSection.createDiv({ cls: "button-row" });
-    const espansoInstallBtn = espansoButtonRow.createEl("button", { text: "Install Espanso Package", cls: "install-btn" });
+    const espansoInstallBtn = espansoButtonRow.createEl("button", { text: "Install Espanso package", cls: "install-btn" });
     espansoInstallBtn.onclick = async () => {
       const yamlText = espansoTextarea.value;
       if (!yamlText?.trim()) {
@@ -45,10 +45,12 @@ export class EspansoSection {
         const conflicts = diffIncoming(this.plugin.settings.snippets, incoming);
         if (conflicts.conflicts.length > 0) {
           const modal = new PackagePreviewModal(this.app, this.plugin, "Espanso Package", conflicts);
-          modal.onConfirm = () => this.installFromYaml(yamlText);
+          modal.onConfirm = async () => {
+            await this.installFromYaml(yamlText);
+          };
           modal.open();
         } else {
-          this.installFromYaml(yamlText);
+          void this.installFromYaml(yamlText);
         }
       } catch (err) {
         new Notice(`Failed to parse Espanso package: ${err}`);

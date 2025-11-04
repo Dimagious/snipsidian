@@ -9,18 +9,12 @@ export class BasicTab {
     ) {}
 
     render(root: HTMLElement) {
-        const debounce = <T extends (...a: any[]) => any>(fn: T, ms: number) => {
-            let t: ReturnType<typeof setTimeout> | undefined;
-            return ((...args: Parameters<T>) => {
-                clearTimeout(t);
-                t = setTimeout(() => fn(...args), ms);
-            }) as T;
-        };
-
         // Helper function for creating sections
         const section = (title: string, hint?: string, specialClass?: string) => {
             const wrap = root.createDiv({ cls: `snipsy-section ${specialClass || ""}` });
-            wrap.createEl("h3", { text: title });
+            new Setting(wrap)
+                .setHeading()
+                .setName(title);
             if (hint) wrap.createEl("p", { text: hint, cls: "snipsy-hint" });
             return wrap;
         };
@@ -29,11 +23,11 @@ export class BasicTab {
         const commandsSection = section("Commands", "Configure hotkeys for Snipsy commands.", "snipsy-commands-section");
 
         new Setting(commandsSection)
-            .setName("Insert Snippet")
+            .setName("Insert snippet")
             .setDesc("Open the snippet picker to insert snippets")
             .addButton((btn) =>
                 btn
-                    .setButtonText("Set Hotkey")
+                    .setButtonText("Set hotkey")
                     .setCta()
                     .onClick(() => {
                         // Open hotkey settings for the insert-snippet command
@@ -52,11 +46,11 @@ export class BasicTab {
             );
 
         new Setting(commandsSection)
-            .setName("Open Snipy Settings")
+            .setName("Open Snipsy settings")
             .setDesc("Quick access to Snipsy settings")
             .addButton((btn) =>
                 btn
-                    .setButtonText("Set Hotkey")
+                    .setButtonText("Set hotkey")
                     .setCta()
                     .onClick(() => {
                         // Open hotkey settings for the open-settings command
@@ -139,14 +133,14 @@ export class BasicTab {
                     .onClick(async () => {
                         try {
                             if (Platform.isDesktop) {
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                const adapter: any = this.app.vault.adapter as any;
+                                // @ts-ignore Obsidian internal API - vault.adapter.getBasePath exists at runtime but is not in type definitions
+                                const adapter = this.app.vault.adapter as { getBasePath?: () => string };
                                 if (typeof adapter.getBasePath !== "function") throw new Error("Not supported on this platform");
                                 const base: string = adapter.getBasePath();
                                 const configDir: string = this.app.vault.configDir;
                                 const path = `${base}/${configDir}/plugins/snipsidian/data.json`;
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                const electron = (window as any).require?.("electron");
+                                // @ts-ignore Electron internal API - window.require exists at runtime in Electron environment
+                                const electron = (window as { require?: (module: string) => { shell?: { showItemInFolder?: (path: string) => void } } }).require?.("electron");
                                 if (!electron?.shell?.showItemInFolder) throw new Error("Electron shell not available");
                                 electron.shell.showItemInFolder(path);
                             } else {
@@ -178,7 +172,7 @@ export class BasicTab {
             .setDesc("Browse thousands of community-created packages")
             .addButton((btn) =>
                 btn
-                    .setButtonText("Browse Packages")
+                    .setButtonText("Browse packages")
                     .setCta()
                     .onClick(() => {
                         window.open("https://hub.espanso.org/", "_blank");
@@ -190,12 +184,12 @@ export class BasicTab {
             .setDesc("See Snipsy in action")
             .addButton((btn) =>
                 btn
-                    .setButtonText("View Demo")
+                    .setButtonText("View demo")
                     .setCta()
                     .onClick(() => {
                         try {
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            const adapter: any = this.app.vault.adapter as any;
+                            // @ts-ignore Obsidian internal API - vault.adapter.getBasePath exists at runtime but is not in type definitions
+                            const adapter = this.app.vault.adapter as { getBasePath?: () => string };
                             const base: string = adapter?.getBasePath?.() ?? "";
                             const configDir: string = this.app.vault.configDir;
                             const absPath = `${base}/${configDir}/plugins/snipsidian/docs/screens/espanso-demo.gif`;

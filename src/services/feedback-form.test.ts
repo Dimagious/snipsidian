@@ -11,6 +11,18 @@ import {
   type PackageFormMeta
 } from "./feedback-form";
 
+// Mock Platform API
+vi.mock("obsidian", () => {
+  const Platform = {
+    isMacOS: false,
+    isWin: false,
+    isLinux: false,
+    isDesktop: true,
+    isMobile: false
+  };
+  return { Platform };
+});
+
 describe("feedback-form", () => {
   const baseUrl = "https://docs.google.com/forms/d/e/1FAIpQLSf4kFr5pme9C0CX02NOad_9STlia5-xZ2D-9C88u1mX32WqXw/viewform";
   
@@ -106,7 +118,12 @@ describe("feedback-form", () => {
   });
 
   describe("collectSystemMeta", () => {
-    it("should collect system metadata correctly", () => {
+    it("should collect system metadata correctly", async () => {
+      const { Platform } = await import("obsidian");
+      Platform.isMacOS = true;
+      Platform.isWin = false;
+      Platform.isLinux = false;
+      
       const mockApp = { version: "1.6.7" };
       const pluginVersion = "0.4.4";
       
@@ -115,9 +132,12 @@ describe("feedback-form", () => {
       expect(meta.plugin).toBe("0.4.4");
       expect(meta.obsidian).toBe("1.6.7");
       expect(meta.platform).toBe("mac");
-      expect(meta.os).toBe("MacIntel");
+      expect(meta.os).toBe("Mac");
       expect(meta.locale).toBe("en-US");
       expect(meta.theme).toBe("dark");
+      
+      // Reset
+      Platform.isMacOS = false;
     });
 
     it("should handle missing app version", () => {
@@ -129,26 +149,29 @@ describe("feedback-form", () => {
       expect(meta.obsidian).toBe("Unknown");
     });
 
-    it("should detect different platforms", () => {
+    it("should detect different platforms", async () => {
+      const { Platform } = await import("obsidian");
       const testCases = [
-        { platform: 'Win32', expected: 'windows' },
-        { platform: 'Linux x86_64', expected: 'linux' },
-        { platform: 'MacIntel', expected: 'mac' },
-        { platform: 'Unknown', expected: 'unknown' }
+        { isMacOS: false, isWin: true, isLinux: false, expected: 'windows', os: 'Windows' },
+        { isMacOS: false, isWin: false, isLinux: true, expected: 'linux', os: 'Linux' },
+        { isMacOS: true, isWin: false, isLinux: false, expected: 'mac', os: 'Mac' },
+        { isMacOS: false, isWin: false, isLinux: false, expected: 'unknown', os: 'Unknown' }
       ];
       
-      testCases.forEach(({ platform, expected }) => {
-        Object.defineProperty(global, 'navigator', {
-          value: {
-            platform: platform,
-            language: 'en-US'
-          },
-          writable: true
-        });
+      testCases.forEach(({ isMacOS, isWin, isLinux, expected, os }) => {
+        Platform.isMacOS = isMacOS;
+        Platform.isWin = isWin;
+        Platform.isLinux = isLinux;
         
         const meta = collectSystemMeta({}, "0.4.4");
         expect(meta.platform).toBe(expected);
+        expect(meta.os).toBe(os);
       });
+      
+      // Reset
+      Platform.isMacOS = false;
+      Platform.isWin = false;
+      Platform.isLinux = false;
     });
 
     it("should detect light theme", () => {
@@ -285,7 +308,12 @@ describe("feedback-form", () => {
   });
 
   describe("collectPackageFormMeta", () => {
-    it("should collect package form metadata", () => {
+    it("should collect package form metadata", async () => {
+      const { Platform } = await import("obsidian");
+      Platform.isMacOS = true;
+      Platform.isWin = false;
+      Platform.isLinux = false;
+      
       const mockApp = {
         version: "1.0.0"
       } as any;
@@ -296,12 +324,15 @@ describe("feedback-form", () => {
         plugin: "0.8.0",
         obsidian: "1.0.0",
         platform: "mac",
-        os: "MacIntel",
+        os: "Mac",
         locale: "en-US",
         theme: "dark",
         submitterName: undefined,
         submitterEmail: undefined
       });
+      
+      // Reset
+      Platform.isMacOS = false;
     });
 
     it("should handle missing app version", () => {

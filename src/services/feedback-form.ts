@@ -3,7 +3,7 @@
  * Handles URL generation with pre-filled data for different feedback types
  */
 
-import { App } from "obsidian";
+import { App, Platform } from "obsidian";
 
 export const entryIdMap = {
   // Основные поля формы
@@ -147,16 +147,23 @@ export function buildPackageFormUrl(
  * @returns Collected metadata object
  */
 export function collectSystemMeta(app: App, pluginVersion: string): FeedbackMeta {
-  // @ts-ignore - Obsidian API works correctly at runtime
+  // @ts-ignore Obsidian internal API - app.version exists at runtime but is not in type definitions
   const obsidianVersion = app.version || "Unknown";
   
-  // Detect platform
-  const platform = navigator.platform.toLowerCase().includes('mac') ? 'mac' : 
-                   navigator.platform.toLowerCase().includes('win') ? 'windows' : 
-                   navigator.platform.toLowerCase().includes('linux') ? 'linux' : 'unknown';
+  // Detect platform using Obsidian Platform API
+  let platform: string;
+  if (Platform.isMacOS) {
+    platform = 'mac';
+  } else if (Platform.isWin) {
+    platform = 'windows';
+  } else if (Platform.isLinux) {
+    platform = 'linux';
+  } else {
+    platform = 'unknown';
+  }
   
-  // Detect OS
-  const os = navigator.platform;
+  // Detect OS using Obsidian Platform API
+  const os = Platform.isMacOS ? 'Mac' : Platform.isWin ? 'Windows' : Platform.isLinux ? 'Linux' : 'Unknown';
   
   // Get locale
   const locale = navigator.language || 'en-US';

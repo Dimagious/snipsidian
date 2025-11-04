@@ -21,11 +21,11 @@ export class FeedbackTab {
 
         // Suggest Feature button
         new Setting(feedbackSection)
-            .setName("Suggest a Feature")
+            .setName("Suggest a feature")
             .setDesc("Have an idea for a new feature or improvement? Share your suggestions with us to help shape the future of Snipsy.")
             .addButton((btn) =>
                 btn
-                    .setButtonText("Suggest Feature")
+                    .setButtonText("Suggest feature")
                     .setCta()
                     .onClick(() => {
                         this.openFeedbackForm("Feature request");
@@ -34,11 +34,11 @@ export class FeedbackTab {
 
         // Report Bug button
         new Setting(feedbackSection)
-            .setName("Report a Bug")
+            .setName("Report a bug")
             .setDesc("Found something that's not working as expected? Report bugs to help us fix issues and improve the plugin's reliability.")
             .addButton((btn) =>
                 btn
-                    .setButtonText("Report Bug")
+                    .setButtonText("Report bug")
                     .setCta()
                     .onClick(() => {
                         this.openFeedbackForm("Bug report");
@@ -47,11 +47,11 @@ export class FeedbackTab {
 
         // General Feedback button
         new Setting(feedbackSection)
-            .setName("General Feedback")
+            .setName("General feedback")
             .setDesc("Share your overall experience with Snipsy, provide general feedback, or get in touch with any other thoughts you might have.")
             .addButton((btn) =>
                 btn
-                    .setButtonText("Share Feedback")
+                    .setButtonText("Share feedback")
                     .setCta()
                     .onClick(() => {
                         this.openFeedbackForm("General feedback");
@@ -66,7 +66,7 @@ export class FeedbackTab {
             .setDesc("Read the comprehensive documentation and guides to get the most out of Snipsy.")
             .addButton((btn) =>
                 btn
-                    .setButtonText("View Docs")
+                    .setButtonText("View docs")
                     .onClick(() => {
                         window.open("https://github.com/Dimagious/snipsidian#readme", "_blank");
                     })
@@ -88,7 +88,7 @@ export class FeedbackTab {
             .setDesc("Join the Obsidian community discussions and get help from other users.")
             .addButton((btn) =>
                 btn
-                    .setButtonText("Join Community")
+                    .setButtonText("Join community")
                     .onClick(() => {
                         window.open("https://forum.obsidian.md/", "_blank");
                     })

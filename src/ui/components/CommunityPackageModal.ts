@@ -1,7 +1,6 @@
-import { App, Modal, Notice, Setting } from "obsidian";
+import { App, Modal, Notice } from "obsidian";
 import type SnipSidianPlugin from "../../main";
 import { loadCommunityPackages, type PackageItem } from "../../services/community-packages";
-import { validatePackage } from "../../services/package-validator";
 
 export class CommunityPackageModal extends Modal {
     private packages: PackageItem[] = [];
@@ -15,7 +14,7 @@ export class CommunityPackageModal extends Modal {
         super(app);
     }
 
-    async onOpen() {
+    onOpen(): void {
         const { contentEl } = this;
         contentEl.empty();
         contentEl.addClass("snipsy-community-modal");
@@ -38,18 +37,11 @@ export class CommunityPackageModal extends Modal {
         };
 
         // Load packages
-        try {
-            this.packages = await loadCommunityPackages();
-            // Sort packages alphabetically by label
-            this.packages.sort((a, b) => a.label.localeCompare(b.label));
-            this.filteredPackages = this.packages;
-            this.renderPackages();
-        } catch (error) {
-            contentEl.createEl("p", { 
-                text: "Failed to load community packages. Please check your internet connection.",
-                cls: "error-message"
-            });
-        }
+        this.packages = loadCommunityPackages();
+        // Sort packages alphabetically by label
+        this.packages.sort((a, b) => a.label.localeCompare(b.label));
+        this.filteredPackages = this.packages;
+        this.renderPackages();
     }
 
     private filterPackages() {
@@ -114,35 +106,31 @@ export class CommunityPackageModal extends Modal {
 
             // Install button
             const installBtn = packageEl.createEl("button", {
-                text: "Install Package",
+                text: "Install package",
                 cls: "install-btn"
             });
             installBtn.onclick = () => this.installPackage(pkg);
         });
     }
 
-    private async installPackage(pkg: PackageItem) {
-        try {
-            // For now, we'll show a notice since we don't have the actual package content
-            // In the future, this would load the package YAML and install it
-            new Notice(`Installing "${pkg.label}"... (Feature coming soon!)`);
-            
-            // TODO: Load package YAML content and install it
-            // const packageContent = await loadPackageContent(pkg.id);
-            // const validation = validatePackage(packageContent);
-            // if (validation.isValid) {
-            //     await this.installCommunityPackage(packageContent);
-            //     new Notice(`Package "${pkg.label}" installed successfully!`);
-            //     this.close();
-            // } else {
-            //     new Notice(`Package validation failed: ${validation.errors.join(', ')}`);
-            // }
-        } catch (error) {
-            new Notice(`Failed to install package: ${error}`);
-        }
+    private installPackage(pkg: PackageItem): void {
+        // For now, we'll show a notice since we don't have the actual package content
+        // In the future, this would load the package YAML and install it
+        new Notice(`Installing "${pkg.label}"... (Feature coming soon!)`);
+        
+        // TODO: Load package YAML content and install it
+        // const packageContent = await loadPackageContent(pkg.id);
+        // const validation = validatePackage(packageContent);
+        // if (validation.isValid) {
+        //     await this.installCommunityPackage(packageContent);
+        //     new Notice(`Package "${pkg.label}" installed successfully!`);
+        //     this.close();
+        // } else {
+        //     new Notice(`Package validation failed: ${validation.errors.join(', ')}`);
+        // }
     }
 
-    onClose() {
+    onClose(): void {
         const { contentEl } = this;
         contentEl.empty();
     }

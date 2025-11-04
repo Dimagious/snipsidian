@@ -1,14 +1,15 @@
 import { App, Modal, Notice } from "obsidian";
 import type SnipSidianPlugin from "../../main";
-import { validatePackage } from "../../services/package-validator";
+import { validatePackage, type ValidationResult } from "../../services/package-validator";
 import { processPackageSubmission } from "../../services/community-packages";
+import type { PackageData } from "../../services/package-types";
 import * as yaml from "js-yaml";
 
 export class SubmitPackageModal extends Modal {
     private yamlTextarea!: HTMLTextAreaElement;
     private validationContainer!: HTMLElement;
     private submitBtn!: HTMLButtonElement;
-    private validationResult: any = null;
+    private validationResult: ValidationResult | null = null;
 
     constructor(
         public app: App,
@@ -17,14 +18,14 @@ export class SubmitPackageModal extends Modal {
         super(app);
     }
 
-    onOpen() {
+    onOpen(): void {
         const { contentEl } = this;
         contentEl.empty();
         contentEl.addClass("snipsy-submit-modal");
 
         // Header
         const header = contentEl.createDiv({ cls: "modal-header" });
-        header.createEl("h2", { text: "Submit Community Package" });
+        header.createEl("h2", { text: "Submit community package" });
         header.createEl("p", { 
             text: "Share your snippet collection with the community!",
             cls: "modal-subtitle"
@@ -63,13 +64,13 @@ export class SubmitPackageModal extends Modal {
         const buttonContainer = contentEl.createDiv({ cls: "button-container" });
         
         const validateBtn = buttonContainer.createEl("button", {
-            text: "Validate Package",
+            text: "Validate package",
             cls: "validate-btn"
         });
         validateBtn.onclick = () => this.validatePackage();
 
         this.submitBtn = buttonContainer.createEl("button", {
-            text: "Submit Package",
+            text: "Submit package",
             cls: "submit-btn"
         });
         this.submitBtn.disabled = true;
@@ -101,7 +102,8 @@ export class SubmitPackageModal extends Modal {
             }
 
             // Check if it looks like a community package
-            if (!(packageData as any).name || !(packageData as any).author || !(packageData as any).version || !(packageData as any).snippets) {
+            const typedPackageData = packageData as PackageData;
+            if (!typedPackageData.name || !typedPackageData.author || !typedPackageData.version || !typedPackageData.snippets) {
                 this.showValidationResult({
                     isValid: false,
                     errors: ["This doesn't look like a community package. Make sure it has name, author, version, and snippets fields."],
@@ -111,7 +113,7 @@ export class SubmitPackageModal extends Modal {
             }
 
             // Validate the package
-            const validation = validatePackage(packageData, { strictMode: false });
+            const validation = validatePackage(typedPackageData, { strictMode: false });
             this.validationResult = validation;
             this.showValidationResult(validation);
 
@@ -127,7 +129,7 @@ export class SubmitPackageModal extends Modal {
         }
     }
 
-    private showValidationResult(validation: any) {
+    private showValidationResult(validation: ValidationResult) {
         this.validationContainer.empty();
 
         if (validation.isValid) {
@@ -174,10 +176,10 @@ export class SubmitPackageModal extends Modal {
 
         try {
             const yamlContent = this.yamlTextarea.value.trim();
-            const packageData = yaml.load(yamlContent);
+            const packageData = yaml.load(yamlContent) as PackageData;
             
             // Generate a temporary filename
-            const packageId = this.generatePackageId((packageData as any).name);
+            const packageId = this.generatePackageId(packageData.name || '');
             const fileName = `${packageId}.yml`;
             
             // Submit to pending folder
@@ -230,7 +232,7 @@ export class SubmitPackageModal extends Modal {
             .replace(/^-+|-+$/g, '');
     }
 
-    onClose() {
+    onClose(): void {
         const { contentEl } = this;
         contentEl.empty();
     }
