@@ -148,7 +148,6 @@ export function wrapSelectionWithSnippet(editor: Editor, replacement: string): v
     
     // Get current cursor position before replacement
     const from = editor.getCursor('from');
-    const to = editor.getCursor('to');
     
     // Check if snippet supports wrapping
     if (cleanReplacement.includes('${SEL}')) {

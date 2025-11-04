@@ -38,24 +38,24 @@ describe("community-packages", () => {
   });
 
   describe("loadCommunityPackages", () => {
-    it("should return empty array when no packages are available", async () => {
-      const packages = await loadCommunityPackages();
+    it("should return empty array when no packages are available", () => {
+      const packages = loadCommunityPackages();
       expect(packages).toEqual([]);
     });
 
-    it("should handle errors gracefully", async () => {
+    it("should handle errors gracefully", () => {
       // Mock console.error to avoid noise in tests
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       
-      const packages = await loadCommunityPackages();
+      const packages = loadCommunityPackages();
       expect(packages).toEqual([]);
       
       consoleSpy.mockRestore();
     });
 
-    it("should return empty array in test environment", async () => {
+    it("should return empty array in test environment", () => {
       // This test verifies the test environment check
-      const packages = await loadCommunityPackages();
+      const packages = loadCommunityPackages();
       expect(packages).toEqual([]);
     });
   });
@@ -122,7 +122,7 @@ describe("community-packages", () => {
   });
 
   describe("loadCommunityPackagesFromVault", () => {
-    it("should return empty array (deprecated function)", async () => {
+    it("should return empty array (deprecated function)", () => {
       const mockApp = {
         vault: {
           getAbstractFileByPath: vi.fn(),
@@ -130,7 +130,7 @@ describe("community-packages", () => {
         }
       };
       
-      const packages = await loadCommunityPackagesFromVault(mockApp);
+      const packages = loadCommunityPackagesFromVault(mockApp);
       expect(packages).toEqual([]); // Deprecated function returns empty array
     });
   });

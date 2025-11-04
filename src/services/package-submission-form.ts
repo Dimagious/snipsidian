@@ -31,7 +31,7 @@ export interface PackageFormSubmissionResult {
  * @returns Validation result with prepared data
  */
 export function validateAndPreparePackageData(
-  packageData: any,
+  packageData: string | PackageData,
   submitterEmail?: string,
   submitterName?: string
 ): { 
@@ -45,9 +45,9 @@ export function validateAndPreparePackageData(
   
   try {
     // Parse YAML if it's a string
-    let parsedData: any;
+    let parsedData: PackageData;
     if (typeof packageData === 'string') {
-      parsedData = yaml.load(packageData);
+      parsedData = yaml.load(packageData) as PackageData;
     } else {
       parsedData = packageData;
     }
@@ -201,7 +201,7 @@ export function getPackageSubmissionFormUrl(): string {
  * @param packageData - Package data to validate
  * @returns Validation result
  */
-export function validatePackageForSubmission(packageData: any): {
+export function validatePackageForSubmission(packageData: PackageData): {
   isValid: boolean;
   errors: string[];
   warnings: string[];
@@ -232,7 +232,7 @@ export function validatePackageForSubmission(packageData: any): {
   
   // Check snippet structure
   if (packageData.snippets && Array.isArray(packageData.snippets)) {
-    packageData.snippets.forEach((snippet: any, index: number) => {
+    packageData.snippets.forEach((snippet: { trigger?: string; replace?: string }, index: number) => {
       if (!snippet.trigger || typeof snippet.trigger !== 'string' || snippet.trigger.trim().length === 0) {
         errors.push(`Snippet ${index + 1}: trigger is required`);
       }

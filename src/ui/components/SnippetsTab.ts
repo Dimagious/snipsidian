@@ -3,7 +3,22 @@ import type SnipSidianPlugin from "../../main";
 import { normalizeTrigger, isBadTrigger, splitKey, joinKey, displayGroupTitle } from "../../services/utils";
 import { GroupManager } from "../utils/group-utils";
 import { UIStateManager } from "../utils/ui-state";
-import { AddSnippetModal, GroupPickerModal, TextPromptModal } from "./Modals";
+import { AddSnippetModal, ConfirmModal, GroupPickerModal, TextPromptModal } from "./Modals";
+
+interface EditData {
+    trigger: string;
+    triggerName: string;
+    replacement: string;
+    triggerInput: HTMLInputElement;
+    replacementInput: HTMLTextAreaElement;
+    saveBtn: HTMLButtonElement;
+    cancelBtn: HTMLButtonElement;
+    editBtn: HTMLButtonElement;
+}
+
+interface SettingWithEditData extends Setting {
+    editData?: EditData;
+}
 
 export class SnippetsTab {
     private groupManager: GroupManager;
@@ -20,12 +35,16 @@ export class SnippetsTab {
     render(root: HTMLElement) {
         // Main Snippet Manager section
         const managerSection = root.createDiv({ cls: "snipsy-section snipsy-snippet-manager" });
-        managerSection.createEl("h3", { text: "Snippet Manager" });
-        managerSection.createEl("p", { text: "Manage your text expansion snippets with search, bulk operations, and organization tools", cls: "snipsy-hint" });
+        new Setting(managerSection)
+            .setHeading()
+            .setName("Snippet Manager")
+            .setDesc("Manage your text expansion snippets with search, bulk operations, and organization tools");
 
         // Search subsection
         const searchSubsection = managerSection.createDiv({ cls: "snipsy-subsection" });
-        searchSubsection.createEl("h4", { text: "Search & Filter" });
+        new Setting(searchSubsection)
+            .setHeading()
+            .setName("Search & Filter");
         
         new Setting(searchSubsection)
             .setName("Search snippets")
@@ -42,7 +61,9 @@ export class SnippetsTab {
 
         // Controls subsection
         const controlsSubsection = managerSection.createDiv({ cls: "snipsy-subsection" });
-        controlsSubsection.createEl("h4", { text: "Management Tools" });
+        new Setting(controlsSubsection)
+            .setHeading()
+            .setName("Management Tools");
         
         // Selection mode and group controls in one row
         const controlsRow = controlsSubsection.createDiv({ cls: "snipsy-controls-row" });
@@ -50,7 +71,7 @@ export class SnippetsTab {
         // Selection mode
         const selectionModeDiv = controlsRow.createDiv({ cls: "snipsy-control-item" });
         new Setting(selectionModeDiv)
-            .setName("Selection Mode")
+            .setName("Selection mode")
             .setDesc("Enable multi-select for bulk operations")
             .addToggle((toggle) => {
                 toggle
@@ -65,7 +86,7 @@ export class SnippetsTab {
         // Group controls
         const groupControlsDiv = controlsRow.createDiv({ cls: "snipsy-control-item" });
         new Setting(groupControlsDiv)
-            .setName("Expand All Groups")
+            .setName("Expand all groups")
             .setDesc("Toggle all groups open/closed")
             .addToggle((toggle) => {
                 // Check if all groups are open
@@ -84,10 +105,10 @@ export class SnippetsTab {
         // Add new snippet button in management tools
         const addSnippetDiv = controlsSubsection.createDiv({ cls: "snipsy-add-snippet" });
         new Setting(addSnippetDiv)
-            .setName("Add New Snippet")
+            .setName("Add new snippet")
             .setDesc("Create a new text expansion snippet")
             .addButton((btn) => {
-                btn.setButtonText("Add New Snippet");
+                btn.setButtonText("Add new snippet");
                 btn.setCta();
                 btn.onClick(() => {
                     this.showAddSnippetModal();
@@ -96,7 +117,9 @@ export class SnippetsTab {
 
         // Snippets subsection (created once)
         const snippetsSubsection = managerSection.createDiv({ cls: "snipsy-subsection" });
-        snippetsSubsection.createEl("h4", { text: "Your Snippets" });
+        new Setting(snippetsSubsection)
+            .setHeading()
+            .setName("Your Snippets");
         const listEl = snippetsSubsection.createDiv({ cls: "snippet-list" });
         
         // Render snippet list content
@@ -219,15 +242,21 @@ export class SnippetsTab {
                 title: "Delete group"
             });
             deleteBtn.onclick = () => {
-                if (confirm(`Delete group "${title}" with ${items.length} snippets?`)) {
-                    for (const [key] of items) {
-                        delete this.plugin.settings.snippets[key];
+                const modal = new ConfirmModal(this.app, {
+                    title: "Delete group",
+                    message: `Delete group "${title}" with ${items.length} snippet(s)?`,
+                    confirmText: "Delete",
+                    onConfirm: async () => {
+                        for (const [key] of items) {
+                            delete this.plugin.settings.snippets[key];
+                        }
+                        await this.plugin.saveSettings();
+                        this.uiState.getGroupOpen().delete(group);
+                        this.renderSnippetList(root);
+                        new Notice(`Deleted ${items.length} snippet(s) from "${title}".`);
                     }
-                    this.plugin.saveSettings();
-                    this.uiState.getGroupOpen().delete(group);
-                    this.renderSnippetList(root);
-                    new Notice(`Deleted ${items.length} snippet(s) from "${title}".`);
-                }
+                });
+                modal.open();
             };
 
             // Group content
@@ -292,12 +321,18 @@ export class SnippetsTab {
                     };
                     
                     // Delete button click handler
-                    deleteBtn.onclick = async () => {
-                        if (confirm(`Delete snippet "${triggerName}"?`)) {
-                            delete this.plugin.settings.snippets[trigger];
-                            await this.plugin.saveSettings();
-                            this.renderSnippetList(root);
-                        }
+                    deleteBtn.onclick = () => {
+                        const modal = new ConfirmModal(this.app, {
+                            title: "Delete snippet",
+                            message: `Delete snippet "${triggerName}"?`,
+                            confirmText: "Delete",
+                            onConfirm: async () => {
+                                delete this.plugin.settings.snippets[trigger];
+                                await this.plugin.saveSettings();
+                                this.renderSnippetList(root);
+                            }
+                        });
+                        modal.open();
                     };
                 }
             }
@@ -307,7 +342,9 @@ export class SnippetsTab {
 
     private renderBulkOperations(container: HTMLElement, root: HTMLElement) {
         const bulkControls = container.createDiv({ cls: "snipsy-section snipsy-bulk-operations" });
-        bulkControls.createEl("h3", { text: "Bulk Operations" });
+        new Setting(bulkControls)
+            .setHeading()
+            .setName("Bulk Operations");
 
         const selectedCount = this.uiState.getSelected().size;
         
@@ -335,32 +372,38 @@ export class SnippetsTab {
                 });
             })
             .addButton((btn) => {
-                btn.setButtonText("Delete Selected");
+                btn.setButtonText("Delete selected");
                 btn.onClick(() => {
                     const n = this.uiState.getSelected().size;
-                    if (confirm(`Delete ${n} snippet(s)?`)) {
-                        for (const key of this.uiState.getSelected()) {
-                            delete this.plugin.settings.snippets[key];
+                    const modal = new ConfirmModal(this.app, {
+                        title: "Delete snippets",
+                        message: `Delete ${n} snippet(s)?`,
+                        confirmText: "Delete",
+                        onConfirm: async () => {
+                            for (const key of this.uiState.getSelected()) {
+                                delete this.plugin.settings.snippets[key];
+                            }
+                            await this.plugin.saveSettings();
+                            this.uiState.setSelected(new Set());
+                            this.renderSnippetList(root);
+                            new Notice(`Deleted ${n} snippet(s).`);
                         }
-                        this.plugin.saveSettings();
-                        this.uiState.setSelected(new Set());
-                        this.renderSnippetList(root);
-                        new Notice(`Deleted ${n} snippet(s).`);
-                    }
+                    });
+                    modal.open();
                 });
             });
     }
 
 
     private showAddSnippetModal() {
-        const modal = new AddSnippetModal(this.app, (snippet) => {
+        const modal = new AddSnippetModal(this.app, async (snippet) => {
             if (snippet.trigger && snippet.replacement) {
                 const key = snippet.group 
                     ? `${snippet.group}/${snippet.trigger}`
                     : snippet.trigger;
                 
                 this.plugin.settings.snippets[key] = snippet.replacement;
-                this.plugin.saveSettings();
+                await this.plugin.saveSettings();
                 
                 // Refresh the list
                 const root = document.querySelector('.snipsidian-settings');
@@ -410,11 +453,12 @@ export class SnippetsTab {
         });
         
         // Update edit button
-        editBtn.textContent = "💾";
+        editBtn.empty();
+        editBtn.createEl("span", { text: "💾" });
         editBtn.title = "Save changes";
         
         // Store references for save/cancel
-        (row as any).editData = {
+        (row as SettingWithEditData).editData = {
             trigger,
             triggerName,
             replacement: actualReplacement,
@@ -427,7 +471,10 @@ export class SnippetsTab {
         
         // Add event handlers
         saveBtn.onclick = () => {
-            this.saveSnippetChanges(row, trigger, triggerName, replacement, document.querySelector('.snipsidian-settings') as HTMLElement);
+            const root = document.querySelector('.snipsidian-settings');
+            if (root) {
+                void this.saveSnippetChanges(row, trigger, triggerName, replacement, root as HTMLElement);
+            }
         };
         
         cancelBtn.onclick = () => {
@@ -436,7 +483,7 @@ export class SnippetsTab {
     }
 
     private async saveSnippetChanges(row: Setting, originalTrigger: string, originalTriggerName: string, originalReplacement: string, root: HTMLElement) {
-        const editData = (row as any).editData;
+        const editData = (row as SettingWithEditData).editData;
         if (!editData) return;
         
         const newTriggerName = editData.triggerInput.value.trim();
@@ -483,11 +530,12 @@ export class SnippetsTab {
 
     private cancelEditMode(row: Setting, editBtn: HTMLButtonElement) {
         // Reset edit button
-        editBtn.textContent = "✏️";
+        editBtn.empty();
+        editBtn.createEl("span", { text: "✏️" });
         editBtn.title = "Edit snippet";
         
         // Clear edit data
-        delete (row as any).editData;
+        delete (row as SettingWithEditData).editData;
         
         // Re-render the snippet list to return to normal view
         const root = document.querySelector('.snipsidian-settings') as HTMLElement;

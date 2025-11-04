@@ -1,7 +1,7 @@
 import * as yaml from "js-yaml";
 import { App, TFolder, TFile, requestUrl } from "obsidian";
-import { buildGoogleFormUrl, collectSystemMeta } from "./feedback-form";
 import { validatePackage, validatePackageFile } from "./package-validator";
+import type { PackageData } from "./package-types";
 
 // No built-in packages - all packages come from GitHub API
 
@@ -25,7 +25,7 @@ export interface PackageItem {
 /**
  * Loads community packages from the approved directory
  */
-export async function loadCommunityPackages(): Promise<PackageItem[]> {
+export function loadCommunityPackages(): PackageItem[] {
   const packages: PackageItem[] = [];
   
   try {
@@ -106,10 +106,14 @@ export async function loadDynamicCommunityPackages(app: App): Promise<PackageIte
 }
 
 
+interface UserInfo {
+  author?: string;
+}
+
 /**
  * Creates a GitHub Issue for package submission
  */
-export async function createPackageIssue(app: App, packageData: any, userInfo: any): Promise<{ success: boolean; issueUrl?: string; error?: string }> {
+export async function createPackageIssue(app: App, packageData: PackageData, userInfo: UserInfo): Promise<{ success: boolean; issueUrl?: string; error?: string }> {
   try {
     const issue = {
       title: `[Package Submission] ${packageData.name}`,
@@ -176,7 +180,7 @@ export async function loadCommunityPackagesFromGitHub(app: App): Promise<Package
             url: file.download_url
           });
           const content = contentResponse.text;
-          const packageData = yaml.load(content) as Record<string, any>;
+          const packageData = yaml.load(content) as PackageData;
 
           if (packageData && packageData.name && packageData.snippets) {
             const snippets = convertSnippetsToObject(packageData.snippets);
@@ -285,7 +289,7 @@ export async function loadAllCommunityPackages(app: App, plugin?: PluginWithApp)
  * This function should be called from UI components that have access to the app instance
  * @deprecated Use loadCommunityPackagesWithCache() instead
  */
-export async function loadCommunityPackagesFromVault(app: App): Promise<PackageItem[]> {
+export function loadCommunityPackagesFromVault(app: App): PackageItem[] {
   // Deprecated - use GitHub API instead
   return [];
 }
@@ -294,7 +298,7 @@ export async function loadCommunityPackagesFromVault(app: App): Promise<PackageI
  * Converts YAML snippets to object format
  * Handles both array format and object format
  */
-function convertSnippetsToObject(snippets: any): { [trigger: string]: string } {
+function convertSnippetsToObject(snippets: PackageData['snippets']): { [trigger: string]: string } {
   const snippetsObj: { [trigger: string]: string } = {};
   
   if (Array.isArray(snippets)) {
@@ -321,9 +325,9 @@ function convertSnippetsToObject(snippets: any): { [trigger: string]: string } {
  * Validates and processes a community package submission
  */
 export async function processPackageSubmission(
-  packageData: any,
+  packageData: PackageData,
   filePath: string,
-  app?: any
+  app?: App
 ): Promise<{ success: boolean; errors: string[]; warnings: string[] }> {
   const errors: string[] = [];
   const warnings: string[] = [];

@@ -1,4 +1,4 @@
-import { Modal, App, Editor, MarkdownView } from "obsidian";
+import { Modal, App, MarkdownView } from "obsidian";
 import type { SnippetItem, SnippetSearchQuery } from "../../types";
 import type { SnippetPickerAPI } from "../../core/snippet-picker";
 import { insertSnippetAtCursor, wrapSelectionWithSnippet } from "../../adapters/obsidian-editor";
@@ -25,10 +25,10 @@ export class SnippetPickerModal extends Modal {
         contentEl.addClass("snippet-picker-modal");
 
         // Title
-        const title = contentEl.createEl("h2", { text: "Insert Snippet" });
+        const title = contentEl.createEl("h2", { text: "Insert snippet" });
 
         // Search field with label
-        const searchLabel = contentEl.createEl("label", { text: "Search Snippet" });
+        const searchLabel = contentEl.createEl("label", { text: "Search snippet" });
 
         this.searchInput = contentEl.createEl("input", {
             type: "text",
@@ -140,7 +140,7 @@ export class SnippetPickerModal extends Modal {
 
         if (this.searchResults.length === 0) {
             const emptyState = this.resultsList.createDiv("empty-state");
-            emptyState.textContent = "No snippets found";
+            emptyState.createEl("span", { text: "No snippets found" });
             return;
         }
 
@@ -150,18 +150,18 @@ export class SnippetPickerModal extends Modal {
 
             // Name (trigger)
             const name = item.createDiv("snippet-name");
-            name.textContent = snippet.trigger;
+            name.createEl("span", { text: snippet.trigger });
 
             // Folder
             const folder = item.createDiv("snippet-folder");
-            folder.textContent = `(${snippet.folder})`;
+            folder.createEl("span", { text: `(${snippet.folder})` });
 
             // Preview (first characters)
             const preview = item.createDiv("snippet-preview-text");
             const previewText = snippet.replacement.length > 50 
                 ? snippet.replacement.substring(0, 50) + "..." 
                 : snippet.replacement;
-            preview.textContent = previewText;
+            preview.createEl("span", { text: previewText });
 
             // Click to select
             item.addEventListener("click", (e) => {
@@ -282,9 +282,9 @@ export class SnippetPickerModal extends Modal {
                 
                 // Add highlighted marker
                 const span = previewTextDiv.createEl("span", {
-                    cls: marker.type === 'cursor' ? "snippet-highlight-cursor" : "snippet-highlight-tabstop"
+                    cls: marker.type === 'cursor' ? "snippet-highlight-cursor" : "snippet-highlight-tabstop",
+                    text: marker.text
                 });
-                span.textContent = marker.text;
                 
                 lastIndex = marker.index + marker.length;
             }
@@ -295,7 +295,7 @@ export class SnippetPickerModal extends Modal {
             }
         } else {
             const emptyDiv = this.previewDiv.createDiv("snippet-preview-empty");
-            emptyDiv.textContent = "Select a snippet to preview";
+            emptyDiv.createEl("span", { text: "Select a snippet to preview" });
         }
     }
 

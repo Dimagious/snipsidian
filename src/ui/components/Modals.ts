@@ -40,7 +40,7 @@ export class PackagePreviewModal extends Modal {
     titleText: string;
     diff: DiffResult;
     choices = new Map<string, "keep" | "overwrite">();
-    onConfirm?: (resolved: Record<string, string>) => void;
+    onConfirm?: (resolved: Record<string, string>) => void | Promise<void>;
 
     constructor(app: App, plugin: SnipSidianPlugin, title: string, diff: DiffResult) {
         super(app);
@@ -60,7 +60,9 @@ export class PackagePreviewModal extends Modal {
         });
 
         if (this.diff.conflicts.length) {
-            contentEl.createEl("h4", { text: "Conflicts" });
+            new Setting(contentEl)
+                .setHeading()
+                .setName("Conflicts");
             const table = contentEl.createEl("table", { cls: "snipsidian-preview-table" });
             const thead = table.createEl("thead");
             const headRow = thead.createEl("tr");
@@ -105,7 +107,13 @@ export class PackagePreviewModal extends Modal {
                 const choice = this.choices.get(c.key) ?? "keep";
                 result[c.key] = choice === "overwrite" ? c.incoming : c.current;
             }
-            this.onConfirm?.(result);
+            const confirmResult = this.onConfirm?.(result);
+            // Handle promise if onConfirm returns one
+            if (confirmResult instanceof Promise) {
+                void confirmResult.catch((error) => {
+                    console.error("Error in onConfirm callback:", error);
+                });
+            }
             this.close();
         };
     }
@@ -213,7 +221,7 @@ export class TextPromptModal extends Modal {
 
         // Error text
         const err = contentEl.createDiv({ cls: "snipsidian-error" });
-        err.textContent = "";
+        let errText: HTMLSpanElement | null = null;
 
         // Footer
         const footer = contentEl.createDiv({ cls: "modal-button-container" });
@@ -226,10 +234,18 @@ export class TextPromptModal extends Modal {
             .setButtonText(this.opts.cta ?? "OK")
             .onClick(() => {
                 const v = (this.value ?? "").trim();
-                if (!v) { err.textContent = "Value cannot be empty."; return; }
+                if (!v) {
+                    err.empty();
+                    errText = err.createEl("span", { text: "Value cannot be empty." });
+                    return;
+                }
                 if (this.opts.validate) {
                     const msg = this.opts.validate(v);
-                    if (msg) { err.textContent = msg; return; }
+                    if (msg) {
+                        err.empty();
+                        errText = err.createEl("span", { text: msg });
+                        return;
+                    }
                 }
                 this.opts.onSubmit(v);
                 this.close();
@@ -246,18 +262,80 @@ export class TextPromptModal extends Modal {
     }
 }
 
+/** Confirmation modal for delete operations */
+export class ConfirmModal extends Modal {
+    private confirmed = false;
+
+    constructor(
+        app: App,
+        private readonly opts: {
+            title: string;
+            message: string;
+            confirmText?: string;
+            cancelText?: string;
+            onConfirm: () => void | Promise<void>;
+        }
+    ) {
+        super(app);
+    }
+
+    onOpen(): void {
+        const { contentEl, titleEl } = this;
+        titleEl.setText(this.opts.title);
+        contentEl.addClass("snipsidian-modal");
+        contentEl.addClass("snipsidian-confirm-modal");
+
+        const message = contentEl.createDiv({ cls: "confirm-message" });
+        message.createEl("p", { text: this.opts.message });
+
+        const footer = contentEl.createDiv({ cls: "modal-button-container" });
+        
+        const cancel = footer.createEl("button", { text: this.opts.cancelText || "Cancel" });
+        cancel.onclick = () => {
+            this.confirmed = false;
+            this.close();
+        };
+
+        const confirm = footer.createEl("button", { 
+            text: this.opts.confirmText || "Confirm",
+            cls: "mod-cta"
+        });
+        confirm.onclick = () => {
+            this.confirmed = true;
+            const result = this.opts.onConfirm();
+            // Handle promise if onConfirm returns one
+            if (result instanceof Promise) {
+                void result.catch((error) => {
+                    console.error("Error in confirm callback:", error);
+                });
+            }
+            this.close();
+        };
+
+        // Focus on cancel button by default
+        cancel.focus();
+    }
+
+    onClose(): void {
+        // If closed without confirmation, do nothing
+        if (!this.confirmed) {
+            return;
+        }
+    }
+}
+
 /** Add new snippet modal */
 export class AddSnippetModal extends Modal {
-    onConfirm?: (snippet: { trigger: string; replacement: string; group: string }) => void;
+    onConfirm?: (snippet: { trigger: string; replacement: string; group: string }) => void | Promise<void>;
 
-    constructor(app: App, onConfirm?: (snippet: { trigger: string; replacement: string; group: string }) => void) {
+    constructor(app: App, onConfirm?: (snippet: { trigger: string; replacement: string; group: string }) => void | Promise<void>) {
         super(app);
         this.onConfirm = onConfirm;
     }
 
     onOpen(): void {
         const { contentEl, titleEl } = this;
-        titleEl.setText("Add New Snippet");
+        titleEl.setText("Add new snippet");
         contentEl.addClass("snipsidian-modal");
 
         let trigger = "";
@@ -302,11 +380,17 @@ export class AddSnippetModal extends Modal {
 
         const footer = contentEl.createDiv({ cls: "modal-button-container" });
         
-        const add = footer.createEl("button", { text: "Add Snippet" });
+        const add = footer.createEl("button", { text: "Add snippet" });
         add.addClass("mod-cta");
         add.onclick = () => {
             if (trigger.trim() && replacement.trim()) {
-                this.onConfirm?.({ trigger: trigger.trim(), replacement: replacement.trim(), group: group.trim() });
+                const result = this.onConfirm?.({ trigger: trigger.trim(), replacement: replacement.trim(), group: group.trim() });
+                // Handle promise if onConfirm returns one
+                if (result instanceof Promise) {
+                    void result.catch((error) => {
+                        console.error("Error in onConfirm callback:", error);
+                    });
+                }
                 this.close();
             }
         };

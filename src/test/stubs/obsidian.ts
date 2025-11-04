@@ -28,7 +28,13 @@ export type Editor = any;
 export type EditorPosition = { line: number; ch: number };
 export class PluginSettingTab { }
 export class Setting { }
-export const Platform = { isDesktop: true, isMobile: false };
+export const Platform = { 
+    isDesktop: true, 
+    isMobile: false,
+    isMacOS: false,
+    isWin: false,
+    isLinux: false
+};
 export class Notice { constructor(_msg: string) { } }
 export class Modal { 
     constructor(app: any) { }

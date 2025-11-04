@@ -1,12 +1,13 @@
 import { App, Notice } from "obsidian";
 import type SnipSidianPlugin from "../../../main";
-import { validatePackage } from "../../../services/package-validator";
+import { validatePackage, type ValidationResult } from "../../../services/package-validator";
 import { createPackageIssue } from "../../../services/community-packages";
 import { buildGoogleFormUrl, collectSystemMeta } from "../../../services/feedback-form";
+import type { PackageData } from "../../../services/package-types";
 import * as yaml from "js-yaml";
 
 export class PackageSubmissionSection {
-  private validationResult: any = null;
+  private validationResult: ValidationResult | null = null;
 
   constructor(
     private app: App,
@@ -15,7 +16,7 @@ export class PackageSubmissionSection {
 
   render(root: HTMLElement): void {
     const submitSection = root.createDiv({ cls: "snipsy-section snipsy-community-submit-section" });
-    submitSection.createEl("h3", { text: "Submit New Package", cls: "section-title" });
+    submitSection.createEl("h3", { text: "Submit new package", cls: "section-title" });
 
     const helpText = submitSection.createDiv({ cls: "help-text" });
     helpText.createEl("p", {
@@ -43,10 +44,10 @@ export class PackageSubmissionSection {
     const validationContainer = submitSection.createDiv({ cls: "validation-container" });
 
     const buttonRow = submitSection.createDiv({ cls: "button-row" });
-    const validateBtn = buttonRow.createEl("button", { text: "Validate Package", cls: "validate-btn" });
+    const validateBtn = buttonRow.createEl("button", { text: "Validate package", cls: "validate-btn" });
     validateBtn.onclick = () => this.validatePackage(yamlTextarea, validationContainer);
 
-    const submitBtn = buttonRow.createEl("button", { text: "Submit Package", cls: "submit-btn" }) as HTMLButtonElement;
+    const submitBtn = buttonRow.createEl("button", { text: "Submit package", cls: "submit-btn" }) as HTMLButtonElement;
     submitBtn.disabled = true;
     submitBtn.onclick = () => this.submitPackage(yamlTextarea, submitBtn);
   }
@@ -58,7 +59,7 @@ export class PackageSubmissionSection {
       return;
     }
     try {
-      const packageData = yaml.load(yamlContent) as any;
+      const packageData = yaml.load(yamlContent) as PackageData;
       if (!packageData || typeof packageData !== "object") {
         this.showValidationResult(container, { isValid: false, errors: ["Invalid YAML format"], warnings: [] });
         return;
@@ -81,7 +82,7 @@ export class PackageSubmissionSection {
     }
   }
 
-  private showValidationResult(container: HTMLElement, validation: any) {
+  private showValidationResult(container: HTMLElement, validation: ValidationResult) {
     container.empty();
     if (validation.isValid) {
       const successEl = container.createDiv({ cls: "validation-success" });
@@ -106,7 +107,7 @@ export class PackageSubmissionSection {
     
     try {
       const yamlContent = textarea.value.trim();
-      const packageData = yaml.load(yamlContent) as any;
+      const packageData = yaml.load(yamlContent) as PackageData;
       
       // Create Issue via GitHub API
       const result = await createPackageIssue(this.app, packageData, { author: packageData.author });
@@ -114,7 +115,7 @@ export class PackageSubmissionSection {
       if (result.success && result.issueUrl) {
         // Show notification with Issue link
         const notice = new Notice("🎉 Package submitted successfully! Click to view Issue.", 10000);
-        notice.noticeEl.onclick = () => {
+        notice.messageEl.onclick = () => {
           window.open(result.issueUrl, '_blank');
         };
         
@@ -135,7 +136,7 @@ export class PackageSubmissionSection {
 
   private showErrorWithFeedbackForm(message: string) {
     const errorNotice = new Notice(`❌ ${message} Click to report bug.`, 10000);
-    errorNotice.noticeEl.onclick = () => {
+    errorNotice.messageEl.onclick = () => {
       const pluginVersion = this.plugin.manifest.version;
       const meta = collectSystemMeta(this.app, pluginVersion);
       const baseUrl = "https://docs.google.com/forms/d/e/1FAIpQLSf4kFr5pme9C0CX02NOad_9STlia5-xZ2D-9C88u1mX32WqXw/viewform";

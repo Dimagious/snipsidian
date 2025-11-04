@@ -1,3 +1,5 @@
+import type { PackageItem } from "./services/community-packages";
+
 export interface SnipSidianSettings {
     snippets: Record<string, string>;
     ui?: {
@@ -6,7 +8,7 @@ export interface SnipSidianSettings {
     };
     communityPackages?: {
         cache?: {
-            packages: any[];
+            packages: PackageItem[];
             lastUpdated: number;
         };
     };

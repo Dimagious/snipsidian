@@ -1,5 +1,6 @@
 // Lightweight converter from Espanso YAML to { trigger: replacement }
 import yaml from "js-yaml";
+import type { EspansoDocument } from "../services/package-types";
 
 /**
  * Supported Espanso fields:
@@ -10,7 +11,7 @@ import yaml from "js-yaml";
  * We ignore complex placeholders/conditions. Leading ":" in triggers is removed.
  */
 export function espansoYamlToSnippets(text: string): Record<string, string> {
-    const doc = yaml.load(text) as any;
+    const doc = yaml.load(text) as EspansoDocument;
     const out: Record<string, string> = {};
     if (!doc || typeof doc !== "object") return out;
 
