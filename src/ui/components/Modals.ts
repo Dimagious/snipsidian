@@ -221,7 +221,6 @@ export class TextPromptModal extends Modal {
 
         // Error text
         const err = contentEl.createDiv({ cls: "snipsidian-error" });
-        let errText: HTMLSpanElement | null = null;
 
         // Footer
         const footer = contentEl.createDiv({ cls: "modal-button-container" });
@@ -236,14 +235,14 @@ export class TextPromptModal extends Modal {
                 const v = (this.value ?? "").trim();
                 if (!v) {
                     err.empty();
-                    errText = err.createEl("span", { text: "Value cannot be empty." });
+                    err.createEl("span", { text: "Value cannot be empty." });
                     return;
                 }
                 if (this.opts.validate) {
                     const msg = this.opts.validate(v);
                     if (msg) {
                         err.empty();
-                        errText = err.createEl("span", { text: msg });
+                        err.createEl("span", { text: msg });
                         return;
                     }
                 }
@@ -347,7 +346,8 @@ export class AddSnippetModal extends Modal {
             .setDesc("The text that will be expanded (e.g., :hello)")
             .addText((text) => {
                 text
-                    .setPlaceholder("e.g., :hello")
+                     
+                    .setPlaceholder("e.g.: :hello")
                     .setValue(trigger)
                     .onChange((value) => {
                         trigger = value;
@@ -359,7 +359,8 @@ export class AddSnippetModal extends Modal {
             .setDesc("The text that will replace the trigger")
             .addTextArea((text) => {
                 text
-                    .setPlaceholder("e.g., Hello, world!")
+                     
+                    .setPlaceholder("e.g.: hello, world!")
                     .setValue(replacement)
                     .onChange((value) => {
                         replacement = value;
@@ -371,7 +372,8 @@ export class AddSnippetModal extends Modal {
             .setDesc("Optional group name for organization")
             .addText((text) => {
                 text
-                    .setPlaceholder("e.g., greetings")
+                     
+                    .setPlaceholder("e.g.: greetings")
                     .setValue(group)
                     .onChange((value) => {
                         group = value;

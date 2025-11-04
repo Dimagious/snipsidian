@@ -151,8 +151,10 @@ export async function createPackageIssue(app: App, packageData: PackageData, use
 
 /**
  * Loads community packages from GitHub API
+ * @param _app - App instance (not used, kept for API compatibility)
  */
-export async function loadCommunityPackagesFromGitHub(app: App): Promise<PackageItem[]> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Parameter kept for API compatibility
+export async function loadCommunityPackagesFromGitHub(_app: App): Promise<PackageItem[]> {
   try {
     const response = await requestUrl({
       url: 'https://api.github.com/repos/Dimagious/snipsidian-community/contents/community-packages/approved'
@@ -293,9 +295,11 @@ export async function loadAllCommunityPackages(app: App, plugin?: PluginWithApp)
 /**
  * Loads community packages from the approved directory using Obsidian API
  * This function should be called from UI components that have access to the app instance
+ * @param _app - App instance (not used, kept for API compatibility)
  * @deprecated Use loadCommunityPackagesWithCache() instead
  */
-export function loadCommunityPackagesFromVault(app: App): PackageItem[] {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Parameter kept for API compatibility
+export function loadCommunityPackagesFromVault(_app: App): PackageItem[] {
   // Deprecated - use GitHub API instead
   return [];
 }

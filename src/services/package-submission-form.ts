@@ -8,9 +8,7 @@ import { App } from "obsidian";
 import { 
   buildPackageFormUrl, 
   collectPackageFormMeta, 
-  PackageSubmissionData,
-  PackageFormMeta,
-  packageFormEntryIdMap
+  PackageSubmissionData
 } from "./feedback-form";
 import { validatePackage } from "./package-validator";
 import type { PackageData } from "./package-types";

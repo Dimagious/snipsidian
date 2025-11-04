@@ -1,0 +1,156 @@
+
+> snipsidian@1.0.0 lint
+> eslint .
+
+
+/Users/dyurkin/projects/snipsidian/eslint.config.js
+  22:49  error  'process' is not defined  no-undef
+
+/Users/dyurkin/projects/snipsidian/src/app/cm6-bridge.ts
+  12:66  error  'info' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/dyurkin/projects/snipsidian/src/app/plugin.ts
+  34:13  error  The command name should not include the plugin name, the plugin name is already shown next to the command name in the UI  obsidianmd/commands/no-plugin-name-in-command-name
+  36:17  error  Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free       @typescript-eslint/ban-ts-comment
+  38:17  error  Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free       @typescript-eslint/ban-ts-comment
+
+/Users/dyurkin/projects/snipsidian/src/core/expander.ts
+  53:24  error  Unnecessary escape character: \[  no-useless-escape
+
+/Users/dyurkin/projects/snipsidian/src/core/snippet-picker.ts
+  44:13  error  'results' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/dyurkin/projects/snipsidian/src/services/community-packages.ts
+  155:55  error  'app' is defined but never used  @typescript-eslint/no-unused-vars
+  298:48  error  'app' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/dyurkin/projects/snipsidian/src/services/feedback-form.ts
+  150:3  error  Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+
+/Users/dyurkin/projects/snipsidian/src/services/package-submission-form.ts
+  12:3  error  'PackageFormMeta' is defined but never used        @typescript-eslint/no-unused-vars
+  13:3  error  'packageFormEntryIdMap' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/dyurkin/projects/snipsidian/src/services/package-validator.ts
+    4:11  error  'PackageItem' is defined but never used  @typescript-eslint/no-unused-vars
+  178:80  error  'warnings' is defined but never used     @typescript-eslint/no-unused-vars
+  254:31  error  Unnecessary escape character: \-         no-useless-escape
+
+/Users/dyurkin/projects/snipsidian/src/services/utils.ts
+  37:20  error  Unnecessary escape character: \[  no-useless-escape
+
+/Users/dyurkin/projects/snipsidian/src/shared/delimiters.ts
+  9:24  error  Unnecessary escape character: \[  no-useless-escape
+
+/Users/dyurkin/projects/snipsidian/src/test/stubs/obsidian.ts
+   4:10  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   6:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   7:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   9:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  13:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  17:31  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  26:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  27:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  38:35  error  '_msg' is defined but never used          @typescript-eslint/no-unused-vars
+  40:17  error  'app' is defined but never used           @typescript-eslint/no-unused-vars
+  40:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  46:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/dyurkin/projects/snipsidian/src/ui/components/BasicTab.ts
+   34:25  error    Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+   36:25  error    Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+   57:25  error    Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+   59:25  error    Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+  136:33  error    Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+  142:33  error    Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+  160:22  warning  Use sentence case for UI text                                                                                        obsidianmd/ui/sentence-case
+  163:36  warning  Use sentence case for UI text                                                                                        obsidianmd/ui/sentence-case
+  171:22  warning  Use sentence case for UI text                                                                                        obsidianmd/ui/sentence-case
+  183:22  warning  Use sentence case for UI text                                                                                        obsidianmd/ui/sentence-case
+  191:29  error    Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+
+/Users/dyurkin/projects/snipsidian/src/ui/components/CommunityPackageModal.ts
+  24:39  warning  Use sentence case for UI text  obsidianmd/ui/sentence-case
+
+/Users/dyurkin/projects/snipsidian/src/ui/components/FeedbackTab.ts
+  76:22  warning  Use sentence case for UI text                                                                                                                     obsidianmd/ui/sentence-case
+  77:22  warning  Use sentence case for UI text                                                                                                                     obsidianmd/ui/sentence-case
+  80:36  warning  Use sentence case for UI text                                                                                                                     obsidianmd/ui/sentence-case
+  88:22  warning  Use sentence case for UI text                                                                                                                     obsidianmd/ui/sentence-case
+  93:37  error    Obsidian's configuration folder is not necessarily `.obsidian`, it can be configured by the user. Use `Vault#configDir` to get the current value  obsidianmd/hardcoded-config-path
+
+/Users/dyurkin/projects/snipsidian/src/ui/components/Modals.ts
+  224:13  error    'errText' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  350:37  warning  Use sentence case for UI text                 obsidianmd/ui/sentence-case
+  362:37  warning  Use sentence case for UI text                 obsidianmd/ui/sentence-case
+  374:37  warning  Use sentence case for UI text                 obsidianmd/ui/sentence-case
+
+/Users/dyurkin/projects/snipsidian/src/ui/components/SettingsTab.ts
+  37:9   error    For a consistent UI use `new Setting(containerEl).setName(...).setHeading()` instead of creating HTML heading elements directly  obsidianmd/settings-tab/no-manual-html-headings
+  37:39  warning  Use sentence case for UI text                                                                                                    obsidianmd/ui/sentence-case
+
+/Users/dyurkin/projects/snipsidian/src/ui/components/SnippetPickerModal.ts
+   28:15  error  'title' is assigned a value but never used          @typescript-eslint/no-unused-vars
+   31:15  error  'searchLabel' is assigned a value but never used    @typescript-eslint/no-unused-vars
+   43:15  error  'previewLabel' is assigned a value but never used   @typescript-eslint/no-unused-vars
+   50:15  error  'navStrong' is assigned a value but never used      @typescript-eslint/no-unused-vars
+   52:15  error  'enterStrong' is assigned a value but never used    @typescript-eslint/no-unused-vars
+   54:15  error  'escStrong' is assigned a value but never used      @typescript-eslint/no-unused-vars
+   57:15  error  'clickStrong' is assigned a value but never used    @typescript-eslint/no-unused-vars
+  221:19  error  'triggerStrong' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  223:19  error  'folderStrong' is assigned a value but never used   @typescript-eslint/no-unused-vars
+  230:17  error  'text' is never reassigned. Use 'const' instead     prefer-const
+  284:23  error  'span' is assigned a value but never used           @typescript-eslint/no-unused-vars
+
+/Users/dyurkin/projects/snipsidian/src/ui/components/SnippetsTab.ts
+    3:61  error    'displayGroupTitle' is defined but never used                   @typescript-eslint/no-unused-vars
+   40:22  warning  Use sentence case for UI text                                   obsidianmd/ui/sentence-case
+   47:22  warning  Use sentence case for UI text                                   obsidianmd/ui/sentence-case
+   66:22  warning  Use sentence case for UI text                                   obsidianmd/ui/sentence-case
+  122:22  warning  Use sentence case for UI text                                   obsidianmd/ui/sentence-case
+  308:25  error    'originalTrigger' is never reassigned. Use 'const' instead      prefer-const
+  309:25  error    'originalReplacement' is never reassigned. Use 'const' instead  prefer-const
+  347:22  warning  Use sentence case for UI text                                   obsidianmd/ui/sentence-case
+  355:35  warning  Use sentence case for UI text                                   obsidianmd/ui/sentence-case
+  526:18  error    'error' is defined but never used                               @typescript-eslint/no-unused-vars
+
+/Users/dyurkin/projects/snipsidian/src/ui/components/SubmitPackageModal.ts
+  138:23  warning  Use sentence case for UI text  obsidianmd/ui/sentence-case
+  158:23  warning  Use sentence case for UI text  obsidianmd/ui/sentence-case
+  209:19  warning  Use sentence case for UI text  obsidianmd/ui/sentence-case
+
+/Users/dyurkin/projects/snipsidian/src/ui/components/community/EspansoSection.ts
+  15:43  warning  Use sentence case for UI text  obsidianmd/ui/sentence-case
+  17:43  warning  Use sentence case for UI text  obsidianmd/ui/sentence-case
+  20:13  warning  Use sentence case for UI text  obsidianmd/ui/sentence-case
+  28:42  warning  Use sentence case for UI text  obsidianmd/ui/sentence-case
+  36:75  warning  Use sentence case for UI text  obsidianmd/ui/sentence-case
+  40:20  warning  Use sentence case for UI text  obsidianmd/ui/sentence-case
+
+/Users/dyurkin/projects/snipsidian/src/ui/components/community/PackageBrowser.ts
+   36:43  warning  Use sentence case for UI text                       obsidianmd/ui/sentence-case
+   52:13  warning  Use sentence case for UI text                       obsidianmd/ui/sentence-case
+   54:14  warning  Use sentence case for UI text                       obsidianmd/ui/sentence-case
+   68:20  warning  Use sentence case for UI text                       obsidianmd/ui/sentence-case
+   80:14  error    'error' is defined but never used                   @typescript-eslint/no-unused-vars
+   89:42  warning  Use sentence case for UI text                       obsidianmd/ui/sentence-case
+   92:13  error    'refreshNote' is assigned a value but never used    @typescript-eslint/no-unused-vars
+   93:15  warning  Use sentence case for UI text                       obsidianmd/ui/sentence-case
+  331:13  error    'verifiedBadge' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  331:66  warning  Use sentence case for UI text                       obsidianmd/ui/sentence-case
+  345:13  error    'tagsLabel' is assigned a value but never used      @typescript-eslint/no-unused-vars
+  356:13  error    'snippetsLabel' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  425:26  error    'index' is defined but never used                   @typescript-eslint/no-unused-vars
+
+/Users/dyurkin/projects/snipsidian/src/ui/components/community/PackageSubmissionSection.ts
+   89:41  warning  Use sentence case for UI text  obsidianmd/ui/sentence-case
+   97:39  warning  Use sentence case for UI text  obsidianmd/ui/sentence-case
+  117:35  warning  Use sentence case for UI text  obsidianmd/ui/sentence-case
+
+/Users/dyurkin/projects/snipsidian/vitest.config.ts
+  0:0  error  Parsing error: "parserOptions.project" has been provided for @typescript-eslint/parser.
+The file was not found in any of the provided project(s): vitest.config.ts
+
+✖ 99 problems (61 errors, 38 warnings)
+  5 errors and 0 warnings potentially fixable with the `--fix` option.
+

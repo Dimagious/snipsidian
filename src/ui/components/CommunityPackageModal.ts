@@ -21,7 +21,7 @@ export class CommunityPackageModal extends Modal {
 
         // Header
         const header = contentEl.createDiv({ cls: "modal-header" });
-        header.createEl("h2", { text: "Community Packages" });
+        header.createEl("h2", { text: "Community packages" });
 
         // Search
         const searchContainer = contentEl.createDiv({ cls: "search-container" });

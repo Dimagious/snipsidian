@@ -50,7 +50,8 @@ export function expandIfTriggered(editor: Editor, snippets: Record<string, strin
 
 /** Returns true if the character is considered a separator */
 export function isSeparator(ch: string): boolean {
-    return /[\s.,!?;:()\[\]{}"'\-\\/]/.test(ch);
+    // eslint-disable-next-line no-useless-escape -- \[ and \] are REQUIRED inside [] to match literal brackets
+    return /[\s.,!?;:()\[\]{}"'/\\-]/.test(ch);
 }
 
 /** Find start index of a word ending at endIndex (inclusive). Return index or null. */

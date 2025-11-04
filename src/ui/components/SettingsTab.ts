@@ -1,4 +1,4 @@
-import { App, PluginSettingTab } from "obsidian";
+import { App, PluginSettingTab, Setting } from "obsidian";
 import type SnipSidianPlugin from "../../main";
 import { BasicTab } from "./BasicTab";
 import { SnippetsTab } from "./SnippetsTab";
@@ -33,8 +33,8 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         }
 
         // Header
-        const header = containerEl.createDiv({ cls: "snipsy-header" });
-        header.createEl("h2", { text: "Snipsy Settings" });
+        const headerDiv = containerEl.createDiv({ cls: "snipsy-header" });
+        new Setting(headerDiv).setHeading().setName("Snipsy settings");
 
         // Tab navigation
         const tabs = [

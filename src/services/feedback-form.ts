@@ -147,7 +147,7 @@ export function buildPackageFormUrl(
  * @returns Collected metadata object
  */
 export function collectSystemMeta(app: App, pluginVersion: string): FeedbackMeta {
-  // @ts-ignore Obsidian internal API - app.version exists at runtime but is not in type definitions
+  // @ts-expect-error Obsidian internal API - app.version exists at runtime but is not in type definitions
   const obsidianVersion = app.version || "Unknown";
   
   // Detect platform using Obsidian Platform API

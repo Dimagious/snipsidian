@@ -86,15 +86,24 @@ export class PackageSubmissionSection {
     container.empty();
     if (validation.isValid) {
       const successEl = container.createDiv({ cls: "validation-success" });
-      successEl.createEl("div", { text: "✅ Package is valid!", cls: "validation-title" });
+      successEl.createEl("div", { 
+          text: "✅ Package is valid!", 
+          cls: "validation-title" 
+      });
       if (validation.warnings.length > 0) {
         const warningsEl = successEl.createDiv({ cls: "validation-warnings" });
-        warningsEl.createEl("div", { text: "Warnings:", cls: "warnings-title" });
+        warningsEl.createEl("div", { 
+            text: "Warnings:", 
+            cls: "warnings-title" 
+        });
         validation.warnings.forEach((w: string) => warningsEl.createEl("div", { text: `⚠️ ${w}`, cls: "warning-item" }));
       }
     } else {
       const errorEl = container.createDiv({ cls: "validation-error" });
-      errorEl.createEl("div", { text: "❌ Validation failed:", cls: "validation-title" });
+      errorEl.createEl("div", { 
+          text: "❌ Validation failed:", 
+          cls: "validation-title" 
+      });
       validation.errors.forEach((e: string) => errorEl.createEl("div", { text: `• ${e}`, cls: "error-item" }));
     }
   }
@@ -114,7 +123,7 @@ export class PackageSubmissionSection {
       
       if (result.success && result.issueUrl) {
         // Show notification with Issue link
-        const notice = new Notice("🎉 Package submitted successfully! Click to view Issue.", 10000);
+        const notice = new Notice("🎉 Package submitted successfully! Click to view issue.", 10000);
         notice.messageEl.onclick = () => {
           window.open(result.issueUrl, '_blank');
         };
@@ -135,6 +144,7 @@ export class PackageSubmissionSection {
   }
 
   private showErrorWithFeedbackForm(message: string) {
+     
     const errorNotice = new Notice(`❌ ${message} Click to report bug.`, 10000);
     errorNotice.messageEl.onclick = () => {
       const pluginVersion = this.plugin.manifest.version;

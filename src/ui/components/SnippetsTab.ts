@@ -1,6 +1,6 @@
 import { App, Notice, Setting } from "obsidian";
 import type SnipSidianPlugin from "../../main";
-import { normalizeTrigger, isBadTrigger, splitKey, joinKey, displayGroupTitle } from "../../services/utils";
+import { normalizeTrigger, isBadTrigger, splitKey, joinKey } from "../../services/utils";
 import { GroupManager } from "../utils/group-utils";
 import { UIStateManager } from "../utils/ui-state";
 import { AddSnippetModal, ConfirmModal, GroupPickerModal, TextPromptModal } from "./Modals";
@@ -37,14 +37,14 @@ export class SnippetsTab {
         const managerSection = root.createDiv({ cls: "snipsy-section snipsy-snippet-manager" });
         new Setting(managerSection)
             .setHeading()
-            .setName("Snippet Manager")
+            .setName("Snippet manager")
             .setDesc("Manage your text expansion snippets with search, bulk operations, and organization tools");
 
         // Search subsection
         const searchSubsection = managerSection.createDiv({ cls: "snipsy-subsection" });
         new Setting(searchSubsection)
             .setHeading()
-            .setName("Search & Filter");
+            .setName("Search & filter");
         
         new Setting(searchSubsection)
             .setName("Search snippets")
@@ -63,7 +63,7 @@ export class SnippetsTab {
         const controlsSubsection = managerSection.createDiv({ cls: "snipsy-subsection" });
         new Setting(controlsSubsection)
             .setHeading()
-            .setName("Management Tools");
+            .setName("Management tools");
         
         // Selection mode and group controls in one row
         const controlsRow = controlsSubsection.createDiv({ cls: "snipsy-controls-row" });
@@ -119,7 +119,7 @@ export class SnippetsTab {
         const snippetsSubsection = managerSection.createDiv({ cls: "snipsy-subsection" });
         new Setting(snippetsSubsection)
             .setHeading()
-            .setName("Your Snippets");
+            .setName("Your snippets");
         const listEl = snippetsSubsection.createDiv({ cls: "snippet-list" });
         
         // Render snippet list content
@@ -305,17 +305,18 @@ export class SnippetsTab {
                     
                     // Edit mode state
                     let isEditing = false;
-                    let originalTrigger = triggerName;
-                    let originalReplacement = replacement || "";
                     
                     // Edit button click handler
                     editBtn.onclick = () => {
                         if (isEditing) {
                             // Save changes
-                            this.saveSnippetChanges(row, trigger, originalTrigger, originalReplacement, root);
+                            const root = document.querySelector('.snipsidian-settings');
+                            if (root) {
+                                void this.saveSnippetChanges(row, trigger, triggerName, replacement, root as HTMLElement);
+                            }
                         } else {
                             // Enter edit mode
-                            this.enterEditMode(row, trigger, triggerName, originalReplacement, editBtn);
+                            this.enterEditMode(row, trigger, triggerName, replacement, editBtn);
                             isEditing = true;
                         }
                     };
@@ -344,7 +345,7 @@ export class SnippetsTab {
         const bulkControls = container.createDiv({ cls: "snipsy-section snipsy-bulk-operations" });
         new Setting(bulkControls)
             .setHeading()
-            .setName("Bulk Operations");
+                .setName("Bulk operations");
 
         const selectedCount = this.uiState.getSelected().size;
         
@@ -352,7 +353,8 @@ export class SnippetsTab {
             .setName(`Selected: ${selectedCount} snippet${selectedCount === 1 ? '' : 's'}`)
             .setDesc("Perform actions on selected snippets")
             .addButton((btn) => {
-                btn.setButtonText("📁 Move to...");
+                 
+                btn.setButtonText("📁 Move to…");
                 btn.onClick(() => {
                     const groups = this.groupManager.allGroupsFrom(this.plugin.settings.snippets);
                     const modal = new GroupPickerModal(this.app, {
@@ -523,7 +525,7 @@ export class SnippetsTab {
             await this.plugin.saveSettings();
             this.renderSnippetList(root);
             
-        } catch (error) {
+        } catch {
             new Notice("Failed to save changes");
         }
     }

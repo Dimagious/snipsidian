@@ -34,7 +34,8 @@ export function isBadTrigger(key: string): boolean {
     if (key.length === 0) return true;
     
     // Check for forbidden characters (but allow colon at the beginning)
-    if (/[\s.,!?;()\[\]{}"'\-\\/]/.test(key)) return true;
+    // eslint-disable-next-line no-useless-escape -- \[ and \] are REQUIRED inside [] to match literal brackets
+    if (/[\s.,!?;()\[\]{}"'/\\-]/.test(key)) return true;
     
     // Check for colon in the middle (not at the beginning)
     // This regex matches: start of string, any non-colon chars, colon, any chars, colon

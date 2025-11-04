@@ -41,7 +41,7 @@ export class SnippetPickerService implements SnippetPickerAPI {
             return this.snippets.slice(0, limit);
         }
 
-        let results = this.snippets.filter(item => {
+        const results = this.snippets.filter(item => {
             // Filter by folder
             if (q.folder && item.folder !== q.folder) {
                 return false;
