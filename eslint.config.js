@@ -56,7 +56,7 @@ export default [
       
       // UI sentence case with custom options
       'obsidianmd/ui/sentence-case': ['warn', {
-        brands: ['Snipsy', 'SnipSidian', 'GitHub', 'Espanso'],
+        brands: ['Snipsy', 'SnipSidian', 'GitHub', 'Espanso', 'Obsidian'],
         acronyms: ['UI', 'API', 'JSON', 'YAML', 'HTML', 'CSS', 'DOM', 'GIF'],
         enforceCamelCaseLower: true,
       }],

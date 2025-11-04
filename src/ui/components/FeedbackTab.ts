@@ -73,7 +73,7 @@ export class FeedbackTab {
             );
 
         new Setting(supportSection)
-            .setName("GitHub Issues")
+            .setName("GitHub issues")
             .setDesc("Browse existing issues, feature requests, and discussions on our GitHub repository.")
             .addButton((btn) =>
                 btn

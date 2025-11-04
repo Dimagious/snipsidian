@@ -350,7 +350,7 @@ export class SnippetsTab {
             .setName(`Selected: ${selectedCount} snippet${selectedCount === 1 ? '' : 's'}`)
             .setDesc("Perform actions on selected snippets")
             .addButton((btn) => {
-                btn.setButtonText("📁 Move to...");
+                btn.setButtonText("📁 Move to…");
                 btn.onClick(() => {
                     const groups = this.groupManager.allGroupsFrom(this.plugin.settings.snippets);
                     const modal = new GroupPickerModal(this.app, {

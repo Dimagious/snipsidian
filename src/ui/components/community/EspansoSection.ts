@@ -14,10 +14,10 @@ export class EspansoSection {
     const espansoSection = root.createDiv({ cls: "snipsy-section snipsy-espanso-section" });
     espansoSection.createEl("h3", { text: "Install Espanso package", cls: "section-title" });
     const espansoHelpText = espansoSection.createDiv({ cls: "help-text" });
-    espansoHelpText.createEl("p", { text: "Paste packages from Espanso Hub." });
+    espansoHelpText.createEl("p", { text: "Paste packages from Espanso hub." });
     const espansoLinkEl = espansoHelpText.createEl("p", { text: "Browse packages at ", cls: "snipsy-hint" });
     const espansoLink = espansoLinkEl.createEl("a", {
-      text: "Espanso Hub",
+      text: "Espanso hub",
       href: "https://hub.espanso.org/search",
       cls: "snipsy-link",
     });
@@ -25,7 +25,7 @@ export class EspansoSection {
     espansoLink.setAttribute("rel", "noopener noreferrer");
 
     const espansoYamlRow = espansoSection.createDiv({ cls: "yaml-input-row" });
-    espansoYamlRow.createEl("p", { text: "Paste YAML content from Espanso Hub or other Espanso sources", cls: "yaml-instruction" });
+    espansoYamlRow.createEl("p", { text: "Paste YAML content from Espanso hub or other Espanso sources", cls: "yaml-instruction" });
     const espansoYamlContainer = espansoYamlRow.createDiv({ cls: "yaml-container" });
     const espansoTextarea = espansoYamlContainer.createEl("textarea", {
       placeholder: "Paste Espanso YAML here…",

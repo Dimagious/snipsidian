@@ -114,7 +114,7 @@ export class PackageSubmissionSection {
       
       if (result.success && result.issueUrl) {
         // Show notification with Issue link
-        const notice = new Notice("🎉 Package submitted successfully! Click to view Issue.", 10000);
+        const notice = new Notice("🎉 Package submitted successfully! Click to view issue.", 10000);
         notice.messageEl.onclick = () => {
           window.open(result.issueUrl, '_blank');
         };
