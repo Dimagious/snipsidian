@@ -178,14 +178,16 @@ function validatePackageStructure(packageData: PackageData, errors: string[], wa
 function validateNamingConventions(packageData: PackageData, errors: string[], warnings: string[]) {
   // Validate package name
   if (packageData.name) {
-    if (!/^[a-zA-Z0-9\s\-_]+$/.test(packageData.name)) {
+    // Hyphen moved to end of character class to avoid escaping
+    if (!/^[a-zA-Z0-9\s_-]+$/.test(packageData.name)) {
       errors.push("Package name can only contain letters, numbers, spaces, hyphens, and underscores");
     }
   }
 
   // Validate author name
   if (packageData.author) {
-    if (!/^[a-zA-Z0-9\s\-_]+$/.test(packageData.author)) {
+    // Hyphen moved to end of character class to avoid escaping
+    if (!/^[a-zA-Z0-9\s_-]+$/.test(packageData.author)) {
       errors.push("Author name can only contain letters, numbers, spaces, hyphens, and underscores");
     }
   }
@@ -251,7 +253,7 @@ function validateSnippets(packageData: PackageData, errors: string[], warnings: 
       snippetErrors.push(`Snippet ${i + 1}: trigger must be a string`);
     } else if (snippet.trigger.length < 1 || snippet.trigger.length > 50) {
       snippetErrors.push(`Snippet ${i + 1}: trigger must be between 1 and 50 characters`);
-    } else if (!/^[a-zA-Z0-9:_\-]+$/.test(snippet.trigger)) {
+    } else if (!/^[a-zA-Z0-9:_-]+$/.test(snippet.trigger)) {
       snippetErrors.push(`Snippet ${i + 1}: trigger can only contain letters, numbers, colons, underscores, and hyphens`);
     } else {
       // Check for duplicate triggers
@@ -335,7 +337,8 @@ export function validatePackageFile(filePath: string): ValidationResult {
 
   // Check file name
   const fileName = pathParts[pathParts.length - 1];
-  if (fileName && !/^[a-zA-Z0-9\-_]+\.(yml|yaml)$/.test(fileName)) {
+  // Hyphen moved to end of character class to avoid escaping
+  if (fileName && !/^[a-zA-Z0-9_-]+\.(yml|yaml)$/.test(fileName)) {
     errors.push("Package file name can only contain letters, numbers, hyphens, and underscores");
   }
 

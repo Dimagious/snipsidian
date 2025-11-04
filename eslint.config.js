@@ -19,7 +19,10 @@ export default [
       parser: tseslint.parser,
       parserOptions: {
         project: './tsconfig.json',
-        tsconfigRootDir: import.meta.dirname || process.cwd(),
+        tsconfigRootDir: import.meta.dirname || (typeof process !== 'undefined' ? process.cwd() : ''),
+      },
+      globals: {
+        process: 'readonly',
       },
     },
     rules: {

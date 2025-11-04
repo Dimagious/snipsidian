@@ -31,11 +31,11 @@ export default class HotstringsPlugin extends Plugin {
         // Open Settings command
         this.addCommand({
             id: "open-settings",
-            name: "Open Snipsy settings",
+            name: "Open settings",
             callback: () => {
-                // @ts-ignore Obsidian internal API - setting.open() and openTabById() exist at runtime but are not in type definitions
+                // @ts-expect-error Obsidian internal API - setting.open() and openTabById() exist at runtime but are not in type definitions
                 this.app.setting.open();
-                // @ts-ignore Obsidian internal API - setting.open() and openTabById() exist at runtime but are not in type definitions
+                // @ts-expect-error Obsidian internal API - setting.open() and openTabById() exist at runtime but are not in type definitions
                 this.app.setting.openTabById(this.manifest.id);
             }
         });

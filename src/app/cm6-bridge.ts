@@ -9,7 +9,7 @@ export function registerEditorChange(
     app: App,
     getSnippets: () => Dict
 ) {
-    const off = app.workspace.on("editor-change", async (editor, info) => {
+    const off = app.workspace.on("editor-change", async (editor) => {
         if (!editor) return;
         const file = app.workspace.getActiveFile();
         const filename = file?.name;
