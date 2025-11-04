@@ -73,10 +73,11 @@ export async function loadDynamicCommunityPackages(app: App): Promise<PackageIte
       if (file instanceof TFile && (file.path.endsWith('.yml') || file.path.endsWith('.yaml'))) {
         try {
           const content = await app.vault.read(file);
-          const packageData = yaml.load(content) as Record<string, unknown>;
+          const packageData = yaml.load(content) as PackageData;
           
           if (packageData && typeof packageData === 'object' && 'name' in packageData && typeof packageData.name === 'string') {
             const tags = Array.isArray(packageData.tags) ? packageData.tags.filter((t): t is string => typeof t === 'string') : [];
+            const snippets = packageData.snippets ? convertSnippetsToObject(packageData.snippets) : undefined;
             const packageItem: PackageItem = {
               id: file.basename,
               label: packageData.name,
@@ -87,7 +88,7 @@ export async function loadDynamicCommunityPackages(app: App): Promise<PackageIte
               tags: tags,
               verified: true, // Dynamic packages are also verified
               rating: 0, // Will be updated based on actual user ratings
-              snippets: packageData.snippets ? convertSnippetsToObject(packageData.snippets) : {}
+              snippets: snippets && Object.keys(snippets).length > 0 ? snippets : undefined
             };
             
             packages.push(packageItem);
@@ -187,6 +188,11 @@ export async function loadCommunityPackagesFromGitHub(app: App): Promise<Package
             
             // Only add package if it has snippets
             if (Object.keys(snippets).length > 0) {
+              const tags = Array.isArray(packageData.tags) 
+                ? packageData.tags.filter((t): t is string => typeof t === 'string')
+                : typeof packageData.tags === 'string'
+                  ? [packageData.tags]
+                  : [];
               const packageItem: PackageItem = {
                 id: file.name.replace(/\.(yml|yaml)$/, ''),
                 label: packageData.name,
@@ -194,8 +200,8 @@ export async function loadCommunityPackagesFromGitHub(app: App): Promise<Package
                 author: packageData.author,
                 version: packageData.version,
                 downloads: 0, // Will be updated when packages are actually downloaded
-                tags: packageData.tags || [],
-        verified: true,
+                tags: tags,
+                verified: true,
                 rating: 0, // Will be updated based on actual user ratings
                 snippets: snippets
               };

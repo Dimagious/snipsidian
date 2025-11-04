@@ -237,6 +237,10 @@ function validateSnippets(packageData: PackageData, errors: string[], warnings: 
 
   for (let i = 0; i < packageData.snippets.length; i++) {
     const snippet = packageData.snippets[i];
+    if (!snippet) {
+      errors.push(`Snippet ${i + 1}: snippet is undefined or null`);
+      continue;
+    }
     const snippetErrors: string[] = [];
     const snippetWarnings: string[] = [];
 

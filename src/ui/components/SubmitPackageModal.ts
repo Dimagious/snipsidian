@@ -176,10 +176,10 @@ export class SubmitPackageModal extends Modal {
 
         try {
             const yamlContent = this.yamlTextarea.value.trim();
-            const packageData = yaml.load(yamlContent);
+            const packageData = yaml.load(yamlContent) as PackageData;
             
             // Generate a temporary filename
-            const packageId = this.generatePackageId((packageData as PackageData).name || '');
+            const packageId = this.generatePackageId(packageData.name || '');
             const fileName = `${packageId}.yml`;
             
             // Submit to pending folder

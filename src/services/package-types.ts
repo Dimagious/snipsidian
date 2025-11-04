@@ -8,7 +8,7 @@ export interface PackageData {
   author?: string;
   description?: string;
   category?: string;
-  tags?: string[];
+  tags?: string[] | string;
   license?: string;
   homepage?: string;
   readme?: string;

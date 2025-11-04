@@ -13,6 +13,7 @@ import {
   packageFormEntryIdMap
 } from "./feedback-form";
 import { validatePackage } from "./package-validator";
+import type { PackageData } from "./package-types";
 
 // Google Form URL for package submission
 export const PACKAGE_SUBMISSION_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSd65G0T_9o6ec8FmWa1BkxiU3dqInS6cad-uPGN-xHpfPplQw/viewform";
@@ -75,11 +76,16 @@ export function validateAndPreparePackageData(
       author: parsedData.author || '',
       description: parsedData.description || '',
       category: parsedData.category || '',
-      tags: Array.isArray(parsedData.tags) 
-        ? parsedData.tags 
-        : typeof parsedData.tags === 'string' 
-          ? parsedData.tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0)
-          : [],
+      tags: (() => {
+        const tagsValue = parsedData.tags;
+        if (Array.isArray(tagsValue)) {
+          return tagsValue.filter((tag): tag is string => typeof tag === 'string');
+        }
+        if (typeof tagsValue === 'string') {
+          return tagsValue.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
+        }
+        return [];
+      })(),
       license: parsedData.license || '',
       homepage: parsedData.homepage || '',
       readme: parsedData.readme || '',
