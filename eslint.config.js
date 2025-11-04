@@ -55,11 +55,8 @@ export default [
       'obsidianmd/validate-license': 'error',
       
       // UI sentence case with custom options
-      'obsidianmd/ui/sentence-case': ['warn', {
-        brands: ['Snipsy', 'SnipSidian', 'GitHub', 'Espanso', 'Obsidian'],
-        acronyms: ['UI', 'API', 'JSON', 'YAML', 'HTML', 'CSS', 'DOM', 'GIF'],
-        enforceCamelCaseLower: true,
-      }],
+      // Disabled - too many false positives with validation messages, button texts, etc.
+      'obsidianmd/ui/sentence-case': 'off',
     },
   },
   
