@@ -142,7 +142,6 @@ export class PackageBrowser {
     labelHeader.onclick = () => this.sortPackages("label");
     
     headerRow.createEl("th", { 
-        // eslint-disable-next-line obsidianmd/ui/sentence-case -- Table header text
         text: "Actions" 
     });
 

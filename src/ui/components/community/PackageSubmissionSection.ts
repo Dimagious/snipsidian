@@ -87,14 +87,12 @@ export class PackageSubmissionSection {
     if (validation.isValid) {
       const successEl = container.createDiv({ cls: "validation-success" });
       successEl.createEl("div", { 
-          // eslint-disable-next-line obsidianmd/ui/sentence-case -- Success validation message
           text: "✅ Package is valid!", 
           cls: "validation-title" 
       });
       if (validation.warnings.length > 0) {
         const warningsEl = successEl.createDiv({ cls: "validation-warnings" });
         warningsEl.createEl("div", { 
-            // eslint-disable-next-line obsidianmd/ui/sentence-case -- Section header format
             text: "Warnings:", 
             cls: "warnings-title" 
         });

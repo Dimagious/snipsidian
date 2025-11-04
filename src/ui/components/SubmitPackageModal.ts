@@ -48,7 +48,6 @@ export class SubmitPackageModal extends Modal {
         // YAML input
         const yamlContainer = contentEl.createDiv({ cls: "yaml-container" });
         yamlContainer.createEl("label", { 
-            // eslint-disable-next-line obsidianmd/ui/sentence-case -- Label format with acronym
             text: "Package YAML:",
             cls: "yaml-label"
         });
@@ -65,14 +64,12 @@ export class SubmitPackageModal extends Modal {
         const buttonContainer = contentEl.createDiv({ cls: "button-container" });
         
         const validateBtn = buttonContainer.createEl("button", {
-            // eslint-disable-next-line obsidianmd/ui/sentence-case -- Button action text
             text: "Validate package",
             cls: "validate-btn"
         });
         validateBtn.onclick = () => this.validatePackage();
 
         this.submitBtn = buttonContainer.createEl("button", {
-            // eslint-disable-next-line obsidianmd/ui/sentence-case -- Button action text
             text: "Submit package",
             cls: "submit-btn"
         });
@@ -138,7 +135,6 @@ export class SubmitPackageModal extends Modal {
         if (validation.isValid) {
             const successEl = this.validationContainer.createDiv({ cls: "validation-success" });
             successEl.createEl("div", { 
-                // eslint-disable-next-line obsidianmd/ui/sentence-case -- Success validation message
                 text: "✅ Package is valid!",
                 cls: "validation-title"
             });
@@ -216,7 +212,6 @@ export class SubmitPackageModal extends Modal {
             cls: "success-title"
         });
         successEl.createEl("div", { 
-            // eslint-disable-next-line obsidianmd/ui/sentence-case -- Success message text
             text: "Your package has been submitted for review and will appear in the pending packages.",
             cls: "success-message"
         });
