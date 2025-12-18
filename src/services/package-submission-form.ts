@@ -168,14 +168,14 @@ export function submitPackageViaGoogleForm(
  * @param submitterName - Optional submitter name
  * @returns Promise that resolves when form is opened
  */
-export async function openPackageSubmissionForm(
+export function openPackageSubmissionForm(
   packageData: Record<string, unknown>,
   app: App,
   pluginVersion: string,
   submitterEmail?: string,
   submitterName?: string
-): Promise<PackageFormSubmissionResult> {
-  const result = await submitPackageViaGoogleForm(
+): PackageFormSubmissionResult {
+  const result = submitPackageViaGoogleForm(
     packageData,
     app,
     pluginVersion,

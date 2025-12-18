@@ -354,7 +354,7 @@ export class SnippetsTab {
             .setDesc("Perform actions on selected snippets")
             .addButton((btn) => {
                  
-                btn.setButtonText("📁 Move to…");
+                btn.setButtonText("Move to…");
                 btn.onClick(() => {
                     const groups = this.groupManager.allGroupsFrom(this.plugin.settings.snippets);
                     const modal = new GroupPickerModal(this.app, {
@@ -449,7 +449,7 @@ export class SnippetsTab {
         });
         
         const cancelBtn = actionsContainer.createEl("button", { 
-            text: "❌", 
+            text: "Cancel", 
             cls: "snippet-action cancel-btn",
             title: "Cancel editing"
         });

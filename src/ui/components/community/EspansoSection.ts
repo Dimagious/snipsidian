@@ -27,10 +27,10 @@ export class EspansoSection {
     const espansoYamlRow = espansoSection.createDiv({ cls: "yaml-input-row" });
     espansoYamlRow.createEl("p", { text: "Paste YAML content from Espanso hub or other Espanso sources", cls: "yaml-instruction" });
     const espansoYamlContainer = espansoYamlRow.createDiv({ cls: "yaml-container" });
-    const espansoTextarea = espansoYamlContainer.createEl("textarea", {
+    const espansoTextarea: HTMLTextAreaElement = espansoYamlContainer.createEl("textarea", {
       placeholder: "Paste Espanso YAML here…",
       cls: "yaml-textarea",
-    }) as HTMLTextAreaElement;
+    });
 
     const espansoButtonRow = espansoSection.createDiv({ cls: "button-row" });
     const espansoInstallBtn = espansoButtonRow.createEl("button", { text: "Install Espanso package", cls: "install-btn" });

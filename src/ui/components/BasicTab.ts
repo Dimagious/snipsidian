@@ -178,7 +178,7 @@ export class BasicTab {
             );
 
         new Setting(helpSection)
-            .setName("Demo GIF")
+            .setName("Demo")
             .setDesc("See Snipsy in action")
             .addButton((btn) =>
                 btn

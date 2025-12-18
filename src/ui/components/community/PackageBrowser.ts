@@ -49,7 +49,7 @@ export class PackageBrowser {
     };
 
     const refreshBtn = searchContainer.createEl("button", {
-      text: "🔄 Refresh",
+      text: "Refresh",
       cls: "refresh-btn",
       title: "Refresh community packages from GitHub"
     });
@@ -65,9 +65,9 @@ export class PackageBrowser {
         this.packages.sort((a, b) => a.label.localeCompare(b.label));
         this.filterPackages();
         this.renderPackages(section);
-        new Notice("✅ Community packages refreshed!");
+        new Notice("Community packages refreshed!");
       } catch (error) {
-        new Notice(`❌ Failed to refresh packages: ${error instanceof Error ? error.message : String(error)}`);
+        new Notice(`Failed to refresh packages: ${error instanceof Error ? error.message : String(error)}`);
       }
     };
 
@@ -248,14 +248,14 @@ export class PackageBrowser {
       }
 
       await this.plugin.saveSettings();
-      new Notice(`✅ Successfully installed "${pkg.label}" with ${installedCount} snippets in group "${packageGroup}"`);
+      new Notice(`Successfully installed "${pkg.label}" with ${installedCount} snippets in group "${packageGroup}"`);
       
       // Re-render to update the "Installed" status
       const browseSection = document.querySelector(".snipsy-community-browse-section");
       if (browseSection) this.renderPackages(browseSection as HTMLElement);
       
     } catch (error) {
-      new Notice(`❌ Failed to install package: ${error instanceof Error ? error.message : String(error)}`);
+      new Notice(`Failed to install package: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -333,7 +333,7 @@ export class PackageBrowser {
     
     if (pkg.verified) {
        
-      infoSection.createEl("span", { text: " ✓ Verified", cls: "verified-badge" });
+      infoSection.createEl("span", { text: "Verified", cls: "verified-badge" });
     }
     
     if (pkg.description) {

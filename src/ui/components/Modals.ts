@@ -347,7 +347,7 @@ export class AddSnippetModal extends Modal {
             .addText((text) => {
                 text
                      
-                    .setPlaceholder("e.g.: :hello")
+                    .setPlaceholder("Example: :hello")
                     .setValue(trigger)
                     .onChange((value) => {
                         trigger = value;
@@ -360,7 +360,7 @@ export class AddSnippetModal extends Modal {
             .addTextArea((text) => {
                 text
                      
-                    .setPlaceholder("e.g.: hello, world!")
+                    .setPlaceholder("Example: hello, world!")
                     .setValue(replacement)
                     .onChange((value) => {
                         replacement = value;
@@ -373,7 +373,7 @@ export class AddSnippetModal extends Modal {
             .addText((text) => {
                 text
                      
-                    .setPlaceholder("e.g.: greetings")
+                    .setPlaceholder("Example: greetings")
                     .setValue(group)
                     .onChange((value) => {
                         group = value;

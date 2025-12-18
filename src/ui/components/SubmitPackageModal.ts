@@ -135,7 +135,7 @@ export class SubmitPackageModal extends Modal {
         if (validation.isValid) {
             const successEl = this.validationContainer.createDiv({ cls: "validation-success" });
             successEl.createEl("div", { 
-                text: "✅ Package is valid!",
+                text: "Package is valid!",
                 cls: "validation-title"
             });
             
@@ -147,7 +147,7 @@ export class SubmitPackageModal extends Modal {
                 });
                 validation.warnings.forEach((warning: string) => {
                     warningsEl.createEl("div", { 
-                        text: `⚠️ ${warning}`,
+                        text: warning,
                         cls: "warning-item"
                     });
                 });
@@ -155,8 +155,7 @@ export class SubmitPackageModal extends Modal {
         } else {
             const errorEl = this.validationContainer.createDiv({ cls: "validation-error" });
             errorEl.createEl("div", { 
-                 
-                text: "❌ Validation failed:",
+                text: "Validation failed:",
                 cls: "validation-title"
             });
             
@@ -207,8 +206,7 @@ export class SubmitPackageModal extends Modal {
         
         const successEl = this.validationContainer.createDiv({ cls: "submission-success" });
         successEl.createEl("div", { 
-             
-            text: "🎉 Thank you for contributing to the community!",
+            text: "Thank you for contributing to the community!",
             cls: "success-title"
         });
         successEl.createEl("div", { 
