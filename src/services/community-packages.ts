@@ -151,10 +151,8 @@ export async function createPackageIssue(app: App, packageData: PackageData, use
 
 /**
  * Loads community packages from GitHub API
- * @param _app - App instance (not used, kept for API compatibility)
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Parameter kept for API compatibility
-export async function loadCommunityPackagesFromGitHub(_app: App): Promise<PackageItem[]> {
+export async function loadCommunityPackagesFromGitHub(): Promise<PackageItem[]> {
   try {
     const response = await requestUrl({
       url: 'https://api.github.com/repos/Dimagious/snipsidian-community/contents/community-packages/approved'
@@ -252,7 +250,7 @@ export async function loadCommunityPackagesWithCache(plugin: PluginWithApp): Pro
   
   try {
     // Load from GitHub
-    const packages = await loadCommunityPackagesFromGitHub(plugin.app);
+    const packages = await loadCommunityPackagesFromGitHub();
     
     // Update cache (even if empty, to avoid repeated 404 requests)
     plugin.settings.communityPackages = {
@@ -295,11 +293,9 @@ export async function loadAllCommunityPackages(app: App, plugin?: PluginWithApp)
 /**
  * Loads community packages from the approved directory using Obsidian API
  * This function should be called from UI components that have access to the app instance
- * @param _app - App instance (not used, kept for API compatibility)
  * @deprecated Use loadCommunityPackagesWithCache() instead
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Parameter kept for API compatibility
-export function loadCommunityPackagesFromVault(_app: App): PackageItem[] {
+export function loadCommunityPackagesFromVault(): PackageItem[] {
   // Deprecated - use GitHub API instead
   return [];
 }
@@ -414,14 +410,14 @@ export async function processPackageSubmission(
         await app.vault.create(fullPath, yamlContent);
       } catch (fileError) {
         console.error("Failed to save package to vault:", fileError);
-        errors.push(`Failed to save package: ${fileError}`);
+        errors.push(`Failed to save package: ${fileError instanceof Error ? fileError.message : String(fileError)}`);
         return { success: false, errors, warnings };
       }
     }
     
     return { success, errors, warnings };
   } catch (error) {
-    errors.push(`Failed to process package submission: ${error}`);
+    errors.push(`Failed to process package submission: ${error instanceof Error ? error.message : String(error)}`);
     return { success: false, errors, warnings };
   }
 }

@@ -104,7 +104,7 @@ export function validateAndPreparePackageData(
     };
     
   } catch (error) {
-    errors.push(`Failed to parse package data: ${error}`);
+    errors.push(`Failed to parse package data: ${error instanceof Error ? error.message : String(error)}`);
     return { isValid: false, errors, warnings };
   }
 }
@@ -118,13 +118,13 @@ export function validateAndPreparePackageData(
  * @param submitterName - Optional submitter name
  * @returns Submission result with form URL
  */
-export async function submitPackageViaGoogleForm(
+export function submitPackageViaGoogleForm(
   packageData: Record<string, unknown>,
   app: App,
   pluginVersion: string,
   submitterEmail?: string,
   submitterName?: string
-): Promise<PackageFormSubmissionResult> {
+): PackageFormSubmissionResult {
   try {
     // Validate and prepare package data
     const validation = validateAndPreparePackageData(packageData, submitterEmail, submitterName);
@@ -154,7 +154,7 @@ export async function submitPackageViaGoogleForm(
   } catch (error) {
     return {
       success: false,
-      error: `Failed to prepare package submission: ${error}`
+      error: `Failed to prepare package submission: ${error instanceof Error ? error.message : String(error)}`
     };
   }
 }

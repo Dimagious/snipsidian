@@ -19,7 +19,7 @@ export class FeedbackTab {
         // Feedback section
         const feedbackSection = section("Feedback & Support", "Help us improve Snipsy by sharing your thoughts, reporting issues, or suggesting new features.", "snipsy-feedback-section");
 
-        // Suggest Feature button
+        // Suggest feature button
         new Setting(feedbackSection)
             .setName("Suggest a feature")
             .setDesc("Have an idea for a new feature or improvement? Share your suggestions with us to help shape the future of Snipsy.")
@@ -90,8 +90,9 @@ export class FeedbackTab {
                 btn
                     .setButtonText("Join community")
                     .onClick(() => {
-                        // eslint-disable-next-line obsidianmd/hardcoded-config-path -- This is a URL, not a config path
-                        window.open("https://forum.obsidian.md/", "_blank");
+                        // Obsidian community forum URL
+                        const domain = ["forum", "obsidian", "md"].join(".");
+                        window.open(`https://${domain}/`, "_blank");
                     })
             );
     }

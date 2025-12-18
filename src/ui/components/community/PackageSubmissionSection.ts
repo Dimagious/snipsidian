@@ -36,10 +36,10 @@ export class PackageSubmissionSection {
       cls: "yaml-instruction",
     });
     const yamlContainer = yamlRow.createDiv({ cls: "yaml-container" });
-    const yamlTextarea = yamlContainer.createEl("textarea", {
+    const yamlTextarea: HTMLTextAreaElement = yamlContainer.createEl("textarea", {
       placeholder: "Paste your community package YAML here…",
       cls: "yaml-textarea",
-    }) as HTMLTextAreaElement;
+    });
 
     const validationContainer = submitSection.createDiv({ cls: "validation-container" });
 
@@ -47,7 +47,7 @@ export class PackageSubmissionSection {
     const validateBtn = buttonRow.createEl("button", { text: "Validate package", cls: "validate-btn" });
     validateBtn.onclick = () => this.validatePackage(yamlTextarea, validationContainer);
 
-    const submitBtn = buttonRow.createEl("button", { text: "Submit package", cls: "submit-btn" }) as HTMLButtonElement;
+    const submitBtn: HTMLButtonElement = buttonRow.createEl("button", { text: "Submit package", cls: "submit-btn" });
     submitBtn.disabled = true;
     submitBtn.onclick = () => this.submitPackage(yamlTextarea, submitBtn);
   }
@@ -78,7 +78,7 @@ export class PackageSubmissionSection {
       const submitBtn = container.parentElement?.querySelector(".submit-btn") as HTMLButtonElement;
       if (submitBtn) submitBtn.disabled = !validation.isValid;
     } catch (error) {
-      this.showValidationResult(container, { isValid: false, errors: [`Failed to parse YAML: ${error}`], warnings: [] });
+      this.showValidationResult(container, { isValid: false, errors: [`Failed to parse YAML: ${error instanceof Error ? error.message : String(error)}`], warnings: [] });
     }
   }
 
@@ -139,7 +139,7 @@ export class PackageSubmissionSection {
         this.showErrorWithFeedbackForm(`Failed to submit package: ${result.error}`);
       }
     } catch (error) {
-      this.showErrorWithFeedbackForm(`Failed to submit package: ${error}`);
+      this.showErrorWithFeedbackForm(`Failed to submit package: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

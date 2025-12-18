@@ -49,12 +49,6 @@ export class GroupManager {
         return { moved, skipped };
     }
 
-    promptNewGroup(initial = ""): GroupKey | null {
-        const label = prompt("New group name:", initial);
-        if (label === null) return null; // cancelled
-        return label.trim() || "";
-    }
-
     displayGroupTitle(groupKey: string): string {
         return displayGroupTitle(groupKey);
     }

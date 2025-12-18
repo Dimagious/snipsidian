@@ -47,7 +47,7 @@ export class BasicTab {
 
         new Setting(commandsSection)
             .setName("Open Snipsy settings")
-            .setDesc("Quick access to Snipsy settings")
+            .setDesc("Quick access to Snipsy settings panel")
             .addButton((btn) =>
                 btn
                     .setButtonText("Set hotkey")
@@ -116,7 +116,7 @@ export class BasicTab {
                                 await this.plugin.saveSettings();
                                 new Notice("Snippets imported successfully");
                             } catch (err) {
-                                new Notice(`Import failed: ${err}`);
+                                new Notice(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
                             }
                         };
                         input.click();
@@ -130,7 +130,7 @@ export class BasicTab {
                 btn
                     .setButtonText("Reveal")
                     .setCta()
-                    .onClick(async () => {
+                    .onClick(() => {
                         try {
                             if (Platform.isDesktop) {
                                 const adapter = this.app.vault.adapter as { getBasePath?: () => string };
@@ -145,7 +145,7 @@ export class BasicTab {
                                 new Notice("File manager access is only available on desktop");
                             }
                         } catch (err) {
-                            new Notice(`Failed to reveal file: ${err}`);
+                            new Notice(`Failed to reveal file: ${err instanceof Error ? err.message : String(err)}`);
                         }
                     })
             );
@@ -192,7 +192,7 @@ export class BasicTab {
                             const absPath = `${base}/${configDir}/plugins/snipsidian/docs/screens/espanso-demo.gif`;
                             window.open(absPath, "_blank");
                         } catch (err) {
-                            new Notice(`Failed to open demo: ${err}`);
+                            new Notice(`Failed to open demo: ${err instanceof Error ? err.message : String(err)}`);
                         }
                     })
             );

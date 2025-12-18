@@ -45,7 +45,7 @@ describe('package-submission-form', () => {
       const result = validateAndPreparePackageData(invalidYaml);
 
       expect(result.isValid).toBe(false);
-      expect(result.errors).toContain('Failed to parse package data: Error: YAML parsing error');
+      expect(result.errors).toContain('Failed to parse package data: YAML parsing error');
       expect(result.preparedData).toBeUndefined();
     });
 

@@ -248,7 +248,7 @@ describe("community-packages", () => {
       const result = await processPackageSubmission(packageData, "community-packages/pending/test-package.yml");
       
       expect(result.success).toBe(false);
-      expect(result.errors).toContain("Failed to process package submission: Error: Validation error");
+      expect(result.errors).toContain("Failed to process package submission: Validation error");
     });
   });
 

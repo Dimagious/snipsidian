@@ -34,7 +34,7 @@ export class EspansoSection {
 
     const espansoButtonRow = espansoSection.createDiv({ cls: "button-row" });
     const espansoInstallBtn = espansoButtonRow.createEl("button", { text: "Install Espanso package", cls: "install-btn" });
-    espansoInstallBtn.onclick = async () => {
+    espansoInstallBtn.onclick = () => {
       const yamlText = espansoTextarea.value;
       if (!yamlText?.trim()) {
         new Notice("Please paste Espanso YAML first");
@@ -53,7 +53,7 @@ export class EspansoSection {
           void this.installFromYaml(yamlText);
         }
       } catch (err) {
-        new Notice(`Failed to parse Espanso package: ${err}`);
+        new Notice(`Failed to parse Espanso package: ${err instanceof Error ? err.message : String(err)}`);
       }
     };
   }
@@ -62,12 +62,12 @@ export class EspansoSection {
     try {
       const incoming = espansoYamlToSnippets(yamlStr);
       for (const [trigger, replacement] of Object.entries(incoming)) {
-        this.plugin.settings.snippets[trigger] = replacement as string;
+        this.plugin.settings.snippets[trigger] = replacement;
       }
       await this.plugin.saveSettings();
       new Notice(`Installed ${Object.keys(incoming).length} snippets from YAML`);
     } catch (err) {
-      new Notice(`Failed to install from YAML: ${err}`);
+      new Notice(`Failed to install from YAML: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 }

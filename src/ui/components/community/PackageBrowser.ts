@@ -67,7 +67,7 @@ export class PackageBrowser {
         this.renderPackages(section);
         new Notice("✅ Community packages refreshed!");
       } catch (error) {
-        new Notice(`❌ Failed to refresh packages: ${error}`);
+        new Notice(`❌ Failed to refresh packages: ${error instanceof Error ? error.message : String(error)}`);
       }
     };
 
@@ -179,7 +179,7 @@ export class PackageBrowser {
     }
   }
 
-  private async installPackage(pkg: PackageItem) {
+  private installPackage(pkg: PackageItem) {
     try {
       if (!pkg.snippets || Object.keys(pkg.snippets).length === 0) {
         new Notice(`Package "${pkg.label}" has no snippets to install`);
@@ -210,7 +210,7 @@ export class PackageBrowser {
         void this.performInstallation(pkg);
       }
     } catch (error) {
-      new Notice(`Failed to install package: ${error}`);
+      new Notice(`Failed to install package: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -255,7 +255,7 @@ export class PackageBrowser {
       if (browseSection) this.renderPackages(browseSection as HTMLElement);
       
     } catch (error) {
-      new Notice(`❌ Failed to install package: ${error}`);
+      new Notice(`❌ Failed to install package: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

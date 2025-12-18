@@ -14,6 +14,7 @@
         "release:check": "node scripts/version-sync.cjs && npm run test && npm run build",
         "release:zip": "node scripts/make-zip.cjs",
         "release": "npm run release:check && npm run release:zip",
+        "release:audit": "node scripts/release-audit.cjs",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "tree": "tree -L 3 -I 'node_modules|coverage'"

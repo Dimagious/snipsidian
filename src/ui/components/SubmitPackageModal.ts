@@ -123,7 +123,7 @@ export class SubmitPackageModal extends Modal {
         } catch (error) {
             this.showValidationResult({
                 isValid: false,
-                errors: [`Failed to parse YAML: ${error}`],
+                errors: [`Failed to parse YAML: ${error instanceof Error ? error.message : String(error)}`],
                 warnings: []
             });
         }
@@ -198,7 +198,7 @@ export class SubmitPackageModal extends Modal {
                 new Notice(`Failed to submit package: ${result.errors.join(', ')}`);
             }
         } catch (error) {
-            new Notice(`Failed to submit package: ${error}`);
+            new Notice(`Failed to submit package: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 

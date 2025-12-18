@@ -81,7 +81,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
                 this.snippetsTab.render(container);
                 break;
             case "community":
-                this.communityTab.render(container);
+                void this.communityTab.render(container);
                 break;
             case "feedback":
                 this.feedbackTab.render(container);
