@@ -12,9 +12,9 @@ export class EspansoSection {
 
   render(root: HTMLElement): void {
     const espansoSection = root.createDiv({ cls: "snipsy-section snipsy-espanso-section" });
-    espansoSection.createEl("h3", { text: "Install Espanso package", cls: "section-title" });
+    espansoSection.createEl("h3", { text: "Install package from hub", cls: "section-title" });
     const espansoHelpText = espansoSection.createDiv({ cls: "help-text" });
-    espansoHelpText.createEl("p", { text: "Paste packages from Espanso hub." });
+    espansoHelpText.createEl("p", { text: "Paste packages from the hub." });
     const espansoLinkEl = espansoHelpText.createEl("p", { text: "Browse packages at ", cls: "snipsy-hint" });
     const espansoLink = espansoLinkEl.createEl("a", {
       text: "Espanso hub",
@@ -25,7 +25,7 @@ export class EspansoSection {
     espansoLink.setAttribute("rel", "noopener noreferrer");
 
     const espansoYamlRow = espansoSection.createDiv({ cls: "yaml-input-row" });
-    espansoYamlRow.createEl("p", { text: "Paste YAML content from Espanso hub or other Espanso sources", cls: "yaml-instruction" });
+    espansoYamlRow.createEl("p", { text: "Paste YAML content from the hub or other sources", cls: "yaml-instruction" });
     const espansoYamlContainer = espansoYamlRow.createDiv({ cls: "yaml-container" });
     const espansoTextarea: HTMLTextAreaElement = espansoYamlContainer.createEl("textarea", {
       placeholder: "Paste Espanso YAML here…",
@@ -33,11 +33,11 @@ export class EspansoSection {
     });
 
     const espansoButtonRow = espansoSection.createDiv({ cls: "button-row" });
-    const espansoInstallBtn = espansoButtonRow.createEl("button", { text: "Install Espanso package", cls: "install-btn" });
+    const espansoInstallBtn = espansoButtonRow.createEl("button", { text: "Install package", cls: "install-btn" });
     espansoInstallBtn.onclick = () => {
       const yamlText = espansoTextarea.value;
       if (!yamlText?.trim()) {
-        new Notice("Please paste Espanso YAML first");
+        new Notice("Please paste YAML content first");
         return;
       }
       try {

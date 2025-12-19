@@ -46,8 +46,8 @@ export class BasicTab {
             );
 
         new Setting(commandsSection)
-            .setName("Open Snipsy settings")
-            .setDesc("Quick access to Snipsy settings panel")
+            .setName("Open settings")
+            .setDesc("Quick access to plugin settings")
             .addButton((btn) =>
                 btn
                     .setButtonText("Set hotkey")
@@ -179,7 +179,7 @@ export class BasicTab {
 
         new Setting(helpSection)
             .setName("Demo")
-            .setDesc("See Snipsy in action")
+            .setDesc("See the plugin in action")
             .addButton((btn) =>
                 btn
                     .setButtonText("View demo")

@@ -92,7 +92,7 @@ export class PackageBrowser {
       reasonsList.createEl("li", { text: "Community repository is not set up yet" });
       
       errorContainer.createEl("p", {
-        text: "Try clicking the Refresh button above, or check back later.",
+        text: "Try clicking the refresh button above, or check back later.",
         cls: "error-hint",
       });
     }

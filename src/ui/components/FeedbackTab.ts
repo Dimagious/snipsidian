@@ -22,7 +22,7 @@ export class FeedbackTab {
         // Suggest feature button
         new Setting(feedbackSection)
             .setName("Suggest a feature")
-            .setDesc("Have an idea for a new feature or improvement? Share your suggestions with us to help shape the future of Snipsy.")
+            .setDesc("Have an idea for a new feature or improvement? Share your suggestions with us to help shape the future of this plugin.")
             .addButton((btn) =>
                 btn
                     .setButtonText("Suggest feature")
@@ -48,7 +48,7 @@ export class FeedbackTab {
         // General Feedback button
         new Setting(feedbackSection)
             .setName("General feedback")
-            .setDesc("Share your overall experience with Snipsy, provide general feedback, or get in touch with any other thoughts you might have.")
+            .setDesc("Share your overall experience, provide general feedback, or get in touch with any other thoughts you might have.")
             .addButton((btn) =>
                 btn
                     .setButtonText("Share feedback")
@@ -63,7 +63,7 @@ export class FeedbackTab {
 
         new Setting(supportSection)
             .setName("Documentation")
-            .setDesc("Read the comprehensive documentation and guides to get the most out of Snipsy.")
+            .setDesc("Read the comprehensive documentation and guides to get the most out of this plugin.")
             .addButton((btn) =>
                 btn
                     .setButtonText("View docs")
