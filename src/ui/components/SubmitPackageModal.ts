@@ -183,7 +183,7 @@ export class SubmitPackageModal extends Modal {
             const fileName = `${packageId}.yml`;
             
             // Submit to pending folder
-            const result = await processPackageSubmission(packageData, `community-packages/pending/${fileName}`);
+            const result = await processPackageSubmission(packageData, `community-packages/pending/${fileName}`, this.app);
             
             if (result.success) {
                 // Show success message

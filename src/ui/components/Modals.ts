@@ -152,6 +152,7 @@ export class GroupPickerModal extends Modal {
         select.addClass("snipsy-group-select");
         if (this.allowUngrouped) select.append(new Option("📁 Ungrouped", ""));
         for (const g of this.groups) {
+            if (!g) continue;
             select.append(new Option(`📁 ${displayGroupTitle(g)}`, g));
         }
         select.append(new Option("➕ New group…", "__new__"));
@@ -385,8 +386,8 @@ export class AddSnippetModal extends Modal {
         const add = footer.createEl("button", { text: "Add snippet" });
         add.addClass("mod-cta");
         add.onclick = () => {
-            if (trigger.trim() && replacement.trim()) {
-                const result = this.onConfirm?.({ trigger: trigger.trim(), replacement: replacement.trim(), group: group.trim() });
+            if (trigger.trim() && replacement.length > 0) {
+                const result = this.onConfirm?.({ trigger: trigger.trim(), replacement, group: group.trim() });
                 // Handle promise if onConfirm returns one
                 if (result instanceof Promise) {
                     void result.catch((error) => {
@@ -401,4 +402,3 @@ export class AddSnippetModal extends Modal {
         cancel.onclick = () => this.close();
     }
 }
-

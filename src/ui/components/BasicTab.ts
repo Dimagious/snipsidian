@@ -161,7 +161,7 @@ export class BasicTab {
                     .setButtonText("Open GitHub")
                     .setCta()
                     .onClick(() => {
-                        window.open("https://github.com/Dimagious/snipsidian", "_blank");
+                        window.open("https://github.com/Dimagious/snipsidian", "_blank", "noopener,noreferrer");
                     })
             );
 
@@ -173,7 +173,7 @@ export class BasicTab {
                     .setButtonText("Browse packages")
                     .setCta()
                     .onClick(() => {
-                        window.open("https://hub.espanso.org/", "_blank");
+                        window.open("https://hub.espanso.org/", "_blank", "noopener,noreferrer");
                     })
             );
 
@@ -190,7 +190,7 @@ export class BasicTab {
                             const base: string = adapter?.getBasePath?.() ?? "";
                             const configDir: string = this.app.vault.configDir;
                             const absPath = `${base}/${configDir}/plugins/snipsidian/docs/screens/espanso-demo.gif`;
-                            window.open(absPath, "_blank");
+                            window.open(absPath, "_blank", "noopener,noreferrer");
                         } catch (err) {
                             new Notice(`Failed to open demo: ${err instanceof Error ? err.message : String(err)}`);
                         }

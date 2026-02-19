@@ -10,8 +10,13 @@ export function diffIncoming(
     const added: DiffResult["added"] = [];
     const conflicts: DiffResult["conflicts"] = [];
     for (const [k, v] of Object.entries(incoming)) {
-        if (current[k] === undefined) added.push({ key: k, value: v });
-        else conflicts.push({ key: k, incoming: v, current: current[k] });
+        if (current[k] === undefined) {
+            added.push({ key: k, value: v });
+            continue;
+        }
+        if (current[k] !== v) {
+            conflicts.push({ key: k, incoming: v, current: current[k] });
+        }
     }
     return { added, conflicts };
 }

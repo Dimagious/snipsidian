@@ -31,6 +31,15 @@ describe("utils.diffIncoming", () => {
         );
         expect(r.conflicts).toHaveLength(1);
     });
+
+    it("does not mark identical values as conflicts", () => {
+        const incoming = { a: "same" };
+        const current = { a: "same" };
+        const r = diffIncoming(incoming, current);
+
+        expect(r.added).toHaveLength(0);
+        expect(r.conflicts).toHaveLength(0);
+    });
 });
 
 describe("utils.isRecordOfString", () => {

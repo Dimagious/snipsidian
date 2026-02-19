@@ -4,12 +4,10 @@ export type SnippetMap = Record<string, string>;
 export type GroupKey = string; // '' means Ungrouped
 
 export class GroupManager {
-    constructor(private snippets: SnippetMap) {}
-
     allGroupsFrom(map: SnippetMap): GroupKey[] {
         const s = new Set<string>();
         for (const k of Object.keys(map)) {
-            const g = k.includes("/") ? k.split("/", 1)[0] ?? "Ungrouped" : "Ungrouped";
+            const { group: g } = splitKey(k);
             s.add(g);
         }
         return Array.from(s).sort((a, b) => a.localeCompare(b));
@@ -25,8 +23,7 @@ export class GroupManager {
         return { ok: true };
     }
 
-    bulkMoveKeys(targetGroup: GroupKey, keys: string[]): { moved: number; skipped: number } {
-        const map = this.snippets;
+    bulkMoveKeys(map: SnippetMap, targetGroup: GroupKey, keys: string[]): { moved: number; skipped: number } {
         const ops: { oldKey: string; newKey: string }[] = [];
         let skipped = 0;
 

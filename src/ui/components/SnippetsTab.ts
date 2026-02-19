@@ -1,9 +1,10 @@
 import { App, Notice, Setting } from "obsidian";
 import type SnipSidianPlugin from "../../main";
-import { normalizeTrigger, isBadTrigger, splitKey, joinKey } from "../../services/utils";
+import { normalizeTrigger, isBadTrigger, splitKey, joinKey, slugifyGroup } from "../../services/utils";
 import { GroupManager } from "../utils/group-utils";
 import { UIStateManager } from "../utils/ui-state";
 import { AddSnippetModal, ConfirmModal, GroupPickerModal, TextPromptModal } from "./Modals";
+import { hasTriggerCollision } from "../../store/snippets";
 
 interface EditData {
     trigger: string;
@@ -28,7 +29,7 @@ export class SnippetsTab {
         private app: App,
         private plugin: SnipSidianPlugin
     ) {
-        this.groupManager = new GroupManager(this.plugin.settings.snippets);
+        this.groupManager = new GroupManager();
         this.uiState = new UIStateManager(this.plugin.settings);
     }
 
@@ -158,7 +159,7 @@ export class SnippetsTab {
         const groups = new Map<string, Array<[string, string]>>();
         for (const e of entries) {
             const [k] = e;
-            const group = k.includes("/") ? k.split("/", 1)[0] ?? "Ungrouped" : "Ungrouped";
+            const { group } = splitKey(k);
             if (!groups.has(group)) groups.set(group, []);
             groups.get(group)!.push(e);
         }
@@ -221,16 +222,8 @@ export class SnippetsTab {
                     title: "Rename group:",
                     initial: title,
                     onSubmit: (newTitle) => {
-                        if (!newTitle || newTitle === title) return;
-                        const newSlug = newTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-                        if (newSlug === group) return;
-                        
-                        const { moved } = this.groupManager.bulkMoveKeys(newSlug, items.map(([k]) => k));
-                        this.uiState.setGroupOpen(newSlug, isOpen);
-                        this.uiState.getGroupOpen().delete(group);
-                        this.renderSnippetList(root);
-                        new Notice(`Renamed group to "${this.groupManager.displayGroupTitle(newSlug)}" (${moved} moved).`);
-                    }
+                        void this.renameGroup(root, group, title, items, isOpen, newTitle);
+                    },
                 });
                 modal.open();
             };
@@ -364,11 +357,7 @@ export class SnippetsTab {
                     });
                     modal.onSubmit = (targetGroup) => {
                         if (targetGroup === null) return;
-                        const keys = Array.from(this.uiState.getSelected());
-                        const { moved, skipped } = this.groupManager.bulkMoveKeys(targetGroup, keys);
-                        this.uiState.setSelected(new Set());
-                        this.renderSnippetList(root);
-                        new Notice(`Moved ${moved} item(s)${skipped ? `, skipped ${skipped} (conflicts)` : ""}.`);
+                        void this.moveSelectedSnippets(root, targetGroup);
                     };
                     modal.open();
                 });
@@ -396,13 +385,84 @@ export class SnippetsTab {
             });
     }
 
+    private async moveSelectedSnippets(root: HTMLElement, targetGroup: string) {
+        const keys = Array.from(this.uiState.getSelected());
+        if (keys.length === 0) return;
+
+        const { moved, skipped } = this.groupManager.bulkMoveKeys(this.plugin.settings.snippets, targetGroup, keys);
+        if (moved === 0) {
+            new Notice(`Moved 0 item(s)${skipped ? `, skipped ${skipped} (conflicts)` : ""}.`);
+            return;
+        }
+
+        try {
+            await this.plugin.saveSettings();
+            this.uiState.setSelected(new Set());
+            this.renderSnippetList(root);
+            new Notice(`Moved ${moved} item(s)${skipped ? `, skipped ${skipped} (conflicts)` : ""}.`);
+        } catch {
+            new Notice("Failed to move snippets");
+        }
+    }
+
+    private async renameGroup(
+        root: HTMLElement,
+        group: string,
+        title: string,
+        items: Array<[string, string]>,
+        isOpen: boolean,
+        newTitle: string
+    ) {
+        if (!newTitle || newTitle === title) return;
+
+        const newSlug = slugifyGroup(newTitle);
+        if (newSlug === group) return;
+
+        const { moved, skipped } = this.groupManager.bulkMoveKeys(
+            this.plugin.settings.snippets,
+            newSlug,
+            items.map(([k]) => k)
+        );
+        if (moved === 0) {
+            new Notice(`Renamed group failed: no snippets moved${skipped ? `, skipped ${skipped}` : ""}.`);
+            return;
+        }
+
+        try {
+            await this.plugin.saveSettings();
+            this.uiState.setGroupOpen(newSlug, isOpen);
+            this.uiState.getGroupOpen().delete(group);
+            this.renderSnippetList(root);
+            const groupName = newSlug === "" ? "Ungrouped" : this.groupManager.displayGroupTitle(newSlug);
+            new Notice(`Renamed group to "${groupName}" (${moved} moved${skipped ? `, skipped ${skipped}` : ""}).`);
+        } catch {
+            new Notice("Failed to rename group");
+        }
+    }
+
 
     private showAddSnippetModal() {
         const modal = new AddSnippetModal(this.app, async (snippet) => {
             if (snippet.trigger && snippet.replacement) {
-                const key = snippet.group 
-                    ? `${snippet.group}/${snippet.trigger}`
-                    : snippet.trigger;
+                const normalizedTrigger = normalizeTrigger(snippet.trigger);
+                if (isBadTrigger(normalizedTrigger)) {
+                    new Notice("Invalid trigger: contains separators or is empty");
+                    return;
+                }
+                const normalizedGroup = slugifyGroup(snippet.group);
+                const key = normalizedGroup
+                    ? `${normalizedGroup}/${normalizedTrigger}`
+                    : normalizedTrigger;
+
+                if (this.plugin.settings.snippets[key] !== undefined) {
+                    new Notice(`Snippet "${normalizedTrigger}" already exists`);
+                    return;
+                }
+
+                if (hasTriggerCollision(this.plugin.settings, normalizedTrigger, key)) {
+                    new Notice(`Trigger "${normalizedTrigger}" already exists in another group`);
+                    return;
+                }
                 
                 this.plugin.settings.snippets[key] = snippet.replacement;
                 await this.plugin.saveSettings();
@@ -489,7 +549,7 @@ export class SnippetsTab {
         if (!editData) return;
         
         const newTriggerName = editData.triggerInput.value.trim();
-        const newReplacement = editData.replacementInput.value.trim();
+        const newReplacement = editData.replacementInput.value;
         
         // Validate trigger
         const normalized = normalizeTrigger(newTriggerName);
@@ -497,10 +557,19 @@ export class SnippetsTab {
             new Notice("Invalid trigger: contains separators or is empty");
             return;
         }
+
+        if (newReplacement.length === 0) {
+            new Notice("Replacement cannot be empty");
+            return;
+        }
         
         // Check if trigger changed
         const { group: grp } = splitKey(originalTrigger);
         const newKey = joinKey(grp, normalized);
+        if (hasTriggerCollision(this.plugin.settings, normalized, originalTrigger)) {
+            new Notice(`Trigger "${normalized}" already exists in another group`);
+            return;
+        }
         
         try {
             // Update snippet data

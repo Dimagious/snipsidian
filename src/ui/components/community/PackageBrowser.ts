@@ -3,6 +3,7 @@ import type SnipSidianPlugin from "../../../main";
 import { loadAllCommunityPackages } from "../../../services/community-packages";
 import { PackagePreviewModal } from "../Modals";
 import { joinKey } from "../../../services/utils";
+import { hasReplacementCollision } from "../../../store/snippets";
 
 interface PackageItem {
   id?: string;
@@ -186,27 +187,30 @@ export class PackageBrowser {
         return;
       }
 
-      // Check for conflicts with existing snippets
       const packageGroup = pkg.label;
-      const conflicts = this.checkSnippetConflicts(pkg.snippets, packageGroup);
+      const triggerCollisions = Object.entries(pkg.snippets).filter(([trigger, replacement]) => {
+        const groupedKey = joinKey(packageGroup, trigger);
+        // Same grouped key conflicts are handled by the preview modal below.
+        if (this.plugin.settings.snippets[groupedKey] !== undefined) return false;
+        return hasReplacementCollision(this.plugin.settings, trigger, replacement, groupedKey);
+      });
+
+      if (triggerCollisions.length > 0) {
+        const collisions = triggerCollisions.map(([trigger]) => trigger).join(", ");
+        new Notice(`Skipped install: trigger name collision with existing snippets (${collisions})`);
+        return;
+      }
+
+      const diff = this.buildPackageDiff(pkg.snippets, packageGroup);
       
-      if (conflicts.length > 0) {
-        // Show conflict resolution modal
-        const modal = new PackagePreviewModal(this.app, this.plugin, pkg.label, {
-          added: [],
-          conflicts: conflicts.map(conflict => ({
-            key: joinKey(packageGroup, conflict),
-            current: this.plugin.settings.snippets[joinKey(packageGroup, conflict)] || '',
-            incoming: pkg.snippets![conflict] || ''
-          }))
-        });
+      if (diff.conflicts.length > 0) {
+        const modal = new PackagePreviewModal(this.app, this.plugin, pkg.label, diff);
         
-        modal.onConfirm = async () => {
-            await this.performInstallation(pkg);
+        modal.onConfirm = async (resolved) => {
+            await this.applyResolvedInstallation(pkg, resolved);
         };
         modal.open();
       } else {
-        // No conflicts, install directly
         void this.performInstallation(pkg);
       }
     } catch (error) {
@@ -214,20 +218,43 @@ export class PackageBrowser {
     }
   }
 
-  private checkSnippetConflicts(newSnippets: { [trigger: string]: string }, packageGroup: string): string[] {
-    const conflicts: string[] = [];
-    
-    for (const trigger of Object.keys(newSnippets)) {
+  private buildPackageDiff(
+    newSnippets: { [trigger: string]: string },
+    packageGroup: string
+  ): {
+    added: Array<{ key: string; value: string }>;
+    conflicts: Array<{ key: string; current: string; incoming: string }>;
+  } {
+    const added: Array<{ key: string; value: string }> = [];
+    const conflicts: Array<{ key: string; current: string; incoming: string }> = [];
+
+    for (const [trigger, incoming] of Object.entries(newSnippets)) {
       const groupedKey = joinKey(packageGroup, trigger);
-      
-      // Check if trigger exists and has different replacement
-      if (this.plugin.settings.snippets[groupedKey] && 
-          this.plugin.settings.snippets[groupedKey] !== newSnippets[trigger]) {
-        conflicts.push(trigger);
+
+      const current = this.plugin.settings.snippets[groupedKey];
+      if (current === undefined) {
+        added.push({ key: groupedKey, value: incoming });
+      } else if (current !== incoming) {
+        conflicts.push({ key: groupedKey, current, incoming });
       }
     }
-    
-    return conflicts;
+
+    return { added, conflicts };
+  }
+
+  private async applyResolvedInstallation(pkg: PackageItem, resolved: Record<string, string>) {
+    try {
+      this.plugin.settings.snippets = resolved;
+      await this.plugin.saveSettings();
+
+      const installedCount = Object.keys(pkg.snippets || {}).length;
+      new Notice(`Successfully installed "${pkg.label}" with ${installedCount} snippets`);
+
+      const browseSection = document.querySelector(".snipsy-community-browse-section");
+      if (browseSection) this.renderPackages(browseSection as HTMLElement);
+    } catch (error) {
+      new Notice(`Failed to install package: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   private async performInstallation(pkg: PackageItem) {
