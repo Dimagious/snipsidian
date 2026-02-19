@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed bulk move and group rename operations to persist changes to disk via settings save.
 - Fixed package install collision checks to detect conflicting replacements across all groups.
 - Removed stale-reference risk in group operations by applying moves to the current snippets map.
+- Removed unused legacy `CommunityPackageModal` code path and related dead modal styles.
 
 ## [1.0.0] - 2025-01-15
 
