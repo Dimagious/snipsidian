@@ -29,7 +29,7 @@ export class SnippetsTab {
         private app: App,
         private plugin: SnipSidianPlugin
     ) {
-        this.groupManager = new GroupManager(this.plugin.settings.snippets);
+        this.groupManager = new GroupManager();
         this.uiState = new UIStateManager(this.plugin.settings);
     }
 
@@ -222,16 +222,8 @@ export class SnippetsTab {
                     title: "Rename group:",
                     initial: title,
                     onSubmit: (newTitle) => {
-                        if (!newTitle || newTitle === title) return;
-                        const newSlug = newTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-                        if (newSlug === group) return;
-                        
-                        const { moved } = this.groupManager.bulkMoveKeys(newSlug, items.map(([k]) => k));
-                        this.uiState.setGroupOpen(newSlug, isOpen);
-                        this.uiState.getGroupOpen().delete(group);
-                        this.renderSnippetList(root);
-                        new Notice(`Renamed group to "${this.groupManager.displayGroupTitle(newSlug)}" (${moved} moved).`);
-                    }
+                        void this.renameGroup(root, group, title, items, isOpen, newTitle);
+                    },
                 });
                 modal.open();
             };
@@ -365,11 +357,7 @@ export class SnippetsTab {
                     });
                     modal.onSubmit = (targetGroup) => {
                         if (targetGroup === null) return;
-                        const keys = Array.from(this.uiState.getSelected());
-                        const { moved, skipped } = this.groupManager.bulkMoveKeys(targetGroup, keys);
-                        this.uiState.setSelected(new Set());
-                        this.renderSnippetList(root);
-                        new Notice(`Moved ${moved} item(s)${skipped ? `, skipped ${skipped} (conflicts)` : ""}.`);
+                        void this.moveSelectedSnippets(root, targetGroup);
                     };
                     modal.open();
                 });
@@ -395,6 +383,61 @@ export class SnippetsTab {
                     modal.open();
                 });
             });
+    }
+
+    private async moveSelectedSnippets(root: HTMLElement, targetGroup: string) {
+        const keys = Array.from(this.uiState.getSelected());
+        if (keys.length === 0) return;
+
+        const { moved, skipped } = this.groupManager.bulkMoveKeys(this.plugin.settings.snippets, targetGroup, keys);
+        if (moved === 0) {
+            new Notice(`Moved 0 item(s)${skipped ? `, skipped ${skipped} (conflicts)` : ""}.`);
+            return;
+        }
+
+        try {
+            await this.plugin.saveSettings();
+            this.uiState.setSelected(new Set());
+            this.renderSnippetList(root);
+            new Notice(`Moved ${moved} item(s)${skipped ? `, skipped ${skipped} (conflicts)` : ""}.`);
+        } catch {
+            new Notice("Failed to move snippets");
+        }
+    }
+
+    private async renameGroup(
+        root: HTMLElement,
+        group: string,
+        title: string,
+        items: Array<[string, string]>,
+        isOpen: boolean,
+        newTitle: string
+    ) {
+        if (!newTitle || newTitle === title) return;
+
+        const newSlug = slugifyGroup(newTitle);
+        if (newSlug === group) return;
+
+        const { moved, skipped } = this.groupManager.bulkMoveKeys(
+            this.plugin.settings.snippets,
+            newSlug,
+            items.map(([k]) => k)
+        );
+        if (moved === 0) {
+            new Notice(`Renamed group failed: no snippets moved${skipped ? `, skipped ${skipped}` : ""}.`);
+            return;
+        }
+
+        try {
+            await this.plugin.saveSettings();
+            this.uiState.setGroupOpen(newSlug, isOpen);
+            this.uiState.getGroupOpen().delete(group);
+            this.renderSnippetList(root);
+            const groupName = newSlug === "" ? "Ungrouped" : this.groupManager.displayGroupTitle(newSlug);
+            new Notice(`Renamed group to "${groupName}" (${moved} moved${skipped ? `, skipped ${skipped}` : ""}).`);
+        } catch {
+            new Notice("Failed to rename group");
+        }
     }
 
 

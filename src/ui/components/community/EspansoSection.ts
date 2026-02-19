@@ -3,7 +3,7 @@ import type SnipSidianPlugin from "../../../main";
 import { espansoYamlToSnippets } from "../../../packages/espanso";
 import { diffIncoming } from "../../../services/utils";
 import { PackagePreviewModal } from "../Modals";
-import { getDict } from "../../../store/snippets";
+import { hasReplacementCollision } from "../../../store/snippets";
 
 export class EspansoSection {
   constructor(
@@ -43,10 +43,8 @@ export class EspansoSection {
       }
       try {
         const incoming = espansoYamlToSnippets(yamlText);
-        const globalDict = getDict(this.plugin.settings);
         const triggerCollisions = Object.entries(incoming).filter(([trigger, replacement]) => {
-          const existing = globalDict[trigger];
-          return existing !== undefined && existing !== replacement;
+          return hasReplacementCollision(this.plugin.settings, trigger, replacement);
         });
 
         if (triggerCollisions.length > 0) {

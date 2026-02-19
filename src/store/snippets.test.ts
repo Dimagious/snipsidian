@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { getDict, mergeDefaults, replaceAllSnippets, getAllSnippetsFlat, hasTriggerCollision } from "./snippets";
+import {
+    getDict,
+    mergeDefaults,
+    replaceAllSnippets,
+    getAllSnippetsFlat,
+    hasTriggerCollision,
+    hasReplacementCollision
+} from "./snippets";
 import type { SnipSidianSettings } from "../types";
 
 describe("store/snippets", () => {
@@ -46,6 +53,21 @@ describe("store/snippets", () => {
         expect(hasTriggerCollision(settings, "sig", "work/sig")).toBe(true);
         expect(hasTriggerCollision(settings, "hello", "hello")).toBe(false);
         expect(hasTriggerCollision(settings, "missing")).toBe(false);
+    });
+
+    it("hasReplacementCollision detects conflicting replacement for same trigger", () => {
+        const settings = {
+            snippets: {
+                "work/sig": "Best",
+                "personal/sig": "Cheers",
+                "hello": "Hello"
+            }
+        } as any;
+
+        expect(hasReplacementCollision(settings, "sig", "Best")).toBe(true);
+        expect(hasReplacementCollision(settings, "sig", "Best", "personal/sig")).toBe(false);
+        expect(hasReplacementCollision(settings, "hello", "Hello")).toBe(false);
+        expect(hasReplacementCollision(settings, "missing", "x")).toBe(false);
     });
 
     describe("getAllSnippetsFlat", () => {

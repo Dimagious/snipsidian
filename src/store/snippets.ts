@@ -28,6 +28,21 @@ export function hasTriggerCollision(
     return false;
 }
 
+export function hasReplacementCollision(
+    settings: SnipSidianSettings,
+    triggerName: string,
+    incomingReplacement: string,
+    excludeFullKey?: string
+): boolean {
+    for (const [fullKey, replacement] of Object.entries(settings.snippets || {})) {
+        if (excludeFullKey && fullKey === excludeFullKey) continue;
+        const { name } = splitKey(fullKey);
+        if (name !== triggerName) continue;
+        if (replacement !== incomingReplacement) return true;
+    }
+    return false;
+}
+
 export function mergeDefaults(
     current: Record<string, string>,
     defaults: Record<string, string>

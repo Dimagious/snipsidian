@@ -3,7 +3,7 @@ import type SnipSidianPlugin from "../../../main";
 import { loadAllCommunityPackages } from "../../../services/community-packages";
 import { PackagePreviewModal } from "../Modals";
 import { joinKey } from "../../../services/utils";
-import { getDict } from "../../../store/snippets";
+import { hasReplacementCollision } from "../../../store/snippets";
 
 interface PackageItem {
   id?: string;
@@ -188,13 +188,11 @@ export class PackageBrowser {
       }
 
       const packageGroup = pkg.label;
-      const globalDict = getDict(this.plugin.settings);
       const triggerCollisions = Object.entries(pkg.snippets).filter(([trigger, replacement]) => {
         const groupedKey = joinKey(packageGroup, trigger);
         // Same grouped key conflicts are handled by the preview modal below.
         if (this.plugin.settings.snippets[groupedKey] !== undefined) return false;
-        const existing = globalDict[trigger];
-        return existing !== undefined && existing !== replacement;
+        return hasReplacementCollision(this.plugin.settings, trigger, replacement, groupedKey);
       });
 
       if (triggerCollisions.length > 0) {

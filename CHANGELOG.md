@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed false-positive conflicts for imports when incoming and current values are identical.
 - Fixed group handling so ungrouped snippets no longer collide with a literal `"Ungrouped"` group.
 - Fixed snippet add/edit forms to preserve replacement whitespace and line breaks.
+- Fixed bulk move and group rename operations to persist changes to disk via settings save.
+- Fixed package install collision checks to detect conflicting replacements across all groups.
+- Removed stale-reference risk in group operations by applying moves to the current snippets map.
 
 ## [1.0.0] - 2025-01-15
 
