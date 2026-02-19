@@ -9,7 +9,7 @@ export class GroupManager {
     allGroupsFrom(map: SnippetMap): GroupKey[] {
         const s = new Set<string>();
         for (const k of Object.keys(map)) {
-            const g = k.includes("/") ? k.split("/", 1)[0] ?? "Ungrouped" : "Ungrouped";
+            const { group: g } = splitKey(k);
             s.add(g);
         }
         return Array.from(s).sort((a, b) => a.localeCompare(b));

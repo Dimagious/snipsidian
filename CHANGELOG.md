@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added collision checks to prevent duplicate trigger names across groups in add/edit flows.
 - Made trigger dictionary resolution deterministic when grouped keys share the same trigger name.
 - Hardened external link opening with `noopener,noreferrer`.
+- Fixed false-positive conflicts for imports when incoming and current values are identical.
+- Fixed group handling so ungrouped snippets no longer collide with a literal `"Ungrouped"` group.
+- Fixed snippet add/edit forms to preserve replacement whitespace and line breaks.
 
 ## [1.0.0] - 2025-01-15
 

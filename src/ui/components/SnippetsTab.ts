@@ -1,6 +1,6 @@
 import { App, Notice, Setting } from "obsidian";
 import type SnipSidianPlugin from "../../main";
-import { normalizeTrigger, isBadTrigger, splitKey, joinKey } from "../../services/utils";
+import { normalizeTrigger, isBadTrigger, splitKey, joinKey, slugifyGroup } from "../../services/utils";
 import { GroupManager } from "../utils/group-utils";
 import { UIStateManager } from "../utils/ui-state";
 import { AddSnippetModal, ConfirmModal, GroupPickerModal, TextPromptModal } from "./Modals";
@@ -159,7 +159,7 @@ export class SnippetsTab {
         const groups = new Map<string, Array<[string, string]>>();
         for (const e of entries) {
             const [k] = e;
-            const group = k.includes("/") ? k.split("/", 1)[0] ?? "Ungrouped" : "Ungrouped";
+            const { group } = splitKey(k);
             if (!groups.has(group)) groups.set(group, []);
             groups.get(group)!.push(e);
         }
@@ -406,8 +406,9 @@ export class SnippetsTab {
                     new Notice("Invalid trigger: contains separators or is empty");
                     return;
                 }
-                const key = snippet.group 
-                    ? `${snippet.group}/${normalizedTrigger}`
+                const normalizedGroup = slugifyGroup(snippet.group);
+                const key = normalizedGroup
+                    ? `${normalizedGroup}/${normalizedTrigger}`
                     : normalizedTrigger;
 
                 if (this.plugin.settings.snippets[key] !== undefined) {
@@ -505,12 +506,17 @@ export class SnippetsTab {
         if (!editData) return;
         
         const newTriggerName = editData.triggerInput.value.trim();
-        const newReplacement = editData.replacementInput.value.trim();
+        const newReplacement = editData.replacementInput.value;
         
         // Validate trigger
         const normalized = normalizeTrigger(newTriggerName);
         if (isBadTrigger(normalized)) {
             new Notice("Invalid trigger: contains separators or is empty");
+            return;
+        }
+
+        if (newReplacement.length === 0) {
+            new Notice("Replacement cannot be empty");
             return;
         }
         
