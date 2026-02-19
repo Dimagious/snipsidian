@@ -4,6 +4,7 @@ import { normalizeTrigger, isBadTrigger, splitKey, joinKey } from "../../service
 import { GroupManager } from "../utils/group-utils";
 import { UIStateManager } from "../utils/ui-state";
 import { AddSnippetModal, ConfirmModal, GroupPickerModal, TextPromptModal } from "./Modals";
+import { hasTriggerCollision } from "../../store/snippets";
 
 interface EditData {
     trigger: string;
@@ -400,9 +401,24 @@ export class SnippetsTab {
     private showAddSnippetModal() {
         const modal = new AddSnippetModal(this.app, async (snippet) => {
             if (snippet.trigger && snippet.replacement) {
+                const normalizedTrigger = normalizeTrigger(snippet.trigger);
+                if (isBadTrigger(normalizedTrigger)) {
+                    new Notice("Invalid trigger: contains separators or is empty");
+                    return;
+                }
                 const key = snippet.group 
-                    ? `${snippet.group}/${snippet.trigger}`
-                    : snippet.trigger;
+                    ? `${snippet.group}/${normalizedTrigger}`
+                    : normalizedTrigger;
+
+                if (this.plugin.settings.snippets[key] !== undefined) {
+                    new Notice(`Snippet "${normalizedTrigger}" already exists`);
+                    return;
+                }
+
+                if (hasTriggerCollision(this.plugin.settings, normalizedTrigger, key)) {
+                    new Notice(`Trigger "${normalizedTrigger}" already exists in another group`);
+                    return;
+                }
                 
                 this.plugin.settings.snippets[key] = snippet.replacement;
                 await this.plugin.saveSettings();
@@ -501,6 +517,10 @@ export class SnippetsTab {
         // Check if trigger changed
         const { group: grp } = splitKey(originalTrigger);
         const newKey = joinKey(grp, normalized);
+        if (hasTriggerCollision(this.plugin.settings, normalized, originalTrigger)) {
+            new Notice(`Trigger "${normalized}" already exists in another group`);
+            return;
+        }
         
         try {
             // Update snippet data

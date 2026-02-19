@@ -214,6 +214,27 @@ describe("adapters/obsidian-editor: insertSnippetAtCursor", () => {
         expect(ed.getCursor()).toEqual({ line: 0, ch: 16 }); // cursor at $| position
     });
 
+    it("should handle cursor placeholder at start of replacement", () => {
+        const ed = new MockEditor("Hello world");
+        ed.setCursor({ line: 0, ch: 6 });
+
+        insertSnippetAtCursor(ed as any, "$|beautiful ");
+
+        expect(ed.getLine(0)).toBe("Hello beautiful world");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 6 });
+    });
+
+    it("should place cursor correctly for multiline replacement", () => {
+        const ed = new MockEditor("Hello world");
+        ed.setCursor({ line: 0, ch: 6 });
+
+        insertSnippetAtCursor(ed as any, "one\n$|two");
+
+        expect(ed.getLine(0)).toBe("Hello one");
+        expect(ed.getLine(1)).toBe("twoworld");
+        expect(ed.getCursor()).toEqual({ line: 1, ch: 0 });
+    });
+
     it("should replace selection if present", () => {
         const ed = new MockEditor("Hello world");
         ed.setCursor({ line: 0, ch: 11 }); // end of line
@@ -245,6 +266,17 @@ describe("adapters/obsidian-editor: wrapSelectionWithSnippet", () => {
         wrapSelectionWithSnippet(ed as any, "**$1**");
         
         expect(ed.getLine(0)).toBe("Hello **world**");
+    });
+
+    it("should place cursor correctly for multiline wrapping template", () => {
+        const ed = new MockEditor("Hello world");
+        ed.setCursor({ line: 0, ch: 11 });
+        ed.selection = "world";
+
+        wrapSelectionWithSnippet(ed as any, "A\n$|${SEL}\nB");
+
+        expect(ed.getLine(0)).toBe("Hello A\nworld\nB");
+        expect(ed.getCursor()).toEqual({ line: 1, ch: 0 });
     });
 
     it("should replace selection if no wrapping placeholders", () => {

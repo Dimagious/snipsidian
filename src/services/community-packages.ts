@@ -385,14 +385,18 @@ export async function processPackageSubmission(
     if (success && app && app.vault) {
       try {
         // Create the pending directory if it doesn't exist
+        const rootPath = "Snipsidian";
+        const communityPath = "Snipsidian/community-packages";
         const pendingPath = "Snipsidian/community-packages/pending";
-        const pendingFolder = app.vault.getAbstractFileByPath(pendingPath);
-        
-        if (!pendingFolder) {
-          // Create the directory structure
-          await app.vault.createFolder("Snipsidian");
-          await app.vault.createFolder("Snipsidian/community-packages");
-          await app.vault.createFolder("Snipsidian/community-packages/pending");
+
+        if (!app.vault.getAbstractFileByPath(rootPath)) {
+          await app.vault.createFolder(rootPath);
+        }
+        if (!app.vault.getAbstractFileByPath(communityPath)) {
+          await app.vault.createFolder(communityPath);
+        }
+        if (!app.vault.getAbstractFileByPath(pendingPath)) {
+          await app.vault.createFolder(pendingPath);
         }
         
         // Convert package data to YAML
@@ -421,4 +425,3 @@ export async function processPackageSubmission(
     return { success: false, errors, warnings };
   }
 }
-

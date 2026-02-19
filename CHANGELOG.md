@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Fixed package conflict resolution so `Keep current` / `Overwrite` choices are actually applied.
+- Fixed Espanso install conflict detection and conflict-resolution application.
+- Switched package submission UI flow to Google Form submission opening (instead of unauthenticated GitHub Issue POST).
+- Added collision checks to prevent duplicate trigger names across groups in add/edit flows.
+- Made trigger dictionary resolution deterministic when grouped keys share the same trigger name.
+- Hardened external link opening with `noopener,noreferrer`.
+
 ## [1.0.0] - 2025-01-15
 
 ### 🎉 Major Release - First Stable Version
@@ -342,4 +353,3 @@ This is the first stable release of Snipsy! After extensive development and test
 ### Notes
 - All snippet management logic, package install behavior, and export/import functionality remain unchanged.  
   This release focuses purely on improving usability and consistency of the settings panel.
-

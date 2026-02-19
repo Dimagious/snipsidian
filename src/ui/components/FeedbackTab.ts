@@ -68,7 +68,7 @@ export class FeedbackTab {
                 btn
                     .setButtonText("View docs")
                     .onClick(() => {
-                        window.open("https://github.com/Dimagious/snipsidian#readme", "_blank");
+                        window.open("https://github.com/Dimagious/snipsidian#readme", "_blank", "noopener,noreferrer");
                     })
             );
 
@@ -79,7 +79,7 @@ export class FeedbackTab {
                 btn
                     .setButtonText("View issues")
                     .onClick(() => {
-                        window.open("https://github.com/Dimagious/snipsidian/issues", "_blank");
+                        window.open("https://github.com/Dimagious/snipsidian/issues", "_blank", "noopener,noreferrer");
                     })
             );
 
@@ -92,7 +92,7 @@ export class FeedbackTab {
                     .onClick(() => {
                         // Obsidian community forum URL
                         const domain = ["forum", "obsidian", "md"].join(".");
-                        window.open(`https://${domain}/`, "_blank");
+                        window.open(`https://${domain}/`, "_blank", "noopener,noreferrer");
                     })
             );
     }
@@ -107,6 +107,6 @@ export class FeedbackTab {
         const formUrl = buildGoogleFormUrl(baseUrl, type, meta);
         
         // Open in new tab
-        window.open(formUrl, "_blank");
+        window.open(formUrl, "_blank", "noopener,noreferrer");
     }
 }

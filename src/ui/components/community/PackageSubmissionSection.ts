@@ -1,8 +1,7 @@
 import { App, Notice } from "obsidian";
 import type SnipSidianPlugin from "../../../main";
 import { validatePackage, type ValidationResult } from "../../../services/package-validator";
-import { createPackageIssue } from "../../../services/community-packages";
-import { buildGoogleFormUrl, collectSystemMeta } from "../../../services/feedback-form";
+import { openPackageSubmissionForm } from "../../../services/package-submission-form";
 import type { PackageData } from "../../../services/package-types";
 import * as yaml from "js-yaml";
 
@@ -117,41 +116,27 @@ export class PackageSubmissionSection {
     try {
       const yamlContent = textarea.value.trim();
       const packageData = yaml.load(yamlContent) as PackageData;
-      
-      // Create Issue via GitHub API
-      const result = await createPackageIssue(this.app, packageData, { author: packageData.author });
-      
-      if (result.success && result.issueUrl) {
-        // Show notification with Issue link
-        const notice = new Notice("Package submitted successfully! Click to view issue.", 10000);
-        notice.messageEl.onclick = () => {
-          window.open(result.issueUrl, '_blank');
-        };
-        
-        // Clear form
-        textarea.value = "";
-        submitBtn.disabled = true;
-        this.validationResult = null;
-        const validationContainer = submitBtn.parentElement?.parentElement?.querySelector(".validation-container");
-        if (validationContainer) validationContainer.empty();
-      } else {
-        // Show error with Google Form link
-        this.showErrorWithFeedbackForm(`Failed to submit package: ${result.error}`);
-      }
-    } catch (error) {
-      this.showErrorWithFeedbackForm(`Failed to submit package: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
+      const result = openPackageSubmissionForm(
+        packageData as Record<string, unknown>,
+        this.app,
+        this.plugin.manifest.version
+      );
 
-  private showErrorWithFeedbackForm(message: string) {
-     
-    const errorNotice = new Notice(`${message} Click to report bug.`, 10000);
-    errorNotice.messageEl.onclick = () => {
-      const pluginVersion = this.plugin.manifest.version;
-      const meta = collectSystemMeta(this.app, pluginVersion);
-      const baseUrl = "https://docs.google.com/forms/d/e/1FAIpQLSf4kFr5pme9C0CX02NOad_9STlia5-xZ2D-9C88u1mX32WqXw/viewform";
-      const formUrl = buildGoogleFormUrl(baseUrl, "Bug report", meta);
-      window.open(formUrl, '_blank');
-    };
+      if (!result.success) {
+        new Notice(`Failed to open submission form: ${result.error ?? "Unknown error"}`);
+        return;
+      }
+
+      new Notice("Submission form opened in your browser");
+
+      // Clear form
+      textarea.value = "";
+      submitBtn.disabled = true;
+      this.validationResult = null;
+      const validationContainer = submitBtn.parentElement?.parentElement?.querySelector(".validation-container");
+      if (validationContainer) validationContainer.empty();
+    } catch (error) {
+      new Notice(`Failed to submit package: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 }
