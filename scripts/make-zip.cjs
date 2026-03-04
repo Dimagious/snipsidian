@@ -1,13 +1,8 @@
 const { execSync } = require("child_process");
 const fs = require("fs");
 
-let files = ["main.js", "manifest.json", "styles.css"];
-
-if (fs.existsSync("docs/screens")) {
-    files.push("docs/screens");
-}
-
-files = files.filter(f => fs.existsSync(f));
+// Obsidian release archives must contain only top-level plugin assets.
+let files = ["main.js", "manifest.json", "styles.css"].filter((f) => fs.existsSync(f));
 
 if (!files.length) {
     console.error("[snipsidian] Nothing to pack. Build first.");
@@ -16,6 +11,10 @@ if (!files.length) {
 
 const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
 const name = `snipsidian-${pkg.version}.zip`;
+
+if (fs.existsSync(name)) {
+    fs.unlinkSync(name);
+}
 
 // Use system 'zip' if available (macOS/Linux). On Windows with Git Bash — also ok.
 try {

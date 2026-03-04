@@ -107,7 +107,7 @@ export class PackageSubmissionSection {
     }
   }
 
-  private async submitPackage(textarea: HTMLTextAreaElement, submitBtn: HTMLButtonElement) {
+  private submitPackage(textarea: HTMLTextAreaElement, submitBtn: HTMLButtonElement) {
     if (!this.validationResult || !this.validationResult.isValid) {
       new Notice("Please validate the package first");
       return;
