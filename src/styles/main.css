@@ -21,13 +21,7 @@
 /* ============ Legacy Styles (временно) ============ */
 /* Эти стили будут постепенно перенесены в модули */
 
-/* Settings panel (legacy bits) */
-.mod-settings .snipsidian-settings {
-  --snip-h2-mb: 6px;
-  --snip-h3-mt: 18px;
-  --snip-h3-mb: 6px;
-}
-
+/* Settings panel heading rhythm (vars + .setting-item padding live in base.css) */
 .mod-settings .snipsidian-settings h2 {
   margin-top: 0;
   margin-bottom: var(--snip-h2-mb);
@@ -43,11 +37,6 @@
 .mod-settings .snipsidian-settings h3 {
   margin-top: var(--snip-h3-mt);
   margin-bottom: var(--snip-h3-mb);
-}
-
-.mod-settings .snipsidian-settings .setting-item {
-  padding-top: 8px;
-  padding-bottom: 8px;
 }
 
 .mod-settings .snipsidian-settings h3 + .setting-item {
@@ -75,8 +64,13 @@
 }
 
 .snipsidian-preview-table td:nth-child(1) { width: 20%; } /* Trigger */
-.snipsidian-preview-table td:nth-child(2) { width: 30%; } /* Current */
-.snipsidian-preview-table td:nth-child(3) { width: 30%; } /* Incoming */
+.snipsidian-preview-table td:nth-child(2),
+.snipsidian-preview-table td:nth-child(3) {
+  width: 30%; /* Current / Incoming */
+  font-family: var(--font-monospace);
+  white-space: pre-wrap;
+  font-size: 0.8em;
+}
 .snipsidian-preview-table td:nth-child(4) { width: 20%; } /* Action */
 
 .snipsidian-preview-table th {
@@ -87,13 +81,6 @@
 
 .snipsidian-preview-table tr:hover td {
   background: var(--background-secondary);
-}
-
-.snipsidian-preview-table td:nth-child(2),
-.snipsidian-preview-table td:nth-child(3) {
-  font-family: var(--font-monospace);
-  white-space: pre-wrap;
-  font-size: 0.8em;
 }
 
 .snipsidian-preview-table .conflict-action select {
@@ -322,53 +309,7 @@
   border: 1px solid var(--background-modifier-border);
 }
 
-/* Package Details Modal */
-.package-details-info {
-  margin-bottom: var(--spacing-xl);
-}
-
-.package-details-info h3 {
-  margin: 0 0 10px 0;
-  color: var(--text-normal);
-}
-
-.package-details-info .package-description {
-  margin: 0 0 15px 0;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-.package-details-info .package-meta {
-  display: flex;
-  gap: var(--spacing-xl);
-  margin-bottom: 15px;
-  font-size: 14px;
-  color: var(--text-muted);
-}
-
-.package-details-info .package-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.package-details-info .package-tag {
-  background: var(--background-secondary);
-  color: var(--text-muted);
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-}
-
-.package-snippets {
-  margin-top: var(--spacing-xl);
-}
-
-.package-snippets h4 {
-  margin: 0 0 15px 0;
-  color: var(--text-normal);
-}
-
+/* Package snippets table (kept here; modal/details rules live in sections/community.css and components/modals.css) */
 .snippets-table {
   width: 100%;
   border-collapse: collapse;
@@ -377,26 +318,21 @@
   overflow: hidden;
 }
 
-.snippets-table th,
-.snippets-table td {
+.snippets-table th {
   padding: var(--spacing-sm) var(--spacing-md);
   text-align: left;
   border-bottom: 1px solid var(--background-modifier-border);
   font-size: 13px;
-}
-
-.snippets-table th {
   background: var(--background-secondary);
   font-weight: 600;
   color: var(--text-normal);
 }
 
 .snippets-table td {
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: 13px;
   color: var(--text-muted);
   font-family: var(--font-monospace);
-}
-
-.modal-button-container {
-  margin-top: var(--spacing-xl);
-  text-align: right;
 }

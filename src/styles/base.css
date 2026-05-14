@@ -6,8 +6,11 @@
   box-sizing: border-box;
 }
 
-/* Text overflow and horizontal scroll fixes */
+/* Text overflow and horizontal scroll fixes + heading rhythm vars */
 .mod-settings .snipsidian-settings {
+  --snip-h2-mb: 6px;
+  --snip-h3-mt: 18px;
+  --snip-h3-mb: 6px;
   overflow-x: hidden;
   word-wrap: break-word;
   word-break: break-word;
@@ -15,6 +18,8 @@
 
 .mod-settings .snipsidian-settings .setting-item {
   overflow-x: hidden;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 .mod-settings .snipsidian-settings .setting-item-name {
@@ -86,19 +91,19 @@
   gap: 8px; 
 }
 
-.snipsidian-group-checkbox { 
-  margin-left: 4px; 
-}
-
-.snipsidian-row-checkbox { 
-  margin-right: 8px; 
-}
-
-.snipsidian-row-checkbox,
 .snipsidian-group-checkbox {
-  appearance: checkbox; 
+  margin-left: 4px;
+  appearance: checkbox;
   -webkit-appearance: checkbox;
-  width: 14px; 
+  width: 14px;
+  height: 14px;
+}
+
+.snipsidian-row-checkbox {
+  margin-right: 8px;
+  appearance: checkbox;
+  -webkit-appearance: checkbox;
+  width: 14px;
   height: 14px;
 }
 
