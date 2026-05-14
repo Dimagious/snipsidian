@@ -29,6 +29,13 @@ const VALID_TAB_IDS: ReadonlySet<TabId> = new Set<TabId>([
  *  `settings.ui` is mutated. May be sync (returns void) or async. */
 type Persist = () => void | Promise<void>;
 
+/** Draft of an in-progress inline edit. Lives in memory only (not
+ *  persisted) — exiting Settings discards unsaved changes. */
+export interface EditDraft {
+    triggerName: string;
+    replacement: string;
+}
+
 export class UIStateManager {
     /** Default landing tab. "Snippets" because that's where day-to-day
      *  work happens — most users open Settings to manage their library
@@ -38,6 +45,13 @@ export class UIStateManager {
     private searchQuery = "";
     private selectionMode = false;
     private selected = new Set<string>();
+
+    /** Single-edit-mode: only one snippet row can be in edit at a time.
+     *  Lifted to UIStateManager so `renderSnippetList()` re-renders don't
+     *  destroy the in-flight edit (B-021). `editingKey` is the snippet
+     *  key (folder/trigger); `editingDraft` holds the unsaved values. */
+    private editingKey: string | null = null;
+    private editingDraft: EditDraft | null = null;
 
     /** Debounce timer for `setGroupOpen` — bulk-expand triggers N saves in
      *  quick succession; we coalesce into one. */
@@ -153,5 +167,34 @@ export class UIStateManager {
 
     setSelected(selected: Set<string>) {
         this.selected = selected;
+    }
+
+    // ---- Inline edit state ----
+    /** Returns the snippet key currently in edit mode, or `null` if no
+     *  row is being edited. */
+    getEditingKey(): string | null {
+        return this.editingKey;
+    }
+
+    /** Returns the current edit draft, or `null` if no row is being
+     *  edited. Returned object is the live reference — callers may
+     *  mutate it directly to track input changes without forcing a
+     *  re-render. */
+    getEditingDraft(): EditDraft | null {
+        return this.editingDraft;
+    }
+
+    /** Enter edit mode for a given snippet key. Pass `null` to exit
+     *  edit mode (after save/cancel). The draft starts as a copy of the
+     *  current trigger/replacement and is mutated in place by input
+     *  handlers. */
+    setEditing(key: string | null, draft: EditDraft | null) {
+        this.editingKey = key;
+        this.editingDraft = draft;
+    }
+
+    /** True when the given key is the currently edited row. */
+    isEditing(key: string): boolean {
+        return this.editingKey === key;
     }
 }

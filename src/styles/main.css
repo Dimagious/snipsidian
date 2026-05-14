@@ -75,6 +75,22 @@
   color: var(--snipsy-on-accent);
 }
 
+/* Utility — used by tab JS to hide/show without setting inline
+   styles (Obsidian's `no-static-styles-assignment` lint rule forbids
+   `el.style.display = "none"`). Keep this near the top so anything can
+   use it. */
+.snipsidian-settings .is-hidden { display: none !important; }
+
+/* ---- Snippets-tab heading ---- */
+/* Real <h3> per accessibility audit (B-091) — `Setting().setHeading()`
+   renders a styled div, which is invisible to screen readers as a
+   structural heading. */
+.snipsidian-settings .snipsy-tab-heading {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 4px 0 12px;
+}
+
 /* ---- Search bar ---- */
 .snipsidian-settings .snipsy-search {
   position: relative;
@@ -82,6 +98,7 @@
 }
 .snipsidian-settings .snipsy-search input {
   padding-left: 30px;
+  width: 100%;
 }
 .snipsidian-settings .snipsy-search .snipsy-search-icon {
   position: absolute;
@@ -90,6 +107,23 @@
   transform: translateY(-50%);
   color: var(--snipsy-text-faint);
   pointer-events: none;
+}
+
+/* ---- Snippet toolbar (search + actions row above the list) ---- */
+.snipsidian-settings .snipsy-snippet-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* Filter count badge (B-099) — only rendered when a search query is
+   active. Tells the user how many results their query returned without
+   forcing them to scroll the list. */
+.snipsidian-settings .snipsy-filter-count {
+  font-size: 12px;
+  color: var(--snipsy-text-faint);
+  white-space: nowrap;
 }
 
 /* ---- Snippet list ---- */
