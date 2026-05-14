@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.10] - 2026-05-14
+
+### Security
+
+- Community packages fetched from the catalog are now re-validated at install time. Adds shape, size, and count caps for triggers and replacements — and explicitly rejects `/` and `\` in package labels / triggers — so attacker-controllable content from the upstream catalog can't land arbitrary keys in `settings.snippets`. New `validatePackageForInstall` in `services/package-validator.ts`; wired into `PackageBrowser.installPackage`. (Closes B-033, S-002, S-006.)
+- The directory-listing → file-fetch step in `loadCommunityPackagesFromGitHub` now requires `download_url` to be `https://raw.githubusercontent.com/…`. A spoofed or future-changed GitHub API response can no longer redirect us to an attacker-controlled host. (Closes B-036, S-005.)
+- Snippet collision checks in `ui/utils/group-utils.ts` now use `Object.prototype.hasOwnProperty.call(map, key)` instead of `key in map`. Eliminates a ghost-collision when renaming or moving snippets to names that match `Object.prototype` members (`toString`, `constructor`, `valueOf`, etc.) — a real edge case after importing JSON packs that contained those keys. (Closes B-035, S-004.)
+
+### Tests
+
+- 19 new boundary-case tests across `package-validator.test.ts` (install-validator contracts, including exact-limit values, RTL-override / control-character triggers, aggregate-size attack, error-message truncation), `community-packages.test.ts` (off-host and downgrade-protocol rejections), and `group-utils.test.ts` (prototype-chain ghost-collision regressions). First structural application of ADR-0005: tests verify the contract at boundaries, not just line coverage.
+
 ## [1.0.9] - 2026-05-14
 
 ### Added
