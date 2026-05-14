@@ -35,6 +35,10 @@ export type EditPlan = {
     fromCh: number;
     toCh: number;
     insert: string;
-    /** Absolute cursor position in ch on the same line (after replacement) */
-    newCursorCh?: number;
+    /** Cursor position after replacement, expressed relative to the original
+     *  `(cur.line, fromCh)` position. `lineDelta` counts newlines crossed
+     *  inside `insert`; `ch` is the absolute column on the final line
+     *  (when `lineDelta` > 0, `ch` is the column from the start of that line;
+     *  when `lineDelta` === 0, `ch` is `fromCh + offset`). */
+    newCursor?: { lineDelta: number; ch: number };
 };

@@ -140,18 +140,35 @@ describe("adapters/obsidian-editor: makeContext", () => {
 });
 
 describe("adapters/obsidian-editor: applyEditPlan", () => {
-    it("replaces range and sets new cursor position", () => {
+    it("replaces range and sets new cursor position on the same line", () => {
         const ed = new MockEditor("fn ");
         ed.setCursor({ line: 0, ch: 3 }); // after space
         const plan = {
             fromCh: 0,
             toCh: 2,
             insert: "function () {}",
-            newCursorCh: "function ".length,
+            newCursor: { lineDelta: 0, ch: "function ".length },
         };
         applyEditPlan(ed as any, plan);
         expect(ed.getLine(0)).toBe("function () {} ");
         expect(ed.getCursor()).toEqual({ line: 0, ch: "function ".length });
+    });
+
+    // Regression: F-001 — multi-line insert must move the cursor to the inserted
+    // line, not stay on the original trigger line.
+    it("places cursor on a later line for multi-line inserts", () => {
+        const ed = new MockEditor("cb ");
+        ed.setCursor({ line: 0, ch: 3 });
+        const plan = {
+            fromCh: 0,
+            toCh: 2,
+            insert: "> [!note] \n> ",
+            newCursor: { lineDelta: 1, ch: "> ".length },
+        };
+        applyEditPlan(ed as any, plan);
+        expect(ed.getLine(0)).toBe("> [!note] ");
+        expect(ed.getLine(1)).toBe(">  ");
+        expect(ed.getCursor()).toEqual({ line: 1, ch: "> ".length });
     });
 });
 
