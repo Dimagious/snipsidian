@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-05-14
+
+### Fixed
+
+- Multi-line snippet replacements now place the cursor on the correct line. Previously any callout/list snippet that used `$|` after a `\n` (e.g. `> [!note] $|\n> `) landed the caret past end-of-line of the first inserted line. `EditPlan` now carries a structured `(lineDelta, ch)` cursor position and the adapter applies the line delta when setting the caret.
+- `$|` cursor marker is now located **after** variable substitution. Previously `$|` was resolved against the raw replacement, so any length change in `$date` / `$time` / `$filename` / `$clipboard` to the left of `$|` silently desynced the caret (e.g. `"$date $|"` placed the cursor at index 6 of the raw string rather than at the end of the expanded date).
+
 ## [1.0.6] - 2026-05-14
 
 ### Changed
