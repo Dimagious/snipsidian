@@ -334,6 +334,22 @@
 }
 .snipsidian-settings .package-row:first-child { border-top: 0; }
 .snipsidian-settings .package-row:hover { background: var(--snipsy-hover); }
+.snipsidian-settings .package-row:focus-visible {
+  outline: 2px solid var(--snipsy-accent);
+  outline-offset: -2px;
+}
+.snipsidian-settings .package-row .package-meta-block {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.snipsidian-settings .package-row .package-actions {
+  flex: 0 0 auto;
+}
+.snipsidian-settings .package-name-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .snipsidian-settings .package-name { font-size: 14px; font-weight: 500; }
 .snipsidian-settings .package-desc {
   font-size: 12.5px;
@@ -372,7 +388,15 @@
   background-size: 200% 100%;
   animation: snipsy-skel 1.4s linear infinite;
   border-radius: 4px;
+  height: 12px;
+  margin: 4px 0;
 }
+.snipsidian-settings .snipsy-skeleton-title { height: 16px; width: 35%; }
+.snipsidian-settings .snipsy-skeleton-line { height: 12px; width: 80%; }
+.snipsidian-settings .snipsy-skeleton-line.is-short { width: 45%; }
+.snipsidian-settings .snipsy-skeleton-button { width: 80px; height: 28px; }
+.snipsidian-settings .package-row.is-skeleton { cursor: default; }
+.snipsidian-settings .package-row.is-skeleton:hover { background: transparent; }
 @keyframes snipsy-skel { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
 
 /* ---- Empty state ---- */
@@ -518,6 +542,119 @@
   color: var(--snipsy-text-faint);
   text-align: center;
   border-top: 1px solid var(--snipsy-divider);
+}
+
+/* ---- About tab (1.1.0 rename of Feedback tab) ----
+   List of plain rows, one per resource. No CTAs — everything here is
+   equally-weighted (HANDOFF §2e). Google Forms feedback path is gone
+   (B-008); feedback flows through GitHub issues. */
+.snipsidian-settings .snipsy-tab-subheading {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--snipsy-text-faint);
+  margin: 16px 0 8px;
+}
+.snipsidian-settings .snipsy-about-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--snipsy-divider);
+  border-radius: var(--snipsy-radius);
+  overflow: hidden;
+}
+.snipsidian-settings .snipsy-about-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--snipsy-divider);
+}
+.snipsidian-settings .snipsy-about-row:first-child { border-top: 0; }
+.snipsidian-settings .snipsy-about-text { flex: 1 1 auto; min-width: 0; }
+.snipsidian-settings .snipsy-about-row-title {
+  font-size: 13px;
+  font-weight: 500;
+}
+.snipsidian-settings .snipsy-about-row-desc {
+  font-size: 12.5px;
+  color: var(--snipsy-text-muted);
+  margin-top: 2px;
+}
+.snipsidian-settings .snipsy-about-row-action {
+  flex: 0 0 auto;
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--snipsy-divider);
+  color: var(--snipsy-text);
+  padding: 4px 10px;
+  border-radius: var(--snipsy-radius);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.snipsidian-settings .snipsy-about-row-action:hover {
+  background: var(--snipsy-hover);
+}
+.snipsidian-settings .snipsy-about-version {
+  margin-top: 16px;
+  font-size: 11.5px;
+  color: var(--snipsy-text-faint);
+  text-align: center;
+}
+
+/* ---- Package submission section (1.1.0 redesign of Submit) ----
+   The old "giant green box" is gone (HANDOFF §4). YAML paste + in-app
+   validate + a single "Open submission issue" button that opens a
+   prefilled GitHub issue (Google Forms path retired — B-008). */
+.snipsidian-settings .snipsy-submit-yaml {
+  margin: 8px 0;
+}
+.snipsidian-settings .snipsy-submit-textarea {
+  width: 100%;
+  min-height: 160px;
+  font-family: var(--snipsy-mono);
+  font-size: 12.5px;
+  padding: 8px 10px;
+  border: 1px solid var(--snipsy-divider);
+  border-radius: var(--snipsy-radius);
+  background: var(--snipsy-bg-alt);
+  color: var(--snipsy-text);
+  resize: vertical;
+}
+.snipsidian-settings .snipsy-submit-validation {
+  margin: 8px 0;
+}
+.snipsidian-settings .snipsy-submit-valid,
+.snipsidian-settings .snipsy-submit-invalid {
+  padding: 8px 10px;
+  border-radius: var(--snipsy-radius);
+  font-size: 12.5px;
+}
+.snipsidian-settings .snipsy-submit-valid {
+  background: rgba(108, 197, 133, 0.10);
+  color: var(--snipsy-success);
+}
+.snipsidian-settings .snipsy-submit-invalid {
+  background: rgba(232, 113, 106, 0.10);
+  color: var(--snipsy-danger);
+}
+.snipsidian-settings .snipsy-submit-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.snipsidian-settings .snipsy-submit-subtitle {
+  font-weight: 500;
+  margin-top: 6px;
+}
+.snipsidian-settings .snipsy-submit-item {
+  font-size: 12px;
+  margin: 2px 0;
+}
+.snipsidian-settings .snipsy-submit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 /* ---- Reduced motion ---- */
