@@ -38,3 +38,26 @@ describe("GroupManager.bulkMoveKeys", () => {
         });
     });
 });
+
+// Regression: security S-004 — `in` operator walks the prototype chain,
+// so `"toString" in {}` returns true. Renaming to a name that matches an
+// inherited prototype member would false-positive a collision. After the
+// `hasOwnProperty.call` fix this passes cleanly.
+describe("GroupManager — prototype-chain ghost-collision (S-004)", () => {
+    it("safeRenameKey allows renaming to a prototype-name like 'toString'", () => {
+        const manager = new GroupManager();
+        const snippets: Record<string, string> = { ":a": "value" };
+        const r = manager.safeRenameKey(snippets, ":a", "toString");
+        expect(r.ok).toBe(true);
+        expect(snippets.toString).toBe("value");
+        expect(snippets[":a"]).toBeUndefined();
+    });
+
+    it("bulkMoveKeys does not skip an own key just because it matches a prototype name", () => {
+        const manager = new GroupManager();
+        const snippets: Record<string, string> = { "alpha/toString": "shadow" };
+        const r = manager.bulkMoveKeys(snippets, "beta", ["alpha/toString"]);
+        expect(r).toEqual({ moved: 1, skipped: 0 });
+        expect(snippets["beta/toString"]).toBe("shadow");
+    });
+});

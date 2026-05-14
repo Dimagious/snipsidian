@@ -15,7 +15,10 @@ export class GroupManager {
 
     safeRenameKey(map: SnippetMap, oldKey: string, newKey: string): { ok: boolean; reason?: string } {
         if (oldKey === newKey) return { ok: true };
-        if (newKey in map) return { ok: false, reason: `Trigger "${newKey}" already exists` };
+        // Use hasOwnProperty.call instead of `in` so we don't false-positive on
+        // inherited prototype names (e.g. renaming to `toString` or
+        // `constructor`). See security S-004.
+        if (Object.prototype.hasOwnProperty.call(map, newKey)) return { ok: false, reason: `Trigger "${newKey}" already exists` };
         const val = map[oldKey];
         if (val === undefined) return { ok: false, reason: "Original key missing" };
         delete map[oldKey];
@@ -30,7 +33,8 @@ export class GroupManager {
         for (const k of keys) {
             const { name } = splitKey(k);
             const newKey = joinKey(targetGroup, name);
-            if (newKey in map && !keys.includes(newKey)) {
+            // Same prototype-chain defence as in safeRenameKey above (S-004).
+            if (Object.prototype.hasOwnProperty.call(map, newKey) && !keys.includes(newKey)) {
                 skipped++;
                 continue;
             }
