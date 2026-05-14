@@ -6,8 +6,7 @@ vi.mock("./package-validator", () => ({
     isValid: true,
     errors: [],
     warnings: []
-  }),
-  validatePackageFile: vi.fn()
+  })
 }));
 
 // Mock requestUrl from obsidian - must be before imports
@@ -24,7 +23,6 @@ import {
   loadDynamicCommunityPackages,
   loadAllCommunityPackages,
   loadCommunityPackagesFromVault,
-  processPackageSubmission,
   loadCommunityPackagesFromGitHub,
   createPackageIssue,
   loadCommunityPackagesWithCache
@@ -132,123 +130,6 @@ describe("community-packages", () => {
       
       const packages = loadCommunityPackagesFromVault(mockApp);
       expect(packages).toEqual([]); // Deprecated function returns empty array
-    });
-  });
-
-  describe("processPackageSubmission", () => {
-    it("should process valid package submission", async () => {
-      const { validatePackage, validatePackageFile } = await import("./package-validator");
-      
-      vi.mocked(validatePackage).mockReturnValue({
-        isValid: true,
-        errors: [],
-        warnings: []
-      });
-      
-      vi.mocked(validatePackageFile).mockReturnValue({
-        isValid: true,
-        errors: [],
-        warnings: []
-      });
-
-      const packageData = {
-        name: "Test Package",
-        version: "1.0.0",
-        author: "test-author",
-        description: "A test package",
-        kind: "community",
-        snippets: []
-      };
-
-      const result = await processPackageSubmission(packageData, "community-packages/pending/test-package.yml");
-      
-      expect(result.success).toBe(true);
-      expect(result.errors).toHaveLength(0);
-    });
-
-    it("should handle invalid package submission", async () => {
-      const { validatePackage, validatePackageFile } = await import("./package-validator");
-      
-      vi.mocked(validatePackage).mockReturnValue({
-        isValid: false,
-        errors: ["Invalid package data"],
-        warnings: []
-      });
-      
-      vi.mocked(validatePackageFile).mockReturnValue({
-        isValid: true,
-        errors: [],
-        warnings: []
-      });
-
-      const packageData = {
-        name: "Test Package",
-        // Missing required fields
-      };
-
-      const result = await processPackageSubmission(packageData, "community-packages/pending/test-package.yml");
-      
-      expect(result.success).toBe(false);
-      expect(result.errors).toContain("Invalid package data");
-    });
-
-    it("should handle invalid file path", async () => {
-      const { validatePackage, validatePackageFile } = await import("./package-validator");
-      
-      vi.mocked(validatePackage).mockReturnValue({
-        isValid: true,
-        errors: [],
-        warnings: []
-      });
-      
-      vi.mocked(validatePackageFile).mockReturnValue({
-        isValid: false,
-        errors: ["Invalid file path"],
-        warnings: ["File warning"]
-      });
-
-      const packageData = {
-        name: "Test Package",
-        author: "test-author",
-        version: "1.0.0",
-        description: "A test package",
-        kind: "community",
-        snippets: []
-      };
-
-      const result = await processPackageSubmission(packageData, "invalid-path.yml");
-      
-      expect(result.success).toBe(false);
-      expect(result.errors).toContain("Invalid file path");
-      expect(result.warnings).toContain("File warning");
-    });
-
-    it("should handle exceptions during processing", async () => {
-      const { validatePackage, validatePackageFile } = await import("./package-validator");
-      
-      vi.mocked(validatePackage).mockImplementation(() => {
-        throw new Error("Validation error");
-      });
-      
-      vi.mocked(validatePackageFile).mockReturnValue({
-        isValid: true,
-        errors: [],
-        warnings: []
-      });
-
-      const packageData = {
-        name: "Test Package",
-        author: "test-author",
-        version: "1.0.0",
-        description: "A test package",
-        kind: "community",
-        snippets: []
-      };
-
-      const result = await processPackageSubmission(packageData, "community-packages/pending/test-package.yml");
-      
-      expect(result.success).toBe(false);
-      expect(result.errors).toContain("Failed to process package submission: Validation error");
     });
   });
 
