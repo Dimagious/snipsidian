@@ -30,7 +30,7 @@ export class SnippetsTab {
         private plugin: SnipSidianPlugin
     ) {
         this.groupManager = new GroupManager();
-        this.uiState = new UIStateManager(this.plugin.settings);
+        this.uiState = new UIStateManager(this.plugin.settings, () => this.plugin.saveSettings());
     }
 
     render(root: HTMLElement) {

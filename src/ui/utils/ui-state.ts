@@ -2,6 +2,10 @@ import type { SnipSidianSettings } from "../../types";
 
 export type TabId = "basic" | "snippets" | "community" | "feedback";
 
+/** Persist callback. Called whenever UI state that lives in
+ *  `settings.ui` is mutated. May be sync (returns void) or async. */
+type Persist = () => void | Promise<void>;
+
 export class UIStateManager {
     private activeTab: TabId = "basic";
     private groupOpen = new Map<string, boolean>();
@@ -9,7 +13,14 @@ export class UIStateManager {
     private selectionMode = false;
     private selected = new Set<string>();
 
-    constructor(private settings: SnipSidianSettings) {}
+    /** Debounce timer for `setGroupOpen` — bulk-expand triggers N saves in
+     *  quick succession; we coalesce into one. */
+    private groupOpenSaveTimer: number | null = null;
+
+    constructor(
+        private settings: SnipSidianSettings,
+        private persist: Persist = () => {},
+    ) {}
 
     // ---- UI state management ----
     ensureUiState() {
@@ -58,6 +69,8 @@ export class UIStateManager {
     setActiveTab(tab: TabId) {
         this.activeTab = tab;
         this.saveActiveTab(tab);
+        // Tab changes happen once per click — persist immediately.
+        void this.persist();
     }
 
     getGroupOpen(): Map<string, boolean> {
@@ -67,6 +80,15 @@ export class UIStateManager {
     setGroupOpen(group: string, open: boolean) {
         this.groupOpen.set(group, open);
         this.saveOpenState(group, open);
+        // Group toggles can fire in bursts (Expand-all writes N states in
+        // a tight loop). Coalesce to one save 250ms after the last call.
+        if (this.groupOpenSaveTimer !== null) {
+            window.clearTimeout(this.groupOpenSaveTimer);
+        }
+        this.groupOpenSaveTimer = window.setTimeout(() => {
+            this.groupOpenSaveTimer = null;
+            void this.persist();
+        }, 250);
     }
 
     getSearchQuery(): string {

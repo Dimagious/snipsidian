@@ -17,7 +17,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
     constructor(app: App, plugin: SnipSidianPlugin) {
         super(app, plugin);
         this.plugin = plugin;
-        this.uiState = new UIStateManager(this.plugin.settings);
+        this.uiState = new UIStateManager(this.plugin.settings, () => this.plugin.saveSettings());
         this.basicTab = new BasicTab(app, plugin);
         this.snippetsTab = new SnippetsTab(app, plugin);
         this.feedbackTab = new FeedbackTab(app, plugin);
