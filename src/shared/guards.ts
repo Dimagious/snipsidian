@@ -1,3 +1,4 @@
+/** Type guard: narrows `unknown` to `Record<string, string>` (no inherited keys checked). */
 export function isRecordOfString(x: unknown): x is Record<string, string> {
     if (!x || typeof x !== "object") return false;
     for (const [k, v] of Object.entries(x as Record<string, unknown>)) {

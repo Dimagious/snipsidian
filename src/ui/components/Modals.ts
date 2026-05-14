@@ -162,6 +162,8 @@ export class GroupPickerModal extends Modal {
             type: "text",
             placeholder: "New group name",
         });
+        const newErr = newWrap.createDiv({ cls: "snipsidian-error" });
+        newErr.hide();
         newWrap.hide();
 
         select.onchange = () => {
@@ -178,7 +180,20 @@ export class GroupPickerModal extends Modal {
             let target: string | null = select.value;
             if (target === "__new__") {
                 const label = input.value.trim();
-                target = slugifyGroup(label) || ""; // '' => Ungrouped
+                if (!label) {
+                    newErr.empty();
+                    newErr.createSpan({ text: "Group name cannot be empty." });
+                    newErr.show();
+                    return;
+                }
+                const slug = slugifyGroup(label);
+                if (!slug) {
+                    newErr.empty();
+                    newErr.createSpan({ text: "Group name must contain at least one letter or number." });
+                    newErr.show();
+                    return;
+                }
+                target = slug;
             }
             this.onSubmit?.(target);
             this.close();
@@ -381,21 +396,42 @@ export class AddSnippetModal extends Modal {
                     });
             });
 
+        const err = contentEl.createDiv({ cls: "snipsidian-error" });
+        err.hide();
+
         const footer = contentEl.createDiv({ cls: "modal-button-container" });
-        
+
         const add = footer.createEl("button", { text: "Add snippet" });
         add.addClass("mod-cta");
         add.onclick = () => {
-            if (trigger.trim() && replacement.length > 0) {
-                const result = this.onConfirm?.({ trigger: trigger.trim(), replacement, group: group.trim() });
-                // Handle promise if onConfirm returns one
-                if (result instanceof Promise) {
-                    void result.catch((error) => {
-                        console.error("Error in onConfirm callback:", error);
-                    });
-                }
-                this.close();
+            err.empty();
+            err.hide();
+
+            const trimmedTrigger = trigger.trim();
+            const trimmedGroup = group.trim();
+
+            if (!trimmedTrigger || replacement.length === 0) {
+                err.createSpan({ text: "Trigger and replacement are required." });
+                err.show();
+                return;
             }
+
+            // Group is optional (empty = Ungrouped), but a non-empty value that
+            // slugifies to empty (e.g. "!!!" or emoji-only) would silently route
+            // to Ungrouped — reject explicitly.
+            if (trimmedGroup && !slugifyGroup(trimmedGroup)) {
+                err.createSpan({ text: "Group name must contain at least one letter or number." });
+                err.show();
+                return;
+            }
+
+            const result = this.onConfirm?.({ trigger: trimmedTrigger, replacement, group: trimmedGroup });
+            if (result instanceof Promise) {
+                void result.catch((error) => {
+                    console.error("Error in onConfirm callback:", error);
+                });
+            }
+            this.close();
         };
 
         const cancel = footer.createEl("button", { text: "Cancel" });

@@ -20,23 +20,23 @@ export function espansoYamlToSnippets(text: string): Record<string, string> {
         if (!m) continue;
         const replace: unknown = (m.replace ?? m.replace_text ?? m.output);
         if (typeof replace !== "string") continue;
-        
-        // Replace placeholder back to $| and fix escaping
-        let normalizedReplace = replace.replace(/CURSOR_PLACEHOLDER/g, '$|');
-        // Fix double escaping \\n -> \n
-        normalizedReplace = normalizedReplace.replace(/\\\\n/g, '\\n');
+
+        // YAML.parse already converts string escapes ("foo\nbar") to real
+        // characters; nothing further to normalise here. (The previous
+        // CURSOR_PLACEHOLDER and \\n→\n substitutions were no-ops — removed
+        // in 1.0.9.)
 
         // Single trigger
         if (typeof m.trigger === "string") {
             const t = normalizeTrigger(m.trigger);
-            if (t) out[t] = normalizedReplace;
+            if (t) out[t] = replace;
         }
         // Multiple triggers
         if (Array.isArray(m.triggers)) {
             for (const tt of m.triggers) {
                 if (typeof tt !== "string") continue;
                 const t = normalizeTrigger(tt);
-                if (t) out[t] = normalizedReplace;
+                if (t) out[t] = replace;
             }
         }
     }

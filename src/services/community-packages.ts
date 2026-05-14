@@ -31,30 +31,8 @@ export interface PackageItem {
 }
 
 
-/**
- * Loads community packages from the approved directory
- */
-export function loadCommunityPackages(): PackageItem[] {
-  const packages: PackageItem[] = [];
-  
-  try {
-    // In test environment, return empty array to match test expectations
-    if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
-      return [];
-    }
-    
-    // In a real Obsidian plugin environment, we need access to the app instance
-    // This function should be called from a context where we have access to app.vault
-    // For now, we'll return an empty array and implement the real loading in the UI component
-    
-    return packages;
-  } catch (error) {
-    console.error("Failed to load community packages:", error);
-    return [];
-  }
-}
-
-// No built-in packages function - all packages come from GitHub API
+// Active load paths are loadCommunityPackagesWithCache (GitHub-backed, 24h cache)
+// and loadDynamicCommunityPackages (vault-backed). Earlier stubs were removed in 1.0.9.
 
 /**
  * Loads dynamic community packages from user's vault
@@ -297,16 +275,6 @@ export async function loadAllCommunityPackages(app: App, plugin?: PluginWithApp)
     console.error("Failed to load community packages:", error);
     return [];
   }
-}
-
-/**
- * Loads community packages from the approved directory using Obsidian API
- * This function should be called from UI components that have access to the app instance
- * @deprecated Use loadCommunityPackagesWithCache() instead
- */
-export function loadCommunityPackagesFromVault(): PackageItem[] {
-  // Deprecated - use GitHub API instead
-  return [];
 }
 
 /**

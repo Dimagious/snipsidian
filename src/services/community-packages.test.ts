@@ -19,10 +19,8 @@ vi.mock("obsidian", async () => {
 });
 
 import {
-  loadCommunityPackages,
   loadDynamicCommunityPackages,
   loadAllCommunityPackages,
-  loadCommunityPackagesFromVault,
   loadCommunityPackagesFromGitHub,
   createPackageIssue,
   loadCommunityPackagesWithCache
@@ -33,29 +31,6 @@ import { requestUrl } from "obsidian";
 describe("community-packages", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  describe("loadCommunityPackages", () => {
-    it("should return empty array when no packages are available", () => {
-      const packages = loadCommunityPackages();
-      expect(packages).toEqual([]);
-    });
-
-    it("should handle errors gracefully", () => {
-      // Mock console.error to avoid noise in tests
-      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      
-      const packages = loadCommunityPackages();
-      expect(packages).toEqual([]);
-      
-      consoleSpy.mockRestore();
-    });
-
-    it("should return empty array in test environment", () => {
-      // This test verifies the test environment check
-      const packages = loadCommunityPackages();
-      expect(packages).toEqual([]);
-    });
   });
 
   describe("loadDynamicCommunityPackages", () => {
@@ -116,20 +91,6 @@ describe("community-packages", () => {
       
       const packages = await loadAllCommunityPackages(mockApp);
       expect(packages).toEqual([]);
-    });
-  });
-
-  describe("loadCommunityPackagesFromVault", () => {
-    it("should return empty array (deprecated function)", () => {
-      const mockApp = {
-        vault: {
-          getAbstractFileByPath: vi.fn(),
-          read: vi.fn()
-        }
-      };
-      
-      const packages = loadCommunityPackagesFromVault(mockApp);
-      expect(packages).toEqual([]); // Deprecated function returns empty array
     });
   });
 

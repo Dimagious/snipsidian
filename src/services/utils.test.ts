@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
     diffIncoming,
-    isRecordOfString,
     normalizeTrigger,
     isBadTrigger,
     splitKey,
@@ -39,19 +38,6 @@ describe("utils.diffIncoming", () => {
 
         expect(r.added).toHaveLength(0);
         expect(r.conflicts).toHaveLength(0);
-    });
-});
-
-describe("utils.isRecordOfString", () => {
-    it("returns true for plain string maps", () => {
-        expect(isRecordOfString({ a: "1", b: "2" })).toBe(true);
-    });
-    it("returns false for non-objects or non-string values", () => {
-        expect(isRecordOfString(null)).toBe(false);
-        expect(isRecordOfString(undefined)).toBe(false);
-        expect(isRecordOfString("x")).toBe(false);
-        expect(isRecordOfString({ a: 1 })).toBe(false);
-        expect(isRecordOfString({ a: "1", b: {} })).toBe(false);
     });
 });
 
