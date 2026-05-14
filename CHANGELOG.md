@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.11] - 2026-05-14
+
+### Fixed
+
+- **Snippet picker** no longer silently ignores Enter / click when no Markdown view is active. Triggering the picker from the Command Palette while focused on Canvas, the file explorer, or the settings tab used to do nothing — no Notice, no error, just a quiet failure. Now shows `"Open a Markdown note to insert a snippet"` and keeps the picker open so the user can switch to a note and try again.
+
+### Documentation
+
+- README rewritten end-to-end for honest positioning. Removed stale "Version 1.0.0 - First stable release" banner, outdated stats from `1.0.5` (test count, coverage, bundle size), and dev-heavy filler. Added explicit "Why Snipsy" differentiation, a "When Snipsy is NOT the right tool" section that recommends Templater / Espanso / Snippets Manager for the jobs they own, and a Privacy section. 348 → 175 lines, all user-facing content density up.
+
 ## [1.0.10] - 2026-05-14
 
 ### Security
