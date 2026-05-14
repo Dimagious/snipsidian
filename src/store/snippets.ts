@@ -1,5 +1,4 @@
 import type { SnipSidianSettings, SnippetItem } from "../types";
-import { isRecordOfString } from "../shared/guards";
 import { splitKey } from "../services/utils";
 
 export function getDict(settings: SnipSidianSettings): Record<string, string> {

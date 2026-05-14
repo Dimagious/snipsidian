@@ -221,6 +221,12 @@ export class SnippetsTab {
                 const modal = new TextPromptModal(this.app, {
                     title: "Rename group:",
                     initial: title,
+                    validate: (v) => {
+                        const trimmed = v.trim();
+                        if (!trimmed) return "Group name cannot be empty";
+                        if (!slugifyGroup(trimmed)) return "Group name must contain at least one letter or number";
+                        return null;
+                    },
                     onSubmit: (newTitle) => {
                         void this.renameGroup(root, group, title, items, isOpen, newTitle);
                     },
