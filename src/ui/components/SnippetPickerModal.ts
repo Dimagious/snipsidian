@@ -72,7 +72,7 @@ export class SnippetPickerModal extends Modal {
         contentEl.empty();
 
         if (this.searchTimeout) {
-            activeWindow.clearTimeout(this.searchTimeout);
+            window.clearTimeout(this.searchTimeout);
         }
     }
 
@@ -80,10 +80,10 @@ export class SnippetPickerModal extends Modal {
         // Search with debounce
         this.searchInput.addEventListener("input", () => {
             if (this.searchTimeout) {
-                activeWindow.clearTimeout(this.searchTimeout);
+                window.clearTimeout(this.searchTimeout);
             }
 
-            this.searchTimeout = activeWindow.setTimeout(() => {
+            this.searchTimeout = window.setTimeout(() => {
                 this.performSearch(this.searchInput.value);
             }, this.debounceMs);
         });

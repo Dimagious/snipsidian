@@ -1,6 +1,5 @@
 import * as YAML from "yaml";
 import { App, TFolder, TFile, requestUrl } from "obsidian";
-import { validatePackage, validatePackageFile } from "./package-validator";
 import type { PackageData } from "./package-types";
 
 // No built-in packages - all packages come from GitHub API
@@ -337,101 +336,6 @@ function convertSnippetsToObject(snippets: PackageData['snippets']): { [trigger:
 }
 
 
-/**
- * Validates and processes a community package submission
- */
-export async function processPackageSubmission(
-  packageData: PackageData,
-  filePath: string,
-  app?: App
-): Promise<{ success: boolean; errors: string[]; warnings: string[] }> {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  
-  try {
-    // Validate package file path
-    const fileValidation = validatePackageFile(filePath);
-    if (!fileValidation.isValid) {
-      errors.push(...fileValidation.errors);
-    }
-    warnings.push(...fileValidation.warnings);
-    
-    // Validate package data
-    const packageValidation = validatePackage(packageData, {
-      strictMode: true,
-      checkContent: true,
-      checkFormat: true,
-      checkNaming: true
-    });
-    
-    if (!packageValidation.isValid) {
-      errors.push(...packageValidation.errors);
-    }
-    warnings.push(...packageValidation.warnings);
-    
-    // Additional community-specific validations
-    if (packageData.kind === "community") {
-      // Ensure community packages have required metadata
-      if (!packageData.author) {
-        errors.push("Community packages must have an author");
-      }
-      
-      if (!packageData.version) {
-        errors.push("Community packages must have a version");
-      }
-      
-      if (!packageData.license) {
-        warnings.push("Community packages should have a license");
-      }
-      
-      if (!packageData.homepage) {
-        warnings.push("Community packages should have a homepage");
-      }
-    }
-    
-    const success = errors.length === 0;
-    
-    // If validation passed and we have access to the app, save the package
-    if (success && app && app.vault) {
-      try {
-        // Create the pending directory if it doesn't exist
-        const rootPath = "Snipsidian";
-        const communityPath = "Snipsidian/community-packages";
-        const pendingPath = "Snipsidian/community-packages/pending";
-
-        if (!app.vault.getAbstractFileByPath(rootPath)) {
-          await app.vault.createFolder(rootPath);
-        }
-        if (!app.vault.getAbstractFileByPath(communityPath)) {
-          await app.vault.createFolder(communityPath);
-        }
-        if (!app.vault.getAbstractFileByPath(pendingPath)) {
-          await app.vault.createFolder(pendingPath);
-        }
-        
-        // Convert package data to YAML
-        const yamlContent = YAML.stringify(packageData, {
-          indent: 2,
-          lineWidth: 0,
-          aliasDuplicateObjects: false
-        });
-        
-        // Extract filename from filePath
-        const fileName = filePath.split('/').pop() || 'package.yml';
-        const fullPath = `${pendingPath}/${fileName}`;
-        
-        // Save the package file
-        await app.vault.create(fullPath, yamlContent);
-      } catch (fileError) {
-        console.error("Failed to save package to vault:", fileError);
-        errors.push(`Failed to save package: ${fileError instanceof Error ? fileError.message : String(fileError)}`);
-        return { success: false, errors, warnings };
-      }
-    }
-    
-    return { success, errors, warnings };
-  } catch (error) {
-    errors.push(`Failed to process package submission: ${error instanceof Error ? error.message : String(error)}`);
-    return { success: false, errors, warnings };
-  }
-}
+/* `processPackageSubmission` removed in 1.0.8 — was wired only to the
+ * dead `SubmitPackageModal` (also removed). Active submission flow goes
+ * through `services/package-submission-form.ts` (Google Form). */
