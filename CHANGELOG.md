@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-05-14
+
+### Added
+
+- Settings now remember the active tab and which groups are collapsed across Obsidian restarts. Previously `setActiveTab` and `setGroupOpen` mutated `settings.ui` in memory but never called `saveSettings()`, so the user landed back on the default tab with every group re-expanded after a restart.
+
+### Changed
+
+- Empty or punctuation-only group names are now rejected with an inline error message instead of silently routing the snippet to "Ungrouped". Affects three places: the **Rename group** prompt, the **New group…** option in `GroupPickerModal`, and the **Group** field in the **Add snippet** modal. The rule is the same everywhere: a non-empty name must contain at least one letter or number; empty input stays valid only in the Add Snippet modal (which means "Ungrouped" intentionally).
+- The **Add Snippet** modal now also shows an inline error when the Trigger or Replacement field is empty, instead of silently no-oping on click.
+- Consolidated the duplicated `isRecordOfString` type guard into `src/shared/guards.ts` (was in both `store/schema.ts` and `services/utils.ts`).
+
+### Removed
+
+- Dead `src/core/expander.ts` (~180 lines) — duplicated `engine/expand.ts` + `engine/match.ts` + `shared/markdown.ts` and had a divergent `isSeparator` that would have been a foot-gun for any future auto-import.
+- Deprecated `loadCommunityPackages()` and `loadCommunityPackagesFromVault()` stubs (~50 lines) — both returned `[]` and had no production callers. Active load paths (`loadCommunityPackagesWithCache`, `loadDynamicCommunityPackages`) untouched.
+- Two no-op normalisation substitutions in the Espanso importer (`CURSOR_PLACEHOLDER` → `$|` and `\\n` → `\n`) — both regexes matched the literal string they replaced. `YAML.parse` already handles real string escapes.
+- Unused `replaceAllSnippets` from `src/store/snippets.ts`.
+
 ## [1.0.8] - 2026-05-14
 
 ### Removed
