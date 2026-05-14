@@ -1,6 +1,7 @@
 import { App, ButtonComponent, Modal, Setting, TextComponent } from "obsidian";
 import type SnipSidianPlugin from "../../main";
 import { DiffResult, displayGroupTitle, slugifyGroup } from "../../services/utils";
+import { computeImportDiff } from "../../services/import-diff";
 
 /** Simple JSON copy/paste modal */
 export class JSONModal extends Modal {
@@ -436,5 +437,186 @@ export class AddSnippetModal extends Modal {
 
         const cancel = footer.createEl("button", { text: "Cancel" });
         cancel.onclick = () => this.close();
+    }
+}
+
+/**
+ * Preview-before-write modal for JSON snippet import (B-038). Replaces
+ * the silent `settings.snippets = parsed` that previously wiped users'
+ * libraries with no recovery path.
+ *
+ * The user picks a mode (merge | replace) — the modal renders the diff
+ * for the active mode so they can see exactly what's about to change.
+ * Replace mode shows the `removed` list in red as the destructive-
+ * action affordance (designer Q5: no second-confirm dialog).
+ *
+ * The caller owns the write. The modal's `onConfirm` callback is
+ * passed the chosen mode and the original `incoming` payload — the
+ * caller merges or replaces according to its policy.
+ */
+export class ImportPreviewModal extends Modal {
+    private mode: "merge" | "replace" = "merge";
+
+    constructor(
+        app: App,
+        private readonly opts: {
+            current: Record<string, string>;
+            incoming: Record<string, string>;
+            onConfirm: (mode: "merge" | "replace") => void | Promise<void>;
+        },
+    ) {
+        super(app);
+    }
+
+    onOpen(): void {
+        const { contentEl, titleEl } = this;
+        titleEl.setText("Import snippets");
+        contentEl.addClass("snipsidian-modal");
+        contentEl.addClass("snipsidian-import-modal");
+
+        const diff = computeImportDiff(this.opts.current, this.opts.incoming);
+
+        // Mode picker — merge first because it's the safe default.
+        const modeRow = contentEl.createDiv({ cls: "snipsy-import-mode" });
+        modeRow.createEl("label", { cls: "snipsy-import-mode-option" }, (label) => {
+            const radio = label.createEl("input", {
+                type: "radio",
+                attr: { name: "snipsy-import-mode", value: "merge" },
+            });
+            radio.checked = true;
+            radio.addEventListener("change", () => {
+                if (radio.checked) {
+                    this.mode = "merge";
+                    this.refreshDiffList(listEl, diff);
+                    this.refreshSummary(summaryEl, diff);
+                    this.refreshApplyButton(applyBtn, diff);
+                }
+            });
+            label.createSpan({ text: "Merge" });
+            label.createSpan({
+                cls: "snipsy-import-mode-hint",
+                text: "Keep existing snippets, add new and overwrite conflicts.",
+            });
+        });
+        modeRow.createEl("label", { cls: "snipsy-import-mode-option" }, (label) => {
+            const radio = label.createEl("input", {
+                type: "radio",
+                attr: { name: "snipsy-import-mode", value: "replace" },
+            });
+            radio.addEventListener("change", () => {
+                if (radio.checked) {
+                    this.mode = "replace";
+                    this.refreshDiffList(listEl, diff);
+                    this.refreshSummary(summaryEl, diff);
+                    this.refreshApplyButton(applyBtn, diff);
+                }
+            });
+            label.createSpan({ text: "Replace all" });
+            label.createSpan({
+                cls: "snipsy-import-mode-hint snipsy-import-mode-hint-danger",
+                text:
+                    diff.removed.length > 0
+                        ? `Delete ${diff.removed.length} existing snippet${diff.removed.length === 1 ? "" : "s"}, then import.`
+                        : "Replace existing snippets with the import.",
+            });
+        });
+
+        const summaryEl = contentEl.createDiv({ cls: "snipsy-import-summary" });
+        this.refreshSummary(summaryEl, diff);
+
+        const listEl = contentEl.createDiv({ cls: "snipsy-import-list" });
+        this.refreshDiffList(listEl, diff);
+
+        const footer = contentEl.createDiv({ cls: "modal-button-container" });
+        const cancel = footer.createEl("button", { text: "Cancel" });
+        cancel.onclick = () => this.close();
+
+        const applyBtn = footer.createEl("button", { cls: "mod-cta" });
+        this.refreshApplyButton(applyBtn, diff);
+        applyBtn.onclick = () => {
+            const result = this.opts.onConfirm(this.mode);
+            if (result instanceof Promise) {
+                void result.catch((error) => {
+                    console.error("Error in import onConfirm callback:", error);
+                });
+            }
+            this.close();
+        };
+    }
+
+    private refreshSummary(
+        el: HTMLElement,
+        diff: ReturnType<typeof computeImportDiff>,
+    ) {
+        el.empty();
+        const parts: string[] = [];
+        if (diff.added.length) parts.push(`${diff.added.length} new`);
+        if (diff.conflicts.length) parts.push(`${diff.conflicts.length} updated`);
+        if (this.mode === "replace" && diff.removed.length) {
+            parts.push(`${diff.removed.length} removed`);
+        }
+        if (diff.unchangedCount) parts.push(`${diff.unchangedCount} unchanged`);
+
+        if (parts.length === 0) {
+            el.createSpan({ text: "Nothing will change." });
+            return;
+        }
+        el.createSpan({ text: parts.join(" · ") });
+    }
+
+    private refreshDiffList(
+        el: HTMLElement,
+        diff: ReturnType<typeof computeImportDiff>,
+    ) {
+        el.empty();
+
+        const MAX_ROWS = 50;
+        let rendered = 0;
+        const remaining: string[] = [];
+
+        const renderRow = (tag: "new" | "update" | "remove", key: string, value: string) => {
+            if (rendered >= MAX_ROWS) {
+                remaining.push(key);
+                return;
+            }
+            const row = el.createDiv({ cls: "snipsy-import-row" });
+            row.createSpan({
+                cls: `snipsy-import-tag snipsy-import-tag-${tag}`,
+                text: tag === "new" ? "NEW" : tag === "update" ? "UPDATE" : "REMOVE",
+            });
+            row.createSpan({ cls: "snipsy-import-key", text: key });
+            row.createSpan({ cls: "snipsy-import-value", text: value });
+            rendered++;
+        };
+
+        for (const a of diff.added) renderRow("new", a.key, a.value);
+        for (const c of diff.conflicts) renderRow("update", c.key, c.incoming);
+        if (this.mode === "replace") {
+            for (const r of diff.removed) renderRow("remove", r.key, r.value);
+        }
+
+        if (remaining.length > 0) {
+            el.createDiv({
+                cls: "snipsy-import-more",
+                text: `…and ${remaining.length} more`,
+            });
+        }
+    }
+
+    private refreshApplyButton(
+        btn: HTMLButtonElement,
+        diff: ReturnType<typeof computeImportDiff>,
+    ) {
+        if (this.mode === "replace") {
+            btn.textContent = `Replace all (${Object.keys(this.opts.incoming).length})`;
+            // Danger affordance: red CTA. Designer Q5 explicitly does NOT
+            // want a second-confirm dialog — the visual + the `removed`
+            // list in the diff is the affordance.
+            btn.addClass("mod-warning");
+        } else {
+            const willChange = diff.added.length + diff.conflicts.length;
+            btn.textContent = willChange === 0 ? "Apply" : `Apply merge (${willChange})`;
+            btn.removeClass("mod-warning");
+        }
     }
 }
