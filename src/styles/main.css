@@ -1,338 +1,371 @@
-/* ============ Snipsidian CSS Modules ============ */
-/* Главный файл для импорта всех CSS модулей */
+/* ============================================================
+   Snipsy — main stylesheet (single source of truth)
 
-/* 1. Variables - CSS переменные и константы */
+   Drop-in implementation of the 2026-05-14 redesign handoff:
+   `.claude/brain/design/snipsy.css`. All Snipsy styles are now in
+   one file scoped to `.snipsidian-settings` (the wrapper class is
+   applied in `SettingsTab.display()`), so nothing leaks into the
+   rest of Obsidian.
+
+   The previous modular layout (`base.css`, `layout.css`, the per-
+   component files in `components/`, and `sections/community.css`)
+   was retired in 1.1.0. Component-level rules now live as their own
+   sections within this file.
+   ============================================================ */
+
 @import './variables.css';
 
-/* 2. Base - Базовые стили и сброс */
-@import './base.css';
-
-/* 3. Layout - Стили макета и структуры */
-@import './layout.css';
-
-/* 4. Components - Переиспользуемые компоненты */
-@import './components/buttons.css';
-@import './components/forms.css';
-@import './components/modals.css';
-
-/* 5. Sections - Стили для конкретных секций */
-@import './sections/community.css';
-
-/* ============ Legacy Styles (временно) ============ */
-/* Эти стили будут постепенно перенесены в модули */
-
-/* Settings panel heading rhythm (vars + .setting-item padding live in base.css) */
-.mod-settings .snipsidian-settings h2 {
-  margin-top: 0;
-  margin-bottom: var(--snip-h2-mb);
+/* ---- Reset green-card era leftovers (older settings markup) ---- */
+.snipsidian-settings .snipsy-section,
+.snipsidian-settings .snipsy-subsection,
+.snipsidian-settings .snipsy-snippet-manager,
+.snipsidian-settings .snipsy-commands-section,
+.snipsidian-settings .snipsy-export-section,
+.snipsidian-settings .snipsy-help-section,
+.snipsidian-settings .snipsy-community-browse-section {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
-.mod-settings .snipsidian-settings .snipsidian-subtitle {
-  margin-top: 0;
-  margin-bottom: 14px;
-  color: var(--text-muted);
-  line-height: 1.4;
+/* ---- Tabs (top of settings pane) ---- */
+.snipsidian-settings .snipsy-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--snipsy-divider);
+  margin: 0 0 var(--snipsy-gap-xl);
+}
+.snipsidian-settings .snipsy-tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--snipsy-text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.snipsidian-settings .snipsy-tab:hover { color: var(--snipsy-text); }
+.snipsidian-settings .snipsy-tab.is-active {
+  color: var(--snipsy-text);
+  border-bottom-color: var(--snipsy-accent);
 }
 
-.mod-settings .snipsidian-settings h3 {
-  margin-top: var(--snip-h3-mt);
-  margin-bottom: var(--snip-h3-mb);
+/* ---- Section headings ---- */
+.snipsidian-settings .setting-item-heading {
+  border: 0;
+  padding: 18px 0 6px;
+  margin-top: 12px;
+}
+.snipsidian-settings .setting-item-heading:first-child { margin-top: 0; padding-top: 4px; }
+.snipsidian-settings .setting-item-heading .setting-item-name { font-size: 16px; font-weight: 600; }
+
+/* ---- Standard setting row (no card, just a divided row) ---- */
+.snipsidian-settings .setting-item {
+  border-top: 1px solid var(--snipsy-divider);
+  padding: 14px 0;
 }
 
-.mod-settings .snipsidian-settings h3 + .setting-item {
-  margin-top: 2px;
+/* ---- Buttons: neutralize the CTA-everywhere problem ---- */
+.snipsidian-settings .setting-item .mod-cta {
+  background: var(--snipsy-accent);
+  color: var(--snipsy-on-accent);
 }
 
-/* Preview table */
-.snipsidian-preview-table {
-  display: table;
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1em 0;
-  font-size: 0.85em;
-  border-radius: var(--border-radius);
-  table-layout: fixed;
+/* ---- Search bar ---- */
+.snipsidian-settings .snipsy-search {
+  position: relative;
+  flex: 1 1 auto;
+}
+.snipsidian-settings .snipsy-search input {
+  padding-left: 30px;
+}
+.snipsidian-settings .snipsy-search .snipsy-search-icon {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--snipsy-text-faint);
+  pointer-events: none;
 }
 
-.snipsidian-preview-table th,
-.snipsidian-preview-table td {
-  border-bottom: 1px solid var(--background-modifier-border);
-  padding: 6px 8px;
-  vertical-align: middle;
-  word-wrap: break-word;
-  word-break: break-word;
+/* ---- Snippet list ---- */
+.snipsidian-settings .snippet-group {
+  margin-top: 12px;
+}
+.snipsidian-settings .group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  cursor: pointer;
+  user-select: none;
+}
+.snipsidian-settings .group-toggle {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--snipsy-text-faint);
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.12s ease;
+}
+.snipsidian-settings .group-toggle.open { transform: rotate(90deg); }
+.snipsidian-settings .group-title { font-size: 13px; font-weight: 600; }
+.snipsidian-settings .group-count { font-size: 12px; color: var(--snipsy-text-faint); }
+
+.snipsidian-settings .snippet-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 200px) 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 10px;
+  border-radius: var(--snipsy-radius);
+  min-height: 32px;
+}
+.snipsidian-settings .snippet-row:hover { background: var(--snipsy-hover); }
+.snipsidian-settings .snippet-row.is-selected { background: var(--snipsy-accent-soft); }
+.snipsidian-settings .snippet-row.is-editing {
+  display: block;
+  padding: 12px;
+  background: var(--snipsy-bg-alt);
+  border: 1px solid var(--snipsy-border);
+}
+.snipsidian-settings .snippet-trigger {
+  font-family: var(--snipsy-mono);
+  font-size: 13px;
+  font-weight: 500;
+}
+.snipsidian-settings .snippet-replacement {
+  font-family: var(--snipsy-mono);
+  font-size: 12.5px;
+  color: var(--snipsy-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.snipsidian-settings .snippet-replacement .arrow { color: var(--snipsy-text-faint); flex: 0 0 auto; }
+
+/* Row + group action buttons (edit / delete / rename / save).
+   By default visible everywhere — touch / mobile / stylus environments
+   don't have hover, so we MUST start at opacity:1. The hover-reveal
+   pattern is opted into below for devices that genuinely have hover. */
+.snipsidian-settings .snippet-actions,
+.snipsidian-settings .group-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 1;
+}
+.snipsidian-settings .group-actions { margin-left: auto; }
+
+.snipsidian-settings .snippet-action {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--snipsy-text-muted);
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: var(--snipsy-radius);
+  cursor: pointer;
+}
+.snipsidian-settings .snippet-action:hover { background: var(--snipsy-hover); color: var(--snipsy-text); }
+.snipsidian-settings .snippet-action.is-danger:hover {
+  background: var(--background-modifier-error-hover, rgba(255, 80, 80, 0.1));
+  color: var(--snipsy-danger);
 }
 
-.snipsidian-preview-table td:nth-child(1) { width: 20%; } /* Trigger */
-.snipsidian-preview-table td:nth-child(2),
-.snipsidian-preview-table td:nth-child(3) {
-  width: 30%; /* Current / Incoming */
-  font-family: var(--font-monospace);
-  white-space: pre-wrap;
-  font-size: 0.8em;
+/* Hover-reveal: only on devices that actually have hover + fine pointer.
+   Touchscreens, stylus, mobile — opacity stays at 1 from the default
+   above. Per designer's Q4 answer. */
+@media (hover: hover) and (pointer: fine) {
+  .snipsidian-settings .snippet-actions,
+  .snipsidian-settings .group-actions {
+    opacity: 0;
+    transition: opacity 0.12s ease;
+  }
+  .snipsidian-settings .snippet-row:hover .snippet-actions,
+  .snipsidian-settings .snippet-row.is-editing .snippet-actions,
+  .snipsidian-settings .group-header:hover .group-actions {
+    opacity: 1;
+  }
 }
-.snipsidian-preview-table td:nth-child(4) { width: 20%; } /* Action */
 
-.snipsidian-preview-table th {
-  text-align: left;
-  color: var(--text-muted);
+/* ---- Inline edit form ---- */
+.snipsidian-settings .snippet-edit {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 10px 14px;
+}
+.snipsidian-settings .snippet-edit .field { display: flex; flex-direction: column; gap: 4px; }
+.snipsidian-settings .snippet-edit .field.is-full { grid-column: 1 / -1; }
+.snipsidian-settings .snippet-edit label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--snipsy-text-faint);
   font-weight: 600;
 }
-
-.snipsidian-preview-table tr:hover td {
-  background: var(--background-secondary);
-}
-
-.snipsidian-preview-table .conflict-action select {
-  font-size: 0.8em;
-  padding: 2px 4px;
-  width: 100%;
-}
-
-.snipsidian-bulk-actions {
+.snipsidian-settings .snippet-edit .actions {
+  grid-column: 1 / -1;
   display: flex;
   justify-content: flex-end;
-  gap: 0.5em;
-  margin-top: 0.75em;
+  gap: 8px;
 }
 
-.snipsidian-bulk-actions button {
-  padding: 0.4em 1em;
-  border-radius: var(--border-radius);
-  border: 1px solid var(--background-modifier-border);
-  background: var(--background-secondary);
-  color: var(--text-normal);
-  font-weight: 500;
-  transition: all var(--transition-normal);
-}
-
-.snipsidian-bulk-actions button:hover {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
-  border-color: var(--interactive-accent);
-}
-
-/* Group header styling */
-.group-header {
+/* ---- Bulk action bar ---- */
+/* Sticky-to-viewport per designer Q3 — designer flagged the missing
+   `position: sticky` in their own handoff; we add it here. */
+.snipsidian-settings .snipsy-bulk-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  width: 100%;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--snipsy-accent-soft);
+  border: 1px solid var(--snipsy-accent);
+  border-radius: var(--snipsy-radius);
+  margin-bottom: 10px;
+  font-size: 13px;
 }
 
-.group-actions {
+/* ---- Packages list (list, not table) ---- */
+.snipsidian-settings .packages-list {
   display: flex;
-  gap: 4px;
-  align-items: center;
-  margin-left: auto;
-}
-
-/* Special Section Styling */
-.snipsy-commands-section,
-.snipsy-export-section,
-.snipsy-help-section,
-.snipsy-feedback-section,
-.snipsy-support-section {
-  border: 2px solid var(--color-green);
-  background: var(--background-primary-alt);
-  position: relative;
-}
-
-.snipsy-commands-section h3,
-.snipsy-export-section h3,
-.snipsy-help-section h3,
-.snipsy-feedback-section h3,
-.snipsy-support-section h3 {
-  color: var(--color-green);
-}
-
-/* Common section styling */
-.snipsy-catalog-section,
-.snipsy-community-catalog-section,
-.snipsy-community-browse-section,
-.snipsy-community-submit-section,
-.snipsy-community-section,
-.snipsy-espanso-section,
-.snipsy-espanso-link-section,
-.snipsy-snippet-manager {
-  border: 2px solid var(--color-green);
-  background: var(--background-primary-alt);
-  position: relative;
-}
-
-.snipsy-catalog-section h3,
-.snipsy-community-catalog-section h3,
-.snipsy-community-browse-section h3,
-.snipsy-community-submit-section h3,
-.snipsy-community-section h3,
-.snipsy-espanso-section h3,
-.snipsy-snippet-manager h3 {
-  color: var(--color-green);
-}
-
-/* Espanso link section styling */
-.snipsy-espanso-link-section {
-  border: none;
-  background: transparent;
-  text-align: center;
-  padding: 10px 0;
-}
-
-.snipsy-espanso-link-section p {
-  margin: 0;
-  display: inline;
-}
-
-.snipsy-link {
-  color: var(--color-green);
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.snipsy-link:hover {
-  text-decoration: underline;
-}
-
-/* Selection Mode Styling */
-.snipsy-selection-mode-section {
-  border: 2px solid var(--color-green);
-  background: var(--background-primary-alt);
-  position: relative;
-}
-
-.snipsy-selection-mode-section h3 {
-  color: var(--color-green);
-}
-
-.snipsy-selection-mode-section .snipsy-hint {
-  color: var(--text-accent);
-  font-weight: 500;
-}
-
-/* Bulk Operations Styling */
-.snipsy-bulk-operations {
-  border: 2px solid var(--text-accent);
-  background: var(--background-primary-alt);
-  position: relative;
-}
-
-.snipsy-bulk-operations::before {
-  content: "📦";
-  position: absolute;
-  top: var(--spacing-lg);
-  right: var(--spacing-lg);
-  font-size: 18px;
-  opacity: 0.7;
-}
-
-.snipsy-bulk-operations h3 {
-  color: var(--text-accent);
-}
-
-.snipsy-bulk-operations .setting-item-name {
-  color: var(--text-accent);
-  font-weight: 600;
-}
-
-/* Subsections within snippet manager */
-.snipsy-subsection {
-  margin: var(--spacing-lg) 0;
-  padding: var(--spacing-md);
-  background: var(--background-primary);
-  border-radius: var(--border-radius-lg);
-  border: 1px solid var(--background-modifier-border);
-}
-
-.snipsy-subsection h4 {
-  margin: 0 0 var(--spacing-sm);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-/* Add snippet button in management tools */
-.snipsy-add-snippet {
-  margin-top: var(--spacing-md);
-  padding-top: var(--spacing-md);
-  border-top: 1px solid var(--background-modifier-border);
-}
-
-.snipsy-add-snippet .setting-item {
-  margin: 0;
-}
-
-.snipsy-add-snippet .setting-item-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-accent);
-}
-
-.snipsy-add-snippet .setting-item-description {
-  font-size: 12px;
-  margin-top: 4px;
-}
-
-.snipsy-add-snippet .mod-cta {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
-  border: none;
-  border-radius: var(--border-radius);
-  padding: var(--spacing-sm) var(--spacing-lg);
-  font-weight: 500;
-  transition: all var(--transition-normal);
-}
-
-.snipsy-add-snippet .mod-cta:hover {
-  background: var(--interactive-accent-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
-}
-
-/* Snippet actions styling */
-.snippet-actions {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-}
-
-/* GIF slot */
-.snipsy-gif-slot {
-  margin-top: var(--spacing-md);
-  text-align: center;
-}
-
-.snipsy-gif-slot img.snipsy-gif {
-  max-width: 100%;
-  border-radius: var(--border-radius);
-  border: 1px solid var(--background-modifier-border);
-}
-
-/* Package snippets table (kept here; modal/details rules live in sections/community.css and components/modals.css) */
-.snippets-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: var(--background-primary);
-  border-radius: var(--border-radius);
+  flex-direction: column;
+  border: 1px solid var(--snipsy-divider);
+  border-radius: var(--snipsy-radius);
   overflow: hidden;
 }
-
-.snippets-table th {
-  padding: var(--spacing-sm) var(--spacing-md);
-  text-align: left;
-  border-bottom: 1px solid var(--background-modifier-border);
-  font-size: 13px;
-  background: var(--background-secondary);
-  font-weight: 600;
-  color: var(--text-normal);
+.snipsidian-settings .package-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--snipsy-divider);
+  cursor: pointer;
+}
+.snipsidian-settings .package-row:first-child { border-top: 0; }
+.snipsidian-settings .package-row:hover { background: var(--snipsy-hover); }
+.snipsidian-settings .package-name { font-size: 14px; font-weight: 500; }
+.snipsidian-settings .package-desc {
+  font-size: 12.5px;
+  color: var(--snipsy-text-muted);
+  margin: 2px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.snipsidian-settings .package-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--snipsy-text-faint);
+  margin-top: 4px;
+}
+.snipsidian-settings .verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--snipsy-accent);
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--snipsy-accent-soft);
+  padding: 1px 6px;
+  border-radius: 999px;
 }
 
-.snippets-table td {
-  padding: var(--spacing-sm) var(--spacing-md);
-  text-align: left;
-  border-bottom: 1px solid var(--background-modifier-border);
-  font-size: 13px;
-  color: var(--text-muted);
-  font-family: var(--font-monospace);
+/* Drop the old packages table entirely; if any legacy markup still emits
+   `.packages-table`, hide it rather than letting it half-render. */
+.snipsidian-settings .packages-table { display: none; }
+
+/* ---- Skeleton (loading state) ---- */
+.snipsidian-settings .snipsy-skeleton {
+  background: linear-gradient(90deg, var(--snipsy-hover) 0%, var(--snipsy-active) 50%, var(--snipsy-hover) 100%);
+  background-size: 200% 100%;
+  animation: snipsy-skel 1.4s linear infinite;
+  border-radius: 4px;
+}
+@keyframes snipsy-skel { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+/* ---- Empty state ---- */
+.snipsidian-settings .snipsy-empty {
+  text-align: center;
+  padding: 36px 16px;
+  border: 1px dashed var(--snipsy-border);
+  border-radius: var(--snipsy-radius);
+  color: var(--snipsy-text-muted);
+}
+
+/* ---- Inline form error region (used by TextPromptModal, AddSnippetModal,
+   GroupPickerModal's new-group input). Always present in DOM so we can
+   toggle via `.show()/.hide()` without re-mount. ---- */
+.snipsidian-settings .snipsidian-error,
+.snipsidian-modal .snipsidian-error {
+  color: var(--snipsy-danger);
+  font-size: 12.5px;
+  margin: 6px 0 0;
+}
+
+/* ---- Modals: tame the picker + diff layouts ---- */
+.modal.snipsy-picker { width: 640px; max-width: calc(100vw - 40px); }
+.modal.snipsy-picker .picker-input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font-size: 15px;
+  padding: 14px 16px 14px 42px;
+}
+.modal.snipsy-picker .picker-item {
+  display: grid;
+  grid-template-columns: minmax(80px, 160px) 1fr auto;
+  gap: 14px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+.modal.snipsy-picker .picker-item.is-active { background: var(--snipsy-active); }
+
+.modal.snipsy-install .diff-row {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 12px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--snipsy-divider);
+  font-size: 12.5px;
+}
+.modal.snipsy-install .diff-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  width: fit-content;
+}
+.modal.snipsy-install .diff-tag.is-new      { background: rgba(108, 197, 133, 0.15); color: var(--snipsy-success); }
+.modal.snipsy-install .diff-tag.is-replace  { background: rgba(232, 113, 106, 0.14); color: var(--snipsy-danger); }
+
+/* ---- Reduced motion ---- */
+/* Honour the user's OS preference (B-089 / a11y A-011). Transitions
+   and animations are subtle in Snipsy, but vestibular-disorder users
+   trigger this preference, and the cost of respecting it is free. */
+@media (prefers-reduced-motion: reduce) {
+  .snipsidian-settings *,
+  .snipsidian-settings *::before,
+  .snipsidian-settings *::after,
+  .modal.snipsy-picker *,
+  .modal.snipsy-install * {
+    animation: none !important;
+    transition: none !important;
+  }
 }
