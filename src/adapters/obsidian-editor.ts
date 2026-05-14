@@ -41,8 +41,11 @@ export function applyEditPlan(editor: Editor, plan: EditPlan) {
     const from: EditorPosition = { line: cur.line, ch: plan.fromCh };
     const to: EditorPosition = { line: cur.line, ch: plan.toCh };
     editor.replaceRange(plan.insert, from, to);
-    if (plan.newCursorCh !== undefined) {
-        editor.setCursor({ line: cur.line, ch: plan.newCursorCh });
+    if (plan.newCursor !== undefined) {
+        editor.setCursor({
+            line: cur.line + plan.newCursor.lineDelta,
+            ch: plan.newCursor.ch,
+        });
     }
 }
 

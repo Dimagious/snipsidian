@@ -25,7 +25,7 @@ describe("expand", () => {
         expect(plan!.insert).toBe("function () {}");
         expect(plan!.fromCh).toBe(0);
         expect(plan!.toCh).toBe(2);
-        expect(plan!.newCursorCh).toBe("function ".length);
+        expect(plan!.newCursor).toEqual({ lineDelta: 0, ch: "function ".length });
     });
 
     it("returns null for unknown trigger", async () => {
