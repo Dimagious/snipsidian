@@ -432,6 +432,94 @@
 .modal.snipsy-install .diff-tag.is-new      { background: rgba(108, 197, 133, 0.15); color: var(--snipsy-success); }
 .modal.snipsy-install .diff-tag.is-replace  { background: rgba(232, 113, 106, 0.14); color: var(--snipsy-danger); }
 
+/* ---- Import preview modal (B-038 fix) ----
+   Replaces the old silent-wipe import. Merge/replace picker + diff
+   list. Replace mode shows `removed` rows in red as the destructive-
+   action affordance (designer Q5 — no second-confirm dialog). */
+.snipsidian-import-modal .snipsy-import-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.snipsidian-import-modal .snipsy-import-mode-option {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--snipsy-divider);
+  border-radius: var(--snipsy-radius);
+  cursor: pointer;
+}
+.snipsidian-import-modal .snipsy-import-mode-hint {
+  font-size: 12px;
+  color: var(--snipsy-text-muted);
+}
+.snipsidian-import-modal .snipsy-import-mode-hint-danger {
+  color: var(--snipsy-danger);
+}
+.snipsidian-import-modal .snipsy-import-summary {
+  font-size: 13px;
+  color: var(--snipsy-text-muted);
+  margin: 8px 0;
+}
+.snipsidian-import-modal .snipsy-import-list {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--snipsy-divider);
+  border-radius: var(--snipsy-radius);
+  margin-bottom: 12px;
+}
+.snipsidian-import-modal .snipsy-import-row {
+  display: grid;
+  grid-template-columns: 64px minmax(80px, 200px) 1fr;
+  gap: 10px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--snipsy-divider);
+  font-size: 12.5px;
+}
+.snipsidian-import-modal .snipsy-import-row:first-child { border-top: 0; }
+.snipsidian-import-modal .snipsy-import-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  width: fit-content;
+}
+.snipsidian-import-modal .snipsy-import-tag-new {
+  background: rgba(108, 197, 133, 0.15);
+  color: var(--snipsy-success);
+}
+.snipsidian-import-modal .snipsy-import-tag-update {
+  background: rgba(108, 162, 232, 0.15);
+  color: var(--snipsy-accent);
+}
+.snipsidian-import-modal .snipsy-import-tag-remove {
+  background: rgba(232, 113, 106, 0.14);
+  color: var(--snipsy-danger);
+}
+.snipsidian-import-modal .snipsy-import-key {
+  font-family: var(--snipsy-mono);
+  font-weight: 500;
+}
+.snipsidian-import-modal .snipsy-import-value {
+  font-family: var(--snipsy-mono);
+  color: var(--snipsy-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.snipsidian-import-modal .snipsy-import-more {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--snipsy-text-faint);
+  text-align: center;
+  border-top: 1px solid var(--snipsy-divider);
+}
+
 /* ---- Reduced motion ---- */
 /* Honour the user's OS preference (B-089 / a11y A-011). Transitions
    and animations are subtle in Snipsy, but vestibular-disorder users
