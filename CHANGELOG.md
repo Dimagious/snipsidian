@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-05-14
+
+### Removed
+
+- Dead `SubmitPackageModal` component (legacy in-vault submission flow). The active submission path goes through `services/package-submission-form.ts` (Google Form) via `PackageSubmissionSection` — `SubmitPackageModal` was no longer reachable.
+- Now-orphaned `processPackageSubmission` helper in `services/community-packages.ts` and its 4 tests.
+
+### Fixed
+
+- Reverted timer functions back to `window.setTimeout` / `window.clearTimeout` (from `activeWindow.*`) per updated Obsidian community-plugin scorecard guidance. The scanner rule reversed between the `1.0.5` and `1.0.7` scans — timers should bind to the window the code was loaded in, not the currently-focused window. Affects `SnippetPickerModal` (search debounce) and `BasicTab` (hotkey-tab scroll). `activeDocument` stayed correct.
+
 ## [1.0.7] - 2026-05-14
 
 ### Fixed
