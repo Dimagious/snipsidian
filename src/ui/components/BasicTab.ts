@@ -34,7 +34,7 @@ export class BasicTab {
                         this.app.setting.open();
                         this.app.setting.openTabById("hotkeys");
                         // Focus on our command
-                        activeWindow.setTimeout(() => {
+                        window.setTimeout(() => {
                             const hotkeyTab = activeDocument.querySelector('.setting-item[data-id="snipsidian:insert-snippet"]');
                             if (hotkeyTab) {
                                 hotkeyTab.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -55,7 +55,7 @@ export class BasicTab {
                         this.app.setting.open();
                         this.app.setting.openTabById("hotkeys");
                         // Focus on our command
-                        activeWindow.setTimeout(() => {
+                        window.setTimeout(() => {
                             const hotkeyTab = activeDocument.querySelector('.setting-item[data-id="snipsidian:open-settings"]');
                             if (hotkeyTab) {
                                 hotkeyTab.scrollIntoView({ behavior: 'smooth', block: 'center' });
