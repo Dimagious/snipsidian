@@ -1,5 +1,5 @@
 import type { SnipSidianSettings, SnippetItem } from "../types";
-import { isRecordOfString } from "./schema";
+import { isRecordOfString } from "../shared/guards";
 import { splitKey } from "../services/utils";
 
 export function getDict(settings: SnipSidianSettings): Record<string, string> {
@@ -50,13 +50,8 @@ export function mergeDefaults(
     return { ...defaults, ...current };
 }
 
-export function replaceAllSnippets(
-    _settings: SnipSidianSettings,
-    incoming: unknown
-): SnipSidianSettings | null {
-    if (!isRecordOfString(incoming)) return null;
-    return { snippets: incoming };
-}
+// `replaceAllSnippets` removed in 1.0.9 — was unused; the JSON import flow in
+// `BasicTab.ts` calls `isRecordOfString` from `shared/guards` directly.
 
 /**
  * Returns a flat list of all snippets from user settings

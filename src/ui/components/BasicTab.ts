@@ -1,6 +1,6 @@
 import { App, Notice, Platform, Setting } from "obsidian";
 import type SnipSidianPlugin from "../../main";
-import { isRecordOfString } from "../../services/utils";
+import { isRecordOfString } from "../../shared/guards";
 
 export class BasicTab {
     constructor(
