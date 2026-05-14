@@ -33,9 +33,7 @@ export default class HotstringsPlugin extends Plugin {
             id: "open-settings",
             name: "Open settings",
             callback: () => {
-                // @ts-expect-error Obsidian internal API - setting.open() and openTabById() exist at runtime but are not in type definitions
                 this.app.setting.open();
-                // @ts-expect-error Obsidian internal API - setting.open() and openTabById() exist at runtime but are not in type definitions
                 this.app.setting.openTabById(this.manifest.id);
             }
         });
@@ -52,8 +50,8 @@ export default class HotstringsPlugin extends Plugin {
     }
 
     async loadSettings() {
-        const saved = await this.loadData();
-        const savedSnippets = (saved?.snippets ?? {}) as Record<string, string>;
+        const saved = (await this.loadData()) as { snippets?: Record<string, string> } | null;
+        const savedSnippets = saved?.snippets ?? {};
         this.settings = {
             snippets: {
                 ...DEFAULT_SNIPPETS,

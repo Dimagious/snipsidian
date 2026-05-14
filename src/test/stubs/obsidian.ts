@@ -47,13 +47,12 @@ export const Platform = {
     isWin: false,
     isLinux: false
 };
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Parameter kept for API compatibility
-export class Notice { constructor(_msg: string) { 
+export class Notice { constructor(_msg: string) {
     // _msg parameter kept for API compatibility but not used in test stub
 } }
-export class Modal { 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars -- Test stub constructor, parameter kept for API compatibility
-    constructor(_app: any) { 
+export class Modal {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Test stub constructor, parameter kept for API compatibility
+    constructor(_app: any) {
     // _app parameter kept for API compatibility but not used in test stub
 }
     open() { }

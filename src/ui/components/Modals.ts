@@ -236,14 +236,14 @@ export class TextPromptModal extends Modal {
                 const v = (this.value ?? "").trim();
                 if (!v) {
                     err.empty();
-                    err.createEl("span", { text: "Value cannot be empty." });
+                    err.createSpan({ text: "Value cannot be empty." });
                     return;
                 }
                 if (this.opts.validate) {
                     const msg = this.opts.validate(v);
                     if (msg) {
                         err.empty();
-                        err.createEl("span", { text: msg });
+                        err.createSpan({ text: msg });
                         return;
                     }
                 }

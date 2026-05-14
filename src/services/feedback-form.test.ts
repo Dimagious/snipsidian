@@ -37,7 +37,7 @@ describe("feedback-form", () => {
     });
     
     // Mock document object
-    Object.defineProperty(global, 'document', {
+    Object.defineProperty(global, 'activeDocument', {
       value: {
         body: {
           classList: {
@@ -175,7 +175,7 @@ describe("feedback-form", () => {
     });
 
     it("should detect light theme", () => {
-      Object.defineProperty(global, 'document', {
+      Object.defineProperty(global, 'activeDocument', {
         value: {
           body: {
             classList: {

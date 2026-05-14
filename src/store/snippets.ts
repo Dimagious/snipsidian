@@ -51,7 +51,7 @@ export function mergeDefaults(
 }
 
 export function replaceAllSnippets(
-    settings: SnipSidianSettings,
+    _settings: SnipSidianSettings,
     incoming: unknown
 ): SnipSidianSettings | null {
     if (!isRecordOfString(incoming)) return null;

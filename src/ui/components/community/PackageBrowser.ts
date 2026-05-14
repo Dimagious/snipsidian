@@ -250,7 +250,7 @@ export class PackageBrowser {
       const installedCount = Object.keys(pkg.snippets || {}).length;
       new Notice(`Successfully installed "${pkg.label}" with ${installedCount} snippets`);
 
-      const browseSection = document.querySelector(".snipsy-community-browse-section");
+      const browseSection = activeDocument.querySelector(".snipsy-community-browse-section");
       if (browseSection) this.renderPackages(browseSection as HTMLElement);
     } catch (error) {
       new Notice(`Failed to install package: ${error instanceof Error ? error.message : String(error)}`);
@@ -278,7 +278,7 @@ export class PackageBrowser {
       new Notice(`Successfully installed "${pkg.label}" with ${installedCount} snippets in group "${packageGroup}"`);
       
       // Re-render to update the "Installed" status
-      const browseSection = document.querySelector(".snipsy-community-browse-section");
+      const browseSection = activeDocument.querySelector(".snipsy-community-browse-section");
       if (browseSection) this.renderPackages(browseSection as HTMLElement);
       
     } catch (error) {
@@ -331,12 +331,12 @@ export class PackageBrowser {
 
     // Update header classes and re-render
     this.updateSortHeaders();
-    const browseSection = document.querySelector(".snipsy-community-browse-section");
+    const browseSection = activeDocument.querySelector(".snipsy-community-browse-section");
     if (browseSection) this.renderPackages(browseSection as HTMLElement);
   }
 
   private updateSortHeaders() {
-    const headers = document.querySelectorAll('.packages-table th.sortable');
+    const headers = activeDocument.querySelectorAll('.packages-table th.sortable');
     headers.forEach(header => {
       header.classList.remove('sort-asc', 'sort-desc');
       const text = header.textContent?.trim();
@@ -360,49 +360,49 @@ export class PackageBrowser {
     
     if (pkg.verified) {
        
-      infoSection.createEl("span", { text: "Verified", cls: "verified-badge" });
+      infoSection.createSpan({ text: "Verified", cls: "verified-badge" });
     }
-    
+
     if (pkg.description) {
       infoSection.createEl("p", { text: pkg.description, cls: "package-description" });
     }
-    
+
     const meta = infoSection.createDiv({ cls: "package-meta" });
-    
-    meta.createEl("div", { text: `Author: ${pkg.author || "Unknown"}` });
-    meta.createEl("div", { text: `Version: ${pkg.version || "1.0.0"}` });
-    
+
+    meta.createDiv({ text: `Author: ${pkg.author || "Unknown"}` });
+    meta.createDiv({ text: `Version: ${pkg.version || "1.0.0"}` });
+
     if (pkg.tags && pkg.tags.length > 0) {
       const tagsContainer = infoSection.createDiv({ cls: "package-tags" });
-      tagsContainer.createEl("div", { text: "Tags:", cls: "package-tags-label" });
+      tagsContainer.createDiv({ text: "Tags:", cls: "package-tags-label" });
       const tagsList = tagsContainer.createDiv({ cls: "package-tags-list" });
-      
+
       pkg.tags.forEach(tag => {
-        tagsList.createEl("span", { text: tag });
+        tagsList.createSpan({ text: tag });
       });
     }
-    
+
     // Add snippets section
     if (pkg.snippets && Object.keys(pkg.snippets).length > 0) {
       const snippetsContainer = infoSection.createDiv({ cls: "package-snippets" });
-      snippetsContainer.createEl("div", { 
+      snippetsContainer.createDiv({
         text: `Snippets (${Object.keys(pkg.snippets).length}):`,
         cls: "snippets-label"
       });
-      
+
       const snippetsList = snippetsContainer.createDiv({ cls: "snippets-list" });
-      
+
       Object.entries(pkg.snippets).forEach(([trigger, replacement]) => {
         const snippetRow = snippetsList.createDiv({ cls: "snippet-row" });
-        
+
         const triggerEl = snippetRow.createDiv({ cls: "snippet-trigger" });
-        triggerEl.createEl("span", { text: trigger });
-        
+        triggerEl.createSpan({ text: trigger });
+
         const arrowEl = snippetRow.createDiv({ cls: "snippet-arrow" });
-        arrowEl.createEl("span", { text: "→" });
-        
+        arrowEl.createSpan({ text: "→" });
+
         const replacementEl = snippetRow.createDiv({ cls: "snippet-replacement" });
-        replacementEl.createEl("span", { text: replacement });
+        replacementEl.createSpan({ text: replacement });
         replacementEl.title = replacement; // Show full text on hover
       });
     }
@@ -438,7 +438,7 @@ export class PackageBrowser {
     const endItem = Math.min(this.currentPage * this.itemsPerPage, this.filteredPackages.length);
     const totalItems = this.filteredPackages.length;
     
-    paginationContainer.createEl("span", {
+    paginationContainer.createSpan({
       text: `Showing ${startItem}-${endItem} of ${totalItems} packages`,
       cls: "pagination-info"
     });
@@ -456,7 +456,7 @@ export class PackageBrowser {
     
     pages.forEach((page) => {
       if (page === '...') {
-        paginationContainer.createEl("span", {
+        paginationContainer.createSpan({
           text: "...",
           cls: "pagination-ellipsis"
         });
@@ -526,7 +526,7 @@ export class PackageBrowser {
     const totalPages = Math.ceil(this.filteredPackages.length / this.itemsPerPage);
     if (page >= 1 && page <= totalPages) {
       this.currentPage = page;
-      const browseSection = document.querySelector(".snipsy-community-browse-section");
+      const browseSection = activeDocument.querySelector(".snipsy-community-browse-section");
       if (browseSection) this.renderPackages(browseSection as HTMLElement);
     }
   }
