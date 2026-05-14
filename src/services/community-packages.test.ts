@@ -219,6 +219,61 @@ snippets: []
 
       expect(packages).toEqual([]);
     });
+
+    // Regression: security S-005 / B-036 — `download_url` from the GitHub
+    // Contents API is treated as untrusted. A spoofed or future-changed API
+    // response that returns an off-host URL must NOT be followed.
+    it("refuses to follow download_url outside raw.githubusercontent.com (S-005)", async () => {
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const mockFiles = [
+        {
+          name: "attacker.yml",
+          download_url: "https://attacker.example/payload.yml",
+        },
+      ];
+
+      const mockApp = { vault: {} } as any;
+
+      // First call returns the directory listing with a hostile download_url.
+      // If the allowlist works, NO second `requestUrl` should fire — so we
+      // intentionally don't mock a second response.
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 200,
+        text: JSON.stringify(mockFiles),
+      });
+
+      const packages = await loadCommunityPackagesFromGitHub(mockApp);
+
+      expect(packages).toEqual([]);
+      expect(vi.mocked(requestUrl)).toHaveBeenCalledTimes(1); // only the listing call
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/refusing to fetch/),
+        expect.anything(),
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it("refuses to follow http:// download_url (must be https)", async () => {
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const mockFiles = [
+        {
+          name: "downgrade.yml",
+          download_url: "http://raw.githubusercontent.com/X/Y/main/approved/x.yml",
+        },
+      ];
+
+      const mockApp = { vault: {} } as any;
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 200,
+        text: JSON.stringify(mockFiles),
+      });
+
+      const packages = await loadCommunityPackagesFromGitHub(mockApp);
+      expect(packages).toEqual([]);
+      expect(vi.mocked(requestUrl)).toHaveBeenCalledTimes(1);
+      consoleSpy.mockRestore();
+    });
   });
 
   describe("createPackageIssue", () => {

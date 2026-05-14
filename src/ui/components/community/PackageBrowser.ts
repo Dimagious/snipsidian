@@ -1,6 +1,7 @@
 import { App, Notice, Modal } from "obsidian";
 import type SnipSidianPlugin from "../../../main";
 import { loadAllCommunityPackages } from "../../../services/community-packages";
+import { validatePackageForInstall } from "../../../services/package-validator";
 import { PackagePreviewModal } from "../Modals";
 import { joinKey } from "../../../services/utils";
 import { hasReplacementCollision } from "../../../store/snippets";
@@ -184,6 +185,19 @@ export class PackageBrowser {
     try {
       if (!pkg.snippets || Object.keys(pkg.snippets).length === 0) {
         new Notice(`Package "${pkg.label}" has no snippets to install`);
+        return;
+      }
+
+      // Re-validate at install time — even though the submission flow runs
+      // `validatePackage`, content fetched from GitHub bypasses that path
+      // (it's already-approved content). This catches attacker-controlled
+      // triggers / replacements / size before they land in settings.
+      const v = validatePackageForInstall(pkg);
+      if (!v.isValid) {
+        const first = v.errors[0] ?? "Package failed install-time validation";
+        const more = v.errors.length > 1 ? ` (and ${v.errors.length - 1} more)` : "";
+        new Notice(`Cannot install "${pkg.label}": ${first}${more}`);
+        console.error("[snipsy] install validation failed for", pkg.label, v.errors);
         return;
       }
 

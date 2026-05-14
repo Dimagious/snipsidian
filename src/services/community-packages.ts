@@ -2,6 +2,28 @@ import * as YAML from "yaml";
 import { App, TFolder, TFile, requestUrl } from "obsidian";
 import type { PackageData } from "./package-types";
 
+/** Hostnames allowed for the second `requestUrl` fetch in
+ *  `loadCommunityPackagesFromGitHub`. The Contents API returns a
+ *  `download_url` that is *intended* to be a raw.githubusercontent.com
+ *  URL — but the response is JSON over HTTPS to api.github.com, and a
+ *  MITM (or a future API change) could return a different host. We
+ *  treat this as untrusted and validate before fetching. See S-005.
+ */
+const ALLOWED_DOWNLOAD_HOSTS = new Set<string>([
+  "raw.githubusercontent.com",
+]);
+
+function isAllowedDownloadUrl(url: unknown): boolean {
+  if (typeof url !== "string") return false;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    return ALLOWED_DOWNLOAD_HOSTS.has(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
 // No built-in packages - all packages come from GitHub API
 
 interface GitHubIssueResponse {
@@ -164,6 +186,14 @@ export async function loadCommunityPackagesFromGitHub(): Promise<PackageItem[]> 
     for (const file of files) {
       if (file.name.endsWith('.yml') || file.name.endsWith('.yaml')) {
         try {
+          // Hostname allowlist: refuse to follow any URL outside the
+          // expected raw.githubusercontent.com host. Defends against a
+          // spoofed `api.github.com` response that points to an attacker
+          // host. See security S-005.
+          if (!isAllowedDownloadUrl(file.download_url)) {
+            console.error(`[snipsy] refusing to fetch ${file.name}: download_url is not on allowlist`, file.download_url);
+            continue;
+          }
           const contentResponse = await requestUrl({
             url: file.download_url
           });

@@ -362,3 +362,116 @@ export function validatePackageMetadata(packageData: PackageData): ValidationRes
   const isValid = errors.length === 0;
   return { isValid, errors, warnings };
 }
+
+// ---------------------------------------------------------------------------
+// Install-time validation
+// ---------------------------------------------------------------------------
+
+/** Maximum number of snippets a community package may install in one go.
+ *  Bigger packages are almost certainly attacker-controlled bulk-dumps. */
+export const INSTALL_MAX_SNIPPETS = 500;
+
+/** Maximum replacement length per snippet at install time. Matches the
+ *  submission-time cap in `validateSnippets`. */
+export const INSTALL_MAX_REPLACEMENT_LEN = 10000;
+
+/** Maximum total bytes a single install may write to `settings.snippets`.
+ *  Defence against a small `snippets` count with megabyte-sized replacements. */
+export const INSTALL_MAX_TOTAL_BYTES = 2 * 1024 * 1024; // 2 MiB
+
+/** Trigger shape allowed at install time. Same as the submission-time regex
+ *  in `validateSnippets`, plus an explicit ban on `/` because the runtime
+ *  uses `joinKey(label, trigger)` to build store keys with `/` as the
+ *  separator — a slash in the trigger would shift the parsed group. */
+const INSTALL_TRIGGER_REGEX = /^[a-zA-Z0-9:_-]+$/;
+
+/** Validates a community-package payload at install time. Runs on the
+ *  runtime `PackageItem` shape (NOT the YAML submission shape). Catches
+ *  attacker-controlled keys/values that bypassed the submission-time
+ *  `validatePackage` (e.g. content fetched from a compromised GitHub
+ *  repo or a forced direct call to `installPackage`).
+ *
+ *  Cross-references:
+ *   - security S-002 (B-033): close the install-time bypass of validatePackage
+ *   - security S-006: reject `/` in label + trigger to keep `splitKey` honest
+ */
+export function validatePackageForInstall(
+  pkg: { label: string; snippets?: { [trigger: string]: string } }
+): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  // Label
+  if (!pkg.label || typeof pkg.label !== "string") {
+    errors.push("Package label is missing");
+    return { isValid: false, errors, warnings };
+  }
+  if (pkg.label.length < 1 || pkg.label.length > 50) {
+    errors.push("Package label must be between 1 and 50 characters");
+  }
+  if (pkg.label.includes("/") || pkg.label.includes("\\")) {
+    errors.push("Package label cannot contain '/' or '\\'");
+  }
+
+  // Snippets bag
+  const snippets = pkg.snippets ?? {};
+  const entries = Object.entries(snippets);
+
+  if (entries.length === 0) {
+    errors.push("Package has no snippets to install");
+    return { isValid: false, errors, warnings };
+  }
+
+  if (entries.length > INSTALL_MAX_SNIPPETS) {
+    errors.push(
+      `Package has ${entries.length} snippets, exceeds limit of ${INSTALL_MAX_SNIPPETS}`
+    );
+  }
+
+  let totalBytes = 0;
+  for (const [trigger, replacement] of entries) {
+    if (typeof trigger !== "string" || trigger.length === 0) {
+      errors.push("Trigger must be a non-empty string");
+      continue;
+    }
+    if (trigger.length > 50) {
+      errors.push(`Trigger "${truncate(trigger)}" exceeds 50 characters`);
+      continue;
+    }
+    if (!INSTALL_TRIGGER_REGEX.test(trigger)) {
+      errors.push(
+        `Trigger "${truncate(trigger)}" can only contain letters, numbers, colons, underscores, and hyphens`
+      );
+      continue;
+    }
+
+    if (typeof replacement !== "string") {
+      errors.push(`Replacement for trigger "${truncate(trigger)}" must be a string`);
+      continue;
+    }
+    if (replacement.length > INSTALL_MAX_REPLACEMENT_LEN) {
+      errors.push(
+        `Replacement for "${truncate(trigger)}" is ${replacement.length} chars, exceeds limit of ${INSTALL_MAX_REPLACEMENT_LEN}`
+      );
+      continue;
+    }
+
+    totalBytes += trigger.length + replacement.length;
+  }
+
+  if (totalBytes > INSTALL_MAX_TOTAL_BYTES) {
+    errors.push(
+      `Package total size ${totalBytes} bytes exceeds limit of ${INSTALL_MAX_TOTAL_BYTES}`
+    );
+  }
+
+  return { isValid: errors.length === 0, errors, warnings };
+}
+
+/** Truncate noisy trigger strings in error messages so a malicious
+ *  package can't flood a `Notice` toast with attacker-controlled text. */
+function truncate(s: string, max = 40): string {
+  if (s.length <= max) return s;
+  return s.slice(0, max) + "…";
+}
+

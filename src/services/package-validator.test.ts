@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { validatePackage, validatePackageFile, validatePackageMetadata } from "./package-validator";
+import {
+  validatePackage,
+  validatePackageFile,
+  validatePackageMetadata,
+  validatePackageForInstall,
+  INSTALL_MAX_SNIPPETS,
+  INSTALL_MAX_REPLACEMENT_LEN,
+} from "./package-validator";
 
 describe("package-validator", () => {
   describe("validatePackage", () => {
@@ -790,6 +797,131 @@ describe("package-validator", () => {
 
       const result = validatePackage(packageData, { strictMode: false });
       expect(result.warnings).toContain("Tags should be between 2 and 10 items");
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // validatePackageForInstall — closes B-033 (install-time bypass) and
+  // S-006 (slash in label/trigger). Boundary cases per ADR-0005:
+  // a test should fail if the *contract* breaks, not just if a line is
+  // unexecuted.
+  // ---------------------------------------------------------------------
+
+  describe("validatePackageForInstall", () => {
+    const okPkg = () => ({
+      label: "My Pack",
+      snippets: { ":hi": "hello", ":br": "be right back" },
+    });
+
+    it("accepts a well-formed package", () => {
+      const r = validatePackageForInstall(okPkg());
+      expect(r.isValid).toBe(true);
+      expect(r.errors).toEqual([]);
+    });
+
+    it("rejects a missing or non-string label", () => {
+      const r1 = validatePackageForInstall({ label: "", snippets: { ":a": "x" } });
+      expect(r1.isValid).toBe(false);
+      expect(r1.errors[0]).toMatch(/label is missing/i);
+
+      const r2 = validatePackageForInstall({ label: undefined as unknown as string, snippets: { ":a": "x" } });
+      expect(r2.isValid).toBe(false);
+    });
+
+    it("rejects an empty snippets bag", () => {
+      const r = validatePackageForInstall({ label: "Empty", snippets: {} });
+      expect(r.isValid).toBe(false);
+      expect(r.errors.join(" ")).toMatch(/no snippets/i);
+    });
+
+    it("rejects a snippets count over INSTALL_MAX_SNIPPETS", () => {
+      const snippets: Record<string, string> = {};
+      for (let i = 0; i <= INSTALL_MAX_SNIPPETS; i++) snippets[`t${i}`] = "x";
+      const r = validatePackageForInstall({ label: "Huge", snippets });
+      expect(r.isValid).toBe(false);
+      expect(r.errors.join(" ")).toMatch(/exceeds limit of 500/);
+    });
+
+    it("accepts exactly INSTALL_MAX_SNIPPETS entries (boundary)", () => {
+      const snippets: Record<string, string> = {};
+      for (let i = 0; i < INSTALL_MAX_SNIPPETS; i++) snippets[`t${i}`] = "x";
+      const r = validatePackageForInstall({ label: "Big", snippets });
+      expect(r.isValid).toBe(true);
+    });
+
+    it("rejects replacement over INSTALL_MAX_REPLACEMENT_LEN", () => {
+      const r = validatePackageForInstall({
+        label: "Big-replace",
+        snippets: { ":big": "a".repeat(INSTALL_MAX_REPLACEMENT_LEN + 1) },
+      });
+      expect(r.isValid).toBe(false);
+      expect(r.errors.join(" ")).toMatch(/exceeds limit of 10000/);
+    });
+
+    it("accepts replacement of exactly INSTALL_MAX_REPLACEMENT_LEN chars (boundary)", () => {
+      const r = validatePackageForInstall({
+        label: "Edge-replace",
+        snippets: { ":edge": "a".repeat(INSTALL_MAX_REPLACEMENT_LEN) },
+      });
+      expect(r.isValid).toBe(true);
+    });
+
+    it("rejects '/' in the label (B-033 + S-006)", () => {
+      const r = validatePackageForInstall({ label: "evil/label", snippets: { ":a": "x" } });
+      expect(r.isValid).toBe(false);
+      expect(r.errors.join(" ")).toMatch(/cannot contain '\/'/);
+    });
+
+    it("rejects '\\' in the label (Windows separator)", () => {
+      const r = validatePackageForInstall({ label: "evil\\label", snippets: { ":a": "x" } });
+      expect(r.isValid).toBe(false);
+    });
+
+    it("rejects '/' in a trigger (S-006: would corrupt splitKey)", () => {
+      const r = validatePackageForInstall({ label: "Pack", snippets: { "evil/trigger": "x" } });
+      expect(r.isValid).toBe(false);
+      expect(r.errors.join(" ")).toMatch(/can only contain letters, numbers, colons, underscores, and hyphens/);
+    });
+
+    it("rejects whitespace in a trigger", () => {
+      const r = validatePackageForInstall({ label: "Pack", snippets: { "two words": "x" } });
+      expect(r.isValid).toBe(false);
+    });
+
+    it("rejects a control character in a trigger (S-002 RTL-override / zero-width unicode angle)", () => {
+      const r = validatePackageForInstall({ label: "Pack", snippets: { "‮:legit": "x" } });
+      expect(r.isValid).toBe(false);
+    });
+
+    it("rejects a non-string replacement (defence against malformed YAML)", () => {
+      const r = validatePackageForInstall({
+        label: "Pack",
+        snippets: { ":a": 42 as unknown as string },
+      });
+      expect(r.isValid).toBe(false);
+      expect(r.errors.join(" ")).toMatch(/must be a string/);
+    });
+
+    it("truncates noisy trigger strings in error messages", () => {
+      const longTrigger = "x".repeat(200);
+      const r = validatePackageForInstall({
+        label: "Pack",
+        snippets: { [longTrigger]: "x" },
+      });
+      // First error mentions the trigger but only the truncated form (≤40 chars + "…").
+      const errMsg = r.errors[0] ?? "";
+      expect(errMsg).toContain("…");
+      expect(errMsg.length).toBeLessThan(longTrigger.length + 80);
+    });
+
+    it("rejects aggregate-size attack (low count, huge content)", () => {
+      // 250 snippets of ~10000 chars each = ~2.5 MiB total, over the 2 MiB cap.
+      const snippets: Record<string, string> = {};
+      const big = "a".repeat(INSTALL_MAX_REPLACEMENT_LEN);
+      for (let i = 0; i < 250; i++) snippets[`t${i}`] = big;
+      const r = validatePackageForInstall({ label: "Aggregate", snippets });
+      expect(r.isValid).toBe(false);
+      expect(r.errors.join(" ")).toMatch(/total size/);
     });
   });
 });
