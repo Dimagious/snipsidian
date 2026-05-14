@@ -3,7 +3,7 @@ import type SnipSidianPlugin from "../../main";
 import { validatePackage, type ValidationResult } from "../../services/package-validator";
 import { processPackageSubmission } from "../../services/community-packages";
 import type { PackageData } from "../../services/package-types";
-import * as yaml from "js-yaml";
+import * as YAML from "yaml";
 
 export class SubmitPackageModal extends Modal {
     private yamlTextarea!: HTMLTextAreaElement;
@@ -90,7 +90,7 @@ export class SubmitPackageModal extends Modal {
         }
 
         try {
-            const packageData = yaml.load(yamlContent);
+            const packageData = YAML.parse(yamlContent);
             
             if (!packageData || typeof packageData !== 'object') {
                 this.showValidationResult({
@@ -134,19 +134,19 @@ export class SubmitPackageModal extends Modal {
 
         if (validation.isValid) {
             const successEl = this.validationContainer.createDiv({ cls: "validation-success" });
-            successEl.createEl("div", { 
+            successEl.createDiv({
                 text: "Package is valid!",
                 cls: "validation-title"
             });
-            
+
             if (validation.warnings.length > 0) {
                 const warningsEl = successEl.createDiv({ cls: "validation-warnings" });
-                warningsEl.createEl("div", { 
+                warningsEl.createDiv({
                     text: "Warnings:",
                     cls: "warnings-title"
                 });
                 validation.warnings.forEach((warning: string) => {
-                    warningsEl.createEl("div", { 
+                    warningsEl.createDiv({
                         text: warning,
                         cls: "warning-item"
                     });
@@ -154,13 +154,13 @@ export class SubmitPackageModal extends Modal {
             }
         } else {
             const errorEl = this.validationContainer.createDiv({ cls: "validation-error" });
-            errorEl.createEl("div", { 
+            errorEl.createDiv({
                 text: "Validation failed:",
                 cls: "validation-title"
             });
-            
+
             validation.errors.forEach((error: string) => {
-                errorEl.createEl("div", { 
+                errorEl.createDiv({
                     text: `• ${error}`,
                     cls: "error-item"
                 });
@@ -176,7 +176,7 @@ export class SubmitPackageModal extends Modal {
 
         try {
             const yamlContent = this.yamlTextarea.value.trim();
-            const packageData = yaml.load(yamlContent) as PackageData;
+            const packageData = YAML.parse(yamlContent) as PackageData;
             
             // Generate a temporary filename
             const packageId = this.generatePackageId(packageData.name || '');
@@ -190,7 +190,7 @@ export class SubmitPackageModal extends Modal {
                 this.showSuccessMessage();
                 
                 // Close modal after a delay
-                setTimeout(() => {
+                activeWindow.setTimeout(() => {
                     this.close();
                 }, 3000);
             } else {
@@ -205,11 +205,11 @@ export class SubmitPackageModal extends Modal {
         this.validationContainer.empty();
         
         const successEl = this.validationContainer.createDiv({ cls: "submission-success" });
-        successEl.createEl("div", { 
+        successEl.createDiv({
             text: "Thank you for contributing to the community!",
             cls: "success-title"
         });
-        successEl.createEl("div", { 
+        successEl.createDiv({
             text: "Your package has been submitted for review and will appear in the pending packages.",
             cls: "success-message"
         });

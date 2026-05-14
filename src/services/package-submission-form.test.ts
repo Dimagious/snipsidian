@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as yaml from 'js-yaml';
+import * as YAML from 'yaml';
 import {
   getPackageSubmissionFormUrl,
   validatePackageForSubmission,
@@ -9,9 +9,9 @@ import {
 } from './package-submission-form';
 
 // Mock dependencies
-vi.mock('js-yaml', () => ({
-  load: vi.fn(),
-  dump: vi.fn()
+vi.mock('yaml', () => ({
+  parse: vi.fn(),
+  stringify: vi.fn()
 }));
 
 vi.mock('./feedback-form', () => ({
@@ -38,7 +38,7 @@ describe('package-submission-form', () => {
   describe('validateAndPreparePackageData', () => {
     it('should handle YAML parsing errors', () => {
       const invalidYaml = 'invalid: yaml: content: [';
-      vi.mocked(yaml.load).mockImplementation(() => {
+      vi.mocked(YAML.parse).mockImplementation(() => {
         throw new Error('YAML parsing error');
       });
 
@@ -60,7 +60,7 @@ describe('package-submission-form', () => {
 
     it('should handle non-object parsed data', () => {
       const stringData = 'just a string';
-      vi.mocked(yaml.load).mockReturnValue(stringData);
+      vi.mocked(YAML.parse).mockReturnValue(stringData);
 
       const result = validateAndPreparePackageData('yaml string');
 
@@ -84,7 +84,7 @@ describe('package-submission-form', () => {
         warnings: []
       });
 
-      vi.mocked(yaml.dump).mockReturnValue('test yaml');
+      vi.mocked(YAML.stringify).mockReturnValue('test yaml');
 
       const result = validateAndPreparePackageData(packageData, 'test@example.com', 'Test User');
 

@@ -3,7 +3,7 @@ import type SnipSidianPlugin from "../../../main";
 import { validatePackage, type ValidationResult } from "../../../services/package-validator";
 import { openPackageSubmissionForm } from "../../../services/package-submission-form";
 import type { PackageData } from "../../../services/package-types";
-import * as yaml from "js-yaml";
+import * as YAML from "yaml";
 
 export class PackageSubmissionSection {
   private validationResult: ValidationResult | null = null;
@@ -58,7 +58,7 @@ export class PackageSubmissionSection {
       return;
     }
     try {
-      const packageData = yaml.load(yamlContent) as PackageData;
+      const packageData = YAML.parse(yamlContent) as PackageData;
       if (!packageData || typeof packageData !== "object") {
         this.showValidationResult(container, { isValid: false, errors: ["Invalid YAML format"], warnings: [] });
         return;
@@ -85,25 +85,25 @@ export class PackageSubmissionSection {
     container.empty();
     if (validation.isValid) {
       const successEl = container.createDiv({ cls: "validation-success" });
-      successEl.createEl("div", { 
-          text: "Package is valid!", 
-          cls: "validation-title" 
+      successEl.createDiv({
+          text: "Package is valid!",
+          cls: "validation-title"
       });
       if (validation.warnings.length > 0) {
         const warningsEl = successEl.createDiv({ cls: "validation-warnings" });
-        warningsEl.createEl("div", { 
-            text: "Warnings:", 
-            cls: "warnings-title" 
+        warningsEl.createDiv({
+            text: "Warnings:",
+            cls: "warnings-title"
         });
-        validation.warnings.forEach((w: string) => warningsEl.createEl("div", { text: w, cls: "warning-item" }));
+        validation.warnings.forEach((w: string) => warningsEl.createDiv({ text: w, cls: "warning-item" }));
       }
     } else {
       const errorEl = container.createDiv({ cls: "validation-error" });
-      errorEl.createEl("div", { 
-          text: "Validation failed:", 
-          cls: "validation-title" 
+      errorEl.createDiv({
+          text: "Validation failed:",
+          cls: "validation-title"
       });
-      validation.errors.forEach((e: string) => errorEl.createEl("div", { text: `• ${e}`, cls: "error-item" }));
+      validation.errors.forEach((e: string) => errorEl.createDiv({ text: `• ${e}`, cls: "error-item" }));
     }
   }
 
@@ -115,7 +115,7 @@ export class PackageSubmissionSection {
     
     try {
       const yamlContent = textarea.value.trim();
-      const packageData = yaml.load(yamlContent) as PackageData;
+      const packageData = YAML.parse(yamlContent) as PackageData;
       const result = openPackageSubmissionForm(
         packageData as Record<string, unknown>,
         this.app,
