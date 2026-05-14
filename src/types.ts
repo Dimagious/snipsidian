@@ -16,7 +16,9 @@ export interface SnipSidianSettings {
     snippets: Record<string, string>;
     ui?: {
         groupOpen?: Record<string, boolean>;
-        activeTab?: "basic" | "snippets" | "community" | "feedback";
+        /** Stored as a string for forward-compatibility — runtime narrowing
+         *  + migration of pre-1.1.0 values happens in `UIStateManager.loadActiveTab`. */
+        activeTab?: string;
     };
     communityPackages?: {
         cache?: {
