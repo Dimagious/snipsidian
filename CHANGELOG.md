@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-05-14
+
+### Changed
+
+- Adopt Obsidian community-scorecard API rules across UI and modals: `document.*` → `activeDocument.*`, `setTimeout` / `clearTimeout` → `activeWindow.setTimeout` / `activeWindow.clearTimeout`, and `createEl("span" / "div")` → `createSpan` / `createDiv`.
+- Consolidate the stylesheet: drop `!important` overrides in favour of class-doubled specificity, expand 3-digit hex literals, normalise trailing-zero margins, and de-duplicate selectors that previously lived in multiple source files.
+- Migrate YAML parsing from `js-yaml` to `yaml` (Eemeli Aro) across the espanso importer, community-package loader, submission modal/section, and submission form.
+- Type Obsidian's internal `App.setting` and `App.version` via `declare module "obsidian"` and remove the corresponding `@ts-expect-error` shims. Type GitHub API responses in `community-packages.ts` instead of leaning on `any`.
+- Update plugin description in `manifest.json` so it no longer starts with the plugin name.
+
+### Security
+
+- Bump `esbuild` to `^0.28.0` (dev-server SSRF advisory) and add npm `overrides` for vulnerable transitive deps (`picomatch`, `minimatch`, `brace-expansion`, `js-yaml`, `glob`, `flatted`, `fast-uri`, `postcss`, `rollup`). `npm audit` now reports 0 vulnerabilities.
+
+### Build
+
+- Release workflow now attests build provenance for `main.js` / `manifest.json` / `styles.css` via `actions/attest-build-provenance` and no longer attaches the legacy `snipsidian-*.zip` artifact to the GitHub Release.
+- Enable `@typescript-eslint/no-unused-vars` (strict, with `^_` opt-out) in `eslint.config.js` so CI catches the same warning the scorecard scanner runs.
+
 ## [1.0.5] - 2026-03-04
 
 ### Fixed
