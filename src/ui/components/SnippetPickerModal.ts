@@ -1,4 +1,4 @@
-import { Modal, App, MarkdownView } from "obsidian";
+import { Modal, App, MarkdownView, Notice } from "obsidian";
 import type { SnippetItem, SnippetSearchQuery } from "../../types";
 import type { SnippetPickerAPI } from "../../core/snippet-picker";
 import { insertSnippetAtCursor, wrapSelectionWithSnippet } from "../../adapters/obsidian-editor";
@@ -308,32 +308,37 @@ export class SnippetPickerModal extends Modal {
 
     private insertSelectedSnippet(): void {
         if (this.isInserting) return; // Protection against repeated calls
-        
-        if (this.selectedIndex >= 0 && this.selectedIndex < this.searchResults.length) {
-            const selectedSnippet = this.searchResults[this.selectedIndex];
-            if (!selectedSnippet) return;
-            
-            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-            
-            if (activeView?.editor) {
-                this.isInserting = true;
-                
-                const editor = activeView.editor;
-                const selection = editor.getSelection();
-                
-                try {
-                    if (selection) {
-                        wrapSelectionWithSnippet(editor, selectedSnippet.replacement);
-                    } else {
-                        insertSnippetAtCursor(editor, selectedSnippet.replacement);
-                    }
-                } catch (error) {
-                    console.error('Error inserting snippet:', error);
-                } finally {
-                    this.isInserting = false;
-                    this.close();
-                }
+
+        if (this.selectedIndex < 0 || this.selectedIndex >= this.searchResults.length) return;
+
+        const selectedSnippet = this.searchResults[this.selectedIndex];
+        if (!selectedSnippet) return;
+
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!activeView?.editor) {
+            // No editable Markdown view is focused — Enter (or click) used to
+            // silently no-op here; user saw nothing and assumed it inserted.
+            // Tell them what's wrong and leave the picker open so they can
+            // switch to a note and try again.
+            new Notice("Open a Markdown note to insert a snippet");
+            return;
+        }
+
+        this.isInserting = true;
+        const editor = activeView.editor;
+        const selection = editor.getSelection();
+
+        try {
+            if (selection) {
+                wrapSelectionWithSnippet(editor, selectedSnippet.replacement);
+            } else {
+                insertSnippetAtCursor(editor, selectedSnippet.replacement);
             }
+        } catch (error) {
+            console.error('Error inserting snippet:', error);
+        } finally {
+            this.isInserting = false;
+            this.close();
         }
     }
 }
