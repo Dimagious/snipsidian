@@ -177,7 +177,7 @@ function validateNamingConventions(packageData: PackageData, errors: string[]) {
   }
 }
 
-function validateContentQuality(packageData: PackageData, errors: string[], warnings: string[]) {
+function validateContentQuality(packageData: PackageData, _errors: string[], warnings: string[]) {
   // Check for inappropriate content
   const inappropriateWords = ["spam", "test", "dummy", "placeholder"];
   

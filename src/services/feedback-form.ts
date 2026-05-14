@@ -147,7 +147,6 @@ export function buildPackageFormUrl(
  * @returns Collected metadata object
  */
 export function collectSystemMeta(app: App, pluginVersion: string): FeedbackMeta {
-  // @ts-expect-error Obsidian internal API - app.version exists at runtime but is not in type definitions
   const obsidianVersion = app.version || "Unknown";
   
   // Detect platform using Obsidian Platform API
@@ -169,7 +168,7 @@ export function collectSystemMeta(app: App, pluginVersion: string): FeedbackMeta
   const locale = navigator.language || 'en-US';
   
   // Try to get theme (this might not be available in all contexts)
-  const theme = document.body.classList.contains('theme-dark') ? 'dark' : 'light';
+  const theme = activeDocument.body.classList.contains('theme-dark') ? 'dark' : 'light';
   
   return {
     plugin: pluginVersion,

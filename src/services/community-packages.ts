@@ -1,9 +1,19 @@
-import * as yaml from "js-yaml";
+import * as YAML from "yaml";
 import { App, TFolder, TFile, requestUrl } from "obsidian";
 import { validatePackage, validatePackageFile } from "./package-validator";
 import type { PackageData } from "./package-types";
 
 // No built-in packages - all packages come from GitHub API
+
+interface GitHubIssueResponse {
+  html_url: string;
+}
+
+interface GitHubContentEntry {
+  name: string;
+  download_url: string;
+  type?: string;
+}
 
 export interface PackageItem {
     id?: string;
@@ -73,7 +83,7 @@ export async function loadDynamicCommunityPackages(app: App): Promise<PackageIte
       if (file instanceof TFile && (file.path.endsWith('.yml') || file.path.endsWith('.yaml'))) {
         try {
           const content = await app.vault.read(file);
-          const packageData = yaml.load(content) as PackageData;
+          const packageData = YAML.parse(content) as PackageData;
           
           if (packageData && typeof packageData === 'object' && 'name' in packageData && typeof packageData.name === 'string') {
             const tags = Array.isArray(packageData.tags) ? packageData.tags.filter((t): t is string => typeof t === 'string') : [];
@@ -114,11 +124,11 @@ interface UserInfo {
 /**
  * Creates a GitHub Issue for package submission
  */
-export async function createPackageIssue(app: App, packageData: PackageData, userInfo: UserInfo): Promise<{ success: boolean; issueUrl?: string; error?: string }> {
+export async function createPackageIssue(_app: App, packageData: PackageData, userInfo: UserInfo): Promise<{ success: boolean; issueUrl?: string; error?: string }> {
   try {
     const issue = {
       title: `[Package Submission] ${packageData.name}`,
-      body: `## Package Information\n\n**Author:** ${userInfo.author || 'Anonymous'}\n**Category:** ${packageData.category || 'other'}\n**Description:** ${packageData.description || 'No description'}\n\n## Package YAML\n\n\`\`\`yaml\n${yaml.dump(packageData)}\n\`\`\`\n\n## Review Checklist\n\n- [ ] Package follows naming conventions\n- [ ] All snippets work correctly\n- [ ] YAML is valid and well-formatted\n- [ ] Content is appropriate and useful\n- [ ] Package fits the chosen category\n- [ ] No duplicate triggers with existing packages`,
+      body: `## Package Information\n\n**Author:** ${userInfo.author || 'Anonymous'}\n**Category:** ${packageData.category || 'other'}\n**Description:** ${packageData.description || 'No description'}\n\n## Package YAML\n\n\`\`\`yaml\n${YAML.stringify(packageData)}\n\`\`\`\n\n## Review Checklist\n\n- [ ] Package follows naming conventions\n- [ ] All snippets work correctly\n- [ ] YAML is valid and well-formatted\n- [ ] Content is appropriate and useful\n- [ ] Package fits the chosen category\n- [ ] No duplicate triggers with existing packages`,
       labels: ['package-submission', 'pending-review']
     };
 
@@ -142,7 +152,7 @@ export async function createPackageIssue(app: App, packageData: PackageData, use
       throw new Error(`GitHub API error: ${response.status}`);
     }
 
-    const result = JSON.parse(response.text);
+    const result = JSON.parse(response.text) as GitHubIssueResponse;
     return { success: true, issueUrl: result.html_url };
   } catch (error) {
     return { success: false, error: (error as Error).message };
@@ -165,8 +175,8 @@ export async function loadCommunityPackagesFromGitHub(): Promise<PackageItem[]> 
       throw new Error(`GitHub API error: ${response.status}`);
     }
 
-    const files = JSON.parse(response.text);
-    
+    const files = JSON.parse(response.text) as GitHubContentEntry[];
+
     // Handle case where directory exists but is empty
     if (!Array.isArray(files) || files.length === 0) {
       return [];
@@ -181,7 +191,7 @@ export async function loadCommunityPackagesFromGitHub(): Promise<PackageItem[]> 
             url: file.download_url
           });
           const content = contentResponse.text;
-          const packageData = yaml.load(content) as PackageData;
+          const packageData = YAML.parse(content) as PackageData;
 
           if (packageData && packageData.name && packageData.snippets) {
             const snippets = convertSnippetsToObject(packageData.snippets);
@@ -400,10 +410,10 @@ export async function processPackageSubmission(
         }
         
         // Convert package data to YAML
-        const yamlContent = yaml.dump(packageData, { 
+        const yamlContent = YAML.stringify(packageData, {
           indent: 2,
-          lineWidth: -1,
-          noRefs: true
+          lineWidth: 0,
+          aliasDuplicateObjects: false
         });
         
         // Extract filename from filePath

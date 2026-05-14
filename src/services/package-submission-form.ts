@@ -3,7 +3,7 @@
  * Handles package submission through Google Forms as an alternative to GitHub Issues
  */
 
-import * as yaml from "js-yaml";
+import * as YAML from "yaml";
 import { App } from "obsidian";
 import { 
   buildPackageFormUrl, 
@@ -46,7 +46,7 @@ export function validateAndPreparePackageData(
     // Parse YAML if it's a string
     let parsedData: PackageData;
     if (typeof packageData === 'string') {
-      parsedData = yaml.load(packageData) as PackageData;
+      parsedData = YAML.parse(packageData) as PackageData;
     } else {
       parsedData = packageData;
     }
@@ -87,10 +87,10 @@ export function validateAndPreparePackageData(
       license: parsedData.license || '',
       homepage: parsedData.homepage || '',
       readme: parsedData.readme || '',
-      yamlContent: typeof packageData === 'string' ? packageData : yaml.dump(parsedData, { 
+      yamlContent: typeof packageData === 'string' ? packageData : YAML.stringify(parsedData, {
         indent: 2,
-        lineWidth: -1,
-        noRefs: true
+        lineWidth: 0,
+        aliasDuplicateObjects: false
       }),
       submitterEmail: submitterEmail || '',
       submitterName: submitterName || ''

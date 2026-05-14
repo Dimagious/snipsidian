@@ -48,14 +48,14 @@ export class SnippetPickerModal extends Modal {
         const hints = contentEl.createDiv("snippet-hints");
         
         hints.createEl("strong", { text: "Navigation:" });
-        hints.appendChild(document.createTextNode(" ↑/↓ to navigate, "));
+        hints.appendChild(activeDocument.createTextNode(" ↑/↓ to navigate, "));
         hints.createEl("strong", { text: "Enter" });
-        hints.appendChild(document.createTextNode(" to insert, "));
+        hints.appendChild(activeDocument.createTextNode(" to insert, "));
         hints.createEl("strong", { text: "Esc" });
-        hints.appendChild(document.createTextNode(" to close"));
+        hints.appendChild(activeDocument.createTextNode(" to close"));
         hints.createEl("br");
         hints.createEl("strong", { text: "Click" });
-        hints.appendChild(document.createTextNode(" any snippet to insert it directly"));
+        hints.appendChild(activeDocument.createTextNode(" any snippet to insert it directly"));
 
         // Event handlers
         this.setupEventHandlers();
@@ -70,9 +70,9 @@ export class SnippetPickerModal extends Modal {
     onClose(): void {
         const { contentEl } = this;
         contentEl.empty();
-        
+
         if (this.searchTimeout) {
-            clearTimeout(this.searchTimeout);
+            activeWindow.clearTimeout(this.searchTimeout);
         }
     }
 
@@ -80,10 +80,10 @@ export class SnippetPickerModal extends Modal {
         // Search with debounce
         this.searchInput.addEventListener("input", () => {
             if (this.searchTimeout) {
-                clearTimeout(this.searchTimeout);
+                activeWindow.clearTimeout(this.searchTimeout);
             }
-            
-            this.searchTimeout = window.setTimeout(() => {
+
+            this.searchTimeout = activeWindow.setTimeout(() => {
                 this.performSearch(this.searchInput.value);
             }, this.debounceMs);
         });
@@ -140,7 +140,7 @@ export class SnippetPickerModal extends Modal {
 
         if (this.searchResults.length === 0) {
             const emptyState = this.resultsList.createDiv("empty-state");
-            emptyState.createEl("span", { text: "No snippets found" });
+            emptyState.createSpan({ text: "No snippets found" });
             return;
         }
 
@@ -150,18 +150,18 @@ export class SnippetPickerModal extends Modal {
 
             // Name (trigger)
             const name = item.createDiv("snippet-name");
-            name.createEl("span", { text: snippet.trigger });
+            name.createSpan({ text: snippet.trigger });
 
             // Folder
             const folder = item.createDiv("snippet-folder");
-            folder.createEl("span", { text: `(${snippet.folder})` });
+            folder.createSpan({ text: `(${snippet.folder})` });
 
             // Preview (first characters)
             const preview = item.createDiv("snippet-preview-text");
-            const previewText = snippet.replacement.length > 50 
-                ? snippet.replacement.substring(0, 50) + "..." 
+            const previewText = snippet.replacement.length > 50
+                ? snippet.replacement.substring(0, 50) + "..."
                 : snippet.replacement;
-            preview.createEl("span", { text: previewText });
+            preview.createSpan({ text: previewText });
 
             // Click to select
             item.addEventListener("click", (e) => {
@@ -219,9 +219,9 @@ export class SnippetPickerModal extends Modal {
             const metaDiv = this.previewDiv.createDiv("snippet-preview-meta");
             
             metaDiv.createEl("strong", { text: "Trigger:" });
-            metaDiv.appendChild(document.createTextNode(` ${selectedSnippet.trigger} | `));
+            metaDiv.appendChild(activeDocument.createTextNode(` ${selectedSnippet.trigger} | `));
             metaDiv.createEl("strong", { text: "Folder:" });
-            metaDiv.appendChild(document.createTextNode(` ${selectedSnippet.folder}`));
+            metaDiv.appendChild(activeDocument.createTextNode(` ${selectedSnippet.folder}`));
             
             // Create preview text with highlighting
             const previewTextDiv = this.previewDiv.createDiv("snippet-preview-text-container");
@@ -277,25 +277,25 @@ export class SnippetPickerModal extends Modal {
             for (const marker of markers) {
                 // Add text before marker
                 if (marker.index > lastIndex) {
-                    previewTextDiv.appendChild(document.createTextNode(text.substring(lastIndex, marker.index)));
+                    previewTextDiv.appendChild(activeDocument.createTextNode(text.substring(lastIndex, marker.index)));
                 }
-                
+
                 // Add highlighted marker
-                previewTextDiv.createEl("span", {
+                previewTextDiv.createSpan({
                     cls: marker.type === 'cursor' ? "snippet-highlight-cursor" : "snippet-highlight-tabstop",
                     text: marker.text
                 });
-                
+
                 lastIndex = marker.index + marker.length;
             }
-            
+
             // Add remaining text
             if (lastIndex < text.length) {
-                previewTextDiv.appendChild(document.createTextNode(text.substring(lastIndex)));
+                previewTextDiv.appendChild(activeDocument.createTextNode(text.substring(lastIndex)));
             }
         } else {
             const emptyDiv = this.previewDiv.createDiv("snippet-preview-empty");
-            emptyDiv.createEl("span", { text: "Select a snippet to preview" });
+            emptyDiv.createSpan({ text: "Select a snippet to preview" });
         }
     }
 

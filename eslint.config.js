@@ -55,6 +55,16 @@ export default [
       // UI sentence case with custom options
       // Disabled - too many false positives with validation messages, button texts, etc.
       'obsidianmd/ui/sentence-case': 'off',
+
+      // Match the Obsidian scorecard scanner's strict no-unused-vars policy:
+      // every declared argument must be used (or prefixed with `_`).
+      '@typescript-eslint/no-unused-vars': ['error', {
+        args: 'all',
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        caughtErrors: 'all',
+        caughtErrorsIgnorePattern: '^_',
+      }],
     },
   },
   

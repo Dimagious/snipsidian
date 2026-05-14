@@ -2,7 +2,7 @@ import type { AppliedReplacement, EditPlan, ExpandInput, TriggerMatch } from "./
 
 /** Build a plan for replacement and cursor positioning */
 export function buildEdit(
-    input: ExpandInput,
+    _input: ExpandInput,
     m: TriggerMatch,
     applied: AppliedReplacement
 ): EditPlan {

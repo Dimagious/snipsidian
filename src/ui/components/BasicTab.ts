@@ -31,13 +31,11 @@ export class BasicTab {
                     .setCta()
                     .onClick(() => {
                         // Open hotkey settings for the insert-snippet command
-                        // @ts-expect-error - Obsidian API works correctly at runtime
                         this.app.setting.open();
-                        // @ts-expect-error - Obsidian API works correctly at runtime
                         this.app.setting.openTabById("hotkeys");
                         // Focus on our command
-                        setTimeout(() => {
-                            const hotkeyTab = document.querySelector('.setting-item[data-id="snipsidian:insert-snippet"]');
+                        activeWindow.setTimeout(() => {
+                            const hotkeyTab = activeDocument.querySelector('.setting-item[data-id="snipsidian:insert-snippet"]');
                             if (hotkeyTab) {
                                 hotkeyTab.scrollIntoView({ behavior: 'smooth', block: 'center' });
                             }
@@ -54,13 +52,11 @@ export class BasicTab {
                     .setCta()
                     .onClick(() => {
                         // Open hotkey settings for the open-settings command
-                        // @ts-expect-error - Obsidian API works correctly at runtime
                         this.app.setting.open();
-                        // @ts-expect-error - Obsidian API works correctly at runtime
                         this.app.setting.openTabById("hotkeys");
                         // Focus on our command
-                        setTimeout(() => {
-                            const hotkeyTab = document.querySelector('.setting-item[data-id="snipsidian:open-settings"]');
+                        activeWindow.setTimeout(() => {
+                            const hotkeyTab = activeDocument.querySelector('.setting-item[data-id="snipsidian:open-settings"]');
                             if (hotkeyTab) {
                                 hotkeyTab.scrollIntoView({ behavior: 'smooth', block: 'center' });
                             }
@@ -82,7 +78,7 @@ export class BasicTab {
                         const data = JSON.stringify(this.plugin.settings.snippets, null, 2);
                         const blob = new Blob([data], { type: "application/json" });
                         const url = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
+                        const a = createEl("a");
                         a.href = url;
                         a.download = "snipsidian-snippets.json";
                         a.click();
@@ -98,7 +94,7 @@ export class BasicTab {
                     .setButtonText("Import JSON")
                     .setCta()
                     .onClick(() => {
-                        const input = document.createElement("input");
+                        const input = createEl("input");
                         input.type = "file";
                         input.accept = ".json";
                         input.onchange = async (e) => {
@@ -107,7 +103,7 @@ export class BasicTab {
 
                             try {
                                 const text = await file.text();
-                                const parsed = JSON.parse(text);
+                                const parsed: unknown = JSON.parse(text);
                                 if (!isRecordOfString(parsed)) {
                                     new Notice("Invalid JSON: must be an object of { trigger: replacement } strings");
                                     return;

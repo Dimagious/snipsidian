@@ -190,7 +190,7 @@ export class SnippetsTab {
             };
 
             // Group title
-            header.createEl("span", { text: title, cls: "group-title" });
+            header.createSpan({ text: title, cls: "group-title" });
 
             // Group actions
             const actions = header.createDiv({ cls: "group-actions" });
@@ -303,7 +303,7 @@ export class SnippetsTab {
                     editBtn.onclick = () => {
                         if (isEditing) {
                             // Save changes
-                            const root = document.querySelector('.snipsidian-settings');
+                            const root = activeDocument.querySelector('.snipsidian-settings');
                             if (root) {
                                 void this.saveSnippetChanges(row, trigger, triggerName, replacement, root as HTMLElement);
                             }
@@ -468,7 +468,7 @@ export class SnippetsTab {
                 await this.plugin.saveSettings();
                 
                 // Refresh the list
-                const root = document.querySelector('.snipsidian-settings');
+                const root = activeDocument.querySelector('.snipsidian-settings');
                 if (root) {
                     this.renderSnippetList(root as HTMLElement);
                 }
@@ -516,7 +516,7 @@ export class SnippetsTab {
         
         // Update edit button
         editBtn.empty();
-        editBtn.createEl("span", { text: "💾" });
+        editBtn.createSpan({ text: "💾" });
         editBtn.title = "Save changes";
         
         // Store references for save/cancel
@@ -533,7 +533,7 @@ export class SnippetsTab {
         
         // Add event handlers
         saveBtn.onclick = () => {
-            const root = document.querySelector('.snipsidian-settings');
+            const root = activeDocument.querySelector('.snipsidian-settings');
             if (root) {
                 void this.saveSnippetChanges(row, trigger, triggerName, replacement, root as HTMLElement);
             }
@@ -544,7 +544,7 @@ export class SnippetsTab {
         };
     }
 
-    private async saveSnippetChanges(row: Setting, originalTrigger: string, originalTriggerName: string, originalReplacement: string, root: HTMLElement) {
+    private async saveSnippetChanges(row: Setting, originalTrigger: string, _originalTriggerName: string, _originalReplacement: string, root: HTMLElement) {
         const editData = (row as SettingWithEditData).editData;
         if (!editData) return;
         
@@ -602,14 +602,14 @@ export class SnippetsTab {
     private cancelEditMode(row: Setting, editBtn: HTMLButtonElement) {
         // Reset edit button
         editBtn.empty();
-        editBtn.createEl("span", { text: "✏️" });
+        editBtn.createSpan({ text: "✏️" });
         editBtn.title = "Edit snippet";
         
         // Clear edit data
         delete (row as SettingWithEditData).editData;
         
         // Re-render the snippet list to return to normal view
-        const root = document.querySelector('.snipsidian-settings') as HTMLElement;
+        const root = activeDocument.querySelector('.snipsidian-settings') as HTMLElement;
         if (root) {
             this.renderSnippetList(root);
         }

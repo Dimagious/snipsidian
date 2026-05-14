@@ -1,5 +1,17 @@
 import type { PackageItem } from "./services/community-packages";
 
+// Augment Obsidian's App type with internal APIs we rely on. These exist at
+// runtime but aren't part of the public obsidian.d.ts.
+declare module "obsidian" {
+    interface App {
+        setting: {
+            open(): void;
+            openTabById(id: string): void;
+        };
+        version: string;
+    }
+}
+
 export interface SnipSidianSettings {
     snippets: Record<string, string>;
     ui?: {

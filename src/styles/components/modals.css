@@ -1,10 +1,10 @@
 /* ============ Modal Components ============ */
 
 /* Modal base styles */
-.modal .snipsidian-modal {
+.modal .snipsidian-modal.snipsidian-modal {
   width: min(500px, 90vw);
   max-width: 90vw;
-  overflow-x: hidden !important;
+  overflow-x: hidden;
 }
 
 .modal .snipsidian-modal * {
@@ -12,8 +12,8 @@
 }
 
 /* Kill horizontal scroll on Obsidian modal wrapper - only for our modals */
-.modal .snipsidian-modal .modal-content { 
-  overflow-x: hidden !important; 
+.modal .snipsidian-modal.snipsidian-modal .modal-content {
+  overflow-x: hidden;
 }
 
 /* Modal title */
