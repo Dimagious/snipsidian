@@ -1,13 +1,39 @@
 import type { SnipSidianSettings } from "../../types";
 
-export type TabId = "basic" | "snippets" | "community" | "feedback";
+/** Tab identifiers used inside the new 1.1.0 IA. Storage may still
+ *  contain pre-1.1.0 IDs (`basic` / `community` / `feedback`) — those
+ *  are migrated transparently in `loadActiveTab()`. */
+export type TabId = "snippets" | "packages" | "general" | "about";
+
+/** Migration map from pre-1.1.0 stored IDs to the new IA labels.
+ *  - old `basic` (General tab) → new `general` (position 3)
+ *  - old `community` (Community Packages tab) → new `packages` (position 2)
+ *  - old `feedback` (Feedback tab) → new `about` (position 4)
+ *  - old `snippets` stays as `snippets` (now position 1, landing)
+ *  See ADR-0006 + designer Q1 answer. */
+const LEGACY_TAB_ID_MAP: Record<string, TabId> = {
+    basic: "general",
+    snippets: "snippets",
+    community: "packages",
+    feedback: "about",
+};
+
+const VALID_TAB_IDS: ReadonlySet<TabId> = new Set<TabId>([
+    "snippets",
+    "packages",
+    "general",
+    "about",
+]);
 
 /** Persist callback. Called whenever UI state that lives in
  *  `settings.ui` is mutated. May be sync (returns void) or async. */
 type Persist = () => void | Promise<void>;
 
 export class UIStateManager {
-    private activeTab: TabId = "basic";
+    /** Default landing tab. "Snippets" because that's where day-to-day
+     *  work happens — most users open Settings to manage their library
+     *  (designer Q1 answer). */
+    private activeTab: TabId = "snippets";
     private groupOpen = new Map<string, boolean>();
     private searchQuery = "";
     private selectionMode = false;
@@ -51,9 +77,23 @@ export class UIStateManager {
 
     loadActiveTab(): TabId {
         this.ensureUiState();
-        const v = this.settings.ui!.activeTab;
-        if (v === "basic" || v === "snippets" || v === "community" || v === "feedback") return v;
-        return "basic";
+        const raw = this.settings.ui!.activeTab as string | undefined;
+
+        // New-ID happy path.
+        if (raw && VALID_TAB_IDS.has(raw as TabId)) return raw as TabId;
+
+        // Pre-1.1.0 stored IDs — migrate to the new IA. We also
+        // overwrite the stored value in-memory so future reads land in
+        // the happy path. (The actual disk write happens on the next
+        // `saveActiveTab` call.)
+        if (raw && LEGACY_TAB_ID_MAP[raw]) {
+            const migrated = LEGACY_TAB_ID_MAP[raw];
+            this.settings.ui!.activeTab = migrated;
+            return migrated;
+        }
+
+        // Corrupted / first-launch — default to landing.
+        return "snippets";
     }
 
     saveActiveTab(tab: TabId) {
