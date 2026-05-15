@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-05-15
+
+Maintenance release. No user-visible changes; cuts a new bundle so the Obsidian community plugin index ships the scorecard-clean assets to users.
+
+### Maintenance
+
+- **Test foundation.** ~100 new unit / integration / mount tests across `src/packages/**` (espanso importer boundary cases — B-079), engine + store + validator (boundary hardening per [ADR-0005](.claude/brain/decisions/0005-test-philosophy.md) — B-080), full keystroke → expansion integration flow (B-081), and UI mount tests for `SnippetPickerModal` / `ImportPreviewModal` / `SnippetsTab` (B-001 partial). Plus Playwright + Electron E2E against a real Obsidian instance — 33 specs covering expansion / picker / settings / persistence / variables / delete-flow / rename / commands / Add-snippet validation (B-100..B-107).
+- **Scorecard cleanup.** Replaced 7 `!important` declarations in `styles.css` with class-doubled specificity (`.snipsidian-settings.snipsidian-settings ...`) for the section reset rule + `.is-hidden` utility. Only the `prefers-reduced-motion` block keeps `!important` — idiomatic per MDN. Also dropped one unnecessary `as string | undefined` assertion in `src/ui/utils/ui-state.ts`. Resolves the 15-warning Review batch on `community.obsidian.md/plugins/snipsidian` (scorecard re-scans on its own cadence after release).
+
 ## [1.1.1] - 2026-05-15
 
 Patch release polishing the Snippet Picker — the most-opened surface in the plugin, which wasn't touched in the 1.1.0 redesign. Closes the [B-040](.claude/brain/backlog.md) UX cluster + [A-006](.claude/brain/reports/2026-05-14-accessibility-specialist.md) (a11y combobox pattern) + the picker half of [B-091](.claude/brain/backlog.md) (real heading elements).
