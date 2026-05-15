@@ -419,6 +419,17 @@
 }
 
 /* ---- Modals: tame the picker + diff layouts ---- */
+/* Result-count badge in the picker (B-040 / U-003). Shown only when
+   `total > items.length` so the user knows their query had more
+   matches than the limit cap. */
+.snipsidian-modal .snipsy-picker-count,
+.snippet-picker-modal .snipsy-picker-count {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--snipsy-text-faint);
+}
+
 .modal.snipsy-picker { width: 640px; max-width: calc(100vw - 40px); }
 .modal.snipsy-picker .picker-input {
   width: 100%;
