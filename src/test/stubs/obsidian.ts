@@ -77,13 +77,78 @@ export class Notice {
 
 // ---------- Modal + workspace types ----------
 
+/** Modal stub that mirrors Obsidian's contract closely enough for
+ *  UI mount tests. In jsdom env, `open()` constructs real DOM nodes
+ *  for `modalEl`, `titleEl`, and `contentEl` and attaches them to
+ *  `document.body`; `close()` removes them and runs `onClose`. In
+ *  node env (no DOM), the methods are no-ops so existing node tests
+ *  that instantiate Modal subclasses don't blow up.
+ *
+ *  Tests drive the modal by calling `.open()`, then querying
+ *  `.contentEl` for child elements and dispatching events on them. */
 export class Modal {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Test stub constructor, parameter kept for API compatibility
-    constructor(_app: any) {
-        // _app parameter kept for API compatibility but not used in test stub
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HTMLElement at runtime when DOM is available
+    modalEl: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HTMLElement at runtime when DOM is available
+    titleEl: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HTMLElement at runtime when DOM is available
+    contentEl: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mirrors the production App reference
+    app: any;
+    private isOpen = false;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accept any test App factory
+    constructor(app: any) {
+        this.app = app;
+        // Pre-construct DOM elements when jsdom is available so
+        // production code that reaches for `this.titleEl` /
+        // `this.contentEl` in the constructor (rare but happens)
+        // doesn't NPE. We delay attaching to `document.body` until
+        // `open()` so multiple constructed-but-not-opened modals
+        // don't leak nodes.
+        if (typeof document !== "undefined") {
+            this.modalEl = document.createElement("div");
+            this.modalEl.classList.add("modal-container");
+            this.titleEl = document.createElement("div");
+            this.titleEl.classList.add("modal-title");
+            this.contentEl = document.createElement("div");
+            this.contentEl.classList.add("modal-content");
+            this.modalEl.appendChild(this.titleEl);
+            this.modalEl.appendChild(this.contentEl);
+        }
     }
-    open() { }
-    close() { }
+
+    open(): void {
+        if (this.isOpen) return;
+        this.isOpen = true;
+        if (typeof document !== "undefined" && this.modalEl) {
+            document.body.appendChild(this.modalEl);
+        }
+        // Subclasses override `onOpen()`; call it explicitly so the
+        // test gets a populated contentEl after `.open()`.
+        if (typeof this.onOpen === "function") this.onOpen();
+    }
+
+    close(): void {
+        if (!this.isOpen) return;
+        this.isOpen = false;
+        if (typeof this.onClose === "function") this.onClose();
+        if (this.modalEl?.parentNode) {
+            this.modalEl.parentNode.removeChild(this.modalEl);
+        }
+    }
+
+    /** Subclasses implement `onOpen` to render contents. The base
+     *  class declares it as a no-op so direct instantiation works. */
+    onOpen(): void {
+        // intentionally empty
+    }
+
+    /** Subclasses implement `onClose` to tear down listeners or
+     *  forward results. Base class no-op. */
+    onClose(): void {
+        // intentionally empty
+    }
 }
 
 /** Stub for `MarkdownView`. Production code only reads `.editor` off
