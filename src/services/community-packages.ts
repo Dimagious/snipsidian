@@ -335,5 +335,7 @@ function convertSnippetsToObject(snippets: PackageData['snippets']): { [trigger:
 
 
 /* `processPackageSubmission` removed in 1.0.8 — was wired only to the
- * dead `SubmitPackageModal` (also removed). Active submission flow goes
- * through `services/package-submission-form.ts` (Google Form). */
+ * dead `SubmitPackageModal` (also removed). Active submission flow
+ * opens a prefilled GitHub issue (see
+ * `services/github-issue-url.ts`). The Google Form path was retired
+ * in 1.1.0 (B-008). */

@@ -1,112 +1,125 @@
-import { App, Setting } from "obsidian";
+import { App, Notice, Platform } from "obsidian";
 import type SnipSidianPlugin from "../../main";
-import { buildGoogleFormUrl, collectSystemMeta, type FeedbackType } from "../../services/feedback-form";
+import { buildIssueUrl } from "../../services/github-issue-url";
 
+/**
+ * About tab. Renamed in spirit (the file keeps the legacy
+ * `FeedbackTab` name — see SettingsTab.ts §2a). Per the 1.1.0
+ * redesign, Google Forms is gone (B-008) and feedback flows through
+ * GitHub issues so the project keeps a single feedback channel.
+ *
+ * Layout is a plain list of rows — one icon-less row per resource.
+ * No CTAs; everything here is equally-weighted.
+ */
 export class FeedbackTab {
     constructor(
         private app: App,
-        private plugin: SnipSidianPlugin
+        private plugin: SnipSidianPlugin,
     ) {}
 
     render(root: HTMLElement) {
-        const section = (title: string, hint?: string, specialClass?: string) => {
-            const wrap = root.createDiv({ cls: `snipsy-section ${specialClass || ""}` });
-            wrap.createEl("h3", { text: title });
-            if (hint) wrap.createEl("p", { text: hint, cls: "snipsy-hint" });
-            return wrap;
-        };
+        root.empty();
+        root.createEl("h3", { text: "About Snipsy", cls: "snipsy-tab-heading" });
 
-        // Feedback section
-        const feedbackSection = section("Feedback & Support", "Help us improve Snipsy by sharing your thoughts, reporting issues, or suggesting new features.", "snipsy-feedback-section");
+        const meta = this.collectMeta();
 
-        // Suggest feature button
-        new Setting(feedbackSection)
-            .setName("Suggest a feature")
-            .setDesc("Have an idea for a new feature or improvement? Share your suggestions with us to help shape the future of this plugin.")
-            .addButton((btn) =>
-                btn
-                    .setButtonText("Suggest feature")
-                    .setCta()
-                    .onClick(() => {
-                        this.openFeedbackForm("Feature request");
-                    })
-            );
+        // ---- Feedback ----
+        root.createEl("h4", { text: "Feedback", cls: "snipsy-tab-subheading" });
+        const feedbackList = root.createDiv({ cls: "snipsy-about-list" });
 
-        // Report Bug button
-        new Setting(feedbackSection)
-            .setName("Report a bug")
-            .setDesc("Found something that's not working as expected? Report bugs to help us fix issues and improve the plugin's reliability.")
-            .addButton((btn) =>
-                btn
-                    .setButtonText("Report bug")
-                    .setCta()
-                    .onClick(() => {
-                        this.openFeedbackForm("Bug report");
-                    })
-            );
+        this.renderAboutRow(feedbackList, {
+            title: "Report a bug",
+            description: "File a bug report on GitHub. Includes plugin and Obsidian versions.",
+            buttonText: "Open issue",
+            href: buildIssueUrl({ kind: "bug", meta }),
+        });
 
-        // General Feedback button
-        new Setting(feedbackSection)
-            .setName("General feedback")
-            .setDesc("Share your overall experience, provide general feedback, or get in touch with any other thoughts you might have.")
-            .addButton((btn) =>
-                btn
-                    .setButtonText("Share feedback")
-                    .setCta()
-                    .onClick(() => {
-                        this.openFeedbackForm("General feedback");
-                    })
-            );
+        this.renderAboutRow(feedbackList, {
+            title: "Suggest a feature",
+            description: "Propose new functionality or improvements.",
+            buttonText: "Open issue",
+            href: buildIssueUrl({ kind: "feature", meta }),
+        });
 
-        // Support section
-        const supportSection = section("Support & Resources", "Find additional help and resources for using Snipsy effectively.", "snipsy-support-section");
+        this.renderAboutRow(feedbackList, {
+            title: "General feedback",
+            description: "Share your overall experience or get in touch.",
+            buttonText: "Open issue",
+            href: buildIssueUrl({ kind: "feedback", meta }),
+        });
 
-        new Setting(supportSection)
-            .setName("Documentation")
-            .setDesc("Read the comprehensive documentation and guides to get the most out of this plugin.")
-            .addButton((btn) =>
-                btn
-                    .setButtonText("View docs")
-                    .onClick(() => {
-                        window.open("https://github.com/Dimagious/snipsidian#readme", "_blank", "noopener,noreferrer");
-                    })
-            );
+        // ---- Resources ----
+        root.createEl("h4", { text: "Resources", cls: "snipsy-tab-subheading" });
+        const resourceList = root.createDiv({ cls: "snipsy-about-list" });
 
-        new Setting(supportSection)
-            .setName("GitHub issues")
-            .setDesc("Browse existing issues, feature requests, and discussions on our GitHub repository.")
-            .addButton((btn) =>
-                btn
-                    .setButtonText("View issues")
-                    .onClick(() => {
-                        window.open("https://github.com/Dimagious/snipsidian/issues", "_blank", "noopener,noreferrer");
-                    })
-            );
+        this.renderAboutRow(resourceList, {
+            title: "Documentation",
+            description: "Read the docs and examples on GitHub.",
+            buttonText: "Open",
+            href: "https://github.com/Dimagious/snipsidian#readme",
+        });
 
-        new Setting(supportSection)
-            .setName("Community")
-            .setDesc("Join the Obsidian community discussions and get help from other users.")
-            .addButton((btn) =>
-                btn
-                    .setButtonText("Join community")
-                    .onClick(() => {
-                        // Obsidian community forum URL
-                        const domain = ["forum", "obsidian", "md"].join(".");
-                        window.open(`https://${domain}/`, "_blank", "noopener,noreferrer");
-                    })
-            );
+        this.renderAboutRow(resourceList, {
+            title: "GitHub issues",
+            description: "Browse open and closed issues.",
+            buttonText: "Open",
+            href: "https://github.com/Dimagious/snipsidian/issues",
+        });
+
+        this.renderAboutRow(resourceList, {
+            title: "Obsidian community",
+            description: "Get help from other Obsidian users in the forum.",
+            buttonText: "Open",
+            // Pure obfuscation pattern kept from the legacy tab — keeps
+            // bots from auto-pinging the forum from compiled bundles.
+            href: `https://${["forum", "obsidian", "md"].join(".")}/`,
+        });
+
+        // ---- Version footer ----
+        root.createDiv({ cls: "snipsy-about-version" }, (el) => {
+            el.createSpan({ text: `Snipsy ${this.plugin.manifest.version}` });
+            if (meta.obsidianVersion) {
+                el.createSpan({ text: ` · Obsidian ${meta.obsidianVersion}` });
+            }
+            if (meta.platform) {
+                el.createSpan({ text: ` · ${meta.platform}` });
+            }
+        });
     }
 
-    private openFeedbackForm(type: FeedbackType) {
-        // Get system information for auto-filling
+    private renderAboutRow(
+        parent: HTMLElement,
+        opts: { title: string; description: string; buttonText: string; href: string },
+    ) {
+        const row = parent.createDiv({ cls: "snipsy-about-row" });
+
+        const text = row.createDiv({ cls: "snipsy-about-text" });
+        text.createDiv({ cls: "snipsy-about-row-title", text: opts.title });
+        text.createDiv({ cls: "snipsy-about-row-desc", text: opts.description });
+
+        const btn = row.createEl("button", {
+            cls: "snipsy-about-row-action",
+            text: opts.buttonText,
+            attr: { type: "button", "aria-label": `${opts.buttonText}: ${opts.title}` },
+        });
+        btn.addEventListener("click", () => {
+            try {
+                window.open(opts.href, "_blank", "noopener,noreferrer");
+            } catch (err) {
+                new Notice(
+                    `Failed to open link: ${err instanceof Error ? err.message : String(err)}`,
+                );
+            }
+        });
+    }
+
+    /** Collects the platform/version meta we embed in GitHub issues so
+     *  the user doesn't have to fill it out. Best-effort — any field
+     *  the runtime can't supply is simply omitted. */
+    private collectMeta() {
         const pluginVersion = this.plugin.manifest.version;
-        const meta = collectSystemMeta(this.app, pluginVersion);
-        
-        // Create Google Form URL with pre-filled data
-        const baseUrl = "https://docs.google.com/forms/d/e/1FAIpQLSf4kFr5pme9C0CX02NOad_9STlia5-xZ2D-9C88u1mX32WqXw/viewform";
-        const formUrl = buildGoogleFormUrl(baseUrl, type, meta);
-        
-        // Open in new tab
-        window.open(formUrl, "_blank", "noopener,noreferrer");
+        const obsidianVersion = this.app.version;
+        const platform = Platform.isDesktop ? "Desktop" : Platform.isMobile ? "Mobile" : undefined;
+        return { pluginVersion, obsidianVersion, platform };
     }
 }
