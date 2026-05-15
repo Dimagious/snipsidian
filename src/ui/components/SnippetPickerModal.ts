@@ -129,7 +129,10 @@ export class SnippetPickerModal extends Modal {
             limit: 100
         };
 
-        this.searchResults = this.api.search(searchQuery);
+        // `api.search` now returns `{ items, total }` — `items` is the
+        // truncated list, `total` is the pre-truncation match count
+        // (UI uses it to show "Showing X of Y", see B-040 / U-003).
+        this.searchResults = this.api.search(searchQuery).items;
         this.selectedIndex = 0;
         this.renderResults();
         this.updatePreview();

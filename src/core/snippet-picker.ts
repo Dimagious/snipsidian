@@ -1,8 +1,17 @@
 import type { SnippetItem, SnippetSearchQuery } from "../types";
 
+/** Result of a picker search. `items` is truncated to `q.limit`;
+ *  `total` is the full matched count before truncation. The split is
+ *  what lets the UI show "showing X of Y" only when truncation
+ *  actually happened (B-040 / U-003). */
+export interface SnippetSearchResult {
+    items: SnippetItem[];
+    total: number;
+}
+
 export interface SnippetPickerAPI {
     listAll(): SnippetItem[];
-    search(q: SnippetSearchQuery): SnippetItem[];
+    search(q: SnippetSearchQuery): SnippetSearchResult;
     preview(item: SnippetItem): { text: string; cursorIdx?: number; tabstops?: number[] };
 }
 
@@ -31,14 +40,22 @@ export class SnippetPickerService implements SnippetPickerAPI {
     }
 
     /**
-     * Search snippets by query
+     * Search snippets by query.
+     *
+     * Returns `{ items, total }` where `items` is at most `limit` long
+     * and `total` is the full pre-truncation match count. The UI uses
+     * `total > items.length` to show a "showing X of Y" hint instead
+     * of silently dropping results past the limit (B-040 / U-003).
      */
-    search(q: SnippetSearchQuery): SnippetItem[] {
+    search(q: SnippetSearchQuery): SnippetSearchResult {
         const normalizedQuery = q.text.trim().toLowerCase();
         const limit = q.limit ?? 100;
 
         if (!normalizedQuery) {
-            return this.snippets.slice(0, limit);
+            return {
+                items: this.snippets.slice(0, limit),
+                total: this.snippets.length,
+            };
         }
 
         const results = this.snippets.filter(item => {
@@ -58,7 +75,10 @@ export class SnippetPickerService implements SnippetPickerAPI {
             return searchFields.some(field => field.includes(normalizedQuery));
         });
 
-        return results.slice(0, limit);
+        return {
+            items: results.slice(0, limit),
+            total: results.length,
+        };
     }
 
     /**
