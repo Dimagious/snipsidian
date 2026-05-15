@@ -48,64 +48,108 @@ describe("SnippetPickerService", () => {
     describe("search", () => {
         it("should return all snippets when query is empty", () => {
             const result = service.search({ text: "" });
-            expect(result).toHaveLength(4);
+            expect(result.items).toHaveLength(4);
+            expect(result.total).toBe(4);
         });
 
         it("should return all snippets when query is whitespace", () => {
             const result = service.search({ text: "   " });
-            expect(result).toHaveLength(4);
+            expect(result.items).toHaveLength(4);
+            expect(result.total).toBe(4);
         });
 
         it("should search by trigger", () => {
             const result = service.search({ text: "->" });
-            expect(result).toHaveLength(1);
-            expect(result[0].trigger).toBe("->");
+            expect(result.items).toHaveLength(1);
+            expect(result.items[0].trigger).toBe("->");
+            expect(result.total).toBe(1);
         });
 
         it("should search by replacement", () => {
             const result = service.search({ text: "→" });
-            expect(result).toHaveLength(1);
-            expect(result[0].replacement).toBe("→");
+            expect(result.items).toHaveLength(1);
+            expect(result.items[0].replacement).toBe("→");
         });
 
         it("should search by folder", () => {
             const result = service.search({ text: "arrows" });
-            expect(result).toHaveLength(1);
-            expect(result[0].folder).toBe("arrows");
+            expect(result.items).toHaveLength(1);
+            expect(result.items[0].folder).toBe("arrows");
         });
 
         it("should search by keywords", () => {
             const result = service.search({ text: "heading" });
-            expect(result).toHaveLength(1);
-            expect(result[0].trigger).toBe("h1");
+            expect(result.items).toHaveLength(1);
+            expect(result.items[0].trigger).toBe("h1");
         });
 
         it("should be case insensitive", () => {
             const result = service.search({ text: "ARROW" });
-            expect(result).toHaveLength(1);
-            expect(result[0].folder).toBe("arrows");
+            expect(result.items).toHaveLength(1);
+            expect(result.items[0].folder).toBe("arrows");
         });
 
         it("should filter by folder when specified", () => {
             const result = service.search({ text: "note", folder: "callouts" });
-            expect(result).toHaveLength(1);
-            expect(result[0].trigger).toBe(":note");
+            expect(result.items).toHaveLength(1);
+            expect(result.items[0].trigger).toBe(":note");
+            expect(result.total).toBe(1);
         });
 
         it("should return empty when folder filter doesn't match", () => {
             const result = service.search({ text: "note", folder: "arrows" });
-            expect(result).toHaveLength(0);
+            expect(result.items).toHaveLength(0);
+            expect(result.total).toBe(0);
         });
 
         it("should respect limit", () => {
             const result = service.search({ text: "", limit: 2 });
-            expect(result).toHaveLength(2);
+            expect(result.items).toHaveLength(2);
         });
 
         it("should return partial matches", () => {
             const result = service.search({ text: "note" });
-            expect(result).toHaveLength(1);
-            expect(result[0].trigger).toBe(":note");
+            expect(result.items).toHaveLength(1);
+            expect(result.items[0].trigger).toBe(":note");
+        });
+
+        // -------- Truncation contract (B-040 / U-003) --------
+        // The load-bearing assertion: when results > limit, `total`
+        // reports the pre-truncation count so the UI can show
+        // "Showing X of Y" instead of silently dropping matches.
+
+        it("reports total > items.length when the limit truncates the empty-query result", () => {
+            // 4 snippets, limit 2 → items=2, total=4. Without `total`
+            // the picker would silently hide 2 matches and the user
+            // couldn't tell.
+            const result = service.search({ text: "", limit: 2 });
+            expect(result.items).toHaveLength(2);
+            expect(result.total).toBe(4);
+        });
+
+        it("reports total > items.length when the limit truncates a filtered result", () => {
+            // Pad the fixture to 5 matching snippets, search-by-folder
+            // for that group, limit 3.
+            const padded: SnippetItem[] = [
+                ...mockSnippets,
+                { id: "5", folder: "arrows", trigger: "=>", replacement: "⇒" },
+                { id: "6", folder: "arrows", trigger: "<=", replacement: "⇐" },
+                { id: "7", folder: "arrows", trigger: "<->", replacement: "↔" },
+                { id: "8", folder: "arrows", trigger: "<=>", replacement: "⇔" },
+            ];
+            const padded_service = new SnippetPickerService(padded);
+            const result = padded_service.search({ text: "arrows", limit: 3 });
+            expect(result.items).toHaveLength(3);
+            expect(result.total).toBe(5);
+        });
+
+        it("reports total === items.length when no truncation happens", () => {
+            // The boundary case: matched count equals limit exactly.
+            // The UI hint must NOT fire here ("Showing 4 of 4" is
+            // noise). Pin the contract.
+            const result = service.search({ text: "", limit: 4 });
+            expect(result.items).toHaveLength(4);
+            expect(result.total).toBe(4);
         });
     });
 
