@@ -138,6 +138,17 @@ export function installObsidianDomHelpers(): void {
         this.textContent = text;
     };
 
+    // jsdom doesn't implement `Element.scrollIntoView` (it's a
+    // layout-engine API). The picker calls it on keyboard navigation
+    // (SnippetPickerModal.scrollToSelected); without this no-op the
+    // call throws TypeError in tests and surfaces as an uncaught
+    // exception in vitest, failing the run even when assertions pass.
+    if (typeof (Element.prototype as unknown as Record<string, unknown>).scrollIntoView !== "function") {
+        (Element.prototype as unknown as Record<string, unknown>).scrollIntoView = function (): void {
+            /* no-op in jsdom; real browsers implement this */
+        };
+    }
+
     // `appendText` is rarely used directly in Snipsy but a few legacy
     // call sites still reach for it via the activeDocument helper. The
     // function isn't on HTMLElement in Obsidian's typings — it's on
