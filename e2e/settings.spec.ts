@@ -111,3 +111,123 @@ test.describe("settings: Add snippet flow", () => {
         await expect(countBadge).toContainText("1 of");
     });
 });
+
+test.describe("settings: Add snippet validation (B-107)", () => {
+    /** Read live `settings.snippets` — the source of truth for
+     *  "did the write happen?". Used to assert that validation
+     *  errors prevent persistence, not just paint an error toast. */
+    async function readSnippets(
+        win: import("@playwright/test").Page,
+    ): Promise<Record<string, string>> {
+        return await win.evaluate(() => {
+            return (
+                (globalThis as unknown as {
+                    app?: {
+                        plugins?: {
+                            plugins?: {
+                                snipsidian?: {
+                                    settings?: {
+                                        snippets?: Record<string, string>;
+                                    };
+                                };
+                            };
+                        };
+                    };
+                }).app?.plugins?.plugins?.snipsidian?.settings?.snippets ?? {}
+            );
+        });
+    }
+
+    async function openAddSnippetModal(win: import("@playwright/test").Page) {
+        await win.evaluate(() => {
+            const a = (globalThis as unknown as {
+                app?: { setting?: { open?: () => void; openTabById?: (id: string) => void } };
+            }).app;
+            a?.setting?.open?.();
+            a?.setting?.openTabById?.("snipsidian");
+        });
+        await win
+            .getByRole("button", { name: "Add snippet" })
+            .first()
+            .click();
+        await win
+            .getByRole("textbox", { name: "Example: :hello" })
+            .waitFor({ state: "visible" });
+    }
+
+    test("blocks submit when replacement is empty (in-modal error)", async ({
+        win,
+    }) => {
+        await openAddSnippetModal(win);
+
+        // Fill trigger but leave replacement empty.
+        await win
+            .getByRole("textbox", { name: "Example: :hello" })
+            .fill("e2e-empty");
+
+        // Submit (second "Add snippet" button — the modal's CTA).
+        await win.getByRole("button", { name: "Add snippet" }).nth(1).click();
+
+        // Modal stays open and shows the in-line error.
+        const err = win.locator(".snipsidian-modal .snipsidian-error");
+        await expect(err).toBeVisible();
+        await expect(err).toContainText("required");
+
+        // Settings unchanged.
+        const after = await readSnippets(win);
+        expect(after["e2e-empty"]).toBeUndefined();
+    });
+
+    test("blocks submit when group slugifies to empty", async ({ win }) => {
+        await openAddSnippetModal(win);
+
+        await win
+            .getByRole("textbox", { name: "Example: :hello" })
+            .fill("e2e-badgroup");
+        await win
+            .getByRole("textbox", { name: "Example: hello, world!" })
+            .fill("ok");
+        // `!!!` slugifies to "" — AddSnippetModal rejects this
+        // explicitly so a non-empty group can't silently route into
+        // Ungrouped (B-022 territory).
+        await win
+            .getByRole("textbox", { name: "Example: greetings" })
+            .fill("!!!");
+
+        await win.getByRole("button", { name: "Add snippet" }).nth(1).click();
+
+        const err = win.locator(".snipsidian-modal .snipsidian-error");
+        await expect(err).toBeVisible();
+        await expect(err).toContainText("letter or number");
+
+        const after = await readSnippets(win);
+        expect(after["e2e-badgroup"]).toBeUndefined();
+    });
+
+    test("rejects a duplicate trigger via Notice (no overwrite)", async ({
+        win,
+    }) => {
+        await openAddSnippetModal(win);
+
+        // `brb` is seeded in the pristine vault. Trying to add it
+        // again must NOT overwrite the existing replacement (B-023
+        // collision territory).
+        await win
+            .getByRole("textbox", { name: "Example: :hello" })
+            .fill("brb");
+        await win
+            .getByRole("textbox", { name: "Example: hello, world!" })
+            .fill("SHOULD NOT WIN");
+
+        await win.getByRole("button", { name: "Add snippet" }).nth(1).click();
+
+        // Notice mentions the duplicate.
+        await expect(
+            win.locator(".notice", { hasText: "already exists" }),
+        ).toBeVisible({ timeout: 5_000 });
+
+        // Original replacement preserved.
+        const after = await readSnippets(win);
+        expect(after.brb).toBe("be right back");
+    });
+});
