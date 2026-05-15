@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-05-15
+
+Patch release polishing the Snippet Picker — the most-opened surface in the plugin, which wasn't touched in the 1.1.0 redesign. Closes the [B-040](.claude/brain/backlog.md) UX cluster + [A-006](.claude/brain/reports/2026-05-14-accessibility-specialist.md) (a11y combobox pattern) + the picker half of [B-091](.claude/brain/backlog.md) (real heading elements).
+
+### Added
+
+- **"Wrap selection" mode**. Opening the picker while a Markdown editor has a non-empty selection now reads "Wrap selection" in the title (was always "Insert snippet"). The action wraps the selection with the snippet text.
+- **Truncation badge** "Showing X of Y". Visible only when the user's query matched more snippets than fit under the 100-result cap. The exact-limit boundary stays silent so the hint doesn't surface as noise.
+- **Home / End keyboard navigation** in the picker — jump to the first / last result.
+- **WAI-ARIA combobox-with-listbox pattern** for screen-reader users. Search input gets `role="combobox"` + `aria-controls` + `aria-activedescendant` pointing at the active row; results container gets `role="listbox"`; each row gets `role="option"` + `aria-selected`.
+
+### Changed
+
+- "Folder" label in the picker rows and preview meta is now "Group" — matches the lexicon used by every other surface in the plugin (the data shape is unchanged).
+- Modal title now uses Obsidian's native `titleEl` instead of a manual `<h2>` (the latter was invisible to the modal's a11y tree).
+- "Preview" was rendered as an orphan `<label>` not tied to any input. Now a real `<h3>` so screen-reader users can navigate to it via "next heading".
+- Dropped "directly" filler word from the click-to-insert hint.
+
+### Fixed
+
+- **Double-click race**. Two click handlers used to fire on a row click — one at the list level, one per-item. They raced on double-click and could fire `insert` twice. Now: one handler per row.
+
+### Internal
+
+- `SnippetPickerService.search()` contract changed from `SnippetItem[]` to `{ items, total }` to support the truncation hint. Three new boundary tests pin the contract per [ADR-0005](.claude/brain/decisions/0005-test-philosophy.md): `total > items` when the limit truncates, `total === items` at the exact-limit boundary (no false "Showing N of N" noise).
+- Tests: 235 pass, coverage above thresholds.
+- Bundle: 179.0kb → 180.5kb (+1.5kb).
+
 ## [1.1.0] - 2026-05-15
 
 UI redesign release. Closes ~16 P0/P1 backlog items as side-effects of one coordinated implementation. See [ADR-0006](.claude/brain/decisions/0006-adopt-1.1.0-redesign.md).
