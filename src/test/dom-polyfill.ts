@@ -58,7 +58,7 @@ function createElImpl(
     opts?: DomElementInfo | string,
     cb?: (el: HTMLElement) => void,
 ): HTMLElement {
-    const doc = this instanceof Document ? this : this.ownerDocument!;
+    const doc = this instanceof Document ? this : this.ownerDocument;
     const el = doc.createElement(tag);
     applyOptions(el, opts);
     if (this instanceof HTMLElement) this.appendChild(el);
