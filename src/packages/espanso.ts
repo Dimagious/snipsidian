@@ -45,6 +45,9 @@ export function espansoYamlToSnippets(text: string): Record<string, string> {
 
 function normalizeTrigger(t: string): string {
     // Espanso often uses ":" prefix; our expander thinks ":" is a separator.
-    // Remove leading colons and whitespace.
-    return t.replace(/^:+/, "").trim();
+    // Trim whitespace first so leading-space-then-colon (`"  :brb "`) still
+    // strips the colon — otherwise the colon would leak through and the
+    // trigger would be unreachable (":" is a separator, no engine path
+    // would ever match it).
+    return t.trim().replace(/^:+/, "");
 }

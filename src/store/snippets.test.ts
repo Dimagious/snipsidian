@@ -121,13 +121,115 @@ describe("store/snippets", () => {
         it("should handle empty user snippets", () => {
             const emptySettings: SnipSidianSettings = { snippets: {} };
             const result = getAllSnippetsFlat(emptySettings);
-            
+
             const userSnippets = result.filter(s => s.folder === "user");
             expect(userSnippets).toHaveLength(0);
-            
+
             // Should not have any package snippets
             const packageSnippets = result.filter(s => s.folder.startsWith("builtin-"));
             expect(packageSnippets.length).toBe(0);
+        });
+    });
+
+    // ---- Boundary tests per ADR-0005 (B-080) ----
+    //
+    // The existing tests cover the happy paths. These pin contracts
+    // at edge inputs where bugs have historically slipped through.
+
+    describe("getDict — first-wins collision behaviour (boundary)", () => {
+        it("pins alphabetical-by-full-key order as the tie-breaker", () => {
+            // The function sorts entries by full key, then iterates and
+            // only assigns a trigger name on first sight. Add a third
+            // colliding entry to make sure the order is by full key,
+            // not insertion order or group name alone.
+            const settings = {
+                snippets: {
+                    "zeta/sig": "Z",
+                    "alpha/sig": "A",
+                    "middle/sig": "M",
+                },
+            } as unknown as SnipSidianSettings;
+            // localeCompare orders 'a' < 'm' < 'z'. `alpha/sig` wins.
+            expect(getDict(settings)).toEqual({ sig: "A" });
+        });
+
+        it("treats an ungrouped trigger as having an empty group prefix", () => {
+            // `splitKey("sig")` returns `{ group: "", name: "sig" }`.
+            // Ungrouped triggers sort against grouped ones via full
+            // key — `"sig"` vs `"work/sig"`. `"sig" < "work/sig"` so
+            // ungrouped wins.
+            const settings = {
+                snippets: {
+                    "work/sig": "from-group",
+                    "sig": "ungrouped",
+                },
+            } as unknown as SnipSidianSettings;
+            expect(getDict(settings)).toEqual({ sig: "ungrouped" });
+        });
+
+        it("survives a `__proto__` key without polluting Object.prototype", () => {
+            // Defensive: a malicious import or hand-crafted settings
+            // file could include `__proto__` as a key. `getDict` walks
+            // entries safely via `Object.entries` and writes through
+            // bracket access. Pin the assertion so a refactor using
+            // unsafe property-style access (`out[name] = …` with name
+            // being `__proto__`) gets caught.
+            const settings = {
+                snippets: {
+                    "__proto__": "attacker",
+                    "ok": "valid",
+                },
+            } as unknown as SnipSidianSettings;
+            const dict = getDict(settings);
+            expect(dict.ok).toBe("valid");
+            // Object.prototype must not have been polluted.
+            expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+        });
+    });
+
+    describe("hasTriggerCollision — exclusion semantics (boundary)", () => {
+        it("excludeFullKey only skips that exact key, not other rows with same trigger name", () => {
+            // The `excludeFullKey` is the row being edited — the
+            // function must skip ONLY that row, but still detect
+            // collisions on other rows. Pin the contract because
+            // getting this wrong allows a user to rename a snippet
+            // into another snippet's trigger (data loss).
+            const settings = {
+                snippets: {
+                    "work/sig": "Best",
+                    "personal/sig": "Cheers",
+                    "shared/sig": "Yo",
+                },
+            } as unknown as SnipSidianSettings;
+            // Editing `work/sig` — there are still two OTHER rows with
+            // trigger "sig", so collision must be true.
+            expect(hasTriggerCollision(settings, "sig", "work/sig")).toBe(true);
+            // Editing `work/sig` to a new name `unique` — no other row
+            // has that name, so no collision.
+            expect(hasTriggerCollision(settings, "unique", "work/sig")).toBe(false);
+        });
+    });
+
+    describe("hasReplacementCollision — content-difference semantics (boundary)", () => {
+        it("returns false when the same trigger has the same replacement (no conflict)", () => {
+            // Same trigger, same replacement — that's not a conflict,
+            // it's a duplicate. The function must distinguish.
+            const settings = {
+                snippets: {
+                    "work/sig": "Best",
+                    "personal/sig": "Best",
+                },
+            } as unknown as SnipSidianSettings;
+            expect(hasReplacementCollision(settings, "sig", "Best")).toBe(false);
+        });
+
+        it("returns true when an existing trigger has a different replacement", () => {
+            const settings = {
+                snippets: {
+                    "work/sig": "Best",
+                },
+            } as unknown as SnipSidianSettings;
+            expect(hasReplacementCollision(settings, "sig", "Different")).toBe(true);
         });
     });
 });

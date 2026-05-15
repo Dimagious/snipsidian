@@ -17,16 +17,24 @@
         "release:audit": "node scripts/release-audit.cjs",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
-        "tree": "tree -L 3 -I 'node_modules|coverage'"
+        "tree": "tree -L 3 -I 'node_modules|coverage'",
+        "e2e:setup": "./scripts/e2e-setup.sh",
+        "e2e": "./scripts/e2e-setup.sh && env -u ELECTRON_RUN_AS_NODE playwright test --grep-invert='interactive recording'",
+        "e2e:headed": "./scripts/e2e-setup.sh && env -u ELECTRON_RUN_AS_NODE playwright test --headed --grep-invert='interactive recording'",
+        "e2e:ui": "./scripts/e2e-setup.sh && env -u ELECTRON_RUN_AS_NODE playwright test --ui",
+        "e2e:record": "./scripts/e2e-setup.sh && env -u ELECTRON_RUN_AS_NODE PWDEBUG=1 playwright test e2e/record.spec.ts --headed --timeout=0"
     },
     "dependencies": {
         "yaml": "^2.9.0"
     },
     "devDependencies": {
+        "@electron/asar": "^4.2.0",
         "@eslint/js": "^9.39.1",
         "@microsoft/eslint-plugin-sdl": "^1.1.0",
+        "@playwright/test": "^1.60.0",
         "@types/node": "^20.12.12",
         "@vitest/coverage-v8": "^3.2.4",
+        "electron": "^31.7.7",
         "esbuild": "^0.28.0",
         "eslint": "^9.39.1",
         "eslint-plugin-obsidianmd": "^0.1.7",

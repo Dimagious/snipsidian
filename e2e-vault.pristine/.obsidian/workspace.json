@@ -1,0 +1,31 @@
+{
+  "main": {
+    "id": "e2e-main",
+    "type": "split",
+    "children": [
+      {
+        "id": "e2e-tabs",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "e2e-leaf",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Welcome.md",
+                "mode": "source",
+                "source": true
+              },
+              "icon": "lucide-file",
+              "title": "Welcome"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "active": "e2e-leaf",
+  "lastOpenFiles": ["Welcome.md"]
+}

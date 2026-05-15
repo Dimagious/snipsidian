@@ -923,5 +923,52 @@ describe("package-validator", () => {
       expect(r.isValid).toBe(false);
       expect(r.errors.join(" ")).toMatch(/total size/);
     });
+
+    // ---- Gap-filling boundary cases (B-080) ----
+
+    it("rejects a label longer than 50 characters (upper boundary)", () => {
+      // Pinned at 50 by the validator. 51 should fail; 50 should pass.
+      // Both directions matter so a future refactor that uses `>=`
+      // instead of `>` (off-by-one) gets caught.
+      const tooLong = "x".repeat(51);
+      const r = validatePackageForInstall({
+        label: tooLong,
+        snippets: { ok: "value" },
+      });
+      expect(r.isValid).toBe(false);
+      expect(r.errors.join(" ")).toMatch(/between 1 and 50/);
+    });
+
+    it("accepts a label of exactly 50 characters (upper boundary, valid side)", () => {
+      const exact = "x".repeat(50);
+      const r = validatePackageForInstall({
+        label: exact,
+        snippets: { ok: "value" },
+      });
+      expect(r.isValid).toBe(true);
+    });
+
+    it("rejects an empty-string trigger in the snippets bag", () => {
+      // The snippets bag is `Record<string, string>`; the key type
+      // makes JSON.parse handle this, but a hand-crafted YAML with
+      // an empty string key reaches us. Catch it.
+      const r = validatePackageForInstall({
+        label: "EmptyKey",
+        snippets: { "": "value", ok: "value" },
+      });
+      expect(r.isValid).toBe(false);
+      expect(r.errors.join(" ")).toMatch(/non-empty string/);
+    });
+
+    it("accepts a trigger of exactly 50 characters (upper boundary, valid side)", () => {
+      // 50 is the limit. Pin both sides so off-by-one regressions
+      // surface.
+      const trigger = "t".repeat(50);
+      const r = validatePackageForInstall({
+        label: "ExactTrigger",
+        snippets: { [trigger]: "value" },
+      });
+      expect(r.isValid).toBe(true);
+    });
   });
 });
