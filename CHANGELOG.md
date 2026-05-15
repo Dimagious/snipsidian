@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-05-15
+
+UI redesign release. Closes ~16 P0/P1 backlog items as side-effects of one coordinated implementation. See [ADR-0006](.claude/brain/decisions/0006-adopt-1.1.0-redesign.md).
+
+### Added
+
+- **Tab strip** with new information architecture (Snippets → Packages → General → About). Snippets is the landing tab. Full WAI-ARIA tabs pattern: arrow keys + Home/End move focus and activation, roving tabindex, screen-reader-visible labels. Pre-1.1.0 stored `activeTab` values (`basic` / `community` / `feedback`) migrate to the new IDs transparently on first launch.
+- **Import preview**. Import JSON now opens a modal with a merge vs replace radio and a diff list (added / updated / removed). Replace mode highlights the removed rows in red. No more silent library wipes.
+- **Search result-count badge** on the Snippets tab while filtering.
+- **Sticky bulk operations bar** above the snippet list when items are selected.
+- **Loading skeleton, empty, and error states** on the Packages tab.
+- **Single-edit-mode** in the snippets list. In-progress edits now survive list re-renders. Opening edit on a second row auto-discards the first row's unsaved draft.
+- **GitHub-issue submission flow** for both feedback (bug / feature / general) and community packages. Prefilled with plugin / Obsidian / platform versions.
+
+### Changed
+
+- **Packages tab**: table → list-of-rows layout. Install always opens the preview modal, even at zero conflicts.
+- **General tab**: ghost-style utility buttons instead of 8 CTAs. Sections regrouped into Commands + Backup. Headings are real `<h3>` / `<h4>` for screen readers.
+- **Feedback tab → About tab**: plain rows, no CTAs, version footer.
+- **Action buttons** across snippet rows and group actions use native `setIcon()` with per-row `aria-label`s (e.g. "Edit snippet :hello"), replacing emoji glyphs.
+- **`prefers-reduced-motion: reduce`** is now honoured globally — transitions and animations off for users who request it.
+- **CSS** consolidated from six files into one, scoped to `.snipsidian-settings` so nothing leaks into the rest of Obsidian's UI.
+
+### Removed
+
+- **Google Forms** integration. Both feedback and package submission now go through GitHub issues. Simpler privacy story (no third-party form vendor). `services/feedback-form.{ts,test.ts}` and `services/package-submission-form.{ts,test.ts}` deleted (~1000 lines).
+- **Help & Resources** section from General. Its content (Documentation / Espanso hub / Demo) lived in About too.
+
+### Fixed
+
+- Inline snippet edit no longer wipes itself on every keystroke (B-021).
+- Search input keeps focus and cursor position while typing.
+
+### Internal
+
+- Tests: 232 pass, coverage 92.32% lines / 86.82% branches. New tests pin boundary contracts per [ADR-0005](.claude/brain/decisions/0005-test-philosophy.md): `getEditingDraft()` returns a live reference; `removed` list populates correctly for replace-mode warning; tab-ID migration honours each legacy value; URL-encoded title/body round-trips through GitHub issue URLs.
+
 ## [1.0.11] - 2026-05-14
 
 ### Fixed
