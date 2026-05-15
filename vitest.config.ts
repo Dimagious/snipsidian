@@ -18,8 +18,15 @@ export default defineConfig({
                 "src/types.ts",
                 "src/engine/types.ts",
                 "src/test/**",
+                // `src/ui/**` stays excluded — UI tests (mount-level) are
+                // a later phase and need jsdom + the new factories. Once
+                // those tests exist, drop this line and let coverage
+                // enforce the contract.
                 "src/ui/**",
-                "src/packages/**",
+                // `src/packages/**` was previously excluded with no
+                // tests at all (B-079). `espanso.test.ts` now covers
+                // the importer's contract at the boundary level —
+                // re-included so future regressions show up in coverage.
                 "**/*.d.ts"
             ],
             thresholds: {
