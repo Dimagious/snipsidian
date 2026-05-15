@@ -59,17 +59,23 @@
 
 
 /* ---- Reset green-card era leftovers (older settings markup) ---- */
-.snipsidian-settings .snipsy-section,
-.snipsidian-settings .snipsy-subsection,
-.snipsidian-settings .snipsy-snippet-manager,
-.snipsidian-settings .snipsy-commands-section,
-.snipsidian-settings .snipsy-export-section,
-.snipsidian-settings .snipsy-help-section,
-.snipsidian-settings .snipsy-community-browse-section {
-  border: 0 !important;
-  background: transparent !important;
-  padding: 0 !important;
-  margin: 0 !important;
+/* `.snipsidian-settings.snipsidian-settings` is class-doubled to
+ * raise specificity above any Obsidian-side `.setting-item` defaults
+ * without falling back to `!important` (Obsidian scorecard rule
+ * `declaration-no-important`). The earlier `!important` here landed
+ * during the 1.1.0 CSS rewrite; specificity is the cleaner tool when
+ * we control both sides of the cascade. */
+.snipsidian-settings.snipsidian-settings .snipsy-section,
+.snipsidian-settings.snipsidian-settings .snipsy-subsection,
+.snipsidian-settings.snipsidian-settings .snipsy-snippet-manager,
+.snipsidian-settings.snipsidian-settings .snipsy-commands-section,
+.snipsidian-settings.snipsidian-settings .snipsy-export-section,
+.snipsidian-settings.snipsidian-settings .snipsy-help-section,
+.snipsidian-settings.snipsidian-settings .snipsy-community-browse-section {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
 }
 
 /* ---- Tabs (top of settings pane) ---- */
@@ -120,9 +126,10 @@
 
 /* Utility — used by tab JS to hide/show without setting inline
    styles (Obsidian's `no-static-styles-assignment` lint rule forbids
-   `el.style.display = "none"`). Keep this near the top so anything can
-   use it. */
-.snipsidian-settings .is-hidden { display: none !important; }
+   `el.style.display = "none"`). Class-doubled selector raises
+   specificity (0,2,0 → 0,3,0) so we don't need `!important` to beat
+   sibling rules. Keep near the top so anything can use it. */
+.snipsidian-settings.snipsidian-settings .is-hidden.is-hidden { display: none; }
 
 /* ---- Snippets-tab heading ---- */
 /* Real <h3> per accessibility audit (B-091) — `Setting().setHeading()`

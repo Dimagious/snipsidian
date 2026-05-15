@@ -91,7 +91,7 @@ export class UIStateManager {
 
     loadActiveTab(): TabId {
         this.ensureUiState();
-        const raw = this.settings.ui!.activeTab as string | undefined;
+        const raw = this.settings.ui!.activeTab;
 
         // New-ID happy path.
         if (raw && VALID_TAB_IDS.has(raw as TabId)) return raw as TabId;
