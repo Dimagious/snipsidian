@@ -1,6 +1,7 @@
 // Lightweight converter from Espanso YAML to { trigger: replacement }
 import * as YAML from "yaml";
 import type { EspansoDocument } from "../services/package-types";
+import { normalizeTrigger } from "../services/utils";
 
 /**
  * Supported Espanso fields:
@@ -8,7 +9,10 @@ import type { EspansoDocument } from "../services/package-types";
  *     - trigger: ":brb"        // or 'triggers: [":brb", ":omw"]'
  *       replace: "be right back"
  *
- * We ignore complex placeholders/conditions. Leading ":" in triggers is removed.
+ * We ignore complex placeholders/conditions. Trigger normalisation
+ * (leading/trailing colon strip + whitespace trim) lives in the
+ * shared `services/utils.ts:normalizeTrigger` so both this importer
+ * and the community-packages install path apply the same rules.
  */
 export function espansoYamlToSnippets(text: string): Record<string, string> {
     const doc = YAML.parse(text) as EspansoDocument;
@@ -43,11 +47,3 @@ export function espansoYamlToSnippets(text: string): Record<string, string> {
     return out;
 }
 
-function normalizeTrigger(t: string): string {
-    // Espanso often uses ":" prefix; our expander thinks ":" is a separator.
-    // Trim whitespace first so leading-space-then-colon (`"  :brb "`) still
-    // strips the colon — otherwise the colon would leak through and the
-    // trigger would be unreachable (":" is a separator, no engine path
-    // would ever match it).
-    return t.trim().replace(/^:+/, "");
-}
