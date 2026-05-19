@@ -45,6 +45,32 @@ describe("utils.normalizeTrigger", () => {
     it("trims whitespace", () => {
         expect(normalizeTrigger("  fn  ")).toBe("fn");
     });
+
+    it("strips leading colons (Espanso convention)", () => {
+        expect(normalizeTrigger(":todo")).toBe("todo");
+        expect(normalizeTrigger("::nested")).toBe("nested");
+    });
+
+    it("strips trailing colons (Espanso `:foo:` convention)", () => {
+        expect(normalizeTrigger("smile:")).toBe("smile");
+        expect(normalizeTrigger("fire::")).toBe("fire");
+    });
+
+    it("strips both ends — `:foo:` becomes `foo`", () => {
+        expect(normalizeTrigger(":smile:")).toBe("smile");
+        expect(normalizeTrigger(":fire:")).toBe("fire");
+        expect(normalizeTrigger("  :heart:  ")).toBe("heart");
+    });
+
+    it("leaves interior colons alone (rare, but valid e.g. `ns:trigger`)", () => {
+        expect(normalizeTrigger("ns:trigger")).toBe("ns:trigger");
+        expect(normalizeTrigger(":ns:trigger:")).toBe("ns:trigger");
+    });
+
+    it("returns empty string for pure-colon input", () => {
+        expect(normalizeTrigger(":::")).toBe("");
+        expect(normalizeTrigger("")).toBe("");
+    });
 });
 
 describe("utils.isBadTrigger", () => {

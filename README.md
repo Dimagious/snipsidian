@@ -7,11 +7,11 @@
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 [![Buy Me A Coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-☕-ff813f?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/dimagious)
 
-> **Type `:todo`, get `- [ ]`.** Snipsy is the actively-maintained hotstring plugin for Obsidian — markdown-aware, with a community catalog and Espanso import. No scripting required.
+> **Type `todo` and a space, get `- [ ]`.** Snipsy is the actively-maintained hotstring plugin for Obsidian — markdown-aware, with a community catalog and Espanso import. No scripting required.
 
-<video src="docs/screens/demo.mp4" autoplay muted loop playsinline width="100%">
-  <a href="docs/screens/demo.mp4">▶ Watch the 60-second narrated demo</a>
-</video>
+[![Snipsy demo](docs/screens/demo.gif)](docs/screens/demo.mp4)
+
+> 🔊 [Watch the 60-second walkthrough with voice-over](docs/screens/demo.mp4) — GitHub can't autoplay narrated video inline, so the GIF above is silent; click through for the MP4.
 
 ---
 
@@ -19,28 +19,28 @@
 
 The text-expansion niche in Obsidian has three things wrong with it: the long-standing leader hasn't shipped in four years, the alternatives lean on JavaScript-templating engines, and none of them is aware of markdown context. Snipsy is the simple answer:
 
-- **Actively maintained.** Regular releases, every change passes CI with attested artifacts. Latest scan: 0 vulnerable dependencies, 0 scorecard warnings.
+- **Actively maintained.** Regular releases, every change passes CI with attested artifacts. 0 vulnerable dependencies on the latest dependency scan.
 - **Markdown-aware.** Triggers don't fire inside fenced code blocks, inline code, or YAML frontmatter. Most competitors don't draw that line.
 - **No scripting.** If you need JavaScript or dynamic templates, use [Templater](https://github.com/SilentVoid13/Templater) — it's purpose-built for that. Snipsy is for users who want hotstrings with zero setup.
-- **Community catalog.** Browse curated packages straight from the plugin. Or paste any [Espanso Hub](https://hub.espanso.org/) package's YAML and install it.
+- **Community catalog.** 10 starter packs cover Markdown essentials, daily journaling, GTD, dev boilerplate, code review, research notes, math symbols and more. Install in one click. Or paste any [Espanso Hub](https://hub.espanso.org/) package's YAML.
 
 ---
 
 ## Try these out of the box
 
-Snipsy ships with a starter set you can use immediately:
+Snipsy ships with these triggers ready to use. Type the trigger followed by a space — Snipsy expands it as soon as the space lands.
 
-| Pack | Examples |
+| Category | Triggers |
 |---|---|
-| **Task states** | `:todo` → `- [ ]` · `:done` → `- [x]` · `:doing` → `- [/]` |
-| **Markdown basics** | `:bold` → `**text**` · `:italic` → `_text_` · `:code` → `` `code` `` |
-| **Obsidian callouts** | `:note` → `> [!note]` · `:warning` → `> [!warning]` |
-| **Tables** | `:table` → 3×3 scaffold |
-| **Emojis** | `:smile` → 😀 · `:heart` → ❤️ · `:fire` → 🔥 |
-| **Unicode arrows** | `:arrow` → → · `:left` → ← · `:up` → ↑ |
-| **Math symbols** | `:plus` → ± · `:times` → × · `:leq` → ≤ |
+| **Task states** | `todo` → `- [ ]` · `done` → `- [x]` |
+| **Markdown inline** | `bold` → `**text**` · `italic` → `_text_` · `code` → `` `code` `` |
+| **Headings** | `h1` → `# ` · `h2` → `## ` · `h3` → `### ` |
+| **Obsidian callout** | `note` → `> [!note]` with cursor on the body line |
+| **Tables** | `table` → 3×3 scaffold |
+| **Dynamic** | `today` → today's date · `now` → current time |
+| **Conversational** | `brb` → `be right back` · `omw` → `on my way` · `ty` → `thank you` |
 
-Need more? Browse the community catalog in **Settings → Snipsy → Community packages**, or paste any Espanso `.yml` from [hub.espanso.org](https://hub.espanso.org/) into the **Espanso import** section.
+Want more? Browse the **community catalog** in **Settings → Snipsy → Packages** — 10 starter packs cover Markdown essentials, daily journaling, GTD, meetings, dev boilerplate, code review, research notes, symbols & math, date stamps. Or paste any Espanso `.yml` from [hub.espanso.org](https://hub.espanso.org/) into the **Espanso import** section.
 
 ---
 
@@ -48,13 +48,13 @@ Need more? Browse the community catalog in **Settings → Snipsy → Community p
 
 1. **Install** Snipsy from Obsidian's **Settings → Community plugins → Browse**.
 2. **Enable** it.
-3. **Open a Markdown note** and type `:todo ` (with the trailing space). It expands to `- [ ]`.
+3. **Open a Markdown note** and type `todo` followed by a space. It expands to `- [ ]`.
 
 That's it. Open **Settings → Snipsy** to add your own snippets, browse the catalog, or set up hotkeys.
 
 ### Add a snippet
 
-**Settings → Snipsy → Snippets** → **Add new snippet** → pick a trigger (e.g. `:email`) and replacement (e.g. `you@example.com`). Save. Now `:email ` expands anywhere you type.
+**Settings → Snipsy → Snippets** → **Add new snippet** → pick a trigger (e.g. `sig`) and replacement (e.g. `Best,\nDmitriy`). Save. Now typing `sig` and a space expands to your signature anywhere you type.
 
 ### Set up the picker hotkey
 
@@ -64,14 +64,26 @@ The picker is a Command Palette command called **Insert snippet…** — it's se
 
 ## How expansion works
 
-Snipsy watches for triggers followed by a **separator** — a space, Enter, or common punctuation. The trigger and separator together get replaced.
+Snipsy watches for triggers followed by a **separator** — a space, Enter, or common punctuation. When the separator lands, the trigger gets replaced; the separator itself stays exactly where you typed it.
+
+Two ways to invoke (identical result):
 
 ```
-Type:    "I need to :todo buy groceries"
-Result:  "I need to - [ ] buy groceries"
+You type:   todo·
+You get:    - [ ]·                ← cursor right after the bracket
 
-Type:    "Remember: :note important meeting"
-Result:  "Remember: > [!note] important meeting"
+You type:   :todo·                ← Espanso-style invocation
+You get:    :- [ ]·               ← the leading ":" is your typed character, so it stays
+```
+
+The `·` is the trailing space you typed. Most users skip the leading `:` and just type `todo`, but Espanso muscle memory works too — Snipsy treats `:` as a separator, so it bounds the trigger the same way a space does.
+
+Multi-line snippets place the cursor on the right line:
+
+```
+You type:   note·
+You get:    > [!note]
+            > ·                   ← cursor on the body line, ready to type the note
 ```
 
 What's safe:
@@ -88,7 +100,20 @@ What's safe:
 
 Snipsy has two ways to get pre-made snippets:
 
-**Community catalog.** Hosted at [Dimagious/snipsidian-community](https://github.com/Dimagious/snipsidian-community). Open **Settings → Snipsy → Community packages**, browse the list, click Install. Each pack lives in its own group so you can uninstall it later by deleting the group.
+**Community catalog.** Hosted at [Dimagious/snipsidian-community](https://github.com/Dimagious/snipsidian-community). Open **Settings → Snipsy → Packages**, browse the list, click Install. Each pack lives in its own group so you can uninstall it later by deleting the group. The current catalog covers:
+
+- **Markdown Essentials** — headings, emphasis, code fences, tables, links
+- **Obsidian Power-User** — dataview blocks, frontmatter, embeds, wikilinks
+- **Daily Journal** — daily note, weekly review, gratitude, morning pages
+- **GTD & Productivity** — project / next-action / waiting-for / context tags
+- **Meetings** — meeting notes, 1:1, standup, retrospective
+- **Developer Boilerplate** — JS/TS/Python function shells, log shortcuts, try/catch
+- **Code Review** — Conventional Comments labels (praise / nit / suggestion / blocking)
+- **Research & Academic** — literature notes, claim-evidence, citations
+- **Symbols & Math** — arrows, operators, Greek letters, currency
+- **Date & Time** — `$date` / `$time` stamps, log entries
+- **Obsidian Callouts** — `>note`, `>tip`, `>warning`, `>danger`, etc.
+- **Basic Emojis** — common emoji shortcuts (`smile` → 😀, `fire` → 🔥, etc.)
 
 **Espanso import.** Most Espanso packages are plain YAML. Copy the YAML from any package on [Espanso Hub](https://hub.espanso.org/), paste it into **Espanso import**, click Install. Conflicts open a preview so you can resolve them before anything writes to disk.
 
@@ -161,7 +186,3 @@ If Snipsy saves you keystrokes:
 - ⭐ **Star** the repo so others find it.
 - 🐛 [**Open an issue**](https://github.com/Dimagious/snipsidian/issues) when something breaks.
 - ☕ [**Buy me a coffee**](https://buymeacoffee.com/dimagious) if you want to encourage more work.
-
----
-
-**Made for the Obsidian community.**
