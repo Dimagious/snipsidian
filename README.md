@@ -9,7 +9,9 @@
 
 > **Type `:todo`, get `- [ ]`.** Snipsy is the actively-maintained hotstring plugin for Obsidian — markdown-aware, with a community catalog and Espanso import. No scripting required.
 
-![Snipsy demo](docs/screens/demo.gif)
+<video src="docs/screens/demo.mp4" autoplay muted loop playsinline width="100%">
+  <a href="docs/screens/demo.mp4">▶ Watch the 60-second narrated demo</a>
+</video>
 
 ---
 
@@ -99,16 +101,6 @@ Snipsy is offline-first.
 - Reads/writes only `.obsidian/plugins/snipsidian/data.json` in your vault.
 - Network: a single request to `api.github.com` when you open the Community packages tab (to list the catalog). No analytics, no telemetry, no account.
 - Optional submission flow uses a Google Form (your choice to fill it in).
-
----
-
-## Screenshots
-
-![Settings](docs/screens/basic.png)
-
-| Snippets manager | Community packages |
-|---|---|
-| ![Snippets](docs/screens/snippets.png) | ![Packages](docs/screens/packages.png) |
 
 ---
 
