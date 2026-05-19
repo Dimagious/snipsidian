@@ -61,10 +61,10 @@
 /* ---- Reset green-card era leftovers (older settings markup) ---- */
 /* `.snipsidian-settings.snipsidian-settings` is class-doubled to
  * raise specificity above any Obsidian-side `.setting-item` defaults
- * without falling back to `!important` (Obsidian scorecard rule
- * `declaration-no-important`). The earlier `!important` here landed
- * during the 1.1.0 CSS rewrite; specificity is the cleaner tool when
- * we control both sides of the cascade. */
+ * without resorting to priority overrides (Obsidian scorecard rule
+ * `declaration-no-important`). The earlier priority override here
+ * landed during the 1.1.0 CSS rewrite; specificity is the cleaner
+ * tool when we control both sides of the cascade. */
 .snipsidian-settings.snipsidian-settings .snipsy-section,
 .snipsidian-settings.snipsidian-settings .snipsy-subsection,
 .snipsidian-settings.snipsidian-settings .snipsy-snippet-manager,
@@ -127,8 +127,8 @@
 /* Utility — used by tab JS to hide/show without setting inline
    styles (Obsidian's `no-static-styles-assignment` lint rule forbids
    `el.style.display = "none"`). Class-doubled selector raises
-   specificity (0,2,0 → 0,3,0) so we don't need `!important` to beat
-   sibling rules. Keep near the top so anything can use it. */
+   specificity (0,2,0 → 0,3,0) so we don't need priority overrides
+   to beat sibling rules. Keep near the top so anything can use it. */
 .snipsidian-settings.snipsidian-settings .is-hidden.is-hidden { display: none; }
 
 /* ---- Snippets-tab heading ---- */
@@ -799,14 +799,19 @@
 /* ---- Reduced motion ---- */
 /* Honour the user's OS preference (B-089 / a11y A-011). Transitions
    and animations are subtle in Snipsy, but vestibular-disorder users
-   trigger this preference, and the cost of respecting it is free. */
+   trigger this preference, and the cost of respecting it is free.
+   Class-doubled selectors raise specificity to 0,2,0 — matches every
+   `.snipsidian-settings .x` rule that declares an animation /
+   transition above, and since this block comes last in source order,
+   the cascade resolves in our favour without needing priority
+   overrides (Obsidian scorecard rule `declaration-no-important`). */
 @media (prefers-reduced-motion: reduce) {
-  .snipsidian-settings *,
-  .snipsidian-settings *::before,
-  .snipsidian-settings *::after,
-  .modal.snipsy-picker *,
-  .modal.snipsy-install * {
-    animation: none !important;
-    transition: none !important;
+  .snipsidian-settings.snipsidian-settings *,
+  .snipsidian-settings.snipsidian-settings *::before,
+  .snipsidian-settings.snipsidian-settings *::after,
+  .modal.snipsy-picker.snipsy-picker *,
+  .modal.snipsy-install.snipsy-install * {
+    animation: none;
+    transition: none;
   }
 }
