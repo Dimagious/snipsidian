@@ -61,10 +61,10 @@
 /* ---- Reset green-card era leftovers (older settings markup) ---- */
 /* `.snipsidian-settings.snipsidian-settings` is class-doubled to
  * raise specificity above any Obsidian-side `.setting-item` defaults
- * without falling back to `!important` (Obsidian scorecard rule
- * `declaration-no-important`). The earlier `!important` here landed
- * during the 1.1.0 CSS rewrite; specificity is the cleaner tool when
- * we control both sides of the cascade. */
+ * without resorting to priority overrides (Obsidian scorecard rule
+ * `declaration-no-important`). The earlier priority override here
+ * landed during the 1.1.0 CSS rewrite; specificity is the cleaner
+ * tool when we control both sides of the cascade. */
 .snipsidian-settings.snipsidian-settings .snipsy-section,
 .snipsidian-settings.snipsidian-settings .snipsy-subsection,
 .snipsidian-settings.snipsidian-settings .snipsy-snippet-manager,
@@ -127,8 +127,8 @@
 /* Utility — used by tab JS to hide/show without setting inline
    styles (Obsidian's `no-static-styles-assignment` lint rule forbids
    `el.style.display = "none"`). Class-doubled selector raises
-   specificity (0,2,0 → 0,3,0) so we don't need `!important` to beat
-   sibling rules. Keep near the top so anything can use it. */
+   specificity (0,2,0 → 0,3,0) so we don't need priority overrides
+   to beat sibling rules. Keep near the top so anything can use it. */
 .snipsidian-settings.snipsidian-settings .is-hidden.is-hidden { display: none; }
 
 /* ---- Snippets-tab heading ---- */
@@ -675,17 +675,143 @@
   margin-top: 8px;
 }
 
+/* ============================================================
+   Package Details modal (B-116)
+
+   Opened from PackageBrowser → row click. The modal's contentEl
+   carries `.snipsidian-modal`, NOT `.snipsidian-settings`, so the
+   package-row rules above don't apply — the modal would otherwise
+   render meta spans flush-against-each-other, multi-line snippet
+   replacements as single-line walls, and tags with no separators.
+
+   Selectors here are scoped under `.snipsidian-modal` so they
+   only apply inside our modals (no leak into Obsidian core
+   modals).
+   ============================================================ */
+
+.snipsidian-modal .verified-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--interactive-accent-translucent, var(--background-modifier-active-hover));
+  color: var(--text-accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  margin-bottom: 10px;
+}
+
+.snipsidian-modal .package-desc {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+.snipsidian-modal .package-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--text-faint);
+  margin: 0 0 12px;
+}
+
+/* Subtle separator dots between meta items so "Author / Version /
+   N snippets" reads as a list, not a concatenation. */
+.snipsidian-modal .package-meta > span + span::before {
+  content: "·";
+  color: var(--text-faint);
+  margin-right: 14px;
+  margin-left: -14px;
+}
+
+.snipsidian-modal .package-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 16px;
+}
+
+.snipsidian-modal .package-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.snipsidian-modal .package-snippet-preview {
+  display: flex;
+  flex-direction: column;
+  margin: 4px 0 16px;
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary-alt, var(--background-secondary));
+}
+
+.snipsidian-modal .package-snippet-preview .snippet-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 180px) auto 1fr;
+  align-items: start;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--background-modifier-border-hover, var(--background-modifier-border));
+}
+.snipsidian-modal .package-snippet-preview .snippet-row:last-child {
+  border-bottom: none;
+}
+
+.snipsidian-modal .package-snippet-preview .snippet-trigger {
+  font-family: var(--font-monospace);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-normal);
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.snipsidian-modal .package-snippet-preview .arrow {
+  color: var(--text-faint);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* The big one: `white-space: pre-wrap` is what makes multi-line
+   snippet replacements (callouts, tables, journal templates) render
+   as multi-line in the preview instead of collapsing to a single
+   line. word-break covers long unbroken strings. */
+.snipsidian-modal .package-snippet-preview .snippet-replacement {
+  font-family: var(--font-monospace);
+  font-size: 12.5px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
 /* ---- Reduced motion ---- */
 /* Honour the user's OS preference (B-089 / a11y A-011). Transitions
    and animations are subtle in Snipsy, but vestibular-disorder users
-   trigger this preference, and the cost of respecting it is free. */
+   trigger this preference, and the cost of respecting it is free.
+   Class-doubled selectors raise specificity to 0,2,0 — matches every
+   `.snipsidian-settings .x` rule that declares an animation /
+   transition above, and since this block comes last in source order,
+   the cascade resolves in our favour without needing priority
+   overrides (Obsidian scorecard rule `declaration-no-important`). */
 @media (prefers-reduced-motion: reduce) {
-  .snipsidian-settings *,
-  .snipsidian-settings *::before,
-  .snipsidian-settings *::after,
-  .modal.snipsy-picker *,
-  .modal.snipsy-install * {
-    animation: none !important;
-    transition: none !important;
+  .snipsidian-settings.snipsidian-settings *,
+  .snipsidian-settings.snipsidian-settings *::before,
+  .snipsidian-settings.snipsidian-settings *::after,
+  .modal.snipsy-picker.snipsy-picker *,
+  .modal.snipsy-install.snipsy-install * {
+    animation: none;
+    transition: none;
   }
 }
