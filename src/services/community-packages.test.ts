@@ -131,7 +131,11 @@ snippets:
 
       expect(packages).toHaveLength(1);
       expect(packages[0].label).toBe("Basic Emojis");
-      expect(packages[0].snippets).toHaveProperty(":smile", "😄");
+      // B-117: leading `:` is stripped on convert so `:smile` becomes
+      // `smile` — the form Snipsy's engine can actually match. Old
+      // assertion checked for `:smile` which would be unreachable.
+      expect(packages[0].snippets).toHaveProperty("smile", "😄");
+      expect(packages[0].snippets).not.toHaveProperty(":smile");
     });
 
     it("should handle GitHub API errors gracefully", async () => {

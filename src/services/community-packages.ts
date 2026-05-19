@@ -1,6 +1,7 @@
 import * as YAML from "yaml";
 import { App, TFolder, TFile, requestUrl } from "obsidian";
 import type { PackageData } from "./package-types";
+import { normalizeTrigger } from "./utils";
 
 /** Hostnames allowed for the second `requestUrl` fetch in
  *  `loadCommunityPackagesFromGitHub`. The Contents API returns a
@@ -313,23 +314,36 @@ export async function loadAllCommunityPackages(app: App, plugin?: PluginWithApp)
  */
 function convertSnippetsToObject(snippets: PackageData['snippets']): { [trigger: string]: string } {
   const snippetsObj: { [trigger: string]: string } = {};
-  
+
+  // B-117: triggers are normalised through `normalizeTrigger` so Espanso-style
+  // keys (`:smile:`, `:fire`, etc.) become reachable. Snipsy's engine treats `:`
+  // as a separator, so any leading / trailing colons in the stored key would
+  // make the trigger unmatchable via keystroke expansion. The Espanso *importer*
+  // already does this (`src/packages/espanso.ts`); the install path for
+  // community packages historically did not, which is why `basic-emojis.yml`
+  // was effectively dead code after install.
+  const recordKey = (rawTrigger: string, replacement: string) => {
+    const key = normalizeTrigger(rawTrigger);
+    if (!key) return; // pure-colon / empty triggers can't be reached anyway
+    snippetsObj[key] = replacement;
+  };
+
   if (Array.isArray(snippets)) {
     // Array format: [{ trigger: "...", replace: "..." }]
     for (const snippet of snippets) {
       if (snippet.trigger && snippet.replace) {
-        snippetsObj[snippet.trigger] = snippet.replace;
+        recordKey(snippet.trigger, snippet.replace);
       }
     }
   } else if (snippets && typeof snippets === 'object') {
     // Object format: { "trigger": "replacement", ... }
     for (const [trigger, replacement] of Object.entries(snippets)) {
       if (typeof replacement === 'string') {
-        snippetsObj[trigger] = replacement;
+        recordKey(trigger, replacement);
       }
     }
   }
-  
+
   return snippetsObj;
 }
 
