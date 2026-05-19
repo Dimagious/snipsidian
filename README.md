@@ -9,9 +9,9 @@
 
 > **Type `todo` and a space, get `- [ ]`.** Snipsy is the actively-maintained hotstring plugin for Obsidian — markdown-aware, with a community catalog and Espanso import. No scripting required.
 
-[![Snipsy demo](docs/screens/demo.gif)](docs/screens/demo.mp4)
+![Snipsy demo](docs/screens/demo.gif)
 
-> 🔊 [Watch the 60-second walkthrough with voice-over](docs/screens/demo.mp4) — GitHub can't autoplay narrated video inline, so the GIF above is silent; click through for the MP4.
+> Silent GIF above. A 60-second narrated MP4 lives at [`docs/screens/demo.mp4`](docs/screens/demo.mp4) — GitHub serves it as a download, so save it locally or watch in your editor.
 
 ---
 

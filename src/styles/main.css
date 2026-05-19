@@ -753,6 +753,224 @@
   line-height: 1.4;
 }
 
+/* ============================================================
+   SnippetPickerModal (B-115)
+
+   The Insert-snippet / Wrap-selection modal (`Cmd+P → Insert
+   snippet`). 1.1.x shipped the DOM (search input, results listbox,
+   preview pane, hints row) but no CSS, so the picker rendered as a
+   plain vertical text dump — each row stacked the trigger, group
+   label, and preview as three separate lines with no layout. This
+   block puts in the grid layout, hover/selected states, and the
+   highlight markers for `$|` / `$1`-`$9`.
+
+   Modal's contentEl carries `.snippet-picker-modal` (set in
+   `onOpen`), separate from `.snipsidian-settings` and from the
+   general `.snipsidian-modal` package-details modal.
+   ============================================================ */
+
+.snippet-picker-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 520px;
+  max-width: 800px;
+}
+
+/* Search label — small all-caps eyebrow above the input */
+.snippet-picker-modal > label[for="snipsy-picker-search"] {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-faint);
+  margin-bottom: -4px;
+}
+
+.snippet-picker-modal .search-input {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.snippet-picker-modal .search-input:focus {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px var(--interactive-accent-translucent, rgba(125,103,255,0.22));
+}
+
+/* Results listbox — scrollable, bordered. The .snipsy-picker-count
+   selector already exists above (line 389); we leave it untouched. */
+.snippet-picker-modal .snippet-results {
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+}
+
+.snippet-picker-modal .snippet-results .empty-state {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* Result row — grid: trigger | group-badge | mini-preview */
+.snippet-picker-modal .snippet-item {
+  display: grid;
+  grid-template-columns: minmax(80px, 160px) auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--background-modifier-border-hover, var(--background-modifier-border));
+}
+.snippet-picker-modal .snippet-item:last-child {
+  border-bottom: none;
+}
+.snippet-picker-modal .snippet-item:hover {
+  background: var(--background-modifier-hover);
+}
+.snippet-picker-modal .snippet-item.selected {
+  background: var(--interactive-accent-translucent, var(--background-modifier-active-hover));
+}
+.snippet-picker-modal .snippet-item.selected .snippet-name span {
+  color: var(--text-on-accent, var(--text-normal));
+}
+
+.snippet-picker-modal .snippet-name span {
+  font-family: var(--font-monospace);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-normal);
+}
+
+.snippet-picker-modal .snippet-folder span {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-faint);
+  font-size: 10.5px;
+  line-height: 1.5;
+  letter-spacing: 0.2px;
+}
+
+.snippet-picker-modal .snippet-preview-text span {
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+/* Preview heading — small all-caps eyebrow */
+.snippet-picker-modal .preview-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-faint);
+  margin: 6px 0 -4px;
+}
+
+/* Preview card */
+.snippet-picker-modal .snippet-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary-alt, var(--background-secondary));
+  min-height: 64px;
+}
+
+.snippet-picker-modal .snippet-preview-meta {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  line-height: 1.5;
+}
+.snippet-picker-modal .snippet-preview-meta strong {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.snippet-picker-modal .snippet-preview-text-container {
+  font-family: var(--font-monospace);
+  font-size: 12.5px;
+  color: var(--text-normal);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Cursor marker (`$|`) — accent-colored pill so users see at a
+   glance where the cursor lands after expansion. */
+.snippet-picker-modal .snippet-highlight-cursor {
+  display: inline-block;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--interactive-accent-translucent, rgba(125,103,255,0.18));
+  color: var(--interactive-accent);
+  font-weight: 600;
+  font-family: var(--font-monospace);
+}
+
+/* Tabstop markers (`$1`, `$2`, ...) — muted pill, less visually loud
+   than the cursor marker since tabstops in expansion mode are
+   literal placeholders the user overwrites manually. */
+.snippet-picker-modal .snippet-highlight-tabstop {
+  display: inline-block;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+  font-family: var(--font-monospace);
+}
+
+.snippet-picker-modal .snippet-preview-empty {
+  color: var(--text-faint);
+  font-style: italic;
+  font-size: 12.5px;
+  text-align: center;
+  padding: 16px 0;
+}
+
+/* Hints row — kbd-style chips for Navigation / Enter / Esc / Click */
+.snippet-picker-modal .snippet-hints {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  line-height: 2;
+  padding-top: 6px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.snippet-picker-modal .snippet-hints strong {
+  display: inline-block;
+  padding: 1px 6px;
+  margin: 0 2px;
+  border-radius: 4px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-family: var(--font-monospace);
+}
+
 /* ---- Reduced motion ---- */
 /* Honour the user's OS preference (B-089 / a11y A-011). Transitions
    and animations are subtle in Snipsy, but vestibular-disorder users
