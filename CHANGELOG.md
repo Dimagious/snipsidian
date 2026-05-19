@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.5] - 2026-05-19
+
+Polish pass on the Snippet Picker — the most-opened surface in the plugin, which had been shipping without CSS since 1.1.0.
+
+### Fixed
+
+- **Snippet picker now has actual CSS** (B-115). `SnippetPickerModal` (Cmd+P → Insert snippet) had been emitting a dozen layout classes (`.snippet-results`, `.snippet-item`, `.snippet-name`, `.snippet-folder`, `.snippet-preview-text`, `.snippet-preview`, `.snippet-preview-meta`, `.snippet-highlight-cursor`, `.snippet-highlight-tabstop`, etc.) without a single matching rule in `main.css` since the 1.1.0 redesign. The picker rendered as a vertical text dump — trigger / (group) / preview as three stacked lines per row, preview pane indistinguishable from regular text. New `.snippet-picker-modal` block covers the search input (focus ring), the results listbox (scrollable bordered card, max-height 280px), each row as a 3-col grid `[trigger][group-pill][mini-preview]` with hover + selected states, the preview card (bordered, monospace, `white-space: pre-wrap` so multi-line replacements like callouts and tables render with real line breaks), the `$|` cursor marker (accent-coloured pill), `$1`-`$9` tabstop markers (muted pill), and the hints row (kbd-style chips). Theme-aware via Obsidian CSS custom properties.
+- **README MP4 link no longer promises inline playback.** GitHub serves raw `.mp4` URLs with `application/octet-stream` content-type, so browsers refuse to play the file inline — clicking the previous "Watch the 60-second walkthrough with voice-over" link just downloaded the file. Reworded to make the GIF the inline asset and frame the MP4 honestly: "lives at `docs/screens/demo.mp4` — GitHub serves it as a download, so save it locally or watch in your editor."
+
+### Maintenance
+
+- **DRY: `espanso.ts` now imports `normalizeTrigger` from `services/utils.ts`.** Until 1.1.4 both files had their own copy with similar-but-different semantics. After the 1.1.4 strip-trailing-colons fix in `services/utils.ts`, the two functions had silently diverged in capability. Removed the local copy; both call sites now use the shared export. Behaviour stays correct, and Espanso imports inherit the strip-trailing-colons rule for free.
+
 ## [1.1.4] - 2026-05-19
 
 Ship-what-the-README-promises release. A first-time user who followed the Quick Start (`type todo and a space`) on 1.1.3 got nothing — `todo` wasn't in `DEFAULT_SNIPPETS`. Same with `done` / `note` / `bold` / `table` / etc. — all advertised in the README "Try these out of the box" table, none actually present. 1.1.4 closes that gap.
