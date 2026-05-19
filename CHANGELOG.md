@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-05-19
+
+Ship-what-the-README-promises release. A first-time user who followed the Quick Start (`type todo and a space`) on 1.1.3 got nothing — `todo` wasn't in `DEFAULT_SNIPPETS`. Same with `done` / `note` / `bold` / `table` / etc. — all advertised in the README "Try these out of the box" table, none actually present. 1.1.4 closes that gap.
+
+### Added
+
+- **Default snippets the README has been promising all along.** `presets.ts` now ships `todo` → `- [ ] $|`, `done` → `- [x] $|`, `bold` / `italic` / `code` (inline-emphasis wrappers with cursor inside), `note` → `> [!note]\n> $|` (Obsidian callout with cursor on the body line), `table` → 3×3 scaffold. Existing user data wins the merge in `loadSettings`; only fresh installs get the new defaults.
+
+### Changed
+
+- **`today` / `now` now produce actual dates/times.** Was `{{date:YYYY-MM-DD}}` / `{{time:HH:mm}}` — Templater-syntax stubs that only worked if you also had Templater installed and configured. Now `$date` / `$time` — Snipsy's native variables, substituted at expansion time regardless of which other plugins you have. Existing user-defined values still win in the merge, so users who'd been relying on the old strings keep them; users on a clean install get the new behaviour.
+
+### Fixed
+
+- **Community-pack install path now normalises Espanso-style trigger keys** (B-117). The Basic Emojis pack ships triggers as `:smile:` / `:fire:` (Espanso convention). Snipsy's engine treats `:` as a separator, so a stored `:smile:` is reachable by no keystroke sequence — `:smile:<space>` produces an empty trigger candidate, `:smile<space>` produces `smile` which the dict didn't have. The Espanso importer (`src/packages/espanso.ts`) already stripped leading colons; the community-packages install path didn't. Fixed by strengthening `services/utils.ts:normalizeTrigger` to strip both leading AND trailing colons, and calling it inside `convertSnippetsToObject` for every key on install. Existing users with corrupt `:smile:` entries from prior installs need to **reinstall the pack** — there's no retroactive cleanup pass over their data.json.
+- **README copy now matches engine behaviour.** "How expansion works" used to show `I need to :todo buy groceries` → `I need to - [ ] buy groceries`. In reality the leading `:` is a typed character that stays in the document; the actual result is `I need to :- [ ] buy groceries`. Replaced with a clear two-mode example documenting both `todo·` and `:todo·` invocations with the correct outputs. The "Try these out of the box" table also rewritten to list only the actual `DEFAULT_SNIPPETS` — no more advertising packs that have to be installed separately as if they were defaults.
+- **README demo embed** switched from `<video>` tag to `[![demo.gif](...)](demo.mp4)`. GitHub strips relative-path `<video>` (the raw URL serves `application/octet-stream`, browsers refuse to play it inline). GIF auto-plays as fallback; click-through opens the narrated MP4.
+
 ## [1.1.3] - 2026-05-19
 
 Patch release polishing the rest of the obvious CSS gaps that shipped in 1.1.2. Bundled with the seeding of the community catalog ([snipsidian-community#1](https://github.com/Dimagious/snipsidian-community/pull/1) — 10 starter packs, ~190 snippets), which made the modal CSS gap impossible to ignore.
