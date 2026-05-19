@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-05-19
+
+Patch release polishing the rest of the obvious CSS gaps that shipped in 1.1.2. Bundled with the seeding of the community catalog ([snipsidian-community#1](https://github.com/Dimagious/snipsidian-community/pull/1) — 10 starter packs, ~190 snippets), which made the modal CSS gap impossible to ignore.
+
+### Fixed
+
+- **Package Details modal renders correctly** (B-116). Clicking a row in **Settings → Packages** used to show meta lines collapsed against each other (`Author: snipsidian-communityVersion: 1.0.08 snippets`), tags concatenated into a single string, and multi-line snippet replacements (callouts, tables, journal templates) rendered as walls of single-line text. Root cause: every `.package-meta` / `.package-tags` / `.snippet-row` / `.snippet-replacement` rule in `main.css` was scoped under `.snipsidian-settings`, but the modal's `contentEl` carries `.snipsidian-modal` instead — none of the rules applied. Added a dedicated `.snipsidian-modal` rule block covering the badge, description, meta line with separator dots, tag pills, and the snippet-preview grid with `white-space: pre-wrap` so multi-line replacements finally render with real line breaks.
+
+### Maintenance
+
+- **Cleared remaining `!important` scorecard warnings.** 1.1.2 still surfaced 5 `declaration-no-important` hits — 3 were the literal word inside CSS comments (rephrased to "priority overrides"), 2 were real declarations in the `prefers-reduced-motion` block. Class-doubled the selectors (`.snipsidian-settings.snipsidian-settings *`) so specificity rises to (0,2,0) — matches every `.snipsidian-settings .x` rule that declares an animation / transition, and source-order resolves in the reduced-motion block's favour. `grep -c "!important" styles.css` → 0 (was 5).
+
 ## [1.1.2] - 2026-05-15
 
 Maintenance release. No user-visible changes; cuts a new bundle so the Obsidian community plugin index ships the scorecard-clean assets to users.
