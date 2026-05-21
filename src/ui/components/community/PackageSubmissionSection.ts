@@ -62,7 +62,7 @@ export class PackageSubmissionSection {
             this.validate(yamlTextarea, validationContainer, submitBtn);
         });
         submitBtn.addEventListener("click", () => {
-            this.openSubmissionIssue(yamlTextarea, validationContainer, submitBtn);
+            void this.openSubmissionIssue(yamlTextarea, validationContainer, submitBtn);
         });
     }
 
@@ -164,7 +164,7 @@ export class PackageSubmissionSection {
         }
     }
 
-    private openSubmissionIssue(
+    private async openSubmissionIssue(
         textarea: HTMLTextAreaElement,
         validationContainer: HTMLElement,
         submitBtn: HTMLButtonElement,
@@ -184,8 +184,30 @@ export class PackageSubmissionSection {
             },
         });
 
+        // B-044: `window.open` does NOT throw on popup-blocked — it
+        // returns null. Pre-1.1.7 we fired a success Notice
+        // regardless, and the user would see "opened in browser"
+        // with no actual tab opening. Detect the null return,
+        // copy the URL to the clipboard (best effort), and surface
+        // a Notice the user can act on.
         try {
-            window.open(url, "_blank", "noopener,noreferrer");
+            const popup = window.open(url, "_blank", "noopener,noreferrer");
+            if (popup === null) {
+                let copied = false;
+                try {
+                    await navigator.clipboard?.writeText(url);
+                    copied = true;
+                } catch {
+                    // best-effort — surfaced in the Notice copy below
+                }
+                new Notice(
+                    copied
+                        ? "Popup blocked — link copied to clipboard, paste it in your browser."
+                        : "Popup blocked — open the submission link from the Snipsy GitHub repo manually.",
+                    8_000,
+                );
+                return;
+            }
             new Notice("Submission issue opened in your browser.");
         } catch (err) {
             new Notice(
