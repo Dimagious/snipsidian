@@ -2,7 +2,11 @@ import * as YAML from "yaml";
 import { App, TFolder, TFile } from "obsidian";
 import type { PackageData } from "./package-types";
 import { convertSnippetsToObject } from "./community-api";
-import { loadCommunityPackagesWithCache, type PluginCacheHost } from "./community-cache";
+import {
+    loadCommunityPackagesWithCache,
+    type PluginCacheHost,
+    type CommunityLoadResult,
+} from "./community-cache";
 
 // Module split (B-025, 1.1.7):
 //   - GitHub I/O                  → community-api.ts
@@ -98,26 +102,29 @@ export async function loadDynamicCommunityPackages(app: App): Promise<PackageIte
 // `loadCommunityPackagesWithCache` + `PluginCacheHost` moved to
 // `community-cache.ts` in 1.1.7 (B-025). Re-exported here so
 // existing callers (PackageBrowser.ts, types.ts) don't see the move.
-export { loadCommunityPackagesWithCache, type PluginCacheHost };
+export { loadCommunityPackagesWithCache, type PluginCacheHost, type CommunityLoadResult };
 
 /**
  * Router for the Packages-tab data load. With a `plugin` argument,
  * goes through the 24-hour `community-cache`; without one (test
  * paths, niche callers), falls back to the vault-backed dynamic
  * loader. This is the single entry point UI components should call.
+ *
+ * Returns a `CommunityLoadResult` so the UI can differentiate
+ * "live-fresh / cache-hit / fallback-after-failure" — the
+ * Notice text in `PackageBrowser.refresh` keys off `source`.
  */
 export async function loadAllCommunityPackages(
     app: App,
     plugin?: PluginCacheHost,
-): Promise<PackageItem[]> {
+): Promise<CommunityLoadResult> {
     try {
-        const packages = plugin
-            ? await loadCommunityPackagesWithCache(plugin)
-            : await loadDynamicCommunityPackages(app);
-        return packages;
+        if (plugin) return await loadCommunityPackagesWithCache(plugin);
+        const packages = await loadDynamicCommunityPackages(app);
+        return { packages, source: "live" };
     } catch (error) {
         console.error("Failed to load community packages:", error);
-        return [];
+        return { packages: [], source: "fallback", error: "network" };
     }
 }
 
