@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.6] - 2026-05-21
+
+Install path correctness. Closes the P0 footgun where the disabled "Already installed" button after a user edit silently overwrote local changes on the next install click; replaces the dead-end with explicit Reinstall and Uninstall affordances. Refactors the install-plan logic out of UI handlers so the fix has a function-boundary test that pins the contract.
+
+### Fixed
+
+- **Install button no longer silently overwrites locally-edited snippets** (B-017). Pre-1.1.6, after installing a community pack and editing 2+ rows, the `≥ 80 %-value-match` heuristic flipped the row's badge from "Installed" back to "Install" — clicking it opened the preview modal (which the user read as "fresh install") and Apply overwrote their edits with upstream values. "Installed" is now defined as **key-presence only**: any pack key in the snippet store keeps the badge stable regardless of value, so user edits don't move the state machine. The Reinstall affordance is the only path back to upstream, and it routes through `PackagePreviewModal` with "Keep current" defaulted on every conflict.
+- **Reinstall / Uninstall affordances replace the disabled "Already installed" button** (B-042). The dead-end button had no resync path and no way to remove the pack. The row + Package Details modal now show two explicit actions: **Reinstall** (opens preview modal with current-vs-upstream diff, per-row Keep/Overwrite choices, Keep defaulted) and **Uninstall** (opens a confirmation modal listing the first 5 trigger names that will be removed, plus the full count). Both work for partially-installed and user-edited packs.
+- **`PackagePreviewModal` bulk-action buttons stop duplicating the modal** (PR #40). "Keep all current" / "Overwrite all" used a `close(); open();` re-render trick that — in the real Obsidian Modal lifecycle — re-ran `onOpen` without first emptying `contentEl`, appending a duplicate summary + table + footer on every click. Bug pre-dates 1.1.6 but was hidden behind the disabled "Installed" state until Reinstall surfaced the modal. Selects now update in place via a stored handle.
+
+### Internal
+
+- **`services/utils.ts` demoted** (B-026). Its contents moved to semantic homes: `splitKey`/`joinKey`/`slugifyGroup`/`displayGroupTitle` → `src/store/keys.ts`; `normalizeTrigger`/`isBadTrigger` → `src/engine/triggers.ts`; `diffIncoming`/`DiffResult` → `src/store/diff.ts`. Closes the wrong-way `store → services` import arrow from the 2026-05-14 architect review.
+- **`isBadTrigger` regex literals lifted out of the function body** (B-072 folded in with B-026). Runs on the editor-change hot path; same caching now, but at the module-level for clarity.
+- **Install-plan logic extracted from `PackageBrowser` into pure `src/core/install-plan.ts`** (B-028 partial). `buildPackageDiff`, `isPackageInstalled`, `listPackageKeys`, `removePackageSnippets` are now pure functions with 22 boundary tests per [ADR-0005](.claude/brain/decisions/0005-test-philosophy.md). 100 % coverage. UI handler reduced to "build plan → confirm → write".
+- **Bonus a11y**: replaced the lingering `new Setting(contentEl).setHeading().setName("Conflicts")` styled-div in `PackagePreviewModal` with a real `<h3>Conflicts</h3>`. Last B-091 site outside the 1.1.0 sweep.
+
 ## [1.1.5] - 2026-05-19
 
 Polish pass on the Snippet Picker — the most-opened surface in the plugin, which had been shipping without CSS since 1.1.0.
