@@ -1,11 +1,14 @@
 import * as YAML from "yaml";
 import { App, TFolder, TFile, requestUrl } from "obsidian";
 import type { PackageData } from "./package-types";
-import { loadCommunityPackagesFromGitHub, convertSnippetsToObject } from "./community-api";
+import { convertSnippetsToObject } from "./community-api";
+import { loadCommunityPackagesWithCache, type PluginCacheHost } from "./community-cache";
 
-// GitHub I/O (loadCommunityPackagesFromGitHub, isAllowedDownloadUrl,
-// convertSnippetsToObject) moved to `community-api.ts` in 1.1.7
-// (B-025) per the architect's "single biggest refactor".
+// Module split (B-025, 1.1.7):
+//   - GitHub I/O                  → community-api.ts
+//   - 24h cache wrapper           → community-cache.ts
+// This file is now the facade: PackageItem type, vault-backed loader,
+// router `loadAllCommunityPackages`, and the dead `createPackageIssue`.
 
 interface GitHubIssueResponse {
   html_url: string;
@@ -133,72 +136,30 @@ export async function createPackageIssue(_app: App, packageData: PackageData, us
   }
 }
 
-/**
- * Loads community packages with caching
- */
-interface PluginWithApp {
-  app: App;
-  settings: {
-    communityPackages?: {
-      cache?: {
-        packages: PackageItem[];
-        lastUpdated: number;
-      };
-    };
-  };
-  saveSettings: () => Promise<void>;
-}
+// `loadCommunityPackagesWithCache` + `PluginCacheHost` moved to
+// `community-cache.ts` in 1.1.7 (B-025). Re-exported here so
+// existing callers (PackageBrowser.ts, types.ts) don't see the move.
+export { loadCommunityPackagesWithCache, type PluginCacheHost };
 
-export async function loadCommunityPackagesWithCache(plugin: PluginWithApp): Promise<PackageItem[]> {
-  const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
-  const now = Date.now();
-  
-  // Check if we have valid cache
-  const cache = plugin.settings.communityPackages?.cache;
-  if (cache && (now - cache.lastUpdated) < CACHE_DURATION) {
-    return cache.packages;
-  }
-  
-  try {
-    // Load from GitHub
-    const packages = await loadCommunityPackagesFromGitHub();
-    
-    // Update cache (even if empty, to avoid repeated 404 requests)
-    plugin.settings.communityPackages = {
-      cache: {
-        packages: packages,
-        lastUpdated: now
-      }
-    };
-    await plugin.saveSettings();
-    
-    return packages;
-  } catch (error) {
-    console.error('Failed to load from GitHub, falling back to cache or built-in:', error);
-    
-    // Fallback to cache if available
-    if (cache && cache.packages.length > 0) {
-      return cache.packages;
+/**
+ * Router for the Packages-tab data load. With a `plugin` argument,
+ * goes through the 24-hour `community-cache`; without one (test
+ * paths, niche callers), falls back to the vault-backed dynamic
+ * loader. This is the single entry point UI components should call.
+ */
+export async function loadAllCommunityPackages(
+    app: App,
+    plugin?: PluginCacheHost,
+): Promise<PackageItem[]> {
+    try {
+        const packages = plugin
+            ? await loadCommunityPackagesWithCache(plugin)
+            : await loadDynamicCommunityPackages(app);
+        return packages;
+    } catch (error) {
+        console.error("Failed to load community packages:", error);
+        return [];
     }
-    
-    // No fallback - return empty array if GitHub is unavailable
-    return [];
-  }
-}
-
-/**
- * Loads all community packages from GitHub API
- */
-export async function loadAllCommunityPackages(app: App, plugin?: PluginWithApp): Promise<PackageItem[]> {
-  try {
-    // Load packages from GitHub API with caching
-    const packages = plugin ? await loadCommunityPackagesWithCache(plugin) : await loadDynamicCommunityPackages(app);
-    
-    return packages;
-  } catch (error) {
-    console.error("Failed to load community packages:", error);
-    return [];
-  }
 }
 
 /* `processPackageSubmission` removed in 1.0.8 — was wired only to the
