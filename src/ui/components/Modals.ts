@@ -264,8 +264,12 @@ export class TextPromptModal extends Modal {
                 t.inputEl.addEventListener("input", () => { this.value = t.getValue(); });
             });
 
-        // Error text
-        const err = contentEl.createDiv({ cls: "snipsidian-error" });
+        // Error text. B-088: aria-live="polite" so AT users hear
+        // validation errors as they appear without losing input focus.
+        const err = contentEl.createDiv({
+            cls: "snipsidian-error",
+            attr: { "aria-live": "polite" },
+        });
 
         // Footer
         const footer = contentEl.createDiv({ cls: "modal-button-container" });

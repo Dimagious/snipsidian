@@ -41,6 +41,8 @@ export class PackageBrowser {
     private state: "loading" | "ready" | "error" = "loading";
     private section: HTMLElement | null = null;
     private listEl: HTMLElement | null = null;
+    private refreshBtn: HTMLButtonElement | null = null;
+    private filterCountEl: HTMLSpanElement | null = null;
 
     constructor(
         private app: App,
@@ -80,8 +82,17 @@ export class PackageBrowser {
             text: "Refresh",
             attr: { type: "button", "aria-label": "Refresh packages from GitHub" },
         });
+        this.refreshBtn = refreshBtn;
         refreshBtn.addEventListener("click", () => {
             void this.refresh();
+        });
+
+        // B-088: visually-hidden aria-live region announcing the
+        // filtered count after every input. Sighted users see the
+        // list change; AT users get a polite announcement.
+        this.filterCountEl = toolbar.createSpan({
+            cls: "snipsy-visually-hidden",
+            attr: { "aria-live": "polite", "aria-atomic": "true" },
         });
 
         this.listEl = this.section.createDiv({ cls: "packages-list" });
@@ -92,6 +103,8 @@ export class PackageBrowser {
     private async load() {
         if (!this.listEl) return;
         this.state = "loading";
+        // B-088: announce loading state to AT.
+        this.refreshBtn?.setAttr("aria-busy", "true");
         this.renderSkeleton();
         try {
             const items = await loadAllCommunityPackages(this.app, this.plugin);
@@ -104,6 +117,8 @@ export class PackageBrowser {
             console.error("[snipsy] failed to load community packages", err);
             this.state = "error";
             this.renderError();
+        } finally {
+            this.refreshBtn?.removeAttribute("aria-busy");
         }
     }
 
@@ -160,6 +175,18 @@ export class PackageBrowser {
     private renderList() {
         if (!this.listEl) return;
         this.listEl.empty();
+
+        // B-088: announce filtered count to AT (visually-hidden live
+        // region). Only updates when there's an active filter; an
+        // empty query produces an empty announcement so AT doesn't
+        // get noisy on first render.
+        if (this.filterCountEl) {
+            this.filterCountEl.setText(
+                this.searchQuery
+                    ? `Showing ${this.filteredPackages.length} of ${this.packages.length} packages`
+                    : "",
+            );
+        }
 
         if (this.filteredPackages.length === 0) {
             const empty = this.listEl.createDiv({ cls: "snipsy-empty" });
