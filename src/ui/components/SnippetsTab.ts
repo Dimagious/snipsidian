@@ -1,6 +1,7 @@
 import { App, Notice, setIcon } from "obsidian";
 import type SnipSidianPlugin from "../../main";
-import { normalizeTrigger, isBadTrigger, splitKey, joinKey, slugifyGroup } from "../../services/utils";
+import { normalizeTrigger, isBadTrigger } from "../../services/utils";
+import { splitKey, joinKey, slugifyGroup } from "../../store/keys";
 import { GroupManager } from "../utils/group-utils";
 import { UIStateManager } from "../utils/ui-state";
 import { AddSnippetModal, ConfirmModal, GroupPickerModal, TextPromptModal } from "./Modals";

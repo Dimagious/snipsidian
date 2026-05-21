@@ -1,5 +1,5 @@
 import type { SnipSidianSettings, SnippetItem } from "../types";
-import { splitKey } from "../services/utils";
+import { splitKey } from "./keys";
 
 export function getDict(settings: SnipSidianSettings): Record<string, string> {
     const src = settings.snippets || {};

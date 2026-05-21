@@ -1,6 +1,7 @@
 import { App, ButtonComponent, Modal, Setting, TextComponent } from "obsidian";
 import type SnipSidianPlugin from "../../main";
-import { DiffResult, displayGroupTitle, slugifyGroup } from "../../services/utils";
+import { DiffResult } from "../../services/utils";
+import { displayGroupTitle, slugifyGroup } from "../../store/keys";
 import { computeImportDiff } from "../../services/import-diff";
 
 /** Simple JSON copy/paste modal */

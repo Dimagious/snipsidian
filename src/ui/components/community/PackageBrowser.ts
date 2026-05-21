@@ -3,7 +3,7 @@ import type SnipSidianPlugin from "../../../main";
 import { loadAllCommunityPackages } from "../../../services/community-packages";
 import { validatePackageForInstall } from "../../../services/package-validator";
 import { PackagePreviewModal } from "../Modals";
-import { joinKey } from "../../../services/utils";
+import { joinKey } from "../../../store/keys";
 import { hasReplacementCollision } from "../../../store/snippets";
 
 interface PackageItem {

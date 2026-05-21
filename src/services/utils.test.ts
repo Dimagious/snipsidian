@@ -3,10 +3,6 @@ import {
     diffIncoming,
     normalizeTrigger,
     isBadTrigger,
-    splitKey,
-    joinKey,
-    slugifyGroup,
-    displayGroupTitle,
 } from "./utils";
 
 describe("utils.diffIncoming", () => {
@@ -97,35 +93,5 @@ describe("utils.isBadTrigger", () => {
     });
 });
 
-describe("utils.splitKey/joinKey", () => {
-    it("splits 'group/name' into {group, name}", () => {
-        expect(splitKey("dev/fn")).toEqual({ group: "dev", name: "fn" });
-    });
-    it("returns empty group when no slash", () => {
-        expect(splitKey("fn")).toEqual({ group: "", name: "fn" });
-    });
-    it("joinKey composes back", () => {
-        expect(joinKey("dev", "fn")).toBe("dev/fn");
-        expect(joinKey("", "fn")).toBe("fn");
-    });
-});
-
-describe("utils.slugifyGroup", () => {
-    it("lowercases, strips diacritics and non-alphanumerics, collapses dashes", () => {
-        expect(slugifyGroup("  Café Déjà Vu!  ")).toBe("cafe-deja-vu");
-        expect(slugifyGroup("Hello___World---2025")).toBe("hello-world-2025");
-        expect(slugifyGroup("--a--b--")).toBe("a-b");
-    });
-    it("empty or non-latin strings may collapse to empty slug", () => {
-        // Non-latin letters are removed by /[^a-zA-Z0-9]+/ -> may produce empty
-        expect(slugifyGroup("Привет мир")).toBe("");
-    });
-});
-
-describe("utils.displayGroupTitle", () => {
-    it("uses the first path segment and title-cases words", () => {
-        expect(displayGroupTitle("my-group_name")).toBe("My Group Name");
-        expect(displayGroupTitle("dev/fn")).toBe("Dev"); // takes first segment before '/'
-        expect(displayGroupTitle("single")).toBe("Single");
-    });
-});
+// Key-helper tests (splitKey/joinKey/slugifyGroup/displayGroupTitle)
+// moved to `src/store/keys.test.ts` in 1.1.6 (B-026).

@@ -1,4 +1,4 @@
-import { splitKey, joinKey, displayGroupTitle } from "../../services/utils";
+import { splitKey, joinKey, displayGroupTitle } from "../../store/keys";
 
 export type SnippetMap = Record<string, string>;
 export type GroupKey = string; // '' means Ungrouped
