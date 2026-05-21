@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-    diffIncoming,
-    normalizeTrigger,
-    isBadTrigger,
-} from "./utils";
+import { diffIncoming } from "./utils";
 
 describe("utils.diffIncoming", () => {
     it("splits incoming into added and conflicts", () => {
@@ -37,61 +33,8 @@ describe("utils.diffIncoming", () => {
     });
 });
 
-describe("utils.normalizeTrigger", () => {
-    it("trims whitespace", () => {
-        expect(normalizeTrigger("  fn  ")).toBe("fn");
-    });
-
-    it("strips leading colons (Espanso convention)", () => {
-        expect(normalizeTrigger(":todo")).toBe("todo");
-        expect(normalizeTrigger("::nested")).toBe("nested");
-    });
-
-    it("strips trailing colons (Espanso `:foo:` convention)", () => {
-        expect(normalizeTrigger("smile:")).toBe("smile");
-        expect(normalizeTrigger("fire::")).toBe("fire");
-    });
-
-    it("strips both ends — `:foo:` becomes `foo`", () => {
-        expect(normalizeTrigger(":smile:")).toBe("smile");
-        expect(normalizeTrigger(":fire:")).toBe("fire");
-        expect(normalizeTrigger("  :heart:  ")).toBe("heart");
-    });
-
-    it("leaves interior colons alone (rare, but valid e.g. `ns:trigger`)", () => {
-        expect(normalizeTrigger("ns:trigger")).toBe("ns:trigger");
-        expect(normalizeTrigger(":ns:trigger:")).toBe("ns:trigger");
-    });
-
-    it("returns empty string for pure-colon input", () => {
-        expect(normalizeTrigger(":::")).toBe("");
-        expect(normalizeTrigger("")).toBe("");
-    });
-});
-
-describe("utils.isBadTrigger", () => {
-    it("rejects empty or triggers containing separators/punctuation", () => {
-        expect(isBadTrigger("")).toBe(true);
-        expect(isBadTrigger("a b")).toBe(true);   // space
-        expect(isBadTrigger("a.b")).toBe(true);   // dot
-        expect(isBadTrigger("a/b")).toBe(true);   // slash
-        expect(isBadTrigger("a-b")).toBe(true);   // hyphen
-        expect(isBadTrigger("(")).toBe(true);
-        expect(isBadTrigger("a:b")).toBe(true);   // colon in middle
-    });
-    it("accepts simple word-like triggers (latin or unicode letters)", () => {
-        expect(isBadTrigger("ab")).toBe(false);
-        expect(isBadTrigger("пр")).toBe(false);   // cyrillic is allowed
-        expect(isBadTrigger("_ab")).toBe(false);  // underscore ok
-        expect(isBadTrigger("a1")).toBe(false);
-    });
-    it("accepts triggers starting with colon", () => {
-        expect(isBadTrigger(":plot")).toBe(false);
-        expect(isBadTrigger(":scene")).toBe(false);
-        expect(isBadTrigger(":character")).toBe(false);
-        expect(isBadTrigger(":email")).toBe(false);
-    });
-});
+// Trigger-helper tests (normalizeTrigger/isBadTrigger) moved to
+// `src/engine/triggers.test.ts` in 1.1.6 (B-026).
 
 // Key-helper tests (splitKey/joinKey/slugifyGroup/displayGroupTitle)
 // moved to `src/store/keys.test.ts` in 1.1.6 (B-026).
