@@ -348,9 +348,21 @@ export class SnippetsTab {
         setIcon(deleteBtn, "trash");
         deleteBtn.addEventListener("click", (e) => {
             e.stopPropagation();
+            // B-053: preview the first 5 trigger names so the user
+            // knows what's about to disappear — matches the 1.1.6
+            // Uninstall pack confirmation pattern.
+            const triggerNames = items.map(([k]) => splitKey(k).name);
+            const sample = triggerNames.slice(0, 5).join(", ");
+            const more =
+                triggerNames.length > 5
+                    ? ` (and ${triggerNames.length - 5} more)`
+                    : "";
+            const message =
+                `Delete ${items.length} snippet${items.length === 1 ? "" : "s"}` +
+                ` from "${title}": ${sample}${more}.\n\nThis cannot be undone.`;
             const modal = new ConfirmModal(this.app, {
-                title: "Delete group",
-                message: `Delete group "${title}" with ${items.length} snippet(s)?`,
+                title: `Delete group "${title}"?`,
+                message,
                 confirmText: "Delete",
                 onConfirm: async () => {
                     for (const [key] of items) {
