@@ -6,6 +6,7 @@ import { GroupManager } from "../utils/group-utils";
 import { UIStateManager } from "../utils/ui-state";
 import { AddSnippetModal, ConfirmModal, GroupPickerModal, TextPromptModal } from "./Modals";
 import { hasTriggerCollision } from "../../store/snippets";
+import { planAddSnippet } from "../../core/snippet-ops";
 
 export class SnippetsTab {
     private groupManager: GroupManager;
@@ -633,30 +634,17 @@ export class SnippetsTab {
 
     private showAddSnippetModal() {
         const modal = new AddSnippetModal(this.app, async (snippet) => {
-            if (snippet.trigger && snippet.replacement) {
-                const normalizedTrigger = normalizeTrigger(snippet.trigger);
-                if (isBadTrigger(normalizedTrigger)) {
-                    new Notice("Invalid trigger: contains separators or is empty");
-                    return;
-                }
-                const normalizedGroup = slugifyGroup(snippet.group);
-                const key = normalizedGroup
-                    ? `${normalizedGroup}/${normalizedTrigger}`
-                    : normalizedTrigger;
+            if (!snippet.trigger || !snippet.replacement) return;
 
-                if (this.plugin.settings.snippets[key] !== undefined) {
-                    new Notice(`Snippet "${normalizedTrigger}" already exists`);
-                    return;
-                }
-                if (hasTriggerCollision(this.plugin.settings, normalizedTrigger, key)) {
-                    new Notice(`Trigger "${normalizedTrigger}" already exists in another group`);
-                    return;
-                }
-
-                this.plugin.settings.snippets[key] = snippet.replacement;
-                await this.plugin.saveSettings();
-                this.renderList();
+            const plan = planAddSnippet(snippet, this.plugin.settings);
+            if (!plan.ok) {
+                new Notice(plan.reason);
+                return;
             }
+
+            this.plugin.settings.snippets[plan.data.key] = plan.data.value;
+            await this.plugin.saveSettings();
+            this.renderList();
         });
         modal.open();
     }
