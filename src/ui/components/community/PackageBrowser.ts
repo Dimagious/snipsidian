@@ -4,7 +4,7 @@ import { loadAllCommunityPackages } from "../../../services/community-packages";
 import { validatePackageForInstall } from "../../../services/package-validator";
 import { PackagePreviewModal } from "../Modals";
 import { joinKey } from "../../../store/keys";
-import { buildPackageDiff } from "../../../core/install-plan";
+import { buildPackageDiff, isPackageInstalled } from "../../../core/install-plan";
 import { hasReplacementCollision } from "../../../store/snippets";
 
 interface PackageItem {
@@ -199,7 +199,11 @@ export class PackageBrowser {
         });
 
         const actions = row.createDiv({ cls: "package-actions" });
-        const installed = this.isPackageInstalled(pkg);
+        const installed = isPackageInstalled(
+            pkg.snippets,
+            pkg.label,
+            this.plugin.settings.snippets,
+        );
         const btn = actions.createEl("button", {
             text: installed ? "Installed" : "Install",
             cls: installed ? "snippet-action" : "snippet-action mod-cta",
@@ -302,22 +306,6 @@ export class PackageBrowser {
         }
     }
 
-    private isPackageInstalled(pkg: PackageItem): boolean {
-        if (!pkg.snippets) return false;
-        const packageGroup = pkg.label;
-        const packageTriggers = Object.keys(pkg.snippets);
-        if (packageTriggers.length === 0) return false;
-        // Same install-heuristic as before: ≥80% of the package's
-        // snippets present in the group is "installed". Keeps the
-        // install badge stable when the user has tweaked one or two
-        // entries.
-        const installed = packageTriggers.filter((trigger) => {
-            const groupedKey = joinKey(packageGroup, trigger);
-            return this.plugin.settings.snippets[groupedKey] === pkg.snippets![trigger];
-        });
-        return installed.length >= packageTriggers.length * 0.8;
-    }
-
     private showPackageDetails(pkg: PackageItem) {
         const modal = new Modal(this.app);
         modal.titleEl.setText(pkg.label);
@@ -356,7 +344,11 @@ export class PackageBrowser {
         }
 
         const footer = content.createDiv({ cls: "modal-button-container" });
-        const installed = this.isPackageInstalled(pkg);
+        const installed = isPackageInstalled(
+            pkg.snippets,
+            pkg.label,
+            this.plugin.settings.snippets,
+        );
         const installBtn = footer.createEl("button", {
             text: installed ? "Installed" : "Install",
             cls: installed ? "" : "mod-cta",

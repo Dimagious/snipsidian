@@ -53,3 +53,33 @@ export function buildPackageDiff(
     }
     return diffIncoming(prefixed, currentSnippets);
 }
+
+/**
+ * Heuristic check: is this package "installed enough" to label its
+ * row as Installed in the Packages tab?
+ *
+ * Threshold is **≥ 80 % of the package's triggers** present in the
+ * current store AND with the exact same replacement. Keeps the
+ * Installed badge stable when the user has tweaked one or two
+ * entries — without this, any user edit would flip the button back
+ * to "Install" and tempt the user into wiping their changes.
+ *
+ * Note (1.1.6): B-017 / PR 3 will redefine "installed" entirely
+ * (key-presence only, no value comparison), so this heuristic is a
+ * transitional implementation matching what shipped before this
+ * extraction. The PR 3 change becomes a one-line edit here.
+ */
+export function isPackageInstalled(
+    newSnippets: Record<string, string> | undefined,
+    packageGroup: string,
+    currentSnippets: Record<string, string>,
+): boolean {
+    if (!newSnippets) return false;
+    const packageTriggers = Object.keys(newSnippets);
+    if (packageTriggers.length === 0) return false;
+    const installed = packageTriggers.filter((trigger) => {
+        const groupedKey = joinKey(packageGroup, trigger);
+        return currentSnippets[groupedKey] === newSnippets[trigger];
+    });
+    return installed.length >= packageTriggers.length * 0.8;
+}
