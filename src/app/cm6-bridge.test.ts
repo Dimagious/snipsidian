@@ -47,4 +47,31 @@ describe("app/registerEditorChange", () => {
         dispose();
         expect(app.workspace.offref).toHaveBeenCalledWith(expect.objectContaining({ evt: "editor-change" }));
     });
+
+    it("[B-020] logs engine errors instead of silently swallowing them", async () => {
+        const { app, calls } = makeApp();
+        // Force the adapter to throw — simulates a broken snippet
+        // (e.g. variable substitution failure, future regex-trigger
+        // compile error).
+        const boom = new Error("expansion failed");
+        vi.mocked(tryExpandAtSeparator).mockRejectedValueOnce(boom);
+        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        registerEditorChange(app, () => ({}));
+        const cb = calls[0].cb;
+        // Must NOT propagate the error — that would kill other
+        // plugins' handlers down the editor-change event chain.
+        await expect(cb({/* editor */}, {/* info */})).resolves.toBeUndefined();
+
+        expect(errorSpy).toHaveBeenCalledWith(
+            "[snipsy] expansion error",
+            expect.objectContaining({
+                filename: "note.md",
+                error: "expansion failed",
+            }),
+            boom,
+        );
+
+        errorSpy.mockRestore();
+    });
 });

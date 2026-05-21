@@ -13,11 +13,29 @@ export function registerEditorChange(
         if (!editor) return;
         const file = app.workspace.getActiveFile();
         const filename = file?.name;
-        await tryExpandAtSeparator(editor, getSnippets(), {
-            filename,
-            now: clock.now(),
-            readClipboard: readClipboardSafe
-        });
+        // B-020: surface engine errors instead of silently swallowing
+        // them. A broken snippet (e.g. an invalid `$date` format or
+        // a regex-trigger that throws on compile) used to be a black
+        // hole — no visible expansion AND no log to debug from. Now
+        // the editor-change handler logs the thrown error with the
+        // active filename so the user / maintainer can correlate.
+        // Re-thrown errors here would propagate into Obsidian's
+        // event loop and risk killing other plugins' handlers — log
+        // and swallow at the boundary, fail-open on individual
+        // expansions.
+        try {
+            await tryExpandAtSeparator(editor, getSnippets(), {
+                filename,
+                now: clock.now(),
+                readClipboard: readClipboardSafe
+            });
+        } catch (err) {
+            console.error(
+                "[snipsy] expansion error",
+                { filename, error: err instanceof Error ? err.message : String(err) },
+                err,
+            );
+        }
     });
     return () => app.workspace.offref(off as unknown as WorkspaceLeaf);
 }
