@@ -1,11 +1,10 @@
 import { App, Notice, setIcon } from "obsidian";
 import type SnipSidianPlugin from "../../main";
-import { normalizeTrigger, isBadTrigger } from "../../engine/triggers";
-import { splitKey, joinKey, slugifyGroup } from "../../store/keys";
+import { splitKey, slugifyGroup } from "../../store/keys";
 import { GroupManager } from "../utils/group-utils";
 import { UIStateManager } from "../utils/ui-state";
 import { AddSnippetModal, ConfirmModal, GroupPickerModal, TextPromptModal } from "./Modals";
-import { hasTriggerCollision } from "../../store/snippets";
+import { planAddSnippet, planEditSnippet } from "../../core/snippet-ops";
 
 export class SnippetsTab {
     private groupManager: GroupManager;
@@ -514,43 +513,26 @@ export class SnippetsTab {
         const draft = this.uiState.getEditingDraft();
         if (!draft) return;
 
-        const newTriggerName = draft.triggerName.trim();
-        const newReplacement = draft.replacement;
-
-        const normalized = normalizeTrigger(newTriggerName);
-        if (isBadTrigger(normalized)) {
-            new Notice("Invalid trigger: contains separators or is empty");
-            return;
-        }
-        if (newReplacement.length === 0) {
-            new Notice("Replacement cannot be empty");
-            return;
-        }
-
-        const { group: grp } = splitKey(originalKey);
-        const newKey = joinKey(grp, normalized);
-        if (hasTriggerCollision(this.plugin.settings, normalized, originalKey)) {
-            new Notice(`Trigger "${normalized}" already exists in another group`);
+        const plan = planEditSnippet(
+            originalKey,
+            { triggerName: draft.triggerName.trim(), replacement: draft.replacement },
+            this.plugin.settings,
+        );
+        if (!plan.ok) {
+            new Notice(plan.reason);
             return;
         }
 
         try {
-            if (newKey !== originalKey) {
-                const result = this.groupManager.safeRenameKey(
-                    this.plugin.settings.snippets,
-                    originalKey,
-                    newKey,
-                );
-                if (!result.ok) {
-                    new Notice(result.reason || "Failed to rename");
-                    return;
-                }
-                if (this.uiState.getSelected().has(originalKey)) {
-                    this.uiState.getSelected().delete(originalKey);
+            const { newKey, value, renamedFrom } = plan.data;
+            if (renamedFrom) {
+                delete this.plugin.settings.snippets[renamedFrom];
+                if (this.uiState.getSelected().has(renamedFrom)) {
+                    this.uiState.getSelected().delete(renamedFrom);
                     this.uiState.getSelected().add(newKey);
                 }
             }
-            this.plugin.settings.snippets[newKey] = newReplacement;
+            this.plugin.settings.snippets[newKey] = value;
             await this.plugin.saveSettings();
             this.uiState.setEditing(null, null);
             this.renderList();
@@ -633,30 +615,17 @@ export class SnippetsTab {
 
     private showAddSnippetModal() {
         const modal = new AddSnippetModal(this.app, async (snippet) => {
-            if (snippet.trigger && snippet.replacement) {
-                const normalizedTrigger = normalizeTrigger(snippet.trigger);
-                if (isBadTrigger(normalizedTrigger)) {
-                    new Notice("Invalid trigger: contains separators or is empty");
-                    return;
-                }
-                const normalizedGroup = slugifyGroup(snippet.group);
-                const key = normalizedGroup
-                    ? `${normalizedGroup}/${normalizedTrigger}`
-                    : normalizedTrigger;
+            if (!snippet.trigger || !snippet.replacement) return;
 
-                if (this.plugin.settings.snippets[key] !== undefined) {
-                    new Notice(`Snippet "${normalizedTrigger}" already exists`);
-                    return;
-                }
-                if (hasTriggerCollision(this.plugin.settings, normalizedTrigger, key)) {
-                    new Notice(`Trigger "${normalizedTrigger}" already exists in another group`);
-                    return;
-                }
-
-                this.plugin.settings.snippets[key] = snippet.replacement;
-                await this.plugin.saveSettings();
-                this.renderList();
+            const plan = planAddSnippet(snippet, this.plugin.settings);
+            if (!plan.ok) {
+                new Notice(plan.reason);
+                return;
             }
+
+            this.plugin.settings.snippets[plan.data.key] = plan.data.value;
+            await this.plugin.saveSettings();
+            this.renderList();
         });
         modal.open();
     }
