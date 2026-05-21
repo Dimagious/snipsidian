@@ -20,9 +20,8 @@
  * mutation-planning logic.
  */
 
-import { joinKey } from "../store/keys";
+import { joinKey, splitKey, slugifyGroup } from "../store/keys";
 import { normalizeTrigger, isBadTrigger } from "../engine/triggers";
-import { slugifyGroup } from "../store/keys";
 import type { SnipSidianSettings } from "../types";
 import { hasTriggerCollision } from "../store/snippets";
 
@@ -79,4 +78,83 @@ export function planAddSnippet(
     }
 
     return { ok: true, data: { key, value: input.replacement } };
+}
+
+/**
+ * Output of `planEditSnippet`: which key to write the new value to,
+ * what value to write, and (if the trigger was renamed) the old key
+ * the caller should delete from settings + update in selection state.
+ */
+export interface EditSnippetPlan {
+    /** Key under which the snippet should live after the edit. */
+    newKey: string;
+    /** Replacement value to write at `newKey`. */
+    value: string;
+    /** Set when the trigger name changed; caller must `delete
+     *  settings.snippets[renamedFrom]` and migrate any UI state
+     *  (selection, editing pointer) keyed on it. */
+    renamedFrom?: string;
+}
+
+/**
+ * Validate and plan editing an existing snippet.
+ *
+ * The group is preserved from `originalKey` — edits don't move
+ * snippets between groups (that's what Move-to is for). Only the
+ * trigger name and the replacement can change.
+ *
+ * Checks:
+ *   1. Trigger normalises to a non-empty, well-formed key.
+ *   2. Replacement is non-empty.
+ *   3. If the trigger changed, the new key isn't already occupied
+ *      in the same group (with prototype-chain defence — uses
+ *      `hasOwnProperty.call` not `in`).
+ *   4. The trigger name doesn't collide cross-group
+ *      (`hasTriggerCollision`, excluding the original key itself
+ *      so renaming a snippet to its own name within its own group
+ *      doesn't false-positive).
+ */
+export function planEditSnippet(
+    originalKey: string,
+    input: { triggerName: string; replacement: string },
+    settings: SnipSidianSettings,
+): Plan<EditSnippetPlan> {
+    const normalized = normalizeTrigger(input.triggerName);
+    if (isBadTrigger(normalized)) {
+        return { ok: false, reason: "Invalid trigger: contains separators or is empty" };
+    }
+    if (input.replacement.length === 0) {
+        return { ok: false, reason: "Replacement cannot be empty" };
+    }
+
+    const { group } = splitKey(originalKey);
+    const newKey = joinKey(group, normalized);
+    const isRename = newKey !== originalKey;
+
+    if (
+        isRename &&
+        Object.prototype.hasOwnProperty.call(settings.snippets, newKey)
+    ) {
+        return { ok: false, reason: `Trigger "${normalized}" already exists` };
+    }
+
+    if (hasTriggerCollision(settings, normalized, originalKey)) {
+        return {
+            ok: false,
+            reason: `Trigger "${normalized}" already exists in another group`,
+        };
+    }
+
+    if (settings.snippets[originalKey] === undefined) {
+        return { ok: false, reason: "Original snippet missing" };
+    }
+
+    return {
+        ok: true,
+        data: {
+            newKey,
+            value: input.replacement,
+            renamedFrom: isRename ? originalKey : undefined,
+        },
+    };
 }
