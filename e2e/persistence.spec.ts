@@ -63,6 +63,119 @@ test.describe("persistence: save → disk round-trip", () => {
         expect(dataJson.snippets.persisted).toBe("value-after-save");
     });
 
+    test("[B-110] an edited snippet replacement survives an Obsidian app reload", async ({
+        win,
+    }) => {
+        // The existing reload test pins ADD + reload. This pins EDIT
+        // + reload — saveSettings on a mutated existing key should
+        // overwrite the data.json entry, not leave a stale value.
+        await win.evaluate(async () => {
+            const plugin = (globalThis as unknown as {
+                app?: {
+                    plugins?: {
+                        plugins?: {
+                            snipsidian?: {
+                                settings: { snippets: Record<string, string> };
+                                saveSettings: () => Promise<void>;
+                            };
+                        };
+                    };
+                };
+            }).app?.plugins?.plugins?.snipsidian;
+            if (!plugin) throw new Error("snipsidian plugin not loaded");
+            // Pre-seed an entry (idempotent — fresh vault each test).
+            plugin.settings.snippets["edited"] = "original value";
+            await plugin.saveSettings();
+            // Now mutate the same key and save again.
+            plugin.settings.snippets["edited"] = "new value after edit";
+            await plugin.saveSettings();
+        });
+
+        await win.evaluate(() => {
+            const a = (globalThis as unknown as {
+                app?: { commands?: { executeCommandById?: (id: string) => void } };
+            }).app;
+            a?.commands?.executeCommandById?.("app:reload");
+        });
+
+        await win.waitForSelector(".cm-content[contenteditable=true]", {
+            timeout: 30_000,
+        });
+
+        const loadedValue = await win.evaluate(() => {
+            const plugin = (globalThis as unknown as {
+                app?: {
+                    plugins?: {
+                        plugins?: {
+                            snipsidian?: {
+                                settings: { snippets: Record<string, string> };
+                            };
+                        };
+                    };
+                };
+            }).app?.plugins?.plugins?.snipsidian;
+            return plugin?.settings?.snippets?.["edited"] ?? null;
+        });
+        // The edit MUST survive — not the original value.
+        expect(loadedValue).toBe("new value after edit");
+    });
+
+    test("[B-110] a deleted snippet stays deleted across an Obsidian app reload", async ({
+        win,
+    }) => {
+        // Pre-seed + save + delete + save + reload. The key must be
+        // absent in the post-reload settings. Pins the destructive
+        // round-trip — without this, a saveSettings that skipped the
+        // delete branch would leave dead snippets resurrect across
+        // reloads.
+        await win.evaluate(async () => {
+            const plugin = (globalThis as unknown as {
+                app?: {
+                    plugins?: {
+                        plugins?: {
+                            snipsidian?: {
+                                settings: { snippets: Record<string, string> };
+                                saveSettings: () => Promise<void>;
+                            };
+                        };
+                    };
+                };
+            }).app?.plugins?.plugins?.snipsidian;
+            if (!plugin) throw new Error("snipsidian plugin not loaded");
+            plugin.settings.snippets["soon_deleted"] = "to be removed";
+            await plugin.saveSettings();
+            delete plugin.settings.snippets["soon_deleted"];
+            await plugin.saveSettings();
+        });
+
+        await win.evaluate(() => {
+            const a = (globalThis as unknown as {
+                app?: { commands?: { executeCommandById?: (id: string) => void } };
+            }).app;
+            a?.commands?.executeCommandById?.("app:reload");
+        });
+
+        await win.waitForSelector(".cm-content[contenteditable=true]", {
+            timeout: 30_000,
+        });
+
+        const present = await win.evaluate(() => {
+            const plugin = (globalThis as unknown as {
+                app?: {
+                    plugins?: {
+                        plugins?: {
+                            snipsidian?: {
+                                settings: { snippets: Record<string, string> };
+                            };
+                        };
+                    };
+                };
+            }).app?.plugins?.plugins?.snipsidian;
+            return plugin?.settings?.snippets?.["soon_deleted"] !== undefined;
+        });
+        expect(present).toBe(false);
+    });
+
     test("a snippet survives an Obsidian app reload", async ({ win }) => {
         // Step 1: write a snippet and save to disk.
         await win.evaluate(async () => {
