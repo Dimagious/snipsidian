@@ -21,6 +21,9 @@ export class SnippetsTab {
     private countBadge: HTMLSpanElement | null = null;
     /** Bulk bar wrapper — toggled by selection state, never re-mounted. */
     private bulkBar: HTMLElement | null = null;
+    /** B-052: persist the count span so we update its text in place
+     *  rather than empty()+recreate on every checkbox toggle. */
+    private bulkBarCountEl: HTMLSpanElement | null = null;
 
     constructor(
         private app: App,
@@ -143,10 +146,20 @@ export class SnippetsTab {
         const count = this.uiState.getSelected().size;
         const visible = this.uiState.getSelectionMode() && count > 0;
         this.bulkBar.toggleClass("is-hidden", !visible);
+
+        // B-052: if the bar is already built, just update the count
+        // text in place — empty()+recreate on every checkbox toggle
+        // produced a visible flicker on the count and re-allocated
+        // the buttons' event listeners every time.
+        if (this.bulkBarCountEl && this.bulkBar.children.length > 0) {
+            this.bulkBarCountEl.setText(`${count} selected`);
+            return;
+        }
+
         this.bulkBar.empty();
         if (!visible) return;
 
-        this.bulkBar.createSpan({
+        this.bulkBarCountEl = this.bulkBar.createSpan({
             text: `${count} selected`,
         });
 
@@ -333,6 +346,20 @@ export class SnippetsTab {
                     if (!slugifyGroup(trimmed))
                         return "Group name must contain at least one letter or number";
                     return null;
+                },
+                // B-051: surface the lossy slug round-trip. The user
+                // types "My Project 2024!" → it slugifies to
+                // `my-project-2024` → display reconstructs as
+                // "My project 2024" (lost the !, lost the case).
+                // Show what we'll actually save so there are no
+                // surprises after Submit.
+                formatHint: (v) => {
+                    if (!v) return null;
+                    const slug = this.groupManager
+                        ? this.groupManager.displayGroupTitle(slugifyGroup(v))
+                        : v;
+                    if (!slug || slug === v) return null;
+                    return `Will be saved as: ${slug}`;
                 },
                 onSubmit: (newTitle) => {
                     void this.renameGroup(group, title, items, isOpen, newTitle);

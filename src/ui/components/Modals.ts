@@ -241,6 +241,11 @@ export class TextPromptModal extends Modal {
             placeholder?: string;
             cta?: string;
             validate?: (v: string) => string | null;
+            /** Optional live hint shown under the input. Receives
+             *  the current trimmed value, returns the hint text or
+             *  `null` to hide. Used by B-051 to surface "Will be
+             *  saved as: …" for slug-lossy group renames. */
+            formatHint?: (v: string) => string | null;
             onSubmit: (v: string) => void;
         }
     ) { super(app); }
@@ -261,8 +266,31 @@ export class TextPromptModal extends Modal {
                 t.setPlaceholder(this.opts.placeholder ?? "Type a name…");
                 if (this.opts.initial) t.setValue(this.opts.initial);
                 this.value = this.opts.initial ?? "";
-                t.inputEl.addEventListener("input", () => { this.value = t.getValue(); });
+                t.inputEl.addEventListener("input", () => {
+                    this.value = t.getValue();
+                    updateHint();
+                });
             });
+
+        // B-051: live hint below the input. Hidden until formatHint
+        // returns a non-null string. `aria-live="polite"` so AT users
+        // hear the "Will be saved as: …" preview as they type.
+        const hintEl = contentEl.createDiv({
+            cls: "snipsy-hint snipsidian-prompt-hint",
+            attr: { "aria-live": "polite" },
+        });
+        hintEl.hide();
+        const updateHint = () => {
+            if (!this.opts.formatHint) return;
+            const msg = this.opts.formatHint(this.value.trim());
+            if (msg) {
+                hintEl.setText(msg);
+                hintEl.show();
+            } else {
+                hintEl.hide();
+            }
+        };
+        updateHint(); // initial state for `initial` value
 
         // Error text. B-088: aria-live="polite" so AT users hear
         // validation errors as they appear without losing input focus.

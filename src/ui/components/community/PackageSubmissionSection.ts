@@ -29,9 +29,13 @@ export class PackageSubmissionSection {
         intro.createSpan({
             text: "Paste your package YAML to validate it, then open a GitHub issue to submit it for review. ",
         });
+        // B-058: the wiki page doesn't exist (GitHub wikis are off
+        // by default for new repos — the wiki URL redirects to the
+        // repo home). Point at the live catalog directory instead —
+        // submitters can browse real, accepted packs as templates.
         const help = intro.createEl("a", {
-            text: "Package format docs",
-            href: "https://github.com/Dimagious/snipsidian/wiki/Package-Creation",
+            text: "See existing packs as examples",
+            href: "https://github.com/Dimagious/snipsidian-community/tree/main/community-packages/approved",
         });
         help.setAttr("target", "_blank");
         help.setAttr("rel", "noopener noreferrer");

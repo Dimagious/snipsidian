@@ -47,42 +47,50 @@ export class EspansoSection {
         new Notice("Please paste YAML content first");
         return;
       }
+      // B-061: parse the YAML once and reuse `incoming` for collision
+      // check, diff, conflict-modal apply, and the no-conflict path.
+      // Previously the no-conflict branch re-parsed inside
+      // `installFromYaml` — wasteful on large YAML.
+      let incoming: Record<string, string>;
       try {
-        const incoming = espansoYamlToSnippets(yamlText);
-        const triggerCollisions = Object.entries(incoming).filter(([trigger, replacement]) => {
-          return hasReplacementCollision(this.plugin.settings, trigger, replacement);
-        });
-
-        if (triggerCollisions.length > 0) {
-          const collisions = triggerCollisions.map(([trigger]) => trigger).join(", ");
-          new Notice(`Skipped install: trigger name collision with existing snippets (${collisions})`);
-          return;
-        }
-
-        const diff = diffIncoming(incoming, this.plugin.settings.snippets);
-        if (diff.conflicts.length > 0) {
-          // B-060: conflict modal title matches the section heading
-          // ("Import from Espanso YAML" instead of Title Case
-          // "Espanso Package"). Sentence case across modals.
-          const modal = new PackagePreviewModal(this.app, this.plugin, "Import from Espanso YAML", diff);
-          modal.onConfirm = async (resolved) => {
-            this.plugin.settings.snippets = resolved;
-            await this.plugin.saveSettings();
-            new Notice(`Installed ${Object.keys(incoming).length} snippets from YAML`);
-          };
-          modal.open();
-        } else {
-          void this.installFromYaml(yamlText);
-        }
+        incoming = espansoYamlToSnippets(yamlText);
       } catch (err) {
         new Notice(`Failed to parse Espanso package: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
+
+      const triggerCollisions = Object.entries(incoming).filter(([trigger, replacement]) => {
+        return hasReplacementCollision(this.plugin.settings, trigger, replacement);
+      });
+
+      if (triggerCollisions.length > 0) {
+        const collisions = triggerCollisions.map(([trigger]) => trigger).join(", ");
+        new Notice(`Skipped install: trigger name collision with existing snippets (${collisions})`);
+        return;
+      }
+
+      const diff = diffIncoming(incoming, this.plugin.settings.snippets);
+      if (diff.conflicts.length > 0) {
+        // B-060: conflict modal title matches the section heading
+        // ("Import from Espanso YAML" instead of Title Case
+        // "Espanso Package"). Sentence case across modals.
+        const modal = new PackagePreviewModal(this.app, this.plugin, "Import from Espanso YAML", diff);
+        modal.onConfirm = async (resolved) => {
+          this.plugin.settings.snippets = resolved;
+          await this.plugin.saveSettings();
+          new Notice(`Installed ${Object.keys(incoming).length} snippets from YAML`);
+        };
+        modal.open();
+      } else {
+        void this.installFromIncoming(incoming);
       }
     };
   }
 
-  private async installFromYaml(yamlStr: string) {
+  /** Apply already-parsed snippets to settings. Caller has done the
+   *  collision check + diff computation. B-061: no re-parse. */
+  private async installFromIncoming(incoming: Record<string, string>) {
     try {
-      const incoming = espansoYamlToSnippets(yamlStr);
       for (const [trigger, replacement] of Object.entries(incoming)) {
         this.plugin.settings.snippets[trigger] = replacement;
       }
