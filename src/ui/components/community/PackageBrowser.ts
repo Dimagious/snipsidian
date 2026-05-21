@@ -4,6 +4,7 @@ import { loadAllCommunityPackages } from "../../../services/community-packages";
 import { validatePackageForInstall } from "../../../services/package-validator";
 import { PackagePreviewModal } from "../Modals";
 import { joinKey } from "../../../store/keys";
+import { buildPackageDiff } from "../../../core/install-plan";
 import { hasReplacementCollision } from "../../../store/snippets";
 
 interface PackageItem {
@@ -267,7 +268,11 @@ export class PackageBrowser {
 
             // Always preview (HANDOFF §2d) — even with zero conflicts the
             // user should see the diff before the install happens.
-            const diff = this.buildPackageDiff(pkg.snippets, packageGroup);
+            const diff = buildPackageDiff(
+                pkg.snippets,
+                packageGroup,
+                this.plugin.settings.snippets,
+            );
             const modal = new PackagePreviewModal(this.app, this.plugin, pkg.label, diff);
             modal.onConfirm = async (resolved) => {
                 await this.applyResolvedInstallation(pkg, resolved);
@@ -278,29 +283,6 @@ export class PackageBrowser {
                 `Failed to install package: ${error instanceof Error ? error.message : String(error)}`,
             );
         }
-    }
-
-    private buildPackageDiff(
-        newSnippets: { [trigger: string]: string },
-        packageGroup: string,
-    ): {
-        added: Array<{ key: string; value: string }>;
-        conflicts: Array<{ key: string; current: string; incoming: string }>;
-    } {
-        const added: Array<{ key: string; value: string }> = [];
-        const conflicts: Array<{ key: string; current: string; incoming: string }> = [];
-
-        for (const [trigger, incoming] of Object.entries(newSnippets)) {
-            const groupedKey = joinKey(packageGroup, trigger);
-            const current = this.plugin.settings.snippets[groupedKey];
-            if (current === undefined) {
-                added.push({ key: groupedKey, value: incoming });
-            } else if (current !== incoming) {
-                conflicts.push({ key: groupedKey, current, incoming });
-            }
-        }
-
-        return { added, conflicts };
     }
 
     private async applyResolvedInstallation(
