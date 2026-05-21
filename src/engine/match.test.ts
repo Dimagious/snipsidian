@@ -151,4 +151,51 @@ describe("findTrigger", () => {
         expect(m?.fromCh).toBe(0);
         expect(m?.toCh).toBe("пр".length);
     });
+
+    it("[B-019] caps lookback at 64 chars — pathological non-separator runs return null", () => {
+        // 200-char run of non-separators (no spaces in the line up to
+        // the typed separator). Without the cap, findTrigger walks
+        // all 200 chars before concluding "no trigger". With the
+        // cap, it bails out after 64 chars. The dict is empty so
+        // even short matches return null — this test pins the
+        // null-bailout for pathological-length runs specifically.
+        const longRun = "a".repeat(200);
+        const input = {
+            textBefore: longRun,
+            textAfter: "",
+            lastTyped: " ",
+            sepCh: longRun.length,
+        };
+        expect(findTrigger(input, dict, delims)).toBeNull();
+    });
+
+    it("[B-019] triggers exactly 64 chars long still match (boundary)", () => {
+        const exactTrigger = "x".repeat(64);
+        const richDict = { ...dict, [exactTrigger]: "ok" };
+        const input = {
+            textBefore: exactTrigger,
+            textAfter: "",
+            lastTyped: " ",
+            sepCh: exactTrigger.length,
+        };
+        const m = findTrigger(input, richDict, delims);
+        expect(m?.trigger).toBe(exactTrigger);
+    });
+
+    it("[B-019] separator before the 64-char window is still found (short trigger after long URL)", () => {
+        // 200-char URL-like run + space + short trigger + separator
+        // → the short trigger is within the cap, finds the
+        // intermediate space and returns the short trigger.
+        const url = "h".repeat(200);
+        const trigger = "fn";
+        const before = `${url} ${trigger}`;
+        const input = {
+            textBefore: before,
+            textAfter: "",
+            lastTyped: " ",
+            sepCh: before.length,
+        };
+        const m = findTrigger(input, dict, delims);
+        expect(m?.trigger).toBe(trigger);
+    });
 });

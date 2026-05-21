@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Performance
 
 - **Community-package fetch is parallel now** (B-024 / P-007). The Packages-tab cold-load used to fetch each `.yml` file sequentially — ~12× the latency of a single fetch with the current 12-pack catalog. Switched to `Promise.all` over the per-pack downloads; cold open of Packages drops from a couple of seconds to ~one fetch round trip. Each per-pack fetch still swallows its own errors, so one bad pack doesn't reject the whole batch.
+- **`findTrigger` lookback capped at 64 chars** (B-019). Without the cap, pathological inputs — a 50,000-char base64 paste, a long URL on one line, "log everything" files where a single line spans thousands of characters — caused `findTrigger` to walk all of it on every separator keystroke. 64 is well above any legitimate trigger length (current community-pack triggers max out at ~12 chars). Three boundary tests pin the cap. The other perf items (B-067 isInFencedCode caching, B-068 getDict memoise, B-070 picker regex cache) were investigated and deferred — see [ADR-0006](.claude/brain/decisions/0006-perf-hot-path-deferred.md).
 
 ### Internal
 
