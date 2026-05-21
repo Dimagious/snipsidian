@@ -1,5 +1,5 @@
 import * as YAML from "yaml";
-import { App, TFolder, TFile, requestUrl } from "obsidian";
+import { App, TFolder, TFile } from "obsidian";
 import type { PackageData } from "./package-types";
 import { convertSnippetsToObject } from "./community-api";
 import { loadCommunityPackagesWithCache, type PluginCacheHost } from "./community-cache";
@@ -8,11 +8,7 @@ import { loadCommunityPackagesWithCache, type PluginCacheHost } from "./communit
 //   - GitHub I/O                  → community-api.ts
 //   - 24h cache wrapper           → community-cache.ts
 // This file is now the facade: PackageItem type, vault-backed loader,
-// router `loadAllCommunityPackages`, and the dead `createPackageIssue`.
-
-interface GitHubIssueResponse {
-  html_url: string;
-}
+// and the router `loadAllCommunityPackages`.
 
 export interface PackageItem {
     id?: string;
@@ -94,47 +90,10 @@ export async function loadDynamicCommunityPackages(app: App): Promise<PackageIte
 }
 
 
-interface UserInfo {
-  author?: string;
-}
-
-/**
- * Creates a GitHub Issue for package submission
- */
-export async function createPackageIssue(_app: App, packageData: PackageData, userInfo: UserInfo): Promise<{ success: boolean; issueUrl?: string; error?: string }> {
-  try {
-    const issue = {
-      title: `[Package Submission] ${packageData.name}`,
-      body: `## Package Information\n\n**Author:** ${userInfo.author || 'Anonymous'}\n**Category:** ${packageData.category || 'other'}\n**Description:** ${packageData.description || 'No description'}\n\n## Package YAML\n\n\`\`\`yaml\n${YAML.stringify(packageData)}\n\`\`\`\n\n## Review Checklist\n\n- [ ] Package follows naming conventions\n- [ ] All snippets work correctly\n- [ ] YAML is valid and well-formatted\n- [ ] Content is appropriate and useful\n- [ ] Package fits the chosen category\n- [ ] No duplicate triggers with existing packages`,
-      labels: ['package-submission', 'pending-review']
-    };
-
-    const response = await requestUrl({
-      url: 'https://api.github.com/repos/Dimagious/snipsidian-community/issues',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/vnd.github.v3+json'
-      },
-      body: JSON.stringify(issue)
-    });
-
-    if (response.status !== 201 && response.status !== 200) {
-      if (response.status === 404) {
-        return { 
-          success: false, 
-          error: 'Community repository not found. Please contact the maintainer to set up the community packages repository.' 
-        };
-      }
-      throw new Error(`GitHub API error: ${response.status}`);
-    }
-
-    const result = JSON.parse(response.text) as GitHubIssueResponse;
-    return { success: true, issueUrl: result.html_url };
-  } catch (error) {
-    return { success: false, error: (error as Error).message };
-  }
-}
+// `createPackageIssue` removed in 1.1.7 — was the legacy direct-API
+// submission flow, replaced by `services/github-issue-url.ts`
+// (opens a prefilled GitHub issue in the browser via `window.open`).
+// The legacy function had no production callers, only its own tests.
 
 // `loadCommunityPackagesWithCache` + `PluginCacheHost` moved to
 // `community-cache.ts` in 1.1.7 (B-025). Re-exported here so

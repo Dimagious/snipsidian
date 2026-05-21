@@ -21,7 +21,6 @@ vi.mock("obsidian", async () => {
 import {
   loadDynamicCommunityPackages,
   loadAllCommunityPackages,
-  createPackageIssue,
   loadCommunityPackagesWithCache
 } from "./community-packages";
 import { loadCommunityPackagesFromGitHub } from "./community-api";
@@ -280,68 +279,10 @@ snippets: []
     });
   });
 
-  describe("createPackageIssue", () => {
-    it("should create GitHub issue successfully", async () => {
-      const mockResponse = {
-        html_url: "https://github.com/Dimagious/snipsidian-community/issues/123"
-      };
-
-      const mockApp = { vault: {} } as any;
-
-      vi.mocked(requestUrl).mockResolvedValue({
-        status: 201,
-        text: JSON.stringify(mockResponse)
-      });
-
-      const packageData = {
-        name: "Test Package",
-        version: "1.0.0",
-        author: "test-author",
-        description: "A test package"
-      };
-
-      const userInfo = {
-        platform: "obsidian",
-        version: "1.0.0"
-      };
-
-      const result = await createPackageIssue(mockApp, packageData, userInfo);
-
-      expect(result.success).toBe(true);
-      expect(result.issueUrl).toBe("https://github.com/Dimagious/snipsidian-community/issues/123");
-    });
-
-    it("should handle GitHub API errors", async () => {
-      const mockApp = { vault: {} } as any;
-
-      vi.mocked(requestUrl).mockResolvedValue({
-        status: 422,
-        text: ""
-      });
-
-      const packageData = { name: "Test Package" };
-      const userInfo = { platform: "obsidian" };
-
-      const result = await createPackageIssue(mockApp, packageData, userInfo);
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("GitHub API error: 422");
-    });
-
-    it("should handle network errors", async () => {
-      const mockApp = { vault: {} } as any;
-
-      vi.mocked(requestUrl).mockRejectedValue(new Error("Network error"));
-
-      const packageData = { name: "Test Package" };
-      const userInfo = { platform: "obsidian" };
-
-      const result = await createPackageIssue(mockApp, packageData, userInfo);
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe("Network error");
-    });
-  });
+  // `createPackageIssue` tests removed in 1.1.7 with the function
+  // itself. Active submission flow opens a prefilled GitHub issue
+  // via `services/github-issue-url.ts`; the direct-API path had no
+  // production callers.
 
   describe("loadCommunityPackagesWithCache", () => {
     it("should load packages from cache when cache is valid", async () => {
