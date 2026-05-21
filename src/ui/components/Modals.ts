@@ -1,6 +1,6 @@
 import { App, ButtonComponent, Modal, Setting, TextComponent } from "obsidian";
 import type SnipSidianPlugin from "../../main";
-import { DiffResult } from "../../services/utils";
+import { DiffResult } from "../../store/diff";
 import { displayGroupTitle, slugifyGroup } from "../../store/keys";
 import { computeImportDiff } from "../../services/import-diff";
 
