@@ -72,15 +72,22 @@ export async function loadCommunityPackagesFromGitHub(): Promise<PackageItem[]> 
 
         if (!Array.isArray(files) || files.length === 0) return [];
 
-        const packages: PackageItem[] = [];
-
-        for (const file of files) {
-            if (!file.name.endsWith(".yml") && !file.name.endsWith(".yaml")) continue;
-            const pkg = await fetchAndParsePack(file);
-            if (pkg) packages.push(pkg);
-        }
-
-        return packages;
+        // B-024 (P-007): fan-out per-pack fetches with Promise.all
+        // instead of awaiting them one at a time. The previous
+        // sequential loop took O(N) round trips serialised; with 12
+        // packs in the catalog that was ~12× the latency of a
+        // single fetch. Parallel fetch is bounded by GitHub's
+        // request rate (60/hr unauthenticated) but at typical
+        // catalog sizes (under 100 packs) we're never close.
+        //
+        // Each `fetchAndParsePack` swallows its own errors and
+        // returns `null`, so a single bad pack doesn't reject the
+        // whole `Promise.all`. We filter nulls out below.
+        const ymlFiles = files.filter(
+            (f) => f.name.endsWith(".yml") || f.name.endsWith(".yaml"),
+        );
+        const fetched = await Promise.all(ymlFiles.map(fetchAndParsePack));
+        return fetched.filter((pkg): pkg is PackageItem => pkg !== null);
     } catch (error) {
         console.error("Failed to load community packages from GitHub:", error);
         return [];
