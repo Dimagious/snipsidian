@@ -31,6 +31,7 @@ export class EspansoSection {
     const espansoTextarea: HTMLTextAreaElement = espansoYamlContainer.createEl("textarea", {
       placeholder: "Paste Espanso YAML here…",
       cls: "yaml-textarea",
+      attr: { "aria-label": "Espanso YAML to import" },
     });
 
     const espansoButtonRow = espansoSection.createDiv({ cls: "button-row" });

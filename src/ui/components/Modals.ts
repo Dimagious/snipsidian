@@ -21,7 +21,10 @@ export class JSONModal extends Modal {
         titleEl.setText(this.title);
 
         contentEl.addClass("snipsidian-modal");
-        const ta = contentEl.createEl("textarea", { text: this.text });
+        const ta = contentEl.createEl("textarea", {
+            text: this.text,
+            attr: { "aria-label": this.title },
+        });
         ta.addClass("snipsidian-json-input");
 
         const footer = contentEl.createDiv({ cls: "modal-button-container" });
@@ -171,6 +174,7 @@ export class GroupPickerModal extends Modal {
         const input = newWrap.createEl("input", {
             type: "text",
             placeholder: "New group name",
+            attr: { "aria-label": "New group name" },
         });
         const newErr = newWrap.createDiv({ cls: "snipsidian-error" });
         newErr.hide();
