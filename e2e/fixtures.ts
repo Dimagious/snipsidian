@@ -141,10 +141,23 @@ export const test = base.extend<SnipsyFixtures>({
             JSON.stringify(vaultRegistry),
         );
 
+        // Opt-in video recording. Set SNIPSY_DEMO_VIDEO_DIR=<absolute
+        // path> to capture the Obsidian window at 1280×720 via
+        // Playwright's Chromium pipeline. Bypasses the macOS Screen
+        // Recording permission that screencapture / ffmpeg
+        // avfoundation require — perfect for the README demo. Off by
+        // default so regular E2E runs aren't slowed down by video
+        // encoding.
+        const recordVideoDir = process.env.SNIPSY_DEMO_VIDEO_DIR;
+        const recordVideo = recordVideoDir
+            ? { recordVideo: { dir: recordVideoDir, size: { width: 1280, height: 720 } } }
+            : {};
+
         const app = await _electron.launch({
             args: [OBSIDIAN_APP_ASAR, `--user-data-dir=${userDataDir}`],
             env,
             timeout: 45_000,
+            ...recordVideo,
         });
         await use(app);
         // Force-close with a hard timeout. Obsidian sometimes
