@@ -1,7 +1,7 @@
 import { App, Notice } from "obsidian";
 import type SnipSidianPlugin from "../../../main";
 import { espansoYamlToSnippets } from "../../../packages/espanso";
-import { diffIncoming } from "../../../services/utils";
+import { diffIncoming } from "../../../store/diff";
 import { PackagePreviewModal } from "../Modals";
 import { hasReplacementCollision } from "../../../store/snippets";
 

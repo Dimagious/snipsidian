@@ -1,7 +1,7 @@
 // Lightweight converter from Espanso YAML to { trigger: replacement }
 import * as YAML from "yaml";
 import type { EspansoDocument } from "../services/package-types";
-import { normalizeTrigger } from "../services/utils";
+import { normalizeTrigger } from "../engine/triggers";
 
 /**
  * Supported Espanso fields:

@@ -1,7 +1,7 @@
 import * as YAML from "yaml";
 import { App, TFolder, TFile, requestUrl } from "obsidian";
 import type { PackageData } from "./package-types";
-import { normalizeTrigger } from "./utils";
+import { normalizeTrigger } from "../engine/triggers";
 
 /** Hostnames allowed for the second `requestUrl` fetch in
  *  `loadCommunityPackagesFromGitHub`. The Contents API returns a
