@@ -21,10 +21,10 @@ vi.mock("obsidian", async () => {
 import {
   loadDynamicCommunityPackages,
   loadAllCommunityPackages,
-  loadCommunityPackagesFromGitHub,
   createPackageIssue,
   loadCommunityPackagesWithCache
 } from "./community-packages";
+import { loadCommunityPackagesFromGitHub } from "./community-api";
 
 import { requestUrl } from "obsidian";
 
