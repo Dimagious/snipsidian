@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { buildPackageDiff, isPackageInstalled } from "./install-plan";
+import {
+    buildPackageDiff,
+    isPackageInstalled,
+    listPackageKeys,
+    removePackageSnippets,
+} from "./install-plan";
 
 describe("install-plan.buildPackageDiff", () => {
     it("splits incoming snippets into added vs conflicts, prefixed by group", () => {
@@ -146,5 +151,96 @@ describe("install-plan.isPackageInstalled (B-017: key-presence only)", () => {
         expect(diff.conflicts).toEqual([
             { key: "Markdown/todo", incoming: "- [ ]", current: "- [ ] !!!" },
         ]);
+    });
+});
+
+describe("install-plan.listPackageKeys", () => {
+    it("returns every key shaped `<packageGroup>/*`", () => {
+        const current = {
+            "Pack/a": "1",
+            "Pack/b": "2",
+            "Other/a": "3",
+            "noprefix": "4",
+        };
+        expect(listPackageKeys("Pack", current).sort()).toEqual([
+            "Pack/a",
+            "Pack/b",
+        ]);
+    });
+
+    it("does NOT match `<packageGroup>` as a literal key (without slash)", () => {
+        // A snippet at the bare key "Pack" is not a member of group
+        // "Pack" — keys must be `Pack/<trigger>` to belong.
+        const current = { Pack: "lone", "Pack/a": "1" };
+        expect(listPackageKeys("Pack", current)).toEqual(["Pack/a"]);
+    });
+
+    it("does NOT match a group whose name starts with `<packageGroup>`", () => {
+        // "Pack2/foo" should NOT match group "Pack" — the slash
+        // boundary in the prefix prevents this kind of bleed.
+        const current = { "Pack/a": "1", "Pack2/a": "1" };
+        expect(listPackageKeys("Pack", current)).toEqual(["Pack/a"]);
+    });
+
+    it("returns empty array for an empty store or empty group", () => {
+        expect(listPackageKeys("Pack", {})).toEqual([]);
+        expect(listPackageKeys("", { "Pack/a": "1" })).toEqual([]);
+    });
+});
+
+describe("install-plan.removePackageSnippets", () => {
+    it("returns a NEW map without the package's keys; input is not mutated", () => {
+        const current = {
+            "Pack/a": "1",
+            "Pack/b": "2",
+            "Other/a": "3",
+        };
+        const next = removePackageSnippets("Pack", current);
+        expect(next).toEqual({ "Other/a": "3" });
+        // Original untouched
+        expect(current).toEqual({
+            "Pack/a": "1",
+            "Pack/b": "2",
+            "Other/a": "3",
+        });
+        expect(next).not.toBe(current);
+    });
+
+    it("preserves keys from other groups and bare-key snippets", () => {
+        const current = {
+            "Pack/a": "1",
+            "Other/x": "x",
+            standalone: "s",
+        };
+        expect(removePackageSnippets("Pack", current)).toEqual({
+            "Other/x": "x",
+            standalone: "s",
+        });
+    });
+
+    it("removes user-edited entries within the group (uninstall = no trace)", () => {
+        // The user edited "Pack/a" to "USER" — uninstall still
+        // removes it. That's by design: edits to a pack's own keys
+        // are conceptually "the user's version of this pack", and
+        // uninstall should leave no trace of the pack.
+        const current = {
+            "Pack/a": "USER",
+            "Pack/b": "2",
+        };
+        expect(removePackageSnippets("Pack", current)).toEqual({});
+    });
+
+    it("returns a shallow copy when the package has no keys present", () => {
+        const current = { "Other/a": "1" };
+        const next = removePackageSnippets("Pack", current);
+        expect(next).toEqual({ "Other/a": "1" });
+        expect(next).not.toBe(current);
+    });
+
+    it("returns a shallow copy when packageGroup is empty (defensive)", () => {
+        const current = { "Pack/a": "1" };
+        const next = removePackageSnippets("", current);
+        expect(next).toEqual({ "Pack/a": "1" });
+        expect(next).not.toBe(current);
     });
 });
