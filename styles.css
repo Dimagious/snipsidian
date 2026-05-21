@@ -165,6 +165,25 @@
   margin: 4px 0 12px;
 }
 
+/* ---- Espanso import: group-name input (B-045) ---- */
+.snipsidian-settings .snipsy-espanso-group-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 4px;
+}
+.snipsidian-settings .snipsy-espanso-group-row label {
+  flex: 0 0 auto;
+  font-size: 13px;
+  color: var(--snipsy-text-muted);
+}
+.snipsidian-settings .snipsy-espanso-group-input {
+  flex: 1 1 auto;
+  max-width: 280px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
 /* ---- Search bar ---- */
 .snipsidian-settings .snipsy-search {
   position: relative;
