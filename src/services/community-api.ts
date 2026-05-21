@@ -49,49 +49,90 @@ interface GitHubContentEntry {
 }
 
 /**
+ * Result of a live community-pack fetch.
+ *
+ * Pre-1.1.7 this returned `PackageItem[]` — but the catch-all
+ * `return []` masked *why* the list was empty (real empty catalog
+ * vs. 403 rate-limit vs. network failure on mobile). The cache
+ * layer then overwrote any valid cache with that empty array,
+ * leaving users stuck on a blank Packages tab for 24h with no
+ * indication that anything had gone wrong. With a discriminated
+ * result the cache + UI can decide whether to overwrite + how to
+ * Notice the user.
+ *
+ * `reason` values:
+ *   - `"rate_limited"`: HTTP 403 / 429 from `api.github.com`.
+ *   - `"not_found"`: HTTP 404. Treated as success-with-empty for
+ *     cache purposes (the directory genuinely doesn't exist).
+ *   - `"http"`: any other non-2xx from the listing call.
+ *   - `"network"`: `requestUrl` threw (no response at all — DNS,
+ *     TLS, offline). This is the iOS-on-mobile path we kept seeing.
+ *   - `"parse"`: 200 OK but the listing JSON couldn't be parsed.
+ */
+export type CommunityFetchResult =
+    | { ok: true; packages: PackageItem[] }
+    | { ok: false; reason: "rate_limited" | "not_found" | "http" | "network" | "parse"; status?: number };
+
+/**
  * Fetch and parse every community pack on the GitHub catalog.
  *
- * Returns an empty array on:
- *   - 404 (directory missing)
- *   - empty directory
- *   - network failure (logs and swallows)
+ * `{ ok: true, packages: [...] }` for any 2xx response (including
+ * the empty-catalog case). `{ ok: false, reason }` for any non-2xx
+ * or thrown error — caller decides how to fall back.
  *
- * Each individual pack fetch is independent — a single bad pack does
- * not abort the whole load.
+ * Individual per-pack fetches still swallow their own errors and
+ * return `null` (filtered out below) so a single bad pack does not
+ * abort the whole load.
  */
-export async function loadCommunityPackagesFromGitHub(): Promise<PackageItem[]> {
+export async function loadCommunityPackagesFromGitHub(): Promise<CommunityFetchResult> {
+    let response;
     try {
-        const response = await requestUrl({ url: CONTENTS_API_URL });
-
-        if (response.status !== 200) {
-            if (response.status === 404) return [];
-            throw new Error(`GitHub API error: ${response.status}`);
-        }
-
-        const files = JSON.parse(response.text) as GitHubContentEntry[];
-
-        if (!Array.isArray(files) || files.length === 0) return [];
-
-        // B-024 (P-007): fan-out per-pack fetches with Promise.all
-        // instead of awaiting them one at a time. The previous
-        // sequential loop took O(N) round trips serialised; with 12
-        // packs in the catalog that was ~12× the latency of a
-        // single fetch. Parallel fetch is bounded by GitHub's
-        // request rate (60/hr unauthenticated) but at typical
-        // catalog sizes (under 100 packs) we're never close.
-        //
-        // Each `fetchAndParsePack` swallows its own errors and
-        // returns `null`, so a single bad pack doesn't reject the
-        // whole `Promise.all`. We filter nulls out below.
-        const ymlFiles = files.filter(
-            (f) => f.name.endsWith(".yml") || f.name.endsWith(".yaml"),
-        );
-        const fetched = await Promise.all(ymlFiles.map(fetchAndParsePack));
-        return fetched.filter((pkg): pkg is PackageItem => pkg !== null);
+        response = await requestUrl({ url: CONTENTS_API_URL });
     } catch (error) {
-        console.error("Failed to load community packages from GitHub:", error);
-        return [];
+        console.error("[snipsy] community fetch: network error", error);
+        return { ok: false, reason: "network" };
     }
+
+    if (response.status !== 200) {
+        if (response.status === 404) {
+            return { ok: false, reason: "not_found", status: 404 };
+        }
+        if (response.status === 403 || response.status === 429) {
+            console.error(`[snipsy] community fetch: rate limited (HTTP ${response.status})`);
+            return { ok: false, reason: "rate_limited", status: response.status };
+        }
+        console.error(`[snipsy] community fetch: HTTP ${response.status}`);
+        return { ok: false, reason: "http", status: response.status };
+    }
+
+    let files: GitHubContentEntry[];
+    try {
+        files = JSON.parse(response.text) as GitHubContentEntry[];
+    } catch (error) {
+        console.error("[snipsy] community fetch: bad JSON in listing", error);
+        return { ok: false, reason: "parse" };
+    }
+
+    if (!Array.isArray(files) || files.length === 0) {
+        return { ok: true, packages: [] };
+    }
+
+    // B-024 (P-007): fan-out per-pack fetches with Promise.all
+    // instead of awaiting them one at a time. The previous
+    // sequential loop took O(N) round trips serialised; with 12
+    // packs in the catalog that was ~12× the latency of a
+    // single fetch. Parallel fetch is bounded by GitHub's
+    // request rate (60/hr unauthenticated) but at typical
+    // catalog sizes (under 100 packs) we're never close.
+    //
+    // Each `fetchAndParsePack` swallows its own errors and
+    // returns `null`, so a single bad pack doesn't reject the
+    // whole `Promise.all`. We filter nulls out below.
+    const ymlFiles = files.filter(
+        (f) => f.name.endsWith(".yml") || f.name.endsWith(".yaml"),
+    );
+    const fetched = await Promise.all(ymlFiles.map(fetchAndParsePack));
+    return { ok: true, packages: fetched.filter((pkg): pkg is PackageItem => pkg !== null) };
 }
 
 /** Fetch one pack file from its download_url and parse it into a

@@ -1,6 +1,7 @@
 import { App, Modal, Notice } from "obsidian";
 import type SnipSidianPlugin from "../../../main";
 import { loadAllCommunityPackages } from "../../../services/community-packages";
+import type { CommunityFetchError } from "../../../services/community-cache";
 import { validatePackageForInstall } from "../../../services/package-validator";
 import { ConfirmModal, PackagePreviewModal } from "../Modals";
 import { joinKey, splitKey } from "../../../store/keys";
@@ -100,6 +101,11 @@ export class PackageBrowser {
         await this.load();
     }
 
+    /** Outcome of the last `load()` call. Held on the instance so
+     *  `refresh()` can word the Notice based on what actually
+     *  happened (fresh vs. cache vs. fallback-after-error). */
+    private lastLoad: { source: "cache" | "live" | "fallback"; error?: CommunityFetchError } | null = null;
+
     private async load() {
         if (!this.listEl) return;
         this.state = "loading";
@@ -107,15 +113,18 @@ export class PackageBrowser {
         this.refreshBtn?.setAttr("aria-busy", "true");
         this.renderSkeleton();
         try {
-            const items = await loadAllCommunityPackages(this.app, this.plugin);
+            const result = await loadAllCommunityPackages(this.app, this.plugin);
+            const items = [...result.packages];
             items.sort((a, b) => a.label.localeCompare(b.label));
             this.packages = items;
+            this.lastLoad = { source: result.source, error: result.error };
             this.filterPackages();
             this.state = "ready";
             this.renderList();
         } catch (err) {
             console.error("[snipsy] failed to load community packages", err);
             this.state = "error";
+            this.lastLoad = null;
             this.renderError();
         } finally {
             this.refreshBtn?.removeAttribute("aria-busy");
@@ -129,7 +138,32 @@ export class PackageBrowser {
             await this.plugin.saveSettings();
         }
         await this.load();
-        if (this.state === "ready") new Notice("Community packages refreshed");
+        if (this.state !== "ready") return;
+        new Notice(this.refreshOutcomeMessage());
+    }
+
+    /** Human-readable Notice text for the refresh outcome. The
+     *  pre-fix unconditional "Community packages refreshed" lied
+     *  when the live load silently returned empty after a 403 /
+     *  network error. */
+    private refreshOutcomeMessage(): string {
+        const count = this.packages.length;
+        const load = this.lastLoad;
+
+        if (load?.source === "fallback") {
+            const why =
+                load.error === "rate_limited"
+                    ? "GitHub rate-limited"
+                    : load.error === "network"
+                      ? "Network unavailable"
+                      : "GitHub fetch failed";
+            return count > 0
+                ? `${why}; showing ${count} cached package${count === 1 ? "" : "s"}`
+                : `${why}; no cached packages to show`;
+        }
+
+        if (count === 0) return "Refreshed — no community packages available";
+        return `Refreshed ${count} community package${count === 1 ? "" : "s"}`;
     }
 
     private filterPackages() {
