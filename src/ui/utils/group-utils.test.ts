@@ -60,4 +60,25 @@ describe("GroupManager — prototype-chain ghost-collision (S-004)", () => {
         expect(r).toEqual({ moved: 1, skipped: 0 });
         expect(snippets["beta/toString"]).toBe("shadow");
     });
+
+    it("bulkMoveKeys SKIPS keys whose target already exists outside the source set", () => {
+        // Pre-seed a non-source key at the proposed target. bulkMoveKeys
+        // must not overwrite — that's the data-loss path the S-004 defence
+        // guards against. Source stays in place; `skipped` counts it.
+        const manager = new GroupManager();
+        const snippets: Record<string, string> = {
+            "alpha/dup": "from-alpha",
+            "beta/dup": "already-there",
+        };
+        const r = manager.bulkMoveKeys(snippets, "beta", ["alpha/dup"]);
+        expect(r).toEqual({ moved: 0, skipped: 1 });
+        expect(snippets["beta/dup"]).toBe("already-there");
+        expect(snippets["alpha/dup"]).toBe("from-alpha");
+    });
+
+    it("displayGroupTitle on the class delegates to the standalone helper", () => {
+        const manager = new GroupManager();
+        expect(manager.displayGroupTitle("my-group-name")).toBe("My Group Name");
+        expect(manager.displayGroupTitle("dev/fn")).toBe("Dev");
+    });
 });
