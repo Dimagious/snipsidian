@@ -73,6 +73,61 @@ test.describe("expansion fires in the real editor", () => {
         expect(text).toContain("[!note]");
         expect(text).toContain("> inside");
     });
+
+    test("[B-108] expansion fires at column 0 of a non-first line", async ({
+        win,
+    }) => {
+        // Existing "brb<space> at start of empty doc" test already
+        // covers line 0 column 0. This pins the second variant: a
+        // doc with content, cursor moved to column 0 of a NEW
+        // (empty) line, type trigger from there. Engine's
+        // `shouldExpandHere` has historically broken on the
+        // ch=0-line>0 corner — pin it here.
+        await ui.typeInEditor(win, "first line");
+        await win.keyboard.press("Enter");
+        // Cursor is now at line 1, column 0. Type trigger + sep.
+        await ui.typeInEditor(win, "brb ");
+        const text = await ui.editorText(win);
+        expect(text).toContain("first line");
+        expect(text).toContain("be right back");
+        expect(text).not.toContain("brb ");
+    });
+
+    test("[B-109] expansion fires when separator is a newline (Enter)", async ({
+        win,
+    }) => {
+        // Existing tests use space as the separator. Newline is a
+        // separate `tryExpandAtSeparator` path — the cm6-bridge
+        // emits a different `editor-change` event shape, and the
+        // `lastTyped` character is `\n` rather than ` `. Both must
+        // fire expansion if the engine's delimiter list contains
+        // both (it does, per `src/shared/delimiters.ts`).
+        await ui.typeInEditor(win, "brb");
+        await win.keyboard.press("Enter");
+        const text = await ui.editorText(win);
+        expect(text).toContain("be right back");
+        expect(text).not.toContain("brb");
+    });
+
+    test("[B-111] backspace inside a partial trigger does not expand", async ({
+        win,
+    }) => {
+        // Type the full trigger, backspace one char to make it
+        // partial, then press space. The trigger no longer matches
+        // any registered snippet — expansion must NOT fire. Pins
+        // the cursor-shift behaviour: `findTrigger` walks back from
+        // the separator, so it sees `br` (not `brb`), which isn't
+        // in the dict.
+        await ui.typeInEditor(win, "brb");
+        await win.keyboard.press("Backspace");
+        await ui.typeInEditor(win, " ");
+        const text = await ui.editorText(win);
+        expect(text).toContain("br ");
+        expect(text).not.toContain("be right back");
+        // Sanity: the trigger word itself is gone (we backspaced),
+        // and only the partial `br` + space remains.
+        expect(text).not.toContain("brb");
+    });
 });
 
 test.describe("expansion respects markdown context", () => {
