@@ -2,9 +2,14 @@ import { App, Modal, Notice } from "obsidian";
 import type SnipSidianPlugin from "../../../main";
 import { loadAllCommunityPackages } from "../../../services/community-packages";
 import { validatePackageForInstall } from "../../../services/package-validator";
-import { PackagePreviewModal } from "../Modals";
-import { joinKey } from "../../../store/keys";
-import { buildPackageDiff, isPackageInstalled } from "../../../core/install-plan";
+import { ConfirmModal, PackagePreviewModal } from "../Modals";
+import { joinKey, splitKey } from "../../../store/keys";
+import {
+    buildPackageDiff,
+    isPackageInstalled,
+    listPackageKeys,
+    removePackageSnippets,
+} from "../../../core/install-plan";
 import { hasReplacementCollision } from "../../../store/snippets";
 
 interface PackageItem {
@@ -204,18 +209,52 @@ export class PackageBrowser {
             pkg.label,
             this.plugin.settings.snippets,
         );
-        const btn = actions.createEl("button", {
-            text: installed ? "Installed" : "Install",
-            cls: installed ? "snippet-action" : "snippet-action mod-cta",
-            attr: { type: "button" },
-        });
+
         if (installed) {
-            btn.disabled = true;
+            // B-042: replace the dead-end "Installed" disabled state
+            // with two affordances. Reinstall re-routes through the
+            // preview modal so user edits surface as conflicts with
+            // "Keep current" defaulted (B-017). Uninstall removes
+            // all of the pack's keys after a confirmation modal.
+            const reinstallBtn = actions.createEl("button", {
+                text: "Reinstall",
+                cls: "snippet-action",
+                attr: {
+                    type: "button",
+                    "aria-label": `Reinstall ${pkg.label}`,
+                },
+            });
+            reinstallBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                this.installPackage(pkg);
+            });
+
+            const uninstallBtn = actions.createEl("button", {
+                text: "Uninstall",
+                cls: "snippet-action",
+                attr: {
+                    type: "button",
+                    "aria-label": `Uninstall ${pkg.label}`,
+                },
+            });
+            uninstallBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                this.uninstallPackage(pkg);
+            });
+        } else {
+            const btn = actions.createEl("button", {
+                text: "Install",
+                cls: "snippet-action mod-cta",
+                attr: {
+                    type: "button",
+                    "aria-label": `Install ${pkg.label}`,
+                },
+            });
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                this.installPackage(pkg);
+            });
         }
-        btn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            if (!installed) this.installPackage(pkg);
-        });
 
         const openDetails = () => this.showPackageDetails(pkg);
         row.addEventListener("click", openDetails);
@@ -349,12 +388,31 @@ export class PackageBrowser {
             pkg.label,
             this.plugin.settings.snippets,
         );
-        const installBtn = footer.createEl("button", {
-            text: installed ? "Installed" : "Install",
-            cls: installed ? "" : "mod-cta",
-        });
-        installBtn.disabled = installed;
-        if (!installed) {
+        if (installed) {
+            // B-042: same affordances as the row (Reinstall +
+            // Uninstall) instead of a disabled "Installed" button.
+            const reinstallBtn = footer.createEl("button", {
+                text: "Reinstall",
+                attr: { "aria-label": `Reinstall ${pkg.label}` },
+            });
+            reinstallBtn.onclick = () => {
+                modal.close();
+                this.installPackage(pkg);
+            };
+            const uninstallBtn = footer.createEl("button", {
+                text: "Uninstall",
+                attr: { "aria-label": `Uninstall ${pkg.label}` },
+            });
+            uninstallBtn.onclick = () => {
+                modal.close();
+                this.uninstallPackage(pkg);
+            };
+        } else {
+            const installBtn = footer.createEl("button", {
+                text: "Install",
+                cls: "mod-cta",
+                attr: { "aria-label": `Install ${pkg.label}` },
+            });
             installBtn.onclick = () => {
                 modal.close();
                 this.installPackage(pkg);
@@ -363,5 +421,56 @@ export class PackageBrowser {
         footer.createEl("button", { text: "Close" }).onclick = () => modal.close();
 
         modal.open();
+    }
+
+    /**
+     * Uninstall flow (B-042): list the package's keys, confirm with
+     * the user (showing the first 5 trigger names per B-053), then
+     * apply `removePackageSnippets` and persist.
+     */
+    private uninstallPackage(pkg: PackageItem) {
+        const packageGroup = pkg.label;
+        const keys = listPackageKeys(packageGroup, this.plugin.settings.snippets);
+        if (keys.length === 0) {
+            new Notice(`"${pkg.label}" is not installed.`);
+            return;
+        }
+
+        const triggerNames = keys.map((k) => splitKey(k).name);
+        const sample = triggerNames.slice(0, 5).join(", ");
+        const more =
+            triggerNames.length > 5
+                ? ` (and ${triggerNames.length - 5} more)`
+                : "";
+        const message =
+            `This will remove ${keys.length} snippet${keys.length === 1 ? "" : "s"}` +
+            ` from "${pkg.label}": ${sample}${more}.\n\nThis cannot be undone.`;
+
+        new ConfirmModal(this.app, {
+            title: `Uninstall ${pkg.label}?`,
+            message,
+            confirmText: "Uninstall",
+            onConfirm: async () => {
+                try {
+                    this.plugin.settings.snippets = removePackageSnippets(
+                        packageGroup,
+                        this.plugin.settings.snippets,
+                    );
+                    await this.plugin.saveSettings();
+                    new Notice(
+                        `Uninstalled ${pkg.label} (${keys.length} snippet${
+                            keys.length === 1 ? "" : "s"
+                        } removed)`,
+                    );
+                    this.renderList();
+                } catch (error) {
+                    new Notice(
+                        `Failed to uninstall package: ${
+                            error instanceof Error ? error.message : String(error)
+                        }`,
+                    );
+                }
+            },
+        }).open();
     }
 }

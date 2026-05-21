@@ -55,19 +55,19 @@ export function buildPackageDiff(
 }
 
 /**
- * Heuristic check: is this package "installed enough" to label its
- * row as Installed in the Packages tab?
+ * Is this package installed? Answers the row-button-label question
+ * in the Packages tab.
  *
- * Threshold is **≥ 80 % of the package's triggers** present in the
- * current store AND with the exact same replacement. Keeps the
- * Installed badge stable when the user has tweaked one or two
- * entries — without this, any user edit would flip the button back
- * to "Install" and tempt the user into wiping their changes.
+ * **Definition (1.1.6, B-017):** any key under `<packageGroup>/*`
+ * present in the snippet store. We do NOT compare values: the user
+ * may have edited some entries, and edits must not flip the badge
+ * back to "Install" — that's the original P0 footgun (B-017) where
+ * the disabled "Already installed" button left users with no path
+ * to refresh from upstream and tempted them to "Install" again,
+ * which silently overwrote their edits.
  *
- * Note (1.1.6): B-017 / PR 3 will redefine "installed" entirely
- * (key-presence only, no value comparison), so this heuristic is a
- * transitional implementation matching what shipped before this
- * extraction. The PR 3 change becomes a one-line edit here.
+ * Pre-1.1.6 used a ≥80 % value-match heuristic. That heuristic is
+ * the one this redefinition replaces.
  */
 export function isPackageInstalled(
     newSnippets: Record<string, string> | undefined,
@@ -77,9 +77,53 @@ export function isPackageInstalled(
     if (!newSnippets) return false;
     const packageTriggers = Object.keys(newSnippets);
     if (packageTriggers.length === 0) return false;
-    const installed = packageTriggers.filter((trigger) => {
+    return packageTriggers.some((trigger) => {
         const groupedKey = joinKey(packageGroup, trigger);
-        return currentSnippets[groupedKey] === newSnippets[trigger];
+        return currentSnippets[groupedKey] !== undefined;
     });
-    return installed.length >= packageTriggers.length * 0.8;
+}
+
+/**
+ * List the full snippet keys that belong to a given package group —
+ * i.e. every key shaped `<packageGroup>/*` currently in the store.
+ *
+ * Used to:
+ *   - render the Uninstall confirmation modal (B-053 fold-in: show
+ *     the first N trigger names of what will be removed)
+ *   - drive `removePackageSnippets` below
+ *
+ * Package labels are validated to reject `/` (see package-validator
+ * S-006), so the `<group>/<trigger>` prefix is unambiguous.
+ */
+export function listPackageKeys(
+    packageGroup: string,
+    currentSnippets: Record<string, string>,
+): string[] {
+    if (!packageGroup) return [];
+    const prefix = `${packageGroup}/`;
+    return Object.keys(currentSnippets).filter((k) => k.startsWith(prefix));
+}
+
+/**
+ * Return a NEW snippet map with every `<packageGroup>/*` key removed.
+ * The input map is not mutated — callers replace
+ * `settings.snippets` with the returned value and persist.
+ *
+ * Removes the user's edits to the package's keys as well as the
+ * package's own entries. That's by design: those edits were
+ * conceptually "the user's version of this pack", and uninstalling
+ * a pack should leave no trace of it. If the user wants to keep
+ * something, they rename it out of the package group first.
+ */
+export function removePackageSnippets(
+    packageGroup: string,
+    currentSnippets: Record<string, string>,
+): Record<string, string> {
+    if (!packageGroup) return { ...currentSnippets };
+    const prefix = `${packageGroup}/`;
+    const result: Record<string, string> = {};
+    for (const [k, v] of Object.entries(currentSnippets)) {
+        if (!k.startsWith(prefix)) result[k] = v;
+    }
+    return result;
 }
