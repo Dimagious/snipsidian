@@ -138,6 +138,18 @@ export function installObsidianDomHelpers(): void {
         this.textContent = text;
     };
 
+    // `hide()` / `show()` are Obsidian's display-toggle helpers used
+    // by `TextPromptModal.formatHint` (B-051) and a few other places.
+    // Snipsy code uses them as fire-and-forget setters; jsdom doesn't
+    // implement them, so without these stubs the calls throw and the
+    // mount fails before the test assertions run.
+    proto.hide = function (this: HTMLElement): void {
+        this.style.display = "none";
+    };
+    proto.show = function (this: HTMLElement): void {
+        this.style.display = "";
+    };
+
     // jsdom doesn't implement `Element.scrollIntoView` (it's a
     // layout-engine API). The picker calls it on keyboard navigation
     // (SnippetPickerModal.scrollToSelected); without this no-op the

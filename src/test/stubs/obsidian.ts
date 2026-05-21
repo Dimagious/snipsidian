@@ -57,7 +57,109 @@ export type IconName = any;
 // ---------- Settings + UI primitives ----------
 
 export class PluginSettingTab { }
-export class Setting { }
+
+/**
+ * `Setting` fluent builder. Mounts a `<div>` per row + supports the
+ * chainable methods Snipsy's modals use (`setName`/`setDesc`/
+ * `setHeading`/`addText`/`addTextArea`). Not a faithful reproduction
+ * of Obsidian's full Setting class — just enough for mount tests.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- DOM-shaped fields
+export class Setting {
+    settingEl: any;
+    constructor(containerEl: any) {
+        if (typeof document !== "undefined" && containerEl?.appendChild) {
+            this.settingEl = document.createElement("div");
+            this.settingEl.classList.add("setting-item");
+            containerEl.appendChild(this.settingEl);
+        }
+    }
+    setName(_name: string) { return this; }
+    setDesc(_desc: string) { return this; }
+    setHeading() { return this; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    addText(cb: (t: any) => void) {
+        const t = new TextComponent(this.settingEl);
+        cb(t);
+        return this;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    addTextArea(cb: (t: any) => void) {
+        const t = new TextAreaComponent(this.settingEl);
+        cb(t);
+        return this;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    addToggle(cb: (t: any) => void) {
+        cb({ setValue: () => ({ onChange: () => undefined }) });
+        return this;
+    }
+}
+
+/** `TextComponent` stub — wraps a real `<input type=text>`. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export class TextComponent {
+    inputEl: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    constructor(parent?: any) {
+        if (typeof document !== "undefined") {
+            this.inputEl = document.createElement("input");
+            this.inputEl.type = "text";
+            if (parent?.appendChild) parent.appendChild(this.inputEl);
+        }
+    }
+    setPlaceholder(p: string) { if (this.inputEl) this.inputEl.placeholder = p; return this; }
+    setValue(v: string) { if (this.inputEl) this.inputEl.value = v; return this; }
+    getValue() { return this.inputEl ? this.inputEl.value : ""; }
+    onChange(cb: (v: string) => void) {
+        if (this.inputEl) {
+            this.inputEl.addEventListener("input", () => cb(this.inputEl.value));
+        }
+        return this;
+    }
+}
+
+/** `TextAreaComponent` stub — wraps a real `<textarea>`. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export class TextAreaComponent {
+    inputEl: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    constructor(parent?: any) {
+        if (typeof document !== "undefined") {
+            this.inputEl = document.createElement("textarea");
+            if (parent?.appendChild) parent.appendChild(this.inputEl);
+        }
+    }
+    setPlaceholder(p: string) { if (this.inputEl) this.inputEl.placeholder = p; return this; }
+    setValue(v: string) { if (this.inputEl) this.inputEl.value = v; return this; }
+    getValue() { return this.inputEl ? this.inputEl.value : ""; }
+    onChange(cb: (v: string) => void) {
+        if (this.inputEl) {
+            this.inputEl.addEventListener("input", () => cb(this.inputEl.value));
+        }
+        return this;
+    }
+}
+
+/** `ButtonComponent` stub — wraps a real `<button>`. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export class ButtonComponent {
+    buttonEl: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    constructor(parent?: any) {
+        if (typeof document !== "undefined") {
+            this.buttonEl = document.createElement("button");
+            if (parent?.appendChild) parent.appendChild(this.buttonEl);
+        }
+    }
+    setButtonText(t: string) { if (this.buttonEl) this.buttonEl.textContent = t; return this; }
+    setCta() { if (this.buttonEl) this.buttonEl.classList.add("mod-cta"); return this; }
+    setWarning() { if (this.buttonEl) this.buttonEl.classList.add("mod-warning"); return this; }
+    onClick(cb: () => void) {
+        if (this.buttonEl) this.buttonEl.addEventListener("click", cb);
+        return this;
+    }
+}
 
 // ---------- Platform / runtime ----------
 
