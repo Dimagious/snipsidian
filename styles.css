@@ -351,6 +351,8 @@
 }
 .snipsidian-settings .package-row .package-actions {
   flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
 }
 .snipsidian-settings .package-name-line {
   display: flex;
