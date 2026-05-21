@@ -55,19 +55,19 @@ export function buildPackageDiff(
 }
 
 /**
- * Heuristic check: is this package "installed enough" to label its
- * row as Installed in the Packages tab?
+ * Is this package installed? Answers the row-button-label question
+ * in the Packages tab.
  *
- * Threshold is **≥ 80 % of the package's triggers** present in the
- * current store AND with the exact same replacement. Keeps the
- * Installed badge stable when the user has tweaked one or two
- * entries — without this, any user edit would flip the button back
- * to "Install" and tempt the user into wiping their changes.
+ * **Definition (1.1.6, B-017):** any key under `<packageGroup>/*`
+ * present in the snippet store. We do NOT compare values: the user
+ * may have edited some entries, and edits must not flip the badge
+ * back to "Install" — that's the original P0 footgun (B-017) where
+ * the disabled "Already installed" button left users with no path
+ * to refresh from upstream and tempted them to "Install" again,
+ * which silently overwrote their edits.
  *
- * Note (1.1.6): B-017 / PR 3 will redefine "installed" entirely
- * (key-presence only, no value comparison), so this heuristic is a
- * transitional implementation matching what shipped before this
- * extraction. The PR 3 change becomes a one-line edit here.
+ * Pre-1.1.6 used a ≥80 % value-match heuristic. That heuristic is
+ * the one this redefinition replaces.
  */
 export function isPackageInstalled(
     newSnippets: Record<string, string> | undefined,
@@ -77,9 +77,8 @@ export function isPackageInstalled(
     if (!newSnippets) return false;
     const packageTriggers = Object.keys(newSnippets);
     if (packageTriggers.length === 0) return false;
-    const installed = packageTriggers.filter((trigger) => {
+    return packageTriggers.some((trigger) => {
         const groupedKey = joinKey(packageGroup, trigger);
-        return currentSnippets[groupedKey] === newSnippets[trigger];
+        return currentSnippets[groupedKey] !== undefined;
     });
-    return installed.length >= packageTriggers.length * 0.8;
 }
