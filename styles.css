@@ -78,6 +78,22 @@
   margin: 0;
 }
 
+/* ---- Visually-hidden helper for aria-live regions ----
+   Standard pattern: keep the element in DOM (so AT can read it)
+   while removing it from sighted-user layout. Used for B-088
+   live-count announcements. */
+.snipsidian-settings .snipsy-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ---- Tabs (top of settings pane) ---- */
 .snipsidian-settings .snipsy-tabs {
   display: flex;
@@ -98,6 +114,14 @@
   margin-bottom: -1px;
 }
 .snipsidian-settings .snipsy-tab:hover { color: var(--snipsy-text); }
+/* B-090: explicit focus-visible ring — the tab overrides Obsidian's
+   default focus styles, so without this keyboard users couldn't
+   tell which tab held focus. */
+.snipsidian-settings .snipsy-tab:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px;
+  border-radius: var(--snipsy-radius);
+}
 .snipsidian-settings .snipsy-tab.is-active {
   color: var(--snipsy-text);
   border-bottom-color: var(--snipsy-accent);
@@ -262,6 +286,13 @@
   cursor: pointer;
 }
 .snipsidian-settings .snippet-action:hover { background: var(--snipsy-hover); color: var(--snipsy-text); }
+/* B-090: explicit focus-visible ring — the action button overrides
+   Obsidian's default focus styles. Without this, keyboard users
+   couldn't tell which row's Edit / Delete had focus. */
+.snipsidian-settings .snippet-action:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
 .snipsidian-settings .snippet-action.is-danger:hover {
   background: var(--background-modifier-error-hover, rgba(255, 80, 80, 0.1));
   color: var(--snipsy-danger);

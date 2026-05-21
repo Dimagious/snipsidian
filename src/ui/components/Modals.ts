@@ -21,7 +21,10 @@ export class JSONModal extends Modal {
         titleEl.setText(this.title);
 
         contentEl.addClass("snipsidian-modal");
-        const ta = contentEl.createEl("textarea", { text: this.text });
+        const ta = contentEl.createEl("textarea", {
+            text: this.text,
+            attr: { "aria-label": this.title },
+        });
         ta.addClass("snipsidian-json-input");
 
         const footer = contentEl.createDiv({ cls: "modal-button-container" });
@@ -33,6 +36,11 @@ export class JSONModal extends Modal {
 
         const close = footer.createEl("button", { text: "Close" });
         close.onclick = () => this.close();
+
+        // B-087: explicit focus on the textarea so screen-reader /
+        // keyboard users land somewhere meaningful instead of on the
+        // modal title (Obsidian's default).
+        ta.focus();
     }
 }
 
@@ -126,6 +134,11 @@ export class PackagePreviewModal extends Modal {
             }
             this.close();
         };
+
+        // B-087: focus Apply by default. Cancel is harmless (Escape
+        // also closes the modal), so the primary action is the right
+        // initial target for keyboard / screen-reader users.
+        apply.focus();
     }
 }
 
@@ -171,6 +184,7 @@ export class GroupPickerModal extends Modal {
         const input = newWrap.createEl("input", {
             type: "text",
             placeholder: "New group name",
+            attr: { "aria-label": "New group name" },
         });
         const newErr = newWrap.createDiv({ cls: "snipsidian-error" });
         newErr.hide();
@@ -208,6 +222,11 @@ export class GroupPickerModal extends Modal {
             this.onSubmit?.(target);
             this.close();
         };
+
+        // B-087: focus the group <select> on open so keyboard users
+        // can immediately arrow-key through groups without first
+        // having to Tab past the modal title.
+        select.focus();
     }
 }
 
@@ -245,8 +264,12 @@ export class TextPromptModal extends Modal {
                 t.inputEl.addEventListener("input", () => { this.value = t.getValue(); });
             });
 
-        // Error text
-        const err = contentEl.createDiv({ cls: "snipsidian-error" });
+        // Error text. B-088: aria-live="polite" so AT users hear
+        // validation errors as they appear without losing input focus.
+        const err = contentEl.createDiv({
+            cls: "snipsidian-error",
+            attr: { "aria-live": "polite" },
+        });
 
         // Footer
         const footer = contentEl.createDiv({ cls: "modal-button-container" });
@@ -366,13 +389,18 @@ export class AddSnippetModal extends Modal {
         let trigger = "";
         let replacement = "";
         let group = "";
+        // Ref-object so TS doesn't narrow the field to `never` after
+        // the synchronously-invoked `addText` callback (control flow
+        // analysis can't prove the callback ran before later code).
+        const refs: { trigger?: HTMLInputElement } = {};
 
         new Setting(contentEl)
             .setName("Trigger")
             .setDesc("The text that will be expanded (e.g., :hello)")
             .addText((text) => {
+                refs.trigger = text.inputEl;
                 text
-                     
+
                     .setPlaceholder("Example: :hello")
                     .setValue(trigger)
                     .onChange((value) => {
@@ -446,6 +474,12 @@ export class AddSnippetModal extends Modal {
 
         const cancel = footer.createEl("button", { text: "Cancel" });
         cancel.onclick = () => this.close();
+
+        // B-087: focus the Trigger field on open so the user can
+        // start typing immediately. Skips Obsidian's default of
+        // putting focus on the modal frame, which screen readers
+        // announce as the modal title instead of the first input.
+        refs.trigger?.focus();
     }
 }
 

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A11y: assistive-technology coverage of the Settings UI** (B-003 umbrella tail — closes B-084 / B-085 / B-087 / B-088 / B-090). Package-submission validation result now carries a `✓` / `✗` text prefix and `role="status"` / `role="alert"` alongside the existing colour tint, so users on monochrome schemes or with strong colour blindness get the same at-a-glance signal as everyone else. Three previously-unlabelled hand-built inputs (`JSONModal` textarea, `GroupPickerModal` new-group input, `EspansoSection` YAML paste) get explicit `aria-label`s; screen readers stop announcing them as "edit, blank". Five modals (`JSONModal`, `PackagePreviewModal`, `GroupPickerModal`, `AddSnippetModal`, the raw-`new Modal` package-details) now `.focus()` their primary input / primary action on open instead of leaving focus on the modal title. The bulk-bar count, the package-filter result count, and the validation-error text in `TextPromptModal` are now wrapped in `aria-live="polite"`; the package-Refresh button toggles `aria-busy="true"` while a reload is in flight. Custom-styled buttons (`.snipsy-tab`, `.snippet-action`) gain explicit `:focus-visible` outlines so keyboard users can see which one currently holds focus.
+
 ## [1.1.6] - 2026-05-21
 
 Install path correctness. Closes the P0 footgun where the disabled "Already installed" button after a user edit silently overwrote local changes on the next install click; replaces the dead-end with explicit Reinstall and Uninstall affordances. Refactors the install-plan logic out of UI handlers so the fix has a function-boundary test that pins the contract.

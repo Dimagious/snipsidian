@@ -129,7 +129,14 @@ export class SnippetsTab {
     private renderBulkBar(root: HTMLElement) {
         // Sticky bar lives above the list. Hidden when nothing's selected
         // so it never wastes vertical space (designer Q3).
-        this.bulkBar = root.createDiv({ cls: "snipsy-bulk-bar is-hidden" });
+        //
+        // B-088: aria-live="polite" so AT users hear "3 selected" /
+        // "5 selected" announced as the count changes — without
+        // moving keyboard focus.
+        this.bulkBar = root.createDiv({
+            cls: "snipsy-bulk-bar is-hidden",
+            attr: { "aria-live": "polite", "aria-atomic": "true" },
+        });
     }
 
     private updateBulkBar() {
