@@ -62,13 +62,19 @@ export class PackagePreviewModal extends Modal {
         });
 
         if (this.diff.conflicts.length) {
-            new Setting(contentEl)
-                .setHeading()
-                .setName("Conflicts");
+            contentEl.createEl("h3", { text: "Conflicts" });
             const table = contentEl.createEl("table", { cls: "snipsidian-preview-table" });
             const thead = table.createEl("thead");
             const headRow = thead.createEl("tr");
             ["Trigger", "Current", "Incoming", "Action"].forEach((h) => headRow.createEl("th", { text: h }));
+
+            // Keep a handle to each conflict's <select> so the bulk
+            // actions ("Keep all current" / "Overwrite all") can
+            // update them in place instead of re-rendering. The
+            // previous close()+open() trick double-rendered because
+            // Obsidian's Modal.close() doesn't synchronously empty
+            // contentEl, so onOpen() ran a second time and appended.
+            const selects: Array<{ key: string; el: HTMLSelectElement }> = [];
 
             const tbody = table.createEl("tbody");
             for (const c of this.diff.conflicts) {
@@ -82,19 +88,21 @@ export class PackagePreviewModal extends Modal {
                 sel.append(new Option("Keep current", "keep"), new Option("Overwrite", "overwrite"));
                 sel.value = this.choices.get(c.key) ?? "keep";
                 sel.onchange = () => this.choices.set(c.key, sel.value as "keep" | "overwrite");
+                selects.push({ key: c.key, el: sel });
             }
+
+            const setAll = (choice: "keep" | "overwrite") => {
+                for (const { key, el } of selects) {
+                    this.choices.set(key, choice);
+                    el.value = choice;
+                }
+            };
 
             const bulk = contentEl.createDiv({ cls: "snipsidian-bulk-actions" });
             const btnKeepAll = bulk.createEl("button", { text: "Keep all current" });
-            btnKeepAll.onclick = () => {
-                for (const k of this.choices.keys()) this.choices.set(k, "keep");
-                this.close(); this.open();
-            };
+            btnKeepAll.onclick = () => setAll("keep");
             const btnOverwriteAll = bulk.createEl("button", { text: "Overwrite all" });
-            btnOverwriteAll.onclick = () => {
-                for (const k of this.choices.keys()) this.choices.set(k, "overwrite");
-                this.close(); this.open();
-            };
+            btnOverwriteAll.onclick = () => setAll("overwrite");
         }
 
         const footer = contentEl.createDiv({ cls: "modal-button-container" });
