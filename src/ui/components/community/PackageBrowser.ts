@@ -388,6 +388,9 @@ export class PackageBrowser {
             pkg.label,
             this.plugin.settings.snippets,
         );
+        // B-087: focusBtn holds the affordance that should grab focus
+        // on modal open. Primary action varies with install state.
+        let focusBtn: HTMLButtonElement | null = null;
         if (installed) {
             // B-042: same affordances as the row (Reinstall +
             // Uninstall) instead of a disabled "Installed" button.
@@ -407,6 +410,7 @@ export class PackageBrowser {
                 modal.close();
                 this.uninstallPackage(pkg);
             };
+            focusBtn = reinstallBtn;
         } else {
             const installBtn = footer.createEl("button", {
                 text: "Install",
@@ -417,10 +421,14 @@ export class PackageBrowser {
                 modal.close();
                 this.installPackage(pkg);
             };
+            focusBtn = installBtn;
         }
         footer.createEl("button", { text: "Close" }).onclick = () => modal.close();
 
         modal.open();
+        // B-087: focus the primary action so keyboard / AT users
+        // land on the install/reinstall entry point, not the title.
+        focusBtn?.focus();
     }
 
     /**
