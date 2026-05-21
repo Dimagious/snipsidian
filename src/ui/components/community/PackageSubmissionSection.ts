@@ -136,9 +136,17 @@ export class PackageSubmissionSection {
         container.empty();
         submitBtn.disabled = !validation.isValid;
 
+        // B-084: textual marker on the title alongside the colour
+        // tint. Title text alone already carries state ("Package is
+        // valid" vs "Validation failed"), but for users on monochrome
+        // schemes or with strong colour blindness, the ✓ / ✗ prefix
+        // makes the success/failure read at a glance independent of
+        // hue. The `role="status"` (success) / `role="alert"`
+        // (failure) attributes wire the result into AT announcements.
         if (validation.isValid) {
             const ok = container.createDiv({ cls: "snipsy-submit-valid" });
-            ok.createDiv({ text: "Package is valid", cls: "snipsy-submit-title" });
+            ok.setAttr("role", "status");
+            ok.createDiv({ text: "✓ Package is valid", cls: "snipsy-submit-title" });
             if (validation.warnings.length > 0) {
                 const warnings = ok.createDiv({ cls: "snipsy-submit-warnings" });
                 warnings.createDiv({ text: "Warnings:", cls: "snipsy-submit-subtitle" });
@@ -148,7 +156,8 @@ export class PackageSubmissionSection {
             }
         } else {
             const err = container.createDiv({ cls: "snipsy-submit-invalid" });
-            err.createDiv({ text: "Validation failed", cls: "snipsy-submit-title" });
+            err.setAttr("role", "alert");
+            err.createDiv({ text: "✗ Validation failed", cls: "snipsy-submit-title" });
             validation.errors.forEach((e) =>
                 err.createDiv({ text: `• ${e}`, cls: "snipsy-submit-item" }),
             );
