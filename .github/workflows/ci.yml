@@ -28,6 +28,14 @@ jobs:
       - name: Verify versions (package.json vs manifest.json)
         run: node scripts/assert-versions.cjs
 
+      # Mirrors the Obsidian community-plugins scorecard scanner. Fails
+      # the build if a `["a","b","c"].join(".")` domain-assembly pattern
+      # (B-063 / 1.1.5 → 1.1.6 score drop), a bare `window.setTimeout`,
+      # or other scorecard-flagged shape lands. Add new rules as scorecard
+      # introduces new checks.
+      - name: Scorecard regression gate
+        run: npm run scorecard:check
+
       - name: Unit tests (with coverage gates)
         run: npm run test
 
