@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.7] - 2026-05-21
+
+Quality pass. A11y umbrella (ARIA labels, focus rings, live regions) closed; `services/community-packages.ts` split into focused modules; install-plan-pattern extended from 1.1.6 to add/edit/delete snippet flows; community-packages fetch parallelised; `findTrigger` lookback capped against pathological lines; nine UX-polish bugs fixed across Espanso import, group rename, delete-group confirm, submit-popup-blocker, bulk-select flicker; the `src/ui/**` coverage exclusion lifted (coverage 88% → 95% lines on real-code). Two late additions: a B-118 mobile fix that stops a transient GitHub failure from pinning a blank Packages tab for 24h, and a scorecard regression-gate (`npm run scorecard:check`) wired into CI + `release:check`.
+
 ### Fixed
 
 - **Scorecard regression closed: domain-assembly + bare `window.setTimeout`** (B-063 + drift cleanup). Between 1.1.5 and 1.1.6 the public scorecard at community.obsidian.md/plugins/snipsidian dropped from 94% to 91%. Two issues: (1) `FeedbackTab.ts` still had `["forum", "obsidian", "md"].join(".")` to "hide" the forum URL from compiled bundles — a useless workaround (scrapers evaluate `.join()` at runtime) that the scanner flagged as "Plugin assembles domain names at runtime from split/joined parts." Replaced with the string literal. (2) Six new sites in `BasicTab`, `SnippetPickerModal`, `SnippetsTab`, and `ui-state` reintroduced bare `window.setTimeout` / `window.clearTimeout` — the exact pattern the 1.0.6 scorecard cleanup had migrated to `activeWindow.*` for popout-window compatibility. Switched all six to `activeWindow.*`. The `Clipboard Access` "Other" disclosure stays — `navigator.clipboard.writeText` is the popup-blocked fallback in `PackageSubmissionSection` (B-044, 1.1.7) and `navigator.clipboard.readText` powers the `$clipboard` placeholder; both are intentional, disclosed user features.
