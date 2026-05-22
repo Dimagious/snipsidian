@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.8] - 2026-05-22
+
+UX hotfix for a latent group-accordion bug surfaced by a user the day 1.1.7 shipped. Single-PR mini-release rather than waiting for a batch, because the bug effectively hides the entire snippet library from anyone who doesn't pixel-hunt for the 14×14 chevron icon.
+
 ### Fixed
 
 - **Group accordion now expands when the title or count is clicked, not only the tiny chevron** (B-124). Latent since the original group-header layout — CSS had `cursor: pointer` on the whole `.group-header` (visually promising "I'm clickable") but the click handler was scoped to the 14×14 chevron button only. Users (correctly) tried to click the group title or the count badge and nothing happened. Reported by a user against 1.1.7 with the symptom "Group exists with 17 snippets but doesn't open" — the entire library was effectively inaccessible from the UI for anyone who didn't pixel-hunt for the chevron. Fix moves the click handler to the entire header div; the chevron stays as the AT-accessible affordance + visual rotate indicator (keyboard activation on the button bubbles to the header listener). Action buttons inside the header already had `stopPropagation()` so they don't double-toggle. 4 new regression tests cover: title click, count click, chevron click (keyboard activation path), and the rename-button-does-not-collapse invariant.
