@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Group accordion now expands when the title or count is clicked, not only the tiny chevron** (B-124). Latent since the original group-header layout — CSS had `cursor: pointer` on the whole `.group-header` (visually promising "I'm clickable") but the click handler was scoped to the 14×14 chevron button only. Users (correctly) tried to click the group title or the count badge and nothing happened. Reported by a user against 1.1.7 with the symptom "Group exists with 17 snippets but doesn't open" — the entire library was effectively inaccessible from the UI for anyone who didn't pixel-hunt for the chevron. Fix moves the click handler to the entire header div; the chevron stays as the AT-accessible affordance + visual rotate indicator (keyboard activation on the button bubbles to the header listener). Action buttons inside the header already had `stopPropagation()` so they don't double-toggle. 4 new regression tests cover: title click, count click, chevron click (keyboard activation path), and the rename-button-does-not-collapse invariant.
+
 ## [1.1.7] - 2026-05-21
 
 Quality pass. A11y umbrella (ARIA labels, focus rings, live regions) closed; `services/community-packages.ts` split into focused modules; install-plan-pattern extended from 1.1.6 to add/edit/delete snippet flows; community-packages fetch parallelised; `findTrigger` lookback capped against pathological lines; nine UX-polish bugs fixed across Espanso import, group rename, delete-group confirm, submit-popup-blocker, bulk-select flicker; the `src/ui/**` coverage exclusion lifted (coverage 88% → 95% lines on real-code). Two late additions: a B-118 mobile fix that stops a transient GitHub failure from pinning a blank Packages tab for 24h, and a scorecard regression-gate (`npm run scorecard:check`) wired into CI + `release:check`.

@@ -248,3 +248,84 @@ describe("SnippetsTab — empty + filtered empty states", () => {
         expect(empty?.textContent).toContain("No snippets match your filter");
     });
 });
+
+// B-124 regression: pre-fix the click handler was only on the tiny
+// 14×14 chevron `.group-toggle` button. CSS had `cursor: pointer` on
+// the whole `.group-header`, which was lying — clicking the title text
+// or the count badge did nothing. Reported by a real user against
+// 1.1.7 ("Она не открывается" — clicked the title, expected expand,
+// nothing). Fix: click handler moved to the header div; chevron stays
+// as the AT-accessible affordance + visual indicator (no own click
+// handler — keyboard activation on the button bubbles to header).
+describe("SnippetsTab — group header click target (B-124)", () => {
+    it("expands the group when the title text is clicked, not just the chevron", () => {
+        mount({ hello: "world", brb: "be right back" });
+        const header = root.querySelector(".group-header") as HTMLElement;
+        expect(header).toBeTruthy();
+        const title = header.querySelector(".group-title") as HTMLElement;
+        expect(title?.textContent).toBe("Ungrouped");
+
+        // Body not yet rendered — group starts collapsed.
+        expect(root.querySelector(".group-content")).toBeNull();
+
+        // Click on the title text (NOT the chevron) — pre-fix this did
+        // nothing because the handler was scoped to `.group-toggle`.
+        // The click bubbles up to the header div which now owns the
+        // toggle behaviour.
+        title.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+        // Body now rendered with the two rows.
+        const content = root.querySelector(".group-content");
+        expect(content).toBeTruthy();
+        expect(content?.querySelectorAll(".snippet-row").length).toBe(2);
+    });
+
+    it("expands the group when the count badge is clicked too (whole header is the hit-target)", () => {
+        mount({ a: "1", b: "2", c: "3" });
+        const count = root.querySelector(".group-count") as HTMLElement;
+        expect(count?.textContent).toBe("3");
+
+        count.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+        expect(root.querySelectorAll(".snippet-row").length).toBe(3);
+    });
+
+    it("the chevron button still toggles via its bubbled click (keyboard activation path)", () => {
+        mount({ hello: "world" });
+        const toggle = root.querySelector(".group-toggle") as HTMLButtonElement;
+        // `.click()` on a button generates a click event that bubbles
+        // up to the header — same path the keyboard activation
+        // (Enter / Space on the focused button) takes.
+        toggle.click();
+        expect(root.querySelector(".group-content")).toBeTruthy();
+    });
+
+    it("clicking the rename action does not toggle the group (stopPropagation contract preserved)", () => {
+        // Setup: group already open so we can verify rename doesn't
+        // accidentally COLLAPSE it via the header listener.
+        // After every click that triggers renderList() the DOM is
+        // rebuilt — re-query each time.
+        mount({ "alpha/a": "1", "alpha/b": "2" });
+
+        const findAlphaTitle = () =>
+            Array.from(root.querySelectorAll(".group-header")).find(
+                (h) => h.querySelector(".group-title")?.textContent === "Alpha",
+            )?.querySelector(".group-title") as HTMLElement | undefined;
+
+        // Open via title click first.
+        findAlphaTitle()!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        expect(root.querySelectorAll(".snippet-row").length).toBe(2);
+
+        // Click the rename button — should NOT toggle the group closed.
+        // (It opens a modal; we don't assert on the modal here, just on
+        // the toggle invariant: rows still rendered after the click.)
+        const renameBtn = root.querySelector(
+            '[aria-label^="Rename group Alpha"]',
+        ) as HTMLButtonElement;
+        renameBtn.click();
+
+        // Group still open (renameBtn fires stopPropagation, so the
+        // header click handler never sees the event).
+        expect(root.querySelectorAll(".snippet-row").length).toBe(2);
+    });
+});
