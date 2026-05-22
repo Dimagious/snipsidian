@@ -120,7 +120,7 @@ export class SnippetPickerModal extends Modal {
     onClose(): void {
         const { contentEl } = this;
         contentEl.empty();
-        if (this.searchTimeout) window.clearTimeout(this.searchTimeout);
+        if (this.searchTimeout) activeWindow.clearTimeout(this.searchTimeout);
     }
 
     /** Checks the active Markdown view at open time for a non-empty
@@ -135,8 +135,8 @@ export class SnippetPickerModal extends Modal {
 
     private setupEventHandlers(): void {
         this.searchInput.addEventListener("input", () => {
-            if (this.searchTimeout) window.clearTimeout(this.searchTimeout);
-            this.searchTimeout = window.setTimeout(() => {
+            if (this.searchTimeout) activeWindow.clearTimeout(this.searchTimeout);
+            this.searchTimeout = activeWindow.setTimeout(() => {
                 this.performSearch(this.searchInput.value);
             }, this.debounceMs);
         });

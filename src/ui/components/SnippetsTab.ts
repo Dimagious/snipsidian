@@ -535,7 +535,7 @@ export class SnippetsTab {
         // Focus the trigger on entry. We schedule this so the input is
         // attached to the document before `focus()` fires.
         if (!triggerInput.matches(":focus")) {
-            window.setTimeout(() => triggerInput.focus(), 0);
+            activeWindow.setTimeout(() => triggerInput.focus(), 0);
         }
     }
 

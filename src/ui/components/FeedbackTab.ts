@@ -70,9 +70,7 @@ export class FeedbackTab {
             title: "Obsidian community",
             description: "Get help from other Obsidian users in the forum.",
             buttonText: "Open",
-            // Pure obfuscation pattern kept from the legacy tab — keeps
-            // bots from auto-pinging the forum from compiled bundles.
-            href: `https://${["forum", "obsidian", "md"].join(".")}/`,
+            href: "https://forum.obsidian.md/",
         });
 
         // ---- Version footer ----

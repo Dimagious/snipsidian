@@ -137,9 +137,9 @@ export class UIStateManager {
         // Group toggles can fire in bursts (Expand-all writes N states in
         // a tight loop). Coalesce to one save 250ms after the last call.
         if (this.groupOpenSaveTimer !== null) {
-            window.clearTimeout(this.groupOpenSaveTimer);
+            activeWindow.clearTimeout(this.groupOpenSaveTimer);
         }
-        this.groupOpenSaveTimer = window.setTimeout(() => {
+        this.groupOpenSaveTimer = activeWindow.setTimeout(() => {
             this.groupOpenSaveTimer = null;
             void this.persist();
         }, 250);

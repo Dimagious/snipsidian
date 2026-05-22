@@ -94,7 +94,7 @@ export class BasicTab {
     private openHotkeyTab(commandId: string) {
         this.app.setting.open();
         this.app.setting.openTabById("hotkeys");
-        window.setTimeout(() => {
+        activeWindow.setTimeout(() => {
             const hotkeyTab = activeDocument.querySelector(
                 `.setting-item[data-id="${commandId}"]`,
             );
