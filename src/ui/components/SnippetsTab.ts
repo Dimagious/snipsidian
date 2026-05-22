@@ -293,8 +293,25 @@ export class SnippetsTab {
         const groupEl = this.listEl.createDiv({ cls: "snippet-group" });
         const header = groupEl.createDiv({ cls: "group-header" });
 
-        // Chevron toggle. setIcon renders an SVG; we toggle the
-        // `.open` class to rotate it 90° via CSS (no glyph swap).
+        // B-124: click handler is on the entire header, not only on
+        // the tiny chevron button. CSS has `cursor: pointer` on the
+        // header which had been lying about clickability for ages —
+        // users (correctly) tried to click the title text "Ungrouped"
+        // and nothing happened. The 14×14 chevron was the only
+        // hit-target. Action buttons inside the header still
+        // `stopPropagation()` so they don't double-toggle. Keyboard
+        // activation on the chevron button still works: Enter/Space
+        // generates a click on the button which bubbles to the header.
+        header.addEventListener("click", () => {
+            this.uiState.setGroupOpen(group, !isOpen);
+            this.renderList();
+        });
+
+        // Chevron is the AT-accessible affordance + visual indicator.
+        // setIcon renders an SVG; we toggle the `.open` class to
+        // rotate it 90° via CSS (no glyph swap). No own click handler —
+        // the header listener above handles toggle for both mouse and
+        // keyboard (button click event bubbles up).
         const toggle = header.createEl("button", {
             cls: `group-toggle${isOpen ? " open" : ""}`,
             attr: {
@@ -304,10 +321,6 @@ export class SnippetsTab {
             },
         });
         setIcon(toggle, "chevron-right");
-        toggle.addEventListener("click", () => {
-            this.uiState.setGroupOpen(group, !isOpen);
-            this.renderList();
-        });
 
         header.createSpan({ text: title, cls: "group-title" });
         header.createSpan({ text: `${items.length}`, cls: "group-count" });
