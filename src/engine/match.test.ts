@@ -198,4 +198,36 @@ describe("findTrigger", () => {
         const m = findTrigger(input, dict, delims);
         expect(m?.trigger).toBe(trigger);
     });
+
+    // S-008: a bare `dict[trigger]` lookup resolves inherited
+    // Object.prototype members, so these everyday words used to report a
+    // phantom match (and `expand` then threw calling `.replace` on a
+    // function). With the hasOwnProperty guard they must NOT match unless
+    // the user actually defined them as own snippets.
+    it.each(["constructor", "toString", "valueOf", "hasOwnProperty", "__proto__", "isPrototypeOf"])(
+        "[S-008] does not phantom-match inherited prototype key %s",
+        (word) => {
+            const before = `note ${word}`;
+            const input = {
+                textBefore: before,
+                textAfter: "",
+                lastTyped: " ",
+                sepCh: before.length,
+            };
+            expect(findTrigger(input, dict, delims)).toBeNull();
+        },
+    );
+
+    it("[S-008] still matches a prototype-named trigger when it is a real own snippet", () => {
+        const withOwn: Dict = { ...dict, toString: "TO_STRING" };
+        const before = "note toString";
+        const input = {
+            textBefore: before,
+            textAfter: "",
+            lastTyped: " ",
+            sepCh: before.length,
+        };
+        const m = findTrigger(input, withOwn, delims);
+        expect(m?.trigger).toBe("toString");
+    });
 });

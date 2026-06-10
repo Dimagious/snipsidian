@@ -330,6 +330,38 @@ snippets: []
       expect(vi.mocked(requestUrl)).toHaveBeenCalledTimes(1);
       consoleSpy.mockRestore();
     });
+
+    // Regression: security S-011 — the listing JSON is cast to
+    // GitHubContentEntry[] on trust. A malformed/spoofed entry (missing
+    // `name`, or non-string `name`) used to make `f.name.endsWith(...)`
+    // throw a TypeError OUTSIDE the parse try/catch, rejecting the whole
+    // load. The entry-shape guard must skip bad entries and still return
+    // the valid ones.
+    it("[S-011] skips malformed listing entries without throwing", async () => {
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const mockFiles = [
+        { type: "dir" }, // no name / no download_url
+        { name: 42, download_url: "https://raw.githubusercontent.com/x/y/z.yml" }, // non-string name
+        { name: "ok.yml", download_url: "https://raw.githubusercontent.com/Dimagious/snipsidian-community/main/approved/ok.yml" },
+      ];
+
+      vi.mocked(requestUrl)
+        .mockResolvedValueOnce({ status: 200, text: JSON.stringify(mockFiles) } as any)
+        .mockResolvedValueOnce({
+          status: 200,
+          text: "name: OK\nsnippets:\n  - trigger: brb\n    replace: be right back\n",
+        } as any);
+
+      // Must resolve (not reject) and return the one valid package.
+      const result = await loadCommunityPackagesFromGitHub();
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("unreachable");
+      expect(result.packages).toHaveLength(1);
+      expect(result.packages[0]?.label).toBe("OK");
+      // Only the listing + the single valid file → 2 calls, malformed entries skipped.
+      expect(vi.mocked(requestUrl)).toHaveBeenCalledTimes(2);
+      consoleSpy.mockRestore();
+    });
   });
 
   // `createPackageIssue` tests removed in 1.1.7 with the function
