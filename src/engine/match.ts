@@ -53,6 +53,14 @@ export function findTrigger(
   const trigger = line.slice(fromCh, toCh);
   if (!trigger) return null;
 
-  if (dict[trigger] === undefined) return null;
+  // Use hasOwnProperty.call, NOT `dict[trigger] === undefined`: a bare
+  // property access resolves inherited `Object.prototype` members, so
+  // typing `constructor`, `toString`, `valueOf`, `hasOwnProperty`,
+  // `__proto__` (etc.) before a separator would resolve to a function /
+  // the prototype object — `findTrigger` would report a phantom match and
+  // `expand` would then call `.replace` on a non-string and throw on the
+  // per-keystroke hot path. This is the read-side counterpart to the
+  // write-side defence in `ui/utils/group-utils.ts`. See security S-008.
+  if (!Object.prototype.hasOwnProperty.call(dict, trigger)) return null;
   return { trigger, fromCh, toCh };
 }

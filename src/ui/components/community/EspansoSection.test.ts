@@ -190,6 +190,37 @@ describe("EspansoSection — import flow (B-045)", () => {
         expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
     });
 
+    // S-009: Espanso YAML is pasted from an untrusted source and used to
+    // skip every install-time limit (count, replacement length, trigger
+    // shape) that the community-pack path enforces. The import must now be
+    // gated by `validatePackageForInstall` before any write.
+    it("[S-009] rejects an oversized replacement with a Notice and no mutation", () => {
+        const before = JSON.stringify(plugin.settings.snippets);
+        const huge = "x".repeat(10001); // > INSTALL_MAX_REPLACEMENT_LEN (10000)
+        const { yaml, importBtn } = mount();
+        yaml.value = `matches:\n  - trigger: ":big"\n    replace: "${huge}"`;
+        importBtn.click();
+
+        expect(
+            noticeCalls.some((msg) => msg.startsWith("Cannot import Espanso package:")),
+        ).toBe(true);
+        expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+    });
+
+    it("[S-009] rejects a package exceeding the snippet-count cap", () => {
+        const before = JSON.stringify(plugin.settings.snippets);
+        // 501 matches > INSTALL_MAX_SNIPPETS (500)
+        const lines = Array.from({ length: 501 }, (_, i) => `  - trigger: ":t${i}"\n    replace: "v${i}"`);
+        const { yaml, importBtn } = mount();
+        yaml.value = `matches:\n${lines.join("\n")}`;
+        importBtn.click();
+
+        expect(
+            noticeCalls.some((msg) => msg.startsWith("Cannot import Espanso package:")),
+        ).toBe(true);
+        expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+    });
+
     it("allows re-import: same-value trigger in same group is a no-op, not a collision", async () => {
         // Pre-seed the exact same keys at the same values.
         plugin.settings.snippets["espanso-import/brb"] = "be right back";
