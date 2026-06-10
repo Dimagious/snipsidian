@@ -33,4 +33,13 @@ describe("expand", () => {
         const plan = await expand(input as any, dict, baseCtx as any);
         expect(plan).toBeNull();
     });
+
+    // S-008: before the fix, typing `constructor ` resolved `dict.constructor`
+    // to the Object function — `expand` then called `.replace` on it and
+    // threw a TypeError on the per-keystroke hot path. Must resolve to a
+    // clean no-match instead.
+    it("[S-008] returns null (no throw) for inherited prototype key as trigger", async () => {
+        const input = { textBefore: "constructor", textAfter: "", lastTyped: " ", sepCh: "constructor".length };
+        await expect(expand(input as any, dict, baseCtx as any)).resolves.toBeNull();
+    });
 });

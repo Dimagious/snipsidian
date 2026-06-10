@@ -128,8 +128,19 @@ export async function loadCommunityPackagesFromGitHub(): Promise<CommunityFetchR
     // Each `fetchAndParsePack` swallows its own errors and
     // returns `null`, so a single bad pack doesn't reject the
     // whole `Promise.all`. We filter nulls out below.
+    // S-011: the listing JSON is parsed and cast to `GitHubContentEntry[]`
+    // on trust. A malformed / spoofed `api.github.com` response (entry
+    // missing `name`, or `name` not a string) made `f.name.endsWith(...)`
+    // throw a TypeError here — OUTSIDE the JSON.parse try/catch above — so
+    // a single bad entry rejected the whole load instead of failing
+    // gracefully. Validate the entry shape before touching it; the
+    // download_url is still allowlist-checked in `fetchAndParsePack`.
     const ymlFiles = files.filter(
-        (f) => f.name.endsWith(".yml") || f.name.endsWith(".yaml"),
+        (f): f is GitHubContentEntry =>
+            !!f &&
+            typeof f.name === "string" &&
+            typeof f.download_url === "string" &&
+            (f.name.endsWith(".yml") || f.name.endsWith(".yaml")),
     );
     const fetched = await Promise.all(ymlFiles.map(fetchAndParsePack));
     return { ok: true, packages: fetched.filter((pkg): pkg is PackageItem => pkg !== null) };
