@@ -5,7 +5,6 @@
 [![Release](https://img.shields.io/github/v/release/Dimagious/snipsidian)](https://github.com/Dimagious/snipsidian/releases)
 ![Obsidian ≥ 1.5.0](https://img.shields.io/badge/obsidian-%E2%89%A5%201.5.0-7c3aed)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
-[![Buy Me A Coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-☕-ff813f?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/dimagious)
 
 > **Type `todo` and a space, get `- [ ]`.** Snipsy is the actively-maintained hotstring plugin for Obsidian — markdown-aware, with a community catalog and Espanso import. No scripting required.
 
@@ -185,4 +184,3 @@ If Snipsy saves you keystrokes:
 
 - ⭐ **Star** the repo so others find it.
 - 🐛 [**Open an issue**](https://github.com/Dimagious/snipsidian/issues) when something breaks.
-- ☕ [**Buy me a coffee**](https://buymeacoffee.com/dimagious) if you want to encourage more work.
