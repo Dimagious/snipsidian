@@ -39,7 +39,9 @@ Snipsy ships with these triggers ready to use. Type the trigger followed by a sp
 | **Dynamic** | `today` → today's date · `now` → current time |
 | **Conversational** | `brb` → `be right back` · `omw` → `on my way` · `ty` → `thank you` |
 
-Want more? Browse the **community catalog** in **Settings → Snipsy → Packages** — 10 starter packs cover Markdown essentials, daily journaling, GTD, meetings, dev boilerplate, code review, research notes, symbols & math, date stamps. Or paste any Espanso `.yml` from [hub.espanso.org](https://hub.espanso.org/) into the **Espanso import** section.
+On a fresh install these live in a single **Defaults** group in **Settings → Snipsy → Snippets**. Don't want them? Delete the group and they stay gone. Changed your mind? **Settings → Snipsy → General → Restore default snippets** brings back the missing ones without touching anything you added.
+
+Want more? Browse the **community catalog** in **Settings → Snipsy → Packages** — 10 starter packs cover Markdown essentials, daily journaling, GTD, meetings, dev boilerplate, code review, research notes, symbols & math, date stamps. Or paste any Espanso `.yml` from [hub.espanso.org](https://hub.espanso.org/) into the **Import from Espanso YAML** section.
 
 ---
 
@@ -114,7 +116,7 @@ Snipsy has two ways to get pre-made snippets:
 - **Obsidian Callouts** — `>note`, `>tip`, `>warning`, `>danger`, etc.
 - **Basic Emojis** — common emoji shortcuts (`smile` → 😀, `fire` → 🔥, etc.)
 
-**Espanso import.** Most Espanso packages are plain YAML. Copy the YAML from any package on [Espanso Hub](https://hub.espanso.org/), paste it into **Espanso import**, click Install. Conflicts open a preview so you can resolve them before anything writes to disk.
+**Espanso import.** Most Espanso packages are plain YAML. Copy the YAML from any package on [Espanso Hub](https://hub.espanso.org/), paste it into **Import from Espanso YAML** (Packages tab), pick a group name, click **Import snippets**. Imports land in that named group, so a whole import can be removed later by deleting the group. Conflicts open a preview so you can resolve them before anything writes to disk.
 
 ---
 
@@ -123,8 +125,9 @@ Snipsy has two ways to get pre-made snippets:
 Snipsy is offline-first.
 
 - Reads/writes only `.obsidian/plugins/snipsidian/data.json` in your vault.
-- Network: a single request to `api.github.com` when you open the Community packages tab (to list the catalog). No analytics, no telemetry, no account.
-- Optional submission flow uses a Google Form (your choice to fill it in).
+- Network: only when you use the Packages tab - `api.github.com` to list the catalog, `raw.githubusercontent.com` to download a pack you install. No analytics, no telemetry, no account.
+- Clipboard: a snippet whose replacement contains `$clipboard` reads your clipboard at the moment it expands (that's the feature). No snippet ships with `$clipboard` by default; check the install preview when adding third-party packs.
+- Package submission opens a prefilled GitHub issue in your browser - nothing is sent until you submit it there yourself.
 
 ---
 
