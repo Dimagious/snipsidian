@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-05
+
+The default-snippets release, driven by the first two user-filed issues in the repo ([#55](https://github.com/Dimagious/snipsidian/issues/55), [#56](https://github.com/Dimagious/snipsidian/issues/56)): deleting a default snippet now sticks (B-130), the shipped set is a single deletable "Defaults" group with a restore button (B-131). Also folds in the June security-hardening audit (S-008/S-009/S-011).
+
 ### Added
 
 - **Default snippets now ship as a deletable "Defaults" group, with a restore button** (B-131, follow-up to [#56](https://github.com/Dimagious/snipsidian/issues/56)). New installs seed the built-in snippets under `defaults/<trigger>` instead of loose ungrouped keys, so the whole shipped set is visible as one group in the Snippets tab and removable with a single delete-group action — writers who don't want `now`/`today`/`bold` expanding on common words can drop them all at once (and, since B-130, that decision sticks). A new "Restore default snippets" row in the General tab brings deleted defaults back: additive-only (a trigger name that already exists in any group is skipped, nothing is overwritten), gated through `validatePackageForInstall` like every other write path into `settings.snippets`. Existing users are untouched — their current keys stay exactly where they are. 17 new tests: 9 store-boundary tests on the grouping/restore-plan logic, 5 mount tests on the General-tab flow (including the validation-gate wiring), plus updated seed tests.
