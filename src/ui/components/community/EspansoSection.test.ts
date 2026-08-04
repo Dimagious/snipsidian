@@ -15,6 +15,17 @@ vi.mock("obsidian", async () => {
     };
 });
 
+// Spy-wrap the install validator (delegates to the real one by
+// default) so a single test can force a defensive-branch verdict.
+const validateSpy = vi.hoisted(() => vi.fn());
+vi.mock("../../../services/package-validator", async () => {
+    const actual = await vi.importActual<
+        typeof import("../../../services/package-validator")
+    >("../../../services/package-validator");
+    validateSpy.mockImplementation(actual.validatePackageForInstall);
+    return { ...actual, validatePackageForInstall: validateSpy };
+});
+
 import { installObsidianDomHelpers } from "../../../test/dom-polyfill";
 import { makeMockPlugin } from "../../../test/factories/plugin";
 import { EspansoSection } from "./EspansoSection";
@@ -218,6 +229,42 @@ describe("EspansoSection — import flow (B-045)", () => {
         expect(
             noticeCalls.some((msg) => msg.startsWith("Cannot import Espanso package:")),
         ).toBe(true);
+        expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+    });
+
+    it("[S-009] multi-violation package reports the first error plus a count", () => {
+        const before = JSON.stringify(plugin.settings.snippets);
+        const huge = "x".repeat(10001); // two oversized replacements → 2 errors
+        const { yaml, importBtn } = mount();
+        yaml.value = [
+            "matches:",
+            `  - trigger: ":big1"\n    replace: "${huge}"`,
+            `  - trigger: ":big2"\n    replace: "${huge}"`,
+        ].join("\n");
+        importBtn.click();
+
+        expect(
+            noticeCalls.some(
+                (msg) =>
+                    msg.startsWith("Cannot import Espanso package:") &&
+                    msg.endsWith("(and 1 more)"),
+            ),
+        ).toBe(true);
+        expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+    });
+
+    it("[S-009] invalid verdict with no error detail falls back to a generic message", () => {
+        // The real validator never returns isValid:false with empty errors;
+        // this pins the defensive fallback text on that impossible shape.
+        validateSpy.mockReturnValueOnce({ isValid: false, errors: [], warnings: [] });
+        const before = JSON.stringify(plugin.settings.snippets);
+        const { yaml, importBtn } = mount();
+        yaml.value = SIMPLE_YAML;
+        importBtn.click();
+
+        expect(noticeCalls).toContain(
+            "Cannot import Espanso package: Import failed validation",
+        );
         expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
     });
 

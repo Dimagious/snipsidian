@@ -362,6 +362,27 @@ snippets: []
       expect(vi.mocked(requestUrl)).toHaveBeenCalledTimes(2);
       consoleSpy.mockRestore();
     });
+
+    // S-011 companion: the shape-guard rewrite of the extension filter
+    // must keep accepting BOTH spellings, `.yml` and `.yaml`.
+    it("[S-011] still accepts .yaml listing entries after the shape-guard", async () => {
+      const mockFiles = [
+        { name: "ok.yaml", download_url: "https://raw.githubusercontent.com/Dimagious/snipsidian-community/main/approved/ok.yaml" },
+      ];
+
+      vi.mocked(requestUrl)
+        .mockResolvedValueOnce({ status: 200, text: JSON.stringify(mockFiles) } as any)
+        .mockResolvedValueOnce({
+          status: 200,
+          text: "name: OK yaml\nsnippets:\n  - trigger: brb\n    replace: be right back\n",
+        } as any);
+
+      const result = await loadCommunityPackagesFromGitHub();
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("unreachable");
+      expect(result.packages).toHaveLength(1);
+      expect(result.packages[0]?.label).toBe("OK yaml");
+    });
   });
 
   // `createPackageIssue` tests removed in 1.1.7 with the function
