@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Deleted or renamed default snippets no longer resurrect on restart** (B-130, [#55](https://github.com/Dimagious/snipsidian/issues/55), [#56](https://github.com/Dimagious/snipsidian/issues/56)). `loadSettings` re-merged `DEFAULT_SNIPPETS` into the stored snippet map on every launch, so deleting `now`/`today` (via the settings UI or by editing `data.json` directly) silently undid itself on the next open, and renaming a default (e.g. `note` → `notes`) brought a copy back under the original trigger. Defaults are now seeded exactly once — on first install, when `data.json` has no snippets map yet — and persisted immediately; after that the user's stored map is the single source of truth. Side fix in the same code path: `loadSettings` used to drop every non-`snippets` field from `data.json` on load (`ui.groupOpen`, `ui.activeTab`, `communityPackages.cache` reset on every restart); saved fields are now carried through. 5 new regression tests (delete-survives-reload, rename-does-not-duplicate, first-install seed + persist, saved-map-as-is, non-snippet fields preserved).
+
 ## [1.1.8] - 2026-05-22
 
 UX hotfix for a latent group-accordion bug surfaced by a user the day 1.1.7 shipped. Single-PR mini-release rather than waiting for a batch, because the bug effectively hides the entire snippet library from anyone who doesn't pixel-hunt for the 14×14 chevron icon.
