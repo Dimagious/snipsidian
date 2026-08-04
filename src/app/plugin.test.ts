@@ -37,6 +37,7 @@ vi.mock("../ui/settings", () => ({
 const { default: PluginClass } = await import("./plugin");
 const { registerEditorChange } = await import("./cm6-bridge");
 const { DEFAULT_SNIPPETS } = await import("../presets");
+const { defaultSnippetsAsGroup } = await import("../store/presets");
 
 describe("app/plugin", () => {
     beforeEach(() => {
@@ -134,7 +135,8 @@ describe("app/plugin", () => {
         // @ts-ignore
         plugin.loadData = vi.fn().mockResolvedValue(null);
         await plugin.loadSettings();
-        expect(plugin.settings.snippets).toEqual(DEFAULT_SNIPPETS);
+        // B-131: seeded as the "defaults" group, not as bare triggers.
+        expect(plugin.settings.snippets).toEqual(defaultSnippetsAsGroup());
         // Persisted right away so later deletions of defaults stick.
         expect((plugin as any).saveData).toHaveBeenCalledWith(plugin.settings);
     });
