@@ -197,7 +197,7 @@ Common issues and solutions for Snipsy.
 - **Check data file** - Look at `.obsidian/plugins/snipsidian/data.json`
 - **Restore from backup** - Use your exported JSON backup
 - **Reinstall packages** - Reinstall any corrupted packages
-- **Reset to defaults** - Use "Add missing defaults" button
+- **Restore defaults** - Use **Settings → Snipsy → General → Restore default snippets** (re-adds missing built-in snippets; never overwrites yours)
 
 #### Sync Issues
 **Problem:** Snippets don't sync across devices.
