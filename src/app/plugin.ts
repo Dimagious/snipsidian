@@ -1,7 +1,7 @@
 import { Plugin } from "obsidian";
 import { registerEditorChange } from "./cm6-bridge";
 import { SnipSidianSettingTab } from "../ui/settings";
-import { DEFAULT_SNIPPETS } from "../presets";
+import { defaultSnippetsAsGroup } from "../store/presets";
 import type { SnipSidianSettings } from "../types";
 import { getDict, getAllSnippetsFlat } from "../store/snippets";
 import { SnippetPickerService } from "../core/snippet-picker";
@@ -59,8 +59,10 @@ export default class HotstringsPlugin extends Plugin {
         } else {
             // First install (no data.json, or one without a snippets map):
             // seed the shipped defaults once and persist immediately, so a
-            // later delete/rename of a default snippet sticks.
-            this.settings = { ...saved, snippets: { ...DEFAULT_SNIPPETS } };
+            // later delete/rename of a default snippet sticks. Seeded as the
+            // "Defaults" group (B-131) so the set is one deletable unit in
+            // the Snippets tab and restorable from the General tab.
+            this.settings = { ...saved, snippets: defaultSnippetsAsGroup() };
             await this.saveSettings();
         }
     }

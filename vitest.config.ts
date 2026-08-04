@@ -36,7 +36,12 @@ export default defineConfig({
                 // the gate.
                 //
                 // Tab files (big render trees, no mount tests yet —
-                // own follow-up PR per file):
+                // own follow-up PR per file). `BasicTab.ts` gained
+                // mount tests for the B-131 restore-defaults flow in
+                // 1.2.0 (`BasicTab.test.ts`) but stays excluded at
+                // 53% lines — export/import/reveal wiring is still
+                // untested, same partial-coverage precedent as
+                // SnippetsTab below.
                 "src/ui/components/BasicTab.ts",
                 "src/ui/components/FeedbackTab.ts",
                 "src/ui/components/SettingsTab.ts",
