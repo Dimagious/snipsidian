@@ -4,6 +4,7 @@ import { espansoYamlToSnippets } from "../../../packages/espanso";
 import { diffIncoming } from "../../../store/diff";
 import { PackagePreviewModal } from "../Modals";
 import { hasReplacementCollision } from "../../../store/snippets";
+import { validatePackageForInstall } from "../../../services/package-validator";
 import { joinKey, slugifyGroup } from "../../../store/keys";
 import { GroupManager } from "../../utils/group-utils";
 
@@ -114,6 +115,22 @@ export class EspansoSection {
         parsed = espansoYamlToSnippets(yamlText);
       } catch (err) {
         new Notice(`Failed to parse Espanso package: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
+
+      // S-009: the community-pack install path gates on
+      // `validatePackageForInstall`, but Espanso YAML is pasted from an
+      // untrusted source and historically skipped every size/count/shape
+      // limit — nullifying the whole limit system on this write path.
+      // Run the same install-time validation on the bare-trigger map
+      // before it reaches the diff/write. `parsed` has the same
+      // `{ trigger: replacement }` shape the validator expects.
+      const v = validatePackageForInstall({ label: groupSlug, snippets: parsed });
+      if (!v.isValid) {
+        const first = v.errors[0] ?? "Import failed validation";
+        const more = v.errors.length > 1 ? ` (and ${v.errors.length - 1} more)` : "";
+        new Notice(`Cannot import Espanso package: ${first}${more}`);
+        console.error("[snipsy] Espanso import validation failed", v.errors);
         return;
       }
 

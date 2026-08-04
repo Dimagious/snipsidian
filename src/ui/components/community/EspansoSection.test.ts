@@ -15,6 +15,17 @@ vi.mock("obsidian", async () => {
     };
 });
 
+// Spy-wrap the install validator (delegates to the real one by
+// default) so a single test can force a defensive-branch verdict.
+const validateSpy = vi.hoisted(() => vi.fn());
+vi.mock("../../../services/package-validator", async () => {
+    const actual = await vi.importActual<
+        typeof import("../../../services/package-validator")
+    >("../../../services/package-validator");
+    validateSpy.mockImplementation(actual.validatePackageForInstall);
+    return { ...actual, validatePackageForInstall: validateSpy };
+});
+
 import { installObsidianDomHelpers } from "../../../test/dom-polyfill";
 import { makeMockPlugin } from "../../../test/factories/plugin";
 import { EspansoSection } from "./EspansoSection";
@@ -187,6 +198,73 @@ describe("EspansoSection — import flow (B-045)", () => {
             ),
         ).toBe(true);
         // No mutation past the seed.
+        expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+    });
+
+    // S-009: Espanso YAML is pasted from an untrusted source and used to
+    // skip every install-time limit (count, replacement length, trigger
+    // shape) that the community-pack path enforces. The import must now be
+    // gated by `validatePackageForInstall` before any write.
+    it("[S-009] rejects an oversized replacement with a Notice and no mutation", () => {
+        const before = JSON.stringify(plugin.settings.snippets);
+        const huge = "x".repeat(10001); // > INSTALL_MAX_REPLACEMENT_LEN (10000)
+        const { yaml, importBtn } = mount();
+        yaml.value = `matches:\n  - trigger: ":big"\n    replace: "${huge}"`;
+        importBtn.click();
+
+        expect(
+            noticeCalls.some((msg) => msg.startsWith("Cannot import Espanso package:")),
+        ).toBe(true);
+        expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+    });
+
+    it("[S-009] rejects a package exceeding the snippet-count cap", () => {
+        const before = JSON.stringify(plugin.settings.snippets);
+        // 501 matches > INSTALL_MAX_SNIPPETS (500)
+        const lines = Array.from({ length: 501 }, (_, i) => `  - trigger: ":t${i}"\n    replace: "v${i}"`);
+        const { yaml, importBtn } = mount();
+        yaml.value = `matches:\n${lines.join("\n")}`;
+        importBtn.click();
+
+        expect(
+            noticeCalls.some((msg) => msg.startsWith("Cannot import Espanso package:")),
+        ).toBe(true);
+        expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+    });
+
+    it("[S-009] multi-violation package reports the first error plus a count", () => {
+        const before = JSON.stringify(plugin.settings.snippets);
+        const huge = "x".repeat(10001); // two oversized replacements → 2 errors
+        const { yaml, importBtn } = mount();
+        yaml.value = [
+            "matches:",
+            `  - trigger: ":big1"\n    replace: "${huge}"`,
+            `  - trigger: ":big2"\n    replace: "${huge}"`,
+        ].join("\n");
+        importBtn.click();
+
+        expect(
+            noticeCalls.some(
+                (msg) =>
+                    msg.startsWith("Cannot import Espanso package:") &&
+                    msg.endsWith("(and 1 more)"),
+            ),
+        ).toBe(true);
+        expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+    });
+
+    it("[S-009] invalid verdict with no error detail falls back to a generic message", () => {
+        // The real validator never returns isValid:false with empty errors;
+        // this pins the defensive fallback text on that impossible shape.
+        validateSpy.mockReturnValueOnce({ isValid: false, errors: [], warnings: [] });
+        const before = JSON.stringify(plugin.settings.snippets);
+        const { yaml, importBtn } = mount();
+        yaml.value = SIMPLE_YAML;
+        importBtn.click();
+
+        expect(noticeCalls).toContain(
+            "Cannot import Espanso package: Import failed validation",
+        );
         expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
     });
 
