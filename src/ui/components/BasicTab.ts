@@ -2,6 +2,9 @@ import { App, Notice, Platform } from "obsidian";
 import type SnipSidianPlugin from "../../main";
 import { isRecordOfString } from "../../shared/guards";
 import { ImportPreviewModal } from "./Modals";
+import { DEFAULT_SNIPPETS_GROUP, planRestoreDefaults } from "../../store/presets";
+import { joinKey } from "../../store/keys";
+import { validatePackageForInstall } from "../../services/package-validator";
 
 /**
  * General tab. Visually aligned with the About tab: one section
@@ -67,6 +70,45 @@ export class BasicTab {
             buttonText: "Reveal",
             onClick: () => this.revealDataFile(),
         });
+
+        // ---- Defaults ----
+        root.createEl("h4", { text: "Defaults", cls: "snipsy-tab-subheading" });
+        const defaults = root.createDiv({ cls: "snipsy-about-list" });
+
+        this.renderRow(defaults, {
+            title: "Restore default snippets",
+            description:
+                "Re-add missing built-in snippets to the Defaults group. Existing snippets are not changed.",
+            buttonText: "Restore",
+            onClick: () => void this.restoreDefaults(),
+        });
+    }
+
+    /** B-131: bring back shipped defaults the user previously deleted.
+     *  Additive only — `planRestoreDefaults` skips any trigger name that
+     *  already exists in any group, so nothing is overwritten and no
+     *  `getDict` collisions are introduced. Gated through
+     *  `validatePackageForInstall` like every other write path into
+     *  `settings.snippets`. */
+    private async restoreDefaults() {
+        const plan = planRestoreDefaults(this.plugin.settings.snippets);
+        const count = Object.keys(plan).length;
+        if (count === 0) {
+            new Notice("All default snippets are already in your library");
+            return;
+        }
+
+        const v = validatePackageForInstall({ label: "Defaults", snippets: plan });
+        if (!v.isValid) {
+            new Notice(`Cannot restore defaults: ${v.errors.join("; ")}`);
+            return;
+        }
+
+        for (const [trigger, replacement] of Object.entries(plan)) {
+            this.plugin.settings.snippets[joinKey(DEFAULT_SNIPPETS_GROUP, trigger)] = replacement;
+        }
+        await this.plugin.saveSettings();
+        new Notice(`Restored ${count} default snippet${count === 1 ? "" : "s"}`);
     }
 
     private renderRow(

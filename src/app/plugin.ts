@@ -1,7 +1,7 @@
 import { Plugin } from "obsidian";
 import { registerEditorChange } from "./cm6-bridge";
 import { SnipSidianSettingTab } from "../ui/settings";
-import { DEFAULT_SNIPPETS } from "../presets";
+import { defaultSnippetsAsGroup } from "../store/presets";
 import type { SnipSidianSettings } from "../types";
 import { getDict, getAllSnippetsFlat } from "../store/snippets";
 import { SnippetPickerService } from "../core/snippet-picker";
@@ -50,14 +50,21 @@ export default class HotstringsPlugin extends Plugin {
     }
 
     async loadSettings() {
-        const saved = (await this.loadData()) as { snippets?: Record<string, string> } | null;
-        const savedSnippets = saved?.snippets ?? {};
-        this.settings = {
-            snippets: {
-                ...DEFAULT_SNIPPETS,
-                ...savedSnippets
-            }
-        };
+        const saved = (await this.loadData()) as Partial<SnipSidianSettings> | null;
+        if (saved?.snippets) {
+            // Existing install: the stored map is the source of truth. Never
+            // re-merge DEFAULT_SNIPPETS here — doing so resurrected deleted or
+            // renamed defaults on every launch (B-130, issues #55/#56).
+            this.settings = { ...saved, snippets: saved.snippets };
+        } else {
+            // First install (no data.json, or one without a snippets map):
+            // seed the shipped defaults once and persist immediately, so a
+            // later delete/rename of a default snippet sticks. Seeded as the
+            // "Defaults" group (B-131) so the set is one deletable unit in
+            // the Snippets tab and restorable from the General tab.
+            this.settings = { ...saved, snippets: defaultSnippetsAsGroup() };
+            await this.saveSettings();
+        }
     }
 
     async saveSettings() {

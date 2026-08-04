@@ -36,6 +36,8 @@ vi.mock("../ui/settings", () => ({
 // Dynamic imports AFTER mocks to ensure they take effect
 const { default: PluginClass } = await import("./plugin");
 const { registerEditorChange } = await import("./cm6-bridge");
+const { DEFAULT_SNIPPETS } = await import("../presets");
+const { defaultSnippetsAsGroup } = await import("../store/presets");
 
 describe("app/plugin", () => {
     beforeEach(() => {
@@ -85,14 +87,71 @@ describe("app/plugin", () => {
         expect(disposer).toHaveBeenCalled();
     });
 
-    it("loadSettings merges saved with defaults", async () => {
+    it("loadSettings uses the saved snippets map as-is when one exists", async () => {
         const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
         // @ts-ignore
         const plugin = new PluginClass(app);
         // @ts-ignore
         plugin.loadData = vi.fn().mockResolvedValue({ snippets: { saved: "X" } });
         await plugin.loadSettings();
-        expect(plugin.settings.snippets.saved).toBe("X");
-        expect(Object.keys(plugin.settings.snippets).length).toBeGreaterThan(0);
+        expect(plugin.settings.snippets).toEqual({ saved: "X" });
+    });
+
+    // B-130 (#55/#56): defaults must not resurrect after the user deletes them.
+    it("does not re-add deleted default snippets on reload", async () => {
+        const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
+        // @ts-ignore
+        const plugin = new PluginClass(app);
+        const withoutNowToday = { ...DEFAULT_SNIPPETS } as Record<string, string>;
+        delete withoutNowToday.now;
+        delete withoutNowToday.today;
+        // @ts-ignore
+        plugin.loadData = vi.fn().mockResolvedValue({ snippets: withoutNowToday });
+        await plugin.loadSettings();
+        expect(plugin.settings.snippets.now).toBeUndefined();
+        expect(plugin.settings.snippets.today).toBeUndefined();
+    });
+
+    // B-130 (#55 comment): renaming a default must not bring back a copy
+    // under the original trigger.
+    it("does not duplicate a renamed default snippet on reload", async () => {
+        const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
+        // @ts-ignore
+        const plugin = new PluginClass(app);
+        const renamed = { ...DEFAULT_SNIPPETS } as Record<string, string>;
+        renamed.notes = renamed.note!;
+        delete renamed.note;
+        // @ts-ignore
+        plugin.loadData = vi.fn().mockResolvedValue({ snippets: renamed });
+        await plugin.loadSettings();
+        expect(plugin.settings.snippets.note).toBeUndefined();
+        expect(plugin.settings.snippets.notes).toBe(DEFAULT_SNIPPETS.note);
+    });
+
+    it("seeds DEFAULT_SNIPPETS and persists them on first install", async () => {
+        const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
+        // @ts-ignore
+        const plugin = new PluginClass(app);
+        // @ts-ignore
+        plugin.loadData = vi.fn().mockResolvedValue(null);
+        await plugin.loadSettings();
+        // B-131: seeded as the "defaults" group, not as bare triggers.
+        expect(plugin.settings.snippets).toEqual(defaultSnippetsAsGroup());
+        // Persisted right away so later deletions of defaults stick.
+        expect((plugin as any).saveData).toHaveBeenCalledWith(plugin.settings);
+    });
+
+    it("preserves non-snippet fields (ui, communityPackages) from data.json", async () => {
+        const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
+        // @ts-ignore
+        const plugin = new PluginClass(app);
+        // @ts-ignore
+        plugin.loadData = vi.fn().mockResolvedValue({
+            snippets: { a: "b" },
+            ui: { activeTab: "community", groupOpen: { g: true } },
+        });
+        await plugin.loadSettings();
+        expect(plugin.settings.ui?.activeTab).toBe("community");
+        expect(plugin.settings.ui?.groupOpen).toEqual({ g: true });
     });
 });
