@@ -1,7 +1,8 @@
-// Default snippets shipped with Snipsy. These land in
-// `settings.snippets` on first install (and on any reload where the
-// user's data.json doesn't already have the key — user values win
-// the merge in `loadSettings`).
+// Default snippets shipped with Snipsy. These are seeded into
+// `settings.snippets` exactly once, on first install (`loadSettings` in
+// src/app/plugin.ts). After that the user's data.json owns the map —
+// deleting or renaming a default must stick across restarts (B-130,
+// issues #55/#56), so never re-merge these on load.
 //
 // Trigger keys avoid the leading `:` prefix on purpose: `:` is a
 // delimiter in Snipsy's engine (`src/shared/delimiters.ts`), so a
