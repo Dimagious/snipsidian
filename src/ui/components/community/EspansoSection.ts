@@ -1,6 +1,6 @@
 import { App, Notice } from "obsidian";
 import type SnipSidianPlugin from "../../../main";
-import { espansoYamlToSnippets } from "../../../packages/espanso";
+import { espansoYamlToSnippets, type EspansoSkip } from "../../../packages/espanso";
 import { diffIncoming } from "../../../store/diff";
 import { PackagePreviewModal } from "../Modals";
 import { hasReplacementCollision } from "../../../store/snippets";
@@ -11,6 +11,26 @@ import { GroupManager } from "../../utils/group-utils";
 /** Default group label for Espanso imports when the user doesn't
  *  type one. Slugified at write time via `slugifyGroup`. */
 const DEFAULT_GROUP_LABEL = "Espanso import";
+
+/**
+ * B-139: honest summary of what a parse produced. Espanso packages
+ * routinely use `{{vars}}`/forms/shell that this importer can't
+ * represent — before this, those matches silently imported as
+ * literal `{{corrupted}}` text with zero indication anything was
+ * wrong. `espansoYamlToSnippets` now reports what it skipped and
+ * why; this renders that into the one-line summary shown both as a
+ * status message in the section and (for the conflict path) inside
+ * the confirm modal.
+ */
+function formatSkipSummary(importedCount: number, skipped: EspansoSkip[]): string {
+  const shown = skipped.slice(0, 3).map((s) => s.trigger);
+  const names = skipped.length > 3 ? `${shown.join(", ")}, …` : shown.join(", ");
+  if (importedCount === 0) {
+    const plural = skipped.length === 1 ? "match uses" : "matches use";
+    return `Nothing to import: ${skipped.length} ${plural} forms/scripts Snipsy doesn't support (${names})`;
+  }
+  return `${importedCount} imported, ${skipped.length} skipped: ${names} — use forms/scripts Snipsy doesn't support`;
+}
 
 export class EspansoSection {
   private groupManager = new GroupManager();
@@ -91,7 +111,20 @@ export class EspansoSection {
     // B-056 + B-059: button text matches the section heading
     // ("Import snippets" — verb form of "Import from Espanso YAML").
     const espansoInstallBtn = espansoButtonRow.createEl("button", { text: "Import snippets", cls: "install-btn" });
+
+    // B-139: status line for the skip summary. Hidden by default —
+    // "zero-skip pack → no skip UI" is the pinned contract, so this
+    // only ever shows when `skipped.length > 0`. `aria-live="polite"`
+    // per the house pattern (matches `TextPromptModal`'s hint,
+    // `AddSnippetModal`'s error div, etc.).
+    const espansoStatusEl = espansoSection.createDiv({
+      cls: "snipsy-espanso-skip-status",
+      attr: { "aria-live": "polite" },
+    });
+    espansoStatusEl.hide();
+
     espansoInstallBtn.onclick = () => {
+      espansoStatusEl.hide();
       const yamlText = espansoTextarea.value;
       if (!yamlText?.trim()) {
         new Notice("Please paste YAML content first");
@@ -110,11 +143,25 @@ export class EspansoSection {
 
       // B-061: parse the YAML once and reuse `incoming` for collision
       // check, diff, conflict-modal apply, and the no-conflict path.
-      let parsed: Record<string, string>;
+      // B-139: the importer now reports what it couldn't map
+      // (`skipped`) alongside what it could (`snippets`).
+      let parsed: { snippets: Record<string, string>; skipped: EspansoSkip[] };
       try {
         parsed = espansoYamlToSnippets(yamlText);
       } catch (err) {
         new Notice(`Failed to parse Espanso package: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
+
+      // B-139: nothing importable — surface why and stop before any
+      // validation/write. This is a distinct case from "the pasted
+      // YAML had zero matches at all" (unchanged, falls through to
+      // "Installed 0 snippets" below like before B-139).
+      if (parsed.skipped.length > 0 && Object.keys(parsed.snippets).length === 0) {
+        const msg = formatSkipSummary(0, parsed.skipped);
+        espansoStatusEl.setText(msg);
+        espansoStatusEl.show();
+        new Notice(msg);
         return;
       }
 
@@ -123,9 +170,9 @@ export class EspansoSection {
       // untrusted source and historically skipped every size/count/shape
       // limit — nullifying the whole limit system on this write path.
       // Run the same install-time validation on the bare-trigger map
-      // before it reaches the diff/write. `parsed` has the same
-      // `{ trigger: replacement }` shape the validator expects.
-      const v = validatePackageForInstall({ label: groupSlug, snippets: parsed });
+      // before it reaches the diff/write. `parsed.snippets` has the
+      // same `{ trigger: replacement }` shape the validator expects.
+      const v = validatePackageForInstall({ label: groupSlug, snippets: parsed.snippets });
       if (!v.isValid) {
         const first = v.errors[0] ?? "Import failed validation";
         const more = v.errors.length > 1 ? ` (and ${v.errors.length - 1} more)` : "";
@@ -137,7 +184,7 @@ export class EspansoSection {
       // B-045: build the grouped map. Triggers stay reachable via
       // `<groupSlug>/<trigger>` keys — same shape as community packs.
       const incoming: Record<string, string> = {};
-      for (const [trigger, replacement] of Object.entries(parsed)) {
+      for (const [trigger, replacement] of Object.entries(parsed.snippets)) {
         incoming[joinKey(groupSlug, trigger)] = replacement;
       }
 
@@ -146,7 +193,7 @@ export class EspansoSection {
       // replacement is still a conflict for the engine
       // (`getDict`'s first-wins). Skip if the same grouped-key
       // already exists at the same value (re-import).
-      const triggerCollisions = Object.entries(parsed).filter(([trigger, replacement]) => {
+      const triggerCollisions = Object.entries(parsed.snippets).filter(([trigger, replacement]) => {
         const groupedKey = joinKey(groupSlug, trigger);
         if (this.plugin.settings.snippets[groupedKey] === replacement) return false;
         return hasReplacementCollision(this.plugin.settings, trigger, replacement, groupedKey);
@@ -159,19 +206,54 @@ export class EspansoSection {
       }
 
       const diff = diffIncoming(incoming, this.plugin.settings.snippets);
+      const importedCount = Object.keys(incoming).length;
       if (diff.conflicts.length > 0) {
         // B-060: conflict modal title matches the section heading.
         const modal = new PackagePreviewModal(this.app, this.plugin, "Import from Espanso YAML", diff);
         modal.onConfirm = async (resolved) => {
           this.plugin.settings.snippets = resolved;
           await this.plugin.saveSettings();
-          new Notice(`Installed ${Object.keys(incoming).length} snippets into "${rawGroupLabel}"`);
+          this.reportInstalled(espansoStatusEl, importedCount, rawGroupLabel, parsed.skipped);
         };
         modal.open();
+        // B-139: the skip list must also be visible in the confirm
+        // modal path, not just the eventual success Notice — inject
+        // it as the modal's first block so the user sees it BEFORE
+        // deciding how to resolve conflicts, without touching the
+        // shared `PackagePreviewModal` class (also used by
+        // `PackageBrowser`; B-140 keeps that unification separate).
+        if (parsed.skipped.length > 0) {
+          const skipEl = modal.contentEl.createDiv({
+            cls: "snipsy-espanso-skip-status",
+            attr: { "aria-live": "polite" },
+          });
+          skipEl.setText(formatSkipSummary(importedCount, parsed.skipped));
+          modal.contentEl.insertBefore(skipEl, modal.contentEl.firstChild);
+        }
       } else {
-        void this.installFromIncoming(incoming, rawGroupLabel);
+        void this.installFromIncoming(incoming, rawGroupLabel, espansoStatusEl, parsed.skipped);
       }
     };
+  }
+
+  /** B-139: shared success-reporting tail for both the direct-install
+   *  and conflict-resolved-install paths — Notice text + (if
+   *  anything was skipped) the status line, both mentioning the skip
+   *  count so "N imported" never overclaims what actually landed. */
+  private reportInstalled(
+    statusEl: HTMLElement,
+    importedCount: number,
+    groupLabel: string,
+    skipped: EspansoSkip[],
+  ) {
+    if (skipped.length > 0) {
+      const msg = formatSkipSummary(importedCount, skipped);
+      statusEl.setText(msg);
+      statusEl.show();
+      new Notice(`Installed ${importedCount} snippets into "${groupLabel}". ${msg}`);
+    } else {
+      new Notice(`Installed ${importedCount} snippets into "${groupLabel}"`);
+    }
   }
 
   /** Apply already-prefixed snippets to settings. Caller has done the
@@ -179,13 +261,15 @@ export class EspansoSection {
   private async installFromIncoming(
     incoming: Record<string, string>,
     groupLabel: string,
+    statusEl: HTMLElement,
+    skipped: EspansoSkip[],
   ) {
     try {
       for (const [groupedKey, replacement] of Object.entries(incoming)) {
         this.plugin.settings.snippets[groupedKey] = replacement;
       }
       await this.plugin.saveSettings();
-      new Notice(`Installed ${Object.keys(incoming).length} snippets into "${groupLabel}"`);
+      this.reportInstalled(statusEl, Object.keys(incoming).length, groupLabel, skipped);
     } catch (err) {
       new Notice(`Failed to install from YAML: ${err instanceof Error ? err.message : String(err)}`);
     }

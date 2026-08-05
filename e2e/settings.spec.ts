@@ -44,7 +44,7 @@ test.describe("settings: Add snippet flow", () => {
         // Modal opens with two text inputs (the placeholder text is
         // their accessible name in Obsidian's Setting() pattern).
         const triggerInput = win.getByRole("textbox", {
-            name: "Example: :hello",
+            name: "Example: brb",
         });
         const replacementInput = win.getByRole("textbox", {
             name: "Example: hello, world!",
@@ -151,7 +151,7 @@ test.describe("settings: Add snippet validation (B-107)", () => {
             .first()
             .click();
         await win
-            .getByRole("textbox", { name: "Example: :hello" })
+            .getByRole("textbox", { name: "Example: brb" })
             .waitFor({ state: "visible" });
     }
 
@@ -162,7 +162,7 @@ test.describe("settings: Add snippet validation (B-107)", () => {
 
         // Fill trigger but leave replacement empty.
         await win
-            .getByRole("textbox", { name: "Example: :hello" })
+            .getByRole("textbox", { name: "Example: brb" })
             .fill("e2e-empty");
 
         // Submit (second "Add snippet" button — the modal's CTA).
@@ -182,7 +182,7 @@ test.describe("settings: Add snippet validation (B-107)", () => {
         await openAddSnippetModal(win);
 
         await win
-            .getByRole("textbox", { name: "Example: :hello" })
+            .getByRole("textbox", { name: "Example: brb" })
             .fill("e2e-badgroup");
         await win
             .getByRole("textbox", { name: "Example: hello, world!" })
@@ -213,7 +213,7 @@ test.describe("settings: Add snippet validation (B-107)", () => {
         // again must NOT overwrite the existing replacement (B-023
         // collision territory).
         await win
-            .getByRole("textbox", { name: "Example: :hello" })
+            .getByRole("textbox", { name: "Example: brb" })
             .fill("brb");
         await win
             .getByRole("textbox", { name: "Example: hello, world!" })

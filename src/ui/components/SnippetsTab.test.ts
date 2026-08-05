@@ -357,7 +357,7 @@ describe("SnippetsTab — Add-snippet modal stays open on failure (B-133)", () =
     }
 
     function fillAndSubmit(trigger: string, replacement: string, group = ""): void {
-        const triggerInput = modalField("Example: :hello") as HTMLInputElement;
+        const triggerInput = modalField("Example: brb") as HTMLInputElement;
         triggerInput.value = trigger;
         triggerInput.dispatchEvent(new Event("input"));
         const replacementInput = modalField("Example: hello, world!") as HTMLTextAreaElement;
@@ -444,5 +444,192 @@ describe("SnippetsTab — Add-snippet modal stays open on failure (B-133)", () =
         expect(err?.textContent).toContain("Could not save snippet");
         expect(err?.textContent).toContain("disk full");
         expect(err?.getAttribute("aria-live")).toBe("polite");
+    });
+});
+
+// ---- B-138: per-group enable/disable ----
+
+describe("SnippetsTab — per-group enable/disable (B-138)", () => {
+    function mountWithDisabled(
+        snippets: Record<string, string>,
+        disabledGroups: string[] = [],
+    ): { tab: SnippetsTab } {
+        const mockPlugin = makeMockPlugin({
+            settings: { snippets, disabledGroups },
+        });
+        plugin = mockPlugin as unknown as SnipSidianPlugin;
+        app = mockPlugin.app as unknown as App;
+        const tab = new SnippetsTab(app, plugin);
+        tab.render(root);
+        return { tab };
+    }
+
+    function groupHeaderFor(groupTitle: string): HTMLElement {
+        const headers = root.querySelectorAll(".group-header");
+        for (const header of headers) {
+            const title = header.querySelector(".group-title");
+            if (title?.textContent === groupTitle) return header as HTMLElement;
+        }
+        throw new Error(`Group "${groupTitle}" not found`);
+    }
+
+    function enableToggleFor(groupTitle: string): HTMLInputElement {
+        const toggle = groupHeaderFor(groupTitle).querySelector(
+            ".snipsy-group-enable-toggle",
+        ) as HTMLInputElement | null;
+        if (!toggle) throw new Error(`Enable toggle for "${groupTitle}" not found`);
+        return toggle;
+    }
+
+    async function flush() {
+        await Promise.resolve();
+        await Promise.resolve();
+    }
+
+    it("renders an enable/disable toggle on a real group's header, checked by default", () => {
+        mountWithDisabled({ "work/sig": "Best" });
+        const toggle = enableToggleFor("Work");
+        expect(toggle.checked).toBe(true);
+        expect(toggle.getAttribute("aria-label")).toBe("Enable/disable group Work");
+    });
+
+    it("does NOT render a toggle on the Ungrouped pseudo-group", () => {
+        mountWithDisabled({ hello: "world" });
+        const header = groupHeaderFor("Ungrouped");
+        expect(header.querySelector(".snipsy-group-enable-toggle")).toBeNull();
+    });
+
+    it("a disabled group starts unchecked and its groupEl carries the dimming class", () => {
+        mountWithDisabled({ "work/sig": "Best" }, ["work"]);
+        const toggle = enableToggleFor("Work");
+        expect(toggle.checked).toBe(false);
+        const groupEl = groupHeaderFor("Work").closest(".snippet-group");
+        expect(groupEl?.classList.contains("snippet-group-disabled")).toBe(true);
+    });
+
+    it("unchecking the toggle disables the group, persists, and dims it (round-trip: off)", async () => {
+        mountWithDisabled({ "work/sig": "Best" });
+        const toggle = enableToggleFor("Work");
+        toggle.checked = false;
+        toggle.dispatchEvent(new Event("change"));
+        await flush();
+
+        expect(plugin.settings.disabledGroups).toEqual(["work"]);
+        expect(plugin._saveCalls.length).toBe(1);
+        const groupEl = groupHeaderFor("Work").closest(".snippet-group");
+        expect(groupEl?.classList.contains("snippet-group-disabled")).toBe(true);
+    });
+
+    it("re-checking the toggle re-enables the group and persists (round-trip: back on)", async () => {
+        mountWithDisabled({ "work/sig": "Best" }, ["work"]);
+        let toggle = enableToggleFor("Work");
+        expect(toggle.checked).toBe(false);
+
+        toggle.checked = true;
+        toggle.dispatchEvent(new Event("change"));
+        await flush();
+
+        expect(plugin.settings.disabledGroups).toEqual([]);
+        expect(plugin._saveCalls.length).toBe(1);
+        toggle = enableToggleFor("Work");
+        expect(toggle.checked).toBe(true);
+        const groupEl = groupHeaderFor("Work").closest(".snippet-group");
+        expect(groupEl?.classList.contains("snippet-group-disabled")).toBe(false);
+    });
+
+    it("toggling one group's checkbox does not affect another group's disabled state", async () => {
+        mountWithDisabled(
+            { "work/sig": "Best", "personal/todo": "- [ ] " },
+            ["personal"],
+        );
+        const workToggle = enableToggleFor("Work");
+        workToggle.checked = false;
+        workToggle.dispatchEvent(new Event("change"));
+        await flush();
+
+        expect(new Set(plugin.settings.disabledGroups)).toEqual(new Set(["work", "personal"]));
+    });
+
+    it("clicking the toggle does not also collapse/expand the group accordion", () => {
+        mountWithDisabled({ "work/sig": "Best" });
+        const toggle = enableToggleFor("Work");
+        // The group starts closed (default); clicking the enable
+        // toggle must not bubble into the header's click-to-toggle
+        // handler and flip open state as a side effect.
+        toggle.click();
+        // Re-query after the re-render triggered by the toggle's own
+        // `change` handler — the header's own accordion-open listener
+        // must NOT have also fired.
+        const header = groupHeaderFor("Work");
+        const chevron = header.querySelector(".group-toggle") as HTMLButtonElement;
+        expect(chevron.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("deleting a group removes its entry from disabledGroups", async () => {
+        mountWithDisabled({ "work/sig": "Best" }, ["work"]);
+        const header = groupHeaderFor("Work");
+        const deleteBtn = header.querySelector(
+            '[aria-label="Delete group Work"]',
+        ) as HTMLButtonElement;
+        deleteBtn.click();
+        // ConfirmModal opened — click its "Delete" confirm button.
+        const confirmBtn = Array.from(
+            document.body.querySelectorAll("button"),
+        ).find((b) => b.textContent === "Delete") as HTMLButtonElement;
+        confirmBtn.click();
+        await flush();
+
+        expect(plugin.settings.snippets["work/sig"]).toBeUndefined();
+        expect(plugin.settings.disabledGroups).toEqual([]);
+    });
+
+    it("deleting a DIFFERENT (enabled) group leaves an existing disabledGroups entry untouched", async () => {
+        mountWithDisabled(
+            { "work/sig": "Best", "personal/todo": "- [ ] " },
+            ["work"],
+        );
+        const header = groupHeaderFor("Personal");
+        const deleteBtn = header.querySelector(
+            '[aria-label="Delete group Personal"]',
+        ) as HTMLButtonElement;
+        deleteBtn.click();
+        const confirmBtn = Array.from(
+            document.body.querySelectorAll("button"),
+        ).find((b) => b.textContent === "Delete") as HTMLButtonElement;
+        confirmBtn.click();
+        await flush();
+
+        expect(plugin.settings.snippets["personal/todo"]).toBeUndefined();
+        expect(plugin.settings.disabledGroups).toEqual(["work"]);
+    });
+
+    // B-138 (checker follow-up): renaming a group used to leave
+    // `disabledGroups` untouched — the snippets moved to the new
+    // slug but the mute state stayed pinned to the old (now-dead)
+    // slug, so (a) the renamed group silently re-enabled and (b) the
+    // stale old slug lingered, ready to mis-disable some future
+    // unrelated group that happened to slugify to the same name.
+    it("renaming a disabled group carries the disabled state to the new slug", async () => {
+        mountWithDisabled({ "work/sig": "Best" }, ["work"]);
+
+        const header = groupHeaderFor("Work");
+        const renameBtn = header.querySelector(
+            '[aria-label^="Rename group Work"]',
+        ) as HTMLButtonElement;
+        renameBtn.click();
+
+        const modalInput = document.body.querySelector(
+            ".snipsidian-prompt input",
+        ) as HTMLInputElement;
+        modalInput.value = "Office";
+        modalInput.dispatchEvent(new Event("input"));
+        const okBtn = Array.from(
+            document.body.querySelectorAll(".modal-button-container button"),
+        ).find((b) => b.textContent === "OK") as HTMLButtonElement;
+        okBtn.click();
+        await flush();
+
+        expect(plugin.settings.snippets["office/sig"]).toBe("Best");
+        expect(plugin.settings.disabledGroups).toEqual(["office"]);
     });
 });

@@ -22,6 +22,7 @@ import {
     TextPromptModal,
     AddSnippetModal,
     ConfirmModal,
+    computeTriggerHint,
 } from "./Modals";
 import type { App } from "obsidian";
 
@@ -279,7 +280,7 @@ describe("AddSnippetModal", () => {
         const modal = new AddSnippetModal(app);
         modal.open();
         expect(modal.titleEl.textContent).toBe("Add new snippet");
-        expect(getInputByPlaceholder(modal, "Example: :hello")).toBeTruthy();
+        expect(getInputByPlaceholder(modal, "Example: brb")).toBeTruthy();
         expect(getInputByPlaceholder(modal, "Example: hello, world!")).toBeTruthy();
         expect(getInputByPlaceholder(modal, "Example: greetings")).toBeTruthy();
         const buttons = Array.from(modal.contentEl.querySelectorAll("button"));
@@ -290,7 +291,7 @@ describe("AddSnippetModal", () => {
         const onConfirm = vi.fn();
         const modal = new AddSnippetModal(app, onConfirm);
         modal.open();
-        const triggerInput = getInputByPlaceholder(modal, "Example: :hello") as HTMLInputElement;
+        const triggerInput = getInputByPlaceholder(modal, "Example: brb") as HTMLInputElement;
         const replacementInput = getInputByPlaceholder(modal, "Example: hello, world!") as HTMLTextAreaElement;
         const groupInput = getInputByPlaceholder(modal, "Example: greetings") as HTMLInputElement;
 
@@ -324,8 +325,8 @@ describe("AddSnippetModal", () => {
         const onConfirm = vi.fn();
         const modal = new AddSnippetModal(app, onConfirm);
         modal.open();
-        (getInputByPlaceholder(modal, "Example: :hello") as HTMLInputElement).value = "brb";
-        (getInputByPlaceholder(modal, "Example: :hello") as HTMLInputElement).dispatchEvent(new Event("input"));
+        (getInputByPlaceholder(modal, "Example: brb") as HTMLInputElement).value = "brb";
+        (getInputByPlaceholder(modal, "Example: brb") as HTMLInputElement).dispatchEvent(new Event("input"));
         (getInputByPlaceholder(modal, "Example: hello, world!") as HTMLTextAreaElement).value = "be right back";
         (getInputByPlaceholder(modal, "Example: hello, world!") as HTMLTextAreaElement).dispatchEvent(new Event("input"));
         const groupInput = getInputByPlaceholder(modal, "Example: greetings") as HTMLInputElement;
@@ -346,6 +347,115 @@ describe("AddSnippetModal", () => {
             .find((b) => b.textContent === "Cancel") as HTMLButtonElement;
         cancel.click();
         expect(onConfirm).not.toHaveBeenCalled();
+    });
+
+    // ---- B-137 (ux#5): live "Will expand when you type: …" hint ----
+    describe("live trigger hint", () => {
+        function getHint(modal: AddSnippetModal): HTMLElement {
+            return modal.contentEl.querySelector(".snipsidian-addsnippet-hint") as HTMLElement;
+        }
+        function typeTrigger(modal: AddSnippetModal, value: string) {
+            const input = getInputByPlaceholder(modal, "Example: brb") as HTMLInputElement;
+            input.value = value;
+            input.dispatchEvent(new Event("input"));
+        }
+
+        it("is hidden when the field is empty", () => {
+            const modal = new AddSnippetModal(app);
+            modal.open();
+            expect(getHint(modal).style.display).toBe("none");
+        });
+
+        it("is hidden when typing a bare word and prefix mode is off (no lossy transform)", () => {
+            const modal = new AddSnippetModal(app);
+            modal.open();
+            typeTrigger(modal, "brb");
+            expect(getHint(modal).style.display).toBe("none");
+        });
+
+        it("shows when a leading colon gets stripped by normalization (mode off)", () => {
+            const modal = new AddSnippetModal(app);
+            modal.open();
+            typeTrigger(modal, ":hello");
+            expect(getHint(modal).style.display).not.toBe("none");
+            expect(getHint(modal).textContent).toBe("Will expand when you type: hello");
+        });
+
+        it("shows the prefix-aware form when prefix mode is on and the user types a bare word", () => {
+            const modal = new AddSnippetModal(app, undefined, { requirePrefix: true, prefixChar: ":" });
+            modal.open();
+            typeTrigger(modal, "hello");
+            expect(getHint(modal).textContent).toBe("Will expand when you type: :hello");
+        });
+
+        it("hides when prefix mode is on and the user already typed the matching prefix", () => {
+            const modal = new AddSnippetModal(app, undefined, { requirePrefix: true, prefixChar: ":" });
+            modal.open();
+            typeTrigger(modal, ":hello");
+            // Nothing to warn about — what they typed is exactly what will fire it.
+            expect(getHint(modal).style.display).toBe("none");
+        });
+
+        it("uses the configured \";\" prefix char, not a hardcoded \":\"", () => {
+            const modal = new AddSnippetModal(app, undefined, { requirePrefix: true, prefixChar: ";" });
+            modal.open();
+            typeTrigger(modal, "hello");
+            expect(getHint(modal).textContent).toBe("Will expand when you type: ;hello");
+        });
+
+        it("clears again when the field is emptied back out", () => {
+            const modal = new AddSnippetModal(app);
+            modal.open();
+            typeTrigger(modal, ":hello");
+            expect(getHint(modal).style.display).not.toBe("none");
+            typeTrigger(modal, "");
+            expect(getHint(modal).style.display).toBe("none");
+        });
+    });
+});
+
+// ---------- computeTriggerHint (pure) ----------
+
+describe("computeTriggerHint", () => {
+    it("returns null for an empty/whitespace-only input", () => {
+        expect(computeTriggerHint("")).toBeNull();
+        expect(computeTriggerHint("   ")).toBeNull();
+    });
+
+    it("returns null when the input normalises to itself and prefix mode is off", () => {
+        expect(computeTriggerHint("brb")).toBeNull();
+    });
+
+    it("returns the normalized form when a leading colon is stripped", () => {
+        expect(computeTriggerHint(":brb")).toBe("Will expand when you type: brb");
+    });
+
+    it("returns null when the input normalises to empty (colon-only)", () => {
+        expect(computeTriggerHint(":")).toBeNull();
+    });
+
+    it("is prefix-aware: mode on + bare word → shows the prefixed form", () => {
+        expect(computeTriggerHint("brb", { requirePrefix: true, prefixChar: ":" })).toBe(
+            "Will expand when you type: :brb",
+        );
+    });
+
+    it("is prefix-aware: mode on + already-prefixed input matching the configured char → null", () => {
+        expect(computeTriggerHint(":brb", { requirePrefix: true, prefixChar: ":" })).toBeNull();
+    });
+
+    it("defaults the prefix char to \":\" when requirePrefix is on but prefixChar is unset", () => {
+        expect(computeTriggerHint("brb", { requirePrefix: true })).toBe(
+            "Will expand when you type: :brb",
+        );
+    });
+
+    it("requirePrefix:false with a prefixChar set still behaves like mode-off", () => {
+        expect(computeTriggerHint("brb", { requirePrefix: false, prefixChar: ";" })).toBeNull();
+    });
+
+    it("trims surrounding whitespace before comparing", () => {
+        expect(computeTriggerHint("  :brb  ")).toBe("Will expand when you type: brb");
     });
 });
 

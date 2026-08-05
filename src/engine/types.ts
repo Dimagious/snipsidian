@@ -18,6 +18,17 @@ export type ExpandInput = {
     lastTyped: string;
     /** ch-index of the separator on the current line */
     sepCh: number;
+    /**
+     * B-137: opt-in trigger-prefix mode. `undefined`/empty = off
+     * (current behavior, byte-identical). When set to a single
+     * character (e.g. `:` or `;`), `findTrigger` additionally
+     * requires that exact character to sit immediately before the
+     * candidate trigger, and consumes it as part of the match (the
+     * returned `fromCh` extends one char left so the replacement
+     * swallows the prefix). Stored trigger keys stay bare either way
+     * — this only changes what the user has to type to fire them.
+     */
+    prefix?: string;
 };
 
 export type TriggerMatch = {

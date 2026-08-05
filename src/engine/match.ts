@@ -26,7 +26,7 @@ export function findTrigger(
   dict: Dict,
   delimiters: string[] = DEFAULT_DELIMITERS
 ): TriggerMatch | null {
-  const { textBefore, sepCh, lastTyped } = input;
+  const { textBefore, sepCh, lastTyped, prefix } = input;
   if (!delimiters.includes(lastTyped)) return null;
 
   const line = textBefore + lastTyped;
@@ -62,5 +62,29 @@ export function findTrigger(
   // per-keystroke hot path. This is the read-side counterpart to the
   // write-side defence in `ui/utils/group-utils.ts`. See security S-008.
   if (!Object.prototype.hasOwnProperty.call(dict, trigger)) return null;
+
+  // B-137: opt-in trigger-prefix mode. `prefix` is unset for the
+  // overwhelming majority of calls (mode off) — this block is a
+  // no-op then, so the mode-off contract stays byte-identical.
+  //
+  // When set, the char immediately before the candidate
+  // (`line[fromCh - 1]`) must equal `prefix` exactly. That position
+  // is either the separator that ended the backward walk above (a
+  // real character on the line) or, when the walk ran off the start
+  // of the line (`fromCh === 0`), `undefined` — which never equals a
+  // real prefix char, so a trigger sitting at column 0 can never
+  // match in prefix mode (there's nowhere for a prefix to live).
+  //
+  // On a match, `fromCh` extends one char left so the prefix is
+  // CONSUMED by the replacement (`...:todo ` → the whole `:todo`
+  // disappears, not just `todo`). Only the single adjacent prefix
+  // char is consumed — `::todo` leaves one leading `:` behind as
+  // literal text, matching the "one prefix, right next to the
+  // trigger" model rather than stripping every leading prefix char.
+  if (prefix) {
+    if (line[fromCh - 1] !== prefix) return null;
+    return { trigger, fromCh: fromCh - 1, toCh };
+  }
+
   return { trigger, fromCh, toCh };
 }

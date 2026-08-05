@@ -141,6 +141,23 @@
   font-size: 13px;
 }
 
+/* ---- Espanso import: skip summary (B-139) ---- */
+/* Informational, not an error — a neutral/warning tone (not danger
+   red) since this reports "some matches use constructs Snipsy can't
+   support", not a failure of the import itself. Shown both in the
+   section (`.snipsidian-settings`) and injected into the conflict
+   modal's `contentEl` (`.snipsidian-modal`). */
+.snipsidian-settings .snipsy-espanso-skip-status,
+.snipsidian-modal .snipsy-espanso-skip-status {
+  font-size: 12.5px;
+  color: var(--snipsy-text-muted);
+  background: var(--snipsy-bg-alt);
+  border: 1px solid var(--snipsy-border);
+  border-radius: var(--snipsy-radius);
+  padding: 6px 10px;
+  margin: 8px 0;
+}
+
 /* ---- Search bar ---- */
 .snipsidian-settings .snipsy-search {
   position: relative;
@@ -203,6 +220,21 @@
 .snipsidian-settings .group-toggle.open { transform: rotate(90deg); }
 .snipsidian-settings .group-title { font-size: 13px; font-weight: 600; }
 .snipsidian-settings .group-count { font-size: 12px; color: var(--snipsy-text-faint); }
+
+/* B-138: per-group enable/disable. Dim the whole group (header +
+   rows) when its trigger is muted — rows stay fully visible/editable
+   (just visually de-emphasized), not hidden, since the Snippets tab
+   is the one surface where a disabled group's snippets are still
+   meant to be seen and edited. The enable/disable checkbox itself
+   stays at full opacity so its own state reads clearly. */
+.snipsidian-settings .snippet-group-disabled .group-title,
+.snipsidian-settings .snippet-group-disabled .group-count,
+.snipsidian-settings .snippet-group-disabled .snippet-row {
+  opacity: 0.5;
+}
+.snipsidian-settings .snippet-group-disabled .snipsy-group-enable-toggle {
+  opacity: 1;
+}
 
 .snipsidian-settings .snippet-row {
   display: grid;
