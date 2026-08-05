@@ -229,7 +229,7 @@ export class BasicTab {
         this.app.setting.open();
         const tab = this.app.setting.openTabById("hotkeys");
         this.applyHotkeySearchQuery(tab, commandName);
-        activeWindow.setTimeout(() => {
+        window.setTimeout(() => {
             const hotkeyTab = activeDocument.querySelector(
                 `.setting-item[data-id="${commandId}"]`,
             );

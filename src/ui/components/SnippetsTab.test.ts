@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 import { installObsidianDomHelpers } from "../../test/dom-polyfill";
 import { makeMockPlugin } from "../../test/factories/plugin";
 import { SnippetsTab } from "./SnippetsTab";
@@ -548,6 +548,89 @@ describe("SnippetsTab — per-group enable/disable (B-138)", () => {
         await flush();
 
         expect(new Set(plugin.settings.disabledGroups)).toEqual(new Set(["work", "personal"]));
+    });
+
+    // Scorecard parity fix (0.4.1): the toggle's `change` listener used to be
+    // a bare `async () => {...}` passed straight to `addEventListener`
+    // (flagged by @typescript-eslint/no-misused-promises — DOM listeners
+    // must return void). It's now a sync callback that delegates to a named
+    // async method via `void this.setGroupEnabled(...)`. That method wraps
+    // its `await saveSettings()` in try/catch, so a rejection is caught
+    // rather than becoming an unhandled promise rejection (which the bare
+    // `void`-discarded call would otherwise produce) — CLAUDE.md §4: never
+    // swallow errors silently, but also never let one escape unhandled.
+    it("a rejected save from the group-disable toggle does not throw or leave an unhandled rejection", async () => {
+        // Fake timers wrap the whole test, including `mountWithDisabled`:
+        // the initial `renderList()` auto-syncs each group's open state
+        // via `UIStateManager#setGroupOpen`, which arms a real 250ms
+        // `window.setTimeout` debounce (ui-state.ts). If that timer isn't
+        // faked from the start, it stays pending on the real clock past
+        // this test's end and can fire later — against the rejecting
+        // `saveSettings` mock installed below — as an unhandled rejection
+        // in a subsequent test. This is the CI-only flake this test pins
+        // (GitHub Actions run 31030336533).
+        vi.useFakeTimers();
+        try {
+            mountWithDisabled({ "work/sig": "Best" });
+            plugin.saveSettings = async () => {
+                throw new Error("disk full");
+            };
+            const toggle = enableToggleFor("Work");
+            toggle.checked = false;
+
+            expect(() => toggle.dispatchEvent(new Event("change"))).not.toThrow();
+            await flush();
+
+            // The in-memory mutation is applied before the save is attempted
+            // (same order as saveEdit/moveSelectedSnippets/renameGroup below) —
+            // only persistence failed, not the local state update.
+            expect(plugin.settings.disabledGroups).toEqual(["work"]);
+
+            // Restore a resolving save, then deterministically flush the
+            // group-open debounce timer armed by the initial mount so it
+            // doesn't leak past this test still wired to a rejecting mock.
+            plugin.saveSettings = async () => {};
+            await vi.advanceTimersByTimeAsync(300);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    // Fix round (checker finding 3, fix/scorecard-parity-0.4.1): on a failed
+    // save, `setGroupEnabled` used to skip `renderList()` (it only sat in the
+    // try block, right after `saveSettings()`), leaving the row's grey-out
+    // styling out of sync with the in-memory `disabledGroups` mutation above.
+    // The re-render now runs in `finally`, so the row's styling matches the
+    // applied state even when persistence failed. This test fails without
+    // that fix: the stale header still carries no `snippet-group-disabled`
+    // class even though `disabledGroups` already contains "work".
+    it("a rejected save from the group-disable toggle still re-renders so the grey-out class matches the applied state", async () => {
+        // See the previous test for why fake timers wrap the whole test
+        // body: `mountWithDisabled` arms a real 250ms group-open debounce
+        // timer that must not survive past this test still pointed at the
+        // rejecting `saveSettings` mock below.
+        vi.useFakeTimers();
+        try {
+            mountWithDisabled({ "work/sig": "Best" });
+            plugin.saveSettings = async () => {
+                throw new Error("disk full");
+            };
+            const toggle = enableToggleFor("Work");
+            toggle.checked = false;
+            toggle.dispatchEvent(new Event("change"));
+            await flush();
+
+            const groupEl = groupHeaderFor("Work").closest(".snippet-group");
+            expect(groupEl?.classList.contains("snippet-group-disabled")).toBe(true);
+            // The re-rendered checkbox must also reflect the applied
+            // (disabled) state, not the pre-toggle "enabled" default.
+            expect(enableToggleFor("Work").checked).toBe(false);
+
+            plugin.saveSettings = async () => {};
+            await vi.advanceTimersByTimeAsync(300);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it("clicking the toggle does not also collapse/expand the group accordion", () => {

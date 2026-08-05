@@ -1,4 +1,11 @@
-import { describe, it, expect, beforeEach } from "vitest";
+// @vitest-environment jsdom
+//
+// jsdom is required for the debounced group-open save test below:
+// `UIStateManager#setGroupOpen` schedules its save via `window.setTimeout`
+// (ui-state.ts), and `window` is undefined under vitest's default "node"
+// environment.
+
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { UIStateManager } from "./ui-state";
 import type { SnipSidianSettings } from "../../types";
 
@@ -126,5 +133,54 @@ describe("UIStateManager — inline edit state (B-021 contract)", () => {
         expect(ui.getEditingKey()).toBe("b/y");
         expect(ui.getEditingDraft()).toEqual({ triggerName: "y", replacement: "2" });
         expect(ui.isEditing("a/x")).toBe(false);
+    });
+});
+
+describe("UIStateManager — debounced group-open save (persist rejection handling)", () => {
+    // Regression test for a CI-only flake (GitHub Actions run 31030336533):
+    // `setGroupOpen`'s 250ms debounce timer used to call `void this.persist()`
+    // with no rejection handling. A rejected `persist` (e.g. a failed
+    // `saveSettings`) surfaced as an unhandled promise rejection once the
+    // timer fired, since nothing awaited or caught it. Fails before the
+    // `Promise.resolve(this.persist()).catch(...)` fix in `setGroupOpen`
+    // (the timer callback would throw instead of routing to console.error,
+    // and vitest's unhandled-rejection detector would flag the run).
+    it("a rejected persist from the debounced group-open save is caught, not left unhandled", async () => {
+        vi.useFakeTimers();
+        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        try {
+            const persist = vi.fn(async () => {
+                throw new Error("disk full");
+            });
+            const ui = new UIStateManager(makeSettings(), persist);
+
+            ui.setGroupOpen("work", true);
+            await vi.advanceTimersByTimeAsync(300);
+
+            expect(persist).toHaveBeenCalledTimes(1);
+            expect(errorSpy).toHaveBeenCalledWith(
+                "[snipsy] failed to save group state",
+                expect.any(Error),
+            );
+        } finally {
+            errorSpy.mockRestore();
+            vi.useRealTimers();
+        }
+    });
+
+    it("a resolving persist is still called once after the debounce window, on the success path", async () => {
+        vi.useFakeTimers();
+        try {
+            const persist = vi.fn(async () => {});
+            const ui = new UIStateManager(makeSettings(), persist);
+
+            ui.setGroupOpen("work", true);
+            expect(persist).not.toHaveBeenCalled();
+            await vi.advanceTimersByTimeAsync(300);
+
+            expect(persist).toHaveBeenCalledTimes(1);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });

@@ -137,11 +137,19 @@ export class UIStateManager {
         // Group toggles can fire in bursts (Expand-all writes N states in
         // a tight loop). Coalesce to one save 250ms after the last call.
         if (this.groupOpenSaveTimer !== null) {
-            activeWindow.clearTimeout(this.groupOpenSaveTimer);
+            window.clearTimeout(this.groupOpenSaveTimer);
         }
-        this.groupOpenSaveTimer = activeWindow.setTimeout(() => {
+        this.groupOpenSaveTimer = window.setTimeout(() => {
             this.groupOpenSaveTimer = null;
-            void this.persist();
+            // This runs detached from any caller — unlike a direct
+            // toggle handler (e.g. SnippetsTab#setGroupEnabled), there's
+            // no try/catch upstream to observe a rejection here. Without
+            // this catch, a failed debounced save is an unhandled
+            // promise rejection (CLAUDE.md §4: never swallow silently,
+            // but never let one escape unhandled either).
+            Promise.resolve(this.persist()).catch((err) => {
+                console.error("[snipsy] failed to save group state", err);
+            });
         }, 250);
     }
 

@@ -142,11 +142,16 @@ export function installObsidianDomHelpers(): void {
     // by `TextPromptModal.formatHint` (B-051) and a few other places.
     // Snipsy code uses them as fire-and-forget setters; jsdom doesn't
     // implement them, so without these stubs the calls throw and the
-    // mount fails before the test assertions run.
+    // mount fails before the test assertions run. Direct `style.display`
+    // is what's being polyfilled here, not production UI code, so the
+    // "use CSS classes instead" rule doesn't apply — this file doesn't
+    // ship in main.js.
     proto.hide = function (this: HTMLElement): void {
+        // eslint-disable-next-line obsidianmd/no-static-styles-assignment -- polyfilling Obsidian's own hide(), test-only, doesn't ship
         this.style.display = "none";
     };
     proto.show = function (this: HTMLElement): void {
+        // eslint-disable-next-line obsidianmd/no-static-styles-assignment -- polyfilling Obsidian's own show(), test-only, doesn't ship
         this.style.display = "";
     };
 
