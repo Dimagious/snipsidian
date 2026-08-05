@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-08-05
+
+Patch batch from the post-1.2.0 improvement audit (four parallel review agents; synthesis in the repo brain), shipped via the new maker/checker workflow. Headline discovery: repairing the dead local e2e infrastructure immediately exposed B-148 — Enter-terminated triggers had silently stopped expanding on Obsidian 1.12.7.
+
 ### Fixed
 
 - **Add-snippet modal no longer discards what you typed on a validation failure** (B-133). The Add handler called `onConfirm` and then unconditionally closed the modal — real validation (bad trigger characters, a duplicate trigger, a cross-group collision) runs downstream in `planAddSnippet`, so any failure there closed the modal anyway and threw away the trigger and a possibly multi-line replacement. `onConfirm` now reports success or failure back to the modal; it only closes on success and shows the reason inline otherwise, matching the inline-edit form's existing stay-open-on-failure behavior. 3 new mount tests in `SnippetsTab.test.ts` (invalid trigger, cross-group collision, valid input) — the first two fail red against the pre-fix code (verified via `git stash`).
