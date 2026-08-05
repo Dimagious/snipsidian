@@ -51,7 +51,21 @@ export default [
       'obsidianmd/sample-names': 'error',
       'obsidianmd/validate-manifest': 'error',
       'obsidianmd/validate-license': 'error',
-      
+
+      // eslint-plugin-obsidianmd 0.4.x additions (scorecard parity, 2026-08-05):
+      // `prefer-window-timers` flipped direction vs 0.1.x — it now demands
+      // bare `window.setTimeout`/`window.clearTimeout` and flags
+      // `activeWindow.*` timers (popout windows still get a `window` that
+      // resolves correctly via the timer's own closure; `activeWindow` was
+      // never required for timers specifically, only for DOM/`document`
+      // access). See src/ui/utils/ui-state.ts, SnippetPickerModal.ts,
+      // SnippetsTab.ts, BasicTab.ts for the flipped call sites.
+      'obsidianmd/prefer-window-timers': 'error',
+      // Presence-only check: flags PluginSettingTab subclasses missing a
+      // getSettingDefinitions() method. See src/ui/components/SettingsTab.ts
+      // for why it returns `[]` rather than real per-field definitions.
+      'obsidianmd/settings-tab/prefer-setting-definitions': 'error',
+
       // UI sentence case with custom options
       // Disabled - too many false positives with validation messages, button texts, etc.
       'obsidianmd/ui/sentence-case': 'off',
@@ -65,6 +79,12 @@ export default [
         caughtErrors: 'all',
         caughtErrorsIgnorePattern: '^_',
       }],
+
+      // Scorecard parity (0.4.1): a Promise returned where a DOM listener
+      // (or other void-typed callback) expects `void` silently drops
+      // rejections. Requires parserOptions.project (already configured
+      // above) for the type information the rule needs.
+      '@typescript-eslint/no-misused-promises': 'error',
     },
   },
   
@@ -91,6 +111,18 @@ export default [
       'scripts/**',
       'src/**/*.test.ts',
       'vitest.config.ts', // Exclude from type checking to avoid parsing errors
+      // e2e/**, e2e-vault.pristine/**, and playwright.config.ts are
+      // git-tracked, but outside tsconfig's `include` (`src/**/*.ts`
+      // only), so the type-aware rules can't parse them ("file not
+      // found in any of the provided project(s)"); none of this code
+      // ships in main.js. E2E lint setup (its own tsconfig + config
+      // block) is a separate future task.
+      // .obsidian-unpacked/** is a local/untracked unpacked-vault
+      // artifact, not source.
+      '.obsidian-unpacked/**',
+      'e2e-vault.pristine/**',
+      'e2e/**',
+      'playwright.config.ts',
     ],
   },
 ];

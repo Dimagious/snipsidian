@@ -32,8 +32,8 @@
         "yaml": "^2.9.0"
     },
     "devDependencies": {
-        "@codemirror/state": "^6.5.2",
-        "@codemirror/view": "^6.38.2",
+        "@codemirror/state": "6.5.0",
+        "@codemirror/view": "6.38.6",
         "@electron/asar": "^4.2.0",
         "@eslint/js": "^9.39.1",
         "@microsoft/eslint-plugin-sdl": "^1.1.0",
@@ -43,9 +43,9 @@
         "electron": "^39.8.3",
         "esbuild": "^0.28.0",
         "eslint": "^9.39.1",
-        "eslint-plugin-obsidianmd": "^0.1.7",
+        "eslint-plugin-obsidianmd": "^0.4.1",
         "jsdom": "^26.1.0",
-        "obsidian": "^1.5.0",
+        "obsidian": "^1.13.1",
         "tsx": "^4.20.5",
         "typescript": "^5.5.0",
         "typescript-eslint": "^8.46.3",

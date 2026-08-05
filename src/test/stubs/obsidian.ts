@@ -69,9 +69,10 @@ export class PluginSettingTab { }
  * `setHeading`/`addText`/`addTextArea`). Not a faithful reproduction
  * of Obsidian's full Setting class — just enough for mount tests.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- DOM-shaped fields
 export class Setting {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DOM-shaped fields
     settingEl: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accept any test container
     constructor(containerEl: any) {
         if (typeof document !== "undefined" && containerEl?.appendChild) {
             this.settingEl = document.createElement("div");
@@ -165,10 +166,10 @@ export class DropdownComponent {
 }
 
 /** `TextComponent` stub — wraps a real `<input type=text>`. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export class TextComponent {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HTMLElement at runtime
     inputEl: any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accept any test container
     constructor(parent?: any) {
         if (typeof document !== "undefined") {
             this.inputEl = document.createElement("input");
@@ -188,10 +189,10 @@ export class TextComponent {
 }
 
 /** `TextAreaComponent` stub — wraps a real `<textarea>`. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export class TextAreaComponent {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HTMLElement at runtime
     inputEl: any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accept any test container
     constructor(parent?: any) {
         if (typeof document !== "undefined") {
             this.inputEl = document.createElement("textarea");
@@ -210,10 +211,10 @@ export class TextAreaComponent {
 }
 
 /** `ButtonComponent` stub — wraps a real `<button>`. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export class ButtonComponent {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HTMLElement at runtime
     buttonEl: any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accept any test container
     constructor(parent?: any) {
         if (typeof document !== "undefined") {
             this.buttonEl = document.createElement("button");

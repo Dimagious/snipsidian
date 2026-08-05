@@ -364,16 +364,8 @@ export class SnippetsTab {
             // the click reaching the header's own listener so toggling
             // doesn't also collapse/expand the accordion.
             disableCb.addEventListener("click", (e) => e.stopPropagation());
-            disableCb.addEventListener("change", async () => {
-                const current = new Set(this.plugin.settings.disabledGroups ?? []);
-                if (disableCb.checked) {
-                    current.delete(group);
-                } else {
-                    current.add(group);
-                }
-                this.plugin.settings.disabledGroups = Array.from(current);
-                await this.plugin.saveSettings();
-                this.renderList();
+            disableCb.addEventListener("change", () => {
+                void this.setGroupEnabled(group, disableCb.checked);
             });
         }
 
@@ -590,7 +582,7 @@ export class SnippetsTab {
         // Focus the trigger on entry. We schedule this so the input is
         // attached to the document before `focus()` fires.
         if (!triggerInput.matches(":focus")) {
-            activeWindow.setTimeout(() => triggerInput.focus(), 0);
+            window.setTimeout(() => triggerInput.focus(), 0);
         }
     }
 
@@ -601,6 +593,34 @@ export class SnippetsTab {
         // explicit and predictable.
         this.uiState.setEditing(key, { triggerName, replacement });
         this.renderList();
+    }
+
+    /** B-138: toggle a group's disabled state from the header checkbox.
+     *  Extracted to a named async method (rather than an async arrow
+     *  passed straight to `addEventListener`) so the listener itself
+     *  stays a sync `void`-returning callback — DOM listeners must not
+     *  return a Promise (@typescript-eslint/no-misused-promises). Same
+     *  pattern as `saveEdit` below. */
+    private async setGroupEnabled(group: string, enabled: boolean) {
+        const current = new Set(this.plugin.settings.disabledGroups ?? []);
+        if (enabled) {
+            current.delete(group);
+        } else {
+            current.add(group);
+        }
+        this.plugin.settings.disabledGroups = Array.from(current);
+        try {
+            await this.plugin.saveSettings();
+        } catch {
+            new Notice("Failed to save changes");
+        } finally {
+            // Re-render either way: on success this reflects the saved
+            // state, on failure it re-syncs the grey-out styling with
+            // the in-memory `disabledGroups` change above (which stands
+            // even though the save failed) so the UI doesn't show a
+            // checkbox state that disagrees with the row styling.
+            this.renderList();
+        }
     }
 
     private async saveEdit(originalKey: string) {
