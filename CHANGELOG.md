@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-08-05
+
 ### Fixed
 
 - **Scorecard-rule parity with `eslint-plugin-obsidianmd` 0.4.1** (the public scanner moved off 0.1.x and the Review score dropped to "Satisfactory" against 1.3.1). `obsidianmd/prefer-window-timers` flipped direction in 0.4.x — timers must now use `window.setTimeout`/`window.clearTimeout` instead of `activeWindow.*` (popout windows never actually needed the `activeWindow` prefix for timers specifically, only for DOM/document access) — flipped at all 7 call sites (`ui-state.ts`, `SnippetPickerModal.ts`, `SnippetsTab.ts`, `BasicTab.ts`). The per-group enable/disable toggle's `change` handler in `SnippetsTab.ts` was a bare `async` function passed straight to `addEventListener` (`@typescript-eslint/no-misused-promises`) — extracted to a named `setGroupEnabled` method, called via `void`, with the same try/catch-and-Notice error surfacing already used elsewhere in the file, so a failed save is reported instead of becoming an unhandled promise rejection.
