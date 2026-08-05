@@ -32,6 +32,8 @@
         "yaml": "^2.9.0"
     },
     "devDependencies": {
+        "@codemirror/state": "^6.5.2",
+        "@codemirror/view": "^6.38.2",
         "@electron/asar": "^4.2.0",
         "@eslint/js": "^9.39.1",
         "@microsoft/eslint-plugin-sdl": "^1.1.0",

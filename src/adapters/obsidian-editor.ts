@@ -9,12 +9,16 @@ export function makeExpandInput(
     sepCh: number,
     lastTyped: string,
     line?: number,
+    /** B-137: opt-in trigger-prefix mode, threaded straight through to
+     *  `ExpandInput.prefix`. `undefined` (the default) = mode off,
+     *  identical to pre-1.3.0 behavior. */
+    prefix?: string,
 ): ExpandInput {
     const targetLine = line ?? editor.getCursor().line;
     const lineText = editor.getLine(targetLine) ?? "";
     const textBefore = lineText.slice(0, sepCh);
     const textAfter = lineText.slice(sepCh + 1);
-    return { textBefore, textAfter, lastTyped, sepCh };
+    return { textBefore, textAfter, lastTyped, sepCh, prefix };
 }
 
 export function makeContext(
@@ -111,6 +115,8 @@ export async function tryExpandAtSeparator(
         filename?: string;
         now: Date;
         readClipboard?: () => Promise<string>;
+        /** B-137: see `ExpandInput.prefix`. `undefined` = mode off. */
+        prefix?: string;
     }
 ) {
     const cursor = editor.getCursor();
@@ -149,7 +155,7 @@ export async function tryExpandAtSeparator(
     // typing, press Enter, or click elsewhere. `applyEditPlan` must
     // apply the plan to THIS line, not whatever line the cursor ends
     // up on after the await.
-    const input = makeExpandInput(editor, sepCh, lastTyped, targetLine);
+    const input = makeExpandInput(editor, sepCh, lastTyped, targetLine, deps.prefix);
     const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, targetLine, ctxCh);
 
     const plan = await expand(input, dict, ctx);

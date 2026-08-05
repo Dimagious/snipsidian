@@ -23,6 +23,7 @@ export class Plugin {
     // we collect calls so tests can assert them
     addCommandCalls: CommandArgs[] = [];
     addSettingTabCalls: SettingTabArgs[] = [];
+    registerEditorExtensionCalls: unknown[][] = [];
 
     constructor(app?: StubApp) {
         this.app = app ?? { workspace: { on: () => { }, offref: () => { } } };
@@ -34,6 +35,10 @@ export class Plugin {
 
     addSettingTab = (...args: SettingTabArgs) => {
         this.addSettingTabCalls.push(args);
+    };
+
+    registerEditorExtension = (...args: unknown[]) => {
+        this.registerEditorExtensionCalls.push(args);
     };
 
     loadData = async () => undefined;
@@ -91,7 +96,70 @@ export class Setting {
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     addToggle(cb: (t: any) => void) {
-        cb({ setValue: () => ({ onChange: () => undefined }) });
+        const t = new ToggleComponent(this.settingEl);
+        cb(t);
+        return this;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    addDropdown(cb: (d: any) => void) {
+        const d = new DropdownComponent(this.settingEl);
+        cb(d);
+        return this;
+    }
+}
+
+/** `ToggleComponent` stub — wraps a real `<input type=checkbox>` so
+ *  mount tests can `.click()`/dispatch `change` on it directly,
+ *  rather than the previous stub which discarded `onChange` entirely
+ *  (calling `.setValue(x)` returned a fresh no-op object). */
+export class ToggleComponent {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HTMLElement at runtime
+    inputEl: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accept any test container
+    constructor(parent?: any) {
+        if (typeof document !== "undefined") {
+            this.inputEl = document.createElement("input");
+            this.inputEl.type = "checkbox";
+            if (parent?.appendChild) parent.appendChild(this.inputEl);
+        }
+    }
+    setValue(v: boolean) { if (this.inputEl) this.inputEl.checked = v; return this; }
+    getValue() { return this.inputEl ? this.inputEl.checked : false; }
+    setDisabled(v: boolean) { if (this.inputEl) this.inputEl.disabled = v; return this; }
+    onChange(cb: (v: boolean) => void) {
+        if (this.inputEl) {
+            this.inputEl.addEventListener("change", () => cb(this.inputEl.checked));
+        }
+        return this;
+    }
+}
+
+/** `DropdownComponent` stub — wraps a real `<select>`. */
+export class DropdownComponent {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HTMLElement at runtime
+    selectEl: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accept any test container
+    constructor(parent?: any) {
+        if (typeof document !== "undefined") {
+            this.selectEl = document.createElement("select");
+            if (parent?.appendChild) parent.appendChild(this.selectEl);
+        }
+    }
+    addOption(value: string, display: string) {
+        if (this.selectEl) this.selectEl.append(new Option(display, value));
+        return this;
+    }
+    addOptions(options: Record<string, string>) {
+        for (const [value, display] of Object.entries(options)) this.addOption(value, display);
+        return this;
+    }
+    setValue(v: string) { if (this.selectEl) this.selectEl.value = v; return this; }
+    getValue() { return this.selectEl ? this.selectEl.value : ""; }
+    setDisabled(v: boolean) { if (this.selectEl) this.selectEl.disabled = v; return this; }
+    onChange(cb: (v: string) => void) {
+        if (this.selectEl) {
+            this.selectEl.addEventListener("change", () => cb(this.selectEl.value));
+        }
         return this;
     }
 }

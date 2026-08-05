@@ -232,4 +232,87 @@ describe("store/snippets", () => {
             expect(hasReplacementCollision(settings, "sig", "Different")).toBe(true);
         });
     });
+
+    // ---- B-138: per-group enable/disable ----
+    describe("getDict — disabledGroups (B-138)", () => {
+        it("a disabled group's entries are absent from the dict entirely", () => {
+            const settings = {
+                snippets: { "work/sig": "Best", "personal/todo": "- [ ] " },
+                disabledGroups: ["work"],
+            } as unknown as SnipSidianSettings;
+            const dict = getDict(settings);
+            expect(dict.sig).toBeUndefined();
+            expect(dict.todo).toBe("- [ ] ");
+        });
+
+        it("a present (non-disabled) group is unaffected", () => {
+            const settings = {
+                snippets: { "work/sig": "Best" },
+                disabledGroups: ["other-group"],
+            } as unknown as SnipSidianSettings;
+            expect(getDict(settings)).toEqual({ sig: "Best" });
+        });
+
+        it("collision resolution falls through to the next candidate when the winner's group is disabled", () => {
+            // Without disabling, "alpha/sig" wins (alphabetically
+            // first). Disabling "alpha" must NOT just delete the
+            // trigger — "zeta/sig" should become the winner.
+            const settings = {
+                snippets: { "alpha/sig": "A", "zeta/sig": "Z" },
+                disabledGroups: ["alpha"],
+            } as unknown as SnipSidianSettings;
+            expect(getDict(settings)).toEqual({ sig: "Z" });
+        });
+
+        it("unknown group names in disabledGroups are harmless (no matching entries, no crash)", () => {
+            const settings = {
+                snippets: { "work/sig": "Best" },
+                disabledGroups: ["a-group-that-was-deleted-long-ago"],
+            } as unknown as SnipSidianSettings;
+            expect(getDict(settings)).toEqual({ sig: "Best" });
+        });
+
+        it("an empty disabledGroups array means everything is enabled", () => {
+            const settings = {
+                snippets: { "work/sig": "Best" },
+                disabledGroups: [],
+            } as unknown as SnipSidianSettings;
+            expect(getDict(settings)).toEqual({ sig: "Best" });
+        });
+
+        it("undefined disabledGroups (field never set) means everything is enabled", () => {
+            const settings = {
+                snippets: { "work/sig": "Best" },
+            } as unknown as SnipSidianSettings;
+            expect(getDict(settings)).toEqual({ sig: "Best" });
+        });
+
+        it("disabling ALL groups containing a trigger removes it from the dict, not just demotes it", () => {
+            const settings = {
+                snippets: { "a/sig": "A", "b/sig": "B" },
+                disabledGroups: ["a", "b"],
+            } as unknown as SnipSidianSettings;
+            expect(getDict(settings)).toEqual({});
+        });
+    });
+
+    describe("getAllSnippetsFlat — disabledGroups (B-138)", () => {
+        it("excludes a disabled group's entries from the picker feed", () => {
+            const settings = {
+                snippets: { "work/sig": "Best", "personal/todo": "- [ ] " },
+                disabledGroups: ["work"],
+            } as unknown as SnipSidianSettings;
+            const result = getAllSnippetsFlat(settings);
+            expect(result.find((s) => s.id === "user:work/sig")).toBeUndefined();
+            expect(result.find((s) => s.id === "user:personal/todo")).toBeDefined();
+        });
+
+        it("an unrelated disabled group name has no effect", () => {
+            const settings = {
+                snippets: { "work/sig": "Best" },
+                disabledGroups: ["other"],
+            } as unknown as SnipSidianSettings;
+            expect(getAllSnippetsFlat(settings)).toHaveLength(1);
+        });
+    });
 });

@@ -1,5 +1,5 @@
 import { Plugin } from "obsidian";
-import { registerEditorChange } from "./cm6-bridge";
+import { buildExpansionExtension } from "./cm6-bridge";
 import { SnipSidianSettingTab } from "../ui/settings";
 import { defaultSnippetsAsGroup } from "../store/presets";
 import type { SnipSidianSettings } from "../types";
@@ -9,13 +9,34 @@ import { openSnippetPickerModal } from "../ui/components/SnippetPickerModal";
 
 export default class HotstringsPlugin extends Plugin {
     settings!: SnipSidianSettings;
-    private off?: () => void;
 
     async onload() {
         await this.loadSettings();
 
-        // Editor hook (equivalent to current 'editor-change')
-        this.off = registerEditorChange(this.app, () => getDict(this.settings));
+        // B-149: registered as a CM6 editor extension (gated on
+        // genuine-typing `userEvent`s — see `change-source-gate.ts`)
+        // instead of the old bare `workspace.on("editor-change")`
+        // hook. `registerEditorExtension` is managed by Obsidian's
+        // Component lifecycle — no manual disposer to track or call
+        // in `onunload` (unlike the old `this.off`).
+        //
+        // B-137: `getPrefix` resolves the effective prefix char at
+        // call time from live settings — `undefined` (mode off)
+        // unless the user has opted in via the General tab.
+        this.registerEditorExtension(
+            buildExpansionExtension(
+                this.app,
+                () => getDict(this.settings),
+                () => {
+                    if (!this.settings.expansion?.requirePrefix) return undefined;
+                    const char = this.settings.expansion.prefixChar;
+                    // Hardening: clamp to the supported set — corrupt or
+                    // foreign saved data (anything other than ":" or ";")
+                    // must not silently kill all expansion in prefix mode.
+                    return char === ":" || char === ";" ? char : ":";
+                },
+            ),
+        );
 
         // Snippet Picker command
         this.addCommand({
@@ -39,14 +60,6 @@ export default class HotstringsPlugin extends Plugin {
         });
 
         this.addSettingTab(new SnipSidianSettingTab(this.app, this));
-    }
-
-    onunload() {
-        try { 
-            this.off?.(); 
-        } catch {
-            // Ignore errors during cleanup
-        }
     }
 
     async loadSettings() {

@@ -189,6 +189,98 @@ test.describe("expansion fires in the real editor", () => {
         expect(text).not.toContain("be right back");
         expect(text).not.toContain("brb");
     });
+
+    test("[B-149] undo after an Enter-triggered expansion does not re-trigger it", async ({
+        win,
+    }) => {
+        // Mirrors the B-132 spec above with Enter (not space) as the
+        // separator — pins the B-149 concern that B-132's coverage
+        // was space-only. If CM6's undo-grouping ever treats the
+        // Enter keystroke differently from a typed separator (e.g.
+        // splits it into its own undo step, landing on the
+        // "trigger present, not yet expanded" intermediate state),
+        // this is where a re-expansion trap would show up.
+        await ui.typeInEditor(win, "anchor line");
+        await win.keyboard.press("Enter");
+        await win.waitForTimeout(700);
+
+        await ui.typeInEditor(win, "brb");
+        await win.keyboard.press("Enter");
+        let text = await ui.editorText(win);
+        expect(text).toContain("be right back");
+        expect(text).not.toContain("brb");
+
+        // Unlike the space-separator case in B-132, Enter is
+        // dispatched through a keymap command (`userEvent: "input"`)
+        // rather than the DOM-input path (`userEvent: "input.type"`)
+        // that the "brb" keystrokes went through — CM6's history can
+        // treat that as its own undo step rather than grouping it
+        // with the preceding typing, so fully unwinding back to the
+        // anchor line can take more than one Cmd+Z. Keep undoing
+        // (bounded) until the expansion itself is gone; the assertion
+        // that matters is that it never comes BACK.
+        for (let i = 0; i < 4 && text.includes("be right back"); i++) {
+            await win.keyboard.press("Meta+Z");
+            await win.waitForTimeout(300);
+            text = await ui.editorText(win);
+        }
+
+        expect(text).toContain("anchor line");
+        expect(text).not.toContain("be right back");
+
+        // The critical assertion: undo must not be a trap. Wait
+        // again to catch any delayed re-expansion.
+        await win.waitForTimeout(300);
+        text = await ui.editorText(win);
+        expect(text).not.toContain("be right back");
+    });
+
+    test("[B-149] pasting text ending in a trigger + separator does not expand", async ({
+        win,
+    }) => {
+        // Before B-149, the expansion hot path couldn't tell a paste
+        // from real typing — a pasted block ending in `brb ` would
+        // expand inside content the user didn't type character-by-
+        // character. The change-source gate only fires on
+        // `input.type`/`input` (typing), never `input.paste`.
+        await win.evaluate(async () => {
+            await navigator.clipboard.writeText("notes: brb ");
+        });
+        const editor = ui.activeEditor(win);
+        await editor.click();
+        await win.keyboard.press("Meta+V");
+
+        const text = await ui.editorText(win);
+        expect(text).toContain("notes: brb");
+        expect(text).not.toContain("be right back");
+    });
+
+    test("[B-149] backspace that deletes a newline does not expand a trigger sitting at the end of the previous line", async ({
+        win,
+    }) => {
+        // Setup avoids ever pressing Enter right after typing "brb" —
+        // that keystroke IS a legitimate separator (B-148) and would
+        // expand it, which is correct behavior but not what this
+        // test is pinning. Instead: line 2 is created first (empty),
+        // then the cursor moves back up to append "brb" to line 1
+        // WITHOUT typing a separator after it, then moves back down
+        // to line 2's start. Backspace from there deletes the
+        // newline and merges line 2 into line 1 — a real CM6
+        // "delete.backward" event, never "the user just typed a
+        // separator". Must not expand regardless of the resulting
+        // document shape.
+        await ui.typeInEditor(win, "x");
+        await win.keyboard.press("Enter");
+        await win.keyboard.press("ArrowUp");
+        await win.keyboard.press("End");
+        await ui.typeInEditor(win, " brb");
+        await win.keyboard.press("ArrowDown");
+        await win.keyboard.press("Backspace");
+
+        const text = await ui.editorText(win);
+        expect(text).toContain("x brb");
+        expect(text).not.toContain("be right back");
+    });
 });
 
 test.describe("expansion respects markdown context", () => {

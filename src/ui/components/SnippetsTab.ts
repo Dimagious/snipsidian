@@ -290,7 +290,13 @@ export class SnippetsTab {
     ) {
         if (!this.listEl) return;
 
-        const groupEl = this.listEl.createDiv({ cls: "snippet-group" });
+        // B-138: ungrouped entries can never be disabled — there's no
+        // group slug to record in `disabledGroups` for them.
+        const isDisabled = group !== "" && (this.plugin.settings.disabledGroups ?? []).includes(group);
+
+        const groupEl = this.listEl.createDiv({
+            cls: `snippet-group${isDisabled ? " snippet-group-disabled" : ""}`,
+        });
         const header = groupEl.createDiv({ cls: "group-header" });
 
         // B-124: click handler is on the entire header, not only on
@@ -339,6 +345,34 @@ export class SnippetsTab {
                 } else {
                     items.forEach(([key]) => this.uiState.getSelected().delete(key));
                 }
+                this.renderList();
+            });
+        }
+
+        // B-138: per-group enable/disable — mute a group's expansion
+        // + picker visibility without the destructive round-trip of
+        // deleting and reinstalling it. Ungrouped has no toggle: it's
+        // not a real group slug, there's nothing to record.
+        if (group !== "") {
+            const disableCb = actions.createEl("input", {
+                type: "checkbox",
+                cls: "snipsy-group-enable-toggle",
+                attr: { "aria-label": `Enable/disable group ${title}` },
+            });
+            disableCb.checked = !isDisabled;
+            // Same pattern as the other header action controls: stop
+            // the click reaching the header's own listener so toggling
+            // doesn't also collapse/expand the accordion.
+            disableCb.addEventListener("click", (e) => e.stopPropagation());
+            disableCb.addEventListener("change", async () => {
+                const current = new Set(this.plugin.settings.disabledGroups ?? []);
+                if (disableCb.checked) {
+                    current.delete(group);
+                } else {
+                    current.add(group);
+                }
+                this.plugin.settings.disabledGroups = Array.from(current);
+                await this.plugin.saveSettings();
                 this.renderList();
             });
         }
@@ -407,6 +441,14 @@ export class SnippetsTab {
                 onConfirm: async () => {
                     for (const [key] of items) {
                         delete this.plugin.settings.snippets[key];
+                    }
+                    // B-138: a deleted group's slug is meaningless
+                    // going forward — drop it from `disabledGroups` too,
+                    // so a future group that happens to slugify to the
+                    // same name doesn't inherit a stale disabled state.
+                    if (this.plugin.settings.disabledGroups?.includes(group)) {
+                        this.plugin.settings.disabledGroups =
+                            this.plugin.settings.disabledGroups.filter((g) => g !== group);
                     }
                     await this.plugin.saveSettings();
                     this.uiState.getGroupOpen().delete(group);
@@ -649,6 +691,18 @@ export class SnippetsTab {
             return;
         }
 
+        // B-138: carry the disabled state across the rename — the
+        // group's snippets already moved to `newSlug` above, so
+        // `disabledGroups` must follow or a renamed disabled group
+        // silently re-enables (and the stale old slug would later
+        // mis-disable some unrelated future group of the same name).
+        // Same hygiene pattern as the delete-group cleanup above.
+        if (this.plugin.settings.disabledGroups?.includes(group)) {
+            this.plugin.settings.disabledGroups = this.plugin.settings.disabledGroups
+                .filter((g) => g !== group)
+                .concat(newSlug);
+        }
+
         try {
             await this.plugin.saveSettings();
             this.uiState.setGroupOpen(newSlug, isOpen);
@@ -684,7 +738,7 @@ export class SnippetsTab {
             await this.plugin.saveSettings();
             this.renderList();
             return { ok: true };
-        });
+        }, this.plugin.settings.expansion);
         modal.open();
     }
 }

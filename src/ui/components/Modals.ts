@@ -3,6 +3,7 @@ import type SnipSidianPlugin from "../../main";
 import { DiffResult } from "../../store/diff";
 import { displayGroupTitle, slugifyGroup } from "../../store/keys";
 import { computeImportDiff } from "../../services/import-diff";
+import { normalizeTrigger } from "../../engine/triggers";
 
 /** Simple JSON copy/paste modal */
 export class JSONModal extends Modal {
@@ -407,6 +408,37 @@ export class ConfirmModal extends Modal {
  *  compatibility with callers that don't need to report failure. */
 export type SnippetOpResult = { ok: true } | { ok: false; error: string };
 
+/** Expansion settings relevant to how a trigger will actually fire —
+ *  just the B-137 prefix-mode fields, passed in by callers that have
+ *  `plugin.settings.expansion` (currently only `SnippetsTab`). */
+export type ExpansionHintSettings = { requirePrefix?: boolean; prefixChar?: string };
+
+/**
+ * B-137 fold-in (ux#5): compute the "Will expand when you type: …"
+ * hint for the Add-snippet modal's Trigger field. Mirrors the
+ * `formatHint` pattern already used by the group-rename modal
+ * (`SnippetsTab.ts`'s `TextPromptModal.formatHint` for lossy slug
+ * round-trips) — same shape, same purpose: show what the raw input
+ * actually normalises to before the user commits.
+ *
+ * The hint is prefix-aware: when the mode is on, the "effective"
+ * trigger the user actually has to type is `<prefixChar><normalized>`
+ * (stored keys stay bare — the prefix is consumed by the engine at
+ * match time, see `engine/match.ts`). The hint only shows when that
+ * effective form differs from what the user literally typed — no
+ * surprise, nothing to show.
+ */
+export function computeTriggerHint(raw: string, expansion?: ExpansionHintSettings): string | null {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    const normalized = normalizeTrigger(trimmed);
+    if (!normalized) return null;
+    const prefixChar = expansion?.requirePrefix ? (expansion.prefixChar || ":") : "";
+    const effective = `${prefixChar}${normalized}`;
+    if (effective === trimmed) return null;
+    return `Will expand when you type: ${effective}`;
+}
+
 /** Add new snippet modal.
  *
  * B-133: the modal used to call `onConfirm` and unconditionally
@@ -415,20 +447,32 @@ export type SnippetOpResult = { ok: true } | { ok: false; error: string };
  * there closed the modal anyway and discarded everything the user
  * typed. `onConfirm` now reports success/failure via `SnippetOpResult`
  * and the modal only closes on success, mirroring the inline-edit
- * flow (`SnippetsTab.saveEdit`) which already stays open on failure. */
+ * flow (`SnippetsTab.saveEdit`) which already stays open on failure.
+ *
+ * B-137 (ux#5): the Trigger field used to teach the Espanso-style
+ * ":hello" convention in its placeholder/description while
+ * `normalizeTrigger` silently strips the colon before storage — a
+ * user who deliberately typed a prefixed trigger ended up with a
+ * bare-word trigger that fires on ordinary prose. The copy is now
+ * honest about the default (bare word) behavior, and a live hint
+ * shows exactly what will fire the snippet whenever normalization
+ * (or prefix mode) changes what was typed. */
 export class AddSnippetModal extends Modal {
     onConfirm?: (
         snippet: { trigger: string; replacement: string; group: string }
     ) => void | SnippetOpResult | Promise<void | SnippetOpResult>;
+    private expansion?: ExpansionHintSettings;
 
     constructor(
         app: App,
         onConfirm?: (
             snippet: { trigger: string; replacement: string; group: string }
-        ) => void | SnippetOpResult | Promise<void | SnippetOpResult>
+        ) => void | SnippetOpResult | Promise<void | SnippetOpResult>,
+        expansion?: ExpansionHintSettings,
     ) {
         super(app);
         this.onConfirm = onConfirm;
+        this.expansion = expansion;
     }
 
     onOpen(): void {
@@ -446,17 +490,36 @@ export class AddSnippetModal extends Modal {
 
         new Setting(contentEl)
             .setName("Trigger")
-            .setDesc("The text that will be expanded (e.g., :hello)")
+            .setDesc("The text that expands into your replacement")
             .addText((text) => {
                 refs.trigger = text.inputEl;
                 text
-
-                    .setPlaceholder("Example: :hello")
+                    .setPlaceholder("Example: brb")
                     .setValue(trigger)
                     .onChange((value) => {
                         trigger = value;
+                        updateHint();
                     });
             });
+
+        // B-137: live hint, same `aria-live="polite"` pattern as the
+        // group-rename modal's "Will be saved as: …" hint — shown
+        // only when normalization (or prefix mode) changes what the
+        // user typed.
+        const hintEl = contentEl.createDiv({
+            cls: "snipsy-hint snipsidian-addsnippet-hint",
+            attr: { "aria-live": "polite" },
+        });
+        hintEl.hide();
+        const updateHint = () => {
+            const msg = computeTriggerHint(trigger, this.expansion);
+            if (msg) {
+                hintEl.setText(msg);
+                hintEl.show();
+            } else {
+                hintEl.hide();
+            }
+        };
 
         new Setting(contentEl)
             .setName("Replacement")

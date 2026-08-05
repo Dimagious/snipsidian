@@ -1,10 +1,16 @@
-import { App, Notice, Platform } from "obsidian";
+import { App, Notice, Platform, Setting } from "obsidian";
+import type { DropdownComponent } from "obsidian";
 import type SnipSidianPlugin from "../../main";
 import { isRecordOfString } from "../../shared/guards";
 import { ImportPreviewModal } from "./Modals";
 import { DEFAULT_SNIPPETS_GROUP, planRestoreDefaults } from "../../store/presets";
 import { joinKey } from "../../store/keys";
 import { validatePackageForInstall } from "../../services/package-validator";
+
+/** B-137: default prefix char when the mode is on but the user
+ *  hasn't picked one yet. Kept in sync with `plugin.ts`'s `getPrefix`
+ *  fallback and `AddSnippetModal`'s hint computation. */
+const DEFAULT_PREFIX_CHAR = ":";
 
 /**
  * General tab. Visually aligned with the About tab: one section
@@ -45,6 +51,11 @@ export class BasicTab {
             buttonText: "Set hotkey",
             onClick: () => this.openHotkeyTab("snipsidian:open-settings"),
         });
+
+        // ---- Expansion ----
+        root.createEl("h4", { text: "Expansion", cls: "snipsy-tab-subheading" });
+        const expansion = root.createDiv({ cls: "snipsy-about-list" });
+        this.renderExpansionSettings(expansion);
 
         // ---- Backup ----
         root.createEl("h4", { text: "Backup", cls: "snipsy-tab-subheading" });
@@ -109,6 +120,52 @@ export class BasicTab {
         }
         await this.plugin.saveSettings();
         new Notice(`Restored ${count} default snippet${count === 1 ? "" : "s"}`);
+    }
+
+    /**
+     * B-137: opt-in trigger-prefix mode. One global toggle + a
+     * prefix-char dropdown (":" or ";"), dropdown disabled while the
+     * toggle is off. Scope guard per the backlog item: ONE global
+     * mode, no per-snippet opt-out.
+     */
+    private renderExpansionSettings(container: HTMLElement) {
+        const current = this.plugin.settings.expansion ?? {};
+        const requirePrefix = current.requirePrefix ?? false;
+        const prefixChar = current.prefixChar ?? DEFAULT_PREFIX_CHAR;
+
+        let dropdown: DropdownComponent | undefined;
+
+        new Setting(container)
+            .setName("Require a prefix before triggers")
+            .setDesc("With this on, todo stays text; :todo expands.")
+            .addToggle((toggle) => {
+                toggle.setValue(requirePrefix).onChange(async (value: boolean) => {
+                    this.plugin.settings.expansion = {
+                        ...this.plugin.settings.expansion,
+                        requirePrefix: value,
+                    };
+                    await this.plugin.saveSettings();
+                    dropdown?.setDisabled(!value);
+                });
+            });
+
+        new Setting(container)
+            .setName("Prefix character")
+            .setDesc("Which character must come right before a trigger when the toggle above is on.")
+            .addDropdown((dd) => {
+                dropdown = dd;
+                dd.addOption(":", ":")
+                    .addOption(";", ";")
+                    .setValue(prefixChar)
+                    .setDisabled(!requirePrefix)
+                    .onChange(async (value: string) => {
+                        this.plugin.settings.expansion = {
+                            ...this.plugin.settings.expansion,
+                            prefixChar: value,
+                        };
+                        await this.plugin.saveSettings();
+                    });
+            });
     }
 
     private renderRow(

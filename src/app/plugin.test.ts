@@ -6,15 +6,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
         app: any;
         addCommandCalls: any[] = [];
         addSettingTabCalls: any[] = [];
+        registerEditorExtensionCalls: any[] = [];
         constructor(app?: any) {
             this.app = app ?? { workspace: { on: vi.fn(), offref: vi.fn() } };
         }
         addCommand = (...args: any[]) => { this.addCommandCalls.push(args); };
         addSettingTab = (...args: any[]) => { this.addSettingTabCalls.push(args); };
+        registerEditorExtension = (...args: any[]) => { this.registerEditorExtensionCalls.push(args); };
         loadData = vi.fn().mockResolvedValue(undefined);
         saveData = vi.fn().mockResolvedValue(undefined);
     }
-    class Modal { 
+    class Modal {
         constructor(app: any) { }
         open() { }
         close() { }
@@ -22,10 +24,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
     return { Plugin, Modal };
 }, { virtual: true });
 
-// Bridge mock to control disposer
-const disposer = vi.fn();
+// Bridge mock — B-149 replaced `registerEditorChange` with
+// `buildExpansionExtension`, which returns an `Extension` value
+// (registered via `this.registerEditorExtension`, not a manual
+// disposer — Obsidian's Component lifecycle owns cleanup now).
+const fakeExtension = { __fakeExtension: true };
 vi.mock("./cm6-bridge", () => ({
-    registerEditorChange: vi.fn(() => disposer),
+    buildExpansionExtension: vi.fn(() => fakeExtension),
 }));
 
 // Lightweight UI mock
@@ -35,7 +40,7 @@ vi.mock("../ui/settings", () => ({
 
 // Dynamic imports AFTER mocks to ensure they take effect
 const { default: PluginClass } = await import("./plugin");
-const { registerEditorChange } = await import("./cm6-bridge");
+const { buildExpansionExtension } = await import("./cm6-bridge");
 const { DEFAULT_SNIPPETS } = await import("../presets");
 const { defaultSnippetsAsGroup } = await import("../store/presets");
 
@@ -44,19 +49,97 @@ describe("app/plugin", () => {
         vi.clearAllMocks();
     });
 
-    it("loads with defaults, registers editor hook, adds command and settings tab", async () => {
+    it("loads with defaults, registers the CM6 expansion extension, adds command and settings tab", async () => {
         const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
         // @ts-ignore ctor signature comes from stub
         const plugin = new PluginClass(app);
 
         await plugin.onload();
 
-        expect(registerEditorChange).toHaveBeenCalledWith(app, expect.any(Function));
+        expect(buildExpansionExtension).toHaveBeenCalledWith(
+            app,
+            expect.any(Function),
+            expect.any(Function),
+        );
+        expect((plugin as any).registerEditorExtensionCalls).toEqual([[fakeExtension]]);
         // collected by our stubbed Plugin
         expect((plugin as any).addCommandCalls.length).toBeGreaterThan(0);
         expect((plugin as any).addSettingTabCalls.length).toBeGreaterThan(0);
         expect(plugin.settings).toBeDefined();
         expect(plugin.settings.snippets).toBeDefined();
+    });
+
+    // B-137: the third arg to `buildExpansionExtension` is a
+    // `getPrefix` closure resolved from live settings at call time.
+    describe("getPrefix closure (B-137)", () => {
+        function getPrefixArg(): () => string | undefined {
+            const call = (buildExpansionExtension as any).mock.calls[0];
+            return call[2];
+        }
+
+        it("resolves to undefined when the mode is off (default)", async () => {
+            const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
+            // @ts-ignore
+            const plugin = new PluginClass(app);
+            await plugin.onload();
+            expect(getPrefixArg()()).toBeUndefined();
+        });
+
+        it("resolves to the configured prefixChar when the mode is on", async () => {
+            const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
+            // @ts-ignore
+            const plugin = new PluginClass(app);
+            // @ts-ignore
+            plugin.loadData = vi.fn().mockResolvedValue({
+                snippets: { a: "b" },
+                expansion: { requirePrefix: true, prefixChar: ";" },
+            });
+            await plugin.onload();
+            expect(getPrefixArg()()).toBe(";");
+        });
+
+        it("defaults to \":\" when the mode is on but prefixChar is unset", async () => {
+            const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
+            // @ts-ignore
+            const plugin = new PluginClass(app);
+            // @ts-ignore
+            plugin.loadData = vi.fn().mockResolvedValue({
+                snippets: { a: "b" },
+                expansion: { requirePrefix: true },
+            });
+            await plugin.onload();
+            expect(getPrefixArg()()).toBe(":");
+        });
+
+        it("resolves to undefined when requirePrefix is explicitly false, even with a prefixChar set", async () => {
+            const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
+            // @ts-ignore
+            const plugin = new PluginClass(app);
+            // @ts-ignore
+            plugin.loadData = vi.fn().mockResolvedValue({
+                snippets: { a: "b" },
+                expansion: { requirePrefix: false, prefixChar: ";" },
+            });
+            await plugin.onload();
+            expect(getPrefixArg()()).toBeUndefined();
+        });
+
+        // Hardening (checker follow-up): a corrupt/foreign saved
+        // `prefixChar` outside the supported set (":" / ";") must not
+        // silently kill all expansion in prefix mode by being passed
+        // through as-is — it should clamp back to the ":" default.
+        it("falls back to \":\" when the mode is on but prefixChar is a corrupt/unsupported value", async () => {
+            const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
+            // @ts-ignore
+            const plugin = new PluginClass(app);
+            // @ts-ignore
+            plugin.loadData = vi.fn().mockResolvedValue({
+                snippets: { a: "b" },
+                expansion: { requirePrefix: true, prefixChar: "€" },
+            });
+            await plugin.onload();
+            expect(getPrefixArg()()).toBe(":");
+        });
     });
 
     it("adds open settings command", async () => {
@@ -76,15 +159,6 @@ describe("app/plugin", () => {
         );
         expect(openSettingsCommand).toBeDefined();
         expect(openSettingsCommand[0].name).toBe("Open settings");
-    });
-
-    it("onunload calls disposer", async () => {
-        const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
-        // @ts-ignore
-        const plugin = new PluginClass(app);
-        await plugin.onload();
-        await plugin.onunload();
-        expect(disposer).toHaveBeenCalled();
     });
 
     it("loadSettings uses the saved snippets map as-is when one exists", async () => {

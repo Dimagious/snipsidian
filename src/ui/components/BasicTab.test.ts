@@ -138,3 +138,131 @@ describe("BasicTab — Restore default snippets (B-131)", () => {
         expect(noticeCalls).toContain("Cannot restore defaults: nope");
     });
 });
+
+// ---- B-137: Expansion section (require-prefix mode) ----
+//
+// The obsidian test stub's `Setting.setName`/`setDesc` are no-ops
+// (they don't render text into the DOM), so rows can't be located by
+// their label text the way real Obsidian markup could. BasicTab
+// mounts exactly two `Setting` rows (both added for this section, in
+// a fixed order: toggle first, dropdown second) — index-based lookup
+// is precise and doesn't require touching the shared stub.
+function toggleSettingEl(root: HTMLElement): HTMLElement {
+    return root.querySelectorAll(".setting-item")[0] as HTMLElement;
+}
+function dropdownSettingEl(root: HTMLElement): HTMLElement {
+    return root.querySelectorAll(".setting-item")[1] as HTMLElement;
+}
+
+async function flush() {
+    await Promise.resolve();
+    await Promise.resolve();
+}
+
+describe("BasicTab — Expansion section (B-137)", () => {
+    it("renders the Expansion heading with a toggle and a prefix-char dropdown", () => {
+        const { root } = mount();
+        const headings = Array.from(root.querySelectorAll("h4")).map((h) => h.textContent);
+        expect(headings).toContain("Expansion");
+
+        const toggleSetting = toggleSettingEl(root);
+        expect(toggleSetting.querySelector("input[type=checkbox]")).toBeTruthy();
+
+        const dropdownSetting = dropdownSettingEl(root);
+        expect(dropdownSetting.querySelector("select")).toBeTruthy();
+    });
+
+    it("defaults: toggle unchecked, dropdown disabled, value \":\"", () => {
+        const { root } = mount();
+        const toggle = toggleSettingEl(root).querySelector(
+            "input[type=checkbox]",
+        ) as HTMLInputElement;
+        const select = dropdownSettingEl(root).querySelector(
+            "select",
+        ) as HTMLSelectElement;
+
+        expect(toggle.checked).toBe(false);
+        expect(select.disabled).toBe(true);
+        expect(select.value).toBe(":");
+    });
+
+    it("reflects an already-on setting: toggle checked, dropdown enabled with the stored char", () => {
+        plugin.settings.expansion = { requirePrefix: true, prefixChar: ";" };
+        const { root } = mount();
+        const toggle = toggleSettingEl(root).querySelector(
+            "input[type=checkbox]",
+        ) as HTMLInputElement;
+        const select = dropdownSettingEl(root).querySelector(
+            "select",
+        ) as HTMLSelectElement;
+
+        expect(toggle.checked).toBe(true);
+        expect(select.disabled).toBe(false);
+        expect(select.value).toBe(";");
+    });
+
+    it("toggling on writes requirePrefix:true and persists, and enables the dropdown", async () => {
+        const { root } = mount();
+        const toggle = toggleSettingEl(root).querySelector(
+            "input[type=checkbox]",
+        ) as HTMLInputElement;
+        const select = dropdownSettingEl(root).querySelector(
+            "select",
+        ) as HTMLSelectElement;
+
+        toggle.checked = true;
+        toggle.dispatchEvent(new Event("change"));
+        await flush();
+
+        expect(plugin.settings.expansion?.requirePrefix).toBe(true);
+        expect(plugin._saveCalls.length).toBe(1);
+        expect(select.disabled).toBe(false);
+    });
+
+    it("toggling off writes requirePrefix:false and disables the dropdown", async () => {
+        plugin.settings.expansion = { requirePrefix: true, prefixChar: ":" };
+        const { root } = mount();
+        const toggle = toggleSettingEl(root).querySelector(
+            "input[type=checkbox]",
+        ) as HTMLInputElement;
+        const select = dropdownSettingEl(root).querySelector(
+            "select",
+        ) as HTMLSelectElement;
+
+        toggle.checked = false;
+        toggle.dispatchEvent(new Event("change"));
+        await flush();
+
+        expect(plugin.settings.expansion?.requirePrefix).toBe(false);
+        expect(select.disabled).toBe(true);
+    });
+
+    it("changing the dropdown writes prefixChar and persists", async () => {
+        plugin.settings.expansion = { requirePrefix: true, prefixChar: ":" };
+        const { root } = mount();
+        const select = dropdownSettingEl(root).querySelector(
+            "select",
+        ) as HTMLSelectElement;
+
+        select.value = ";";
+        select.dispatchEvent(new Event("change"));
+        await flush();
+
+        expect(plugin.settings.expansion?.prefixChar).toBe(";");
+        expect(plugin._saveCalls.length).toBe(1);
+    });
+
+    it("toggling the mode does not clobber an already-chosen prefixChar", async () => {
+        plugin.settings.expansion = { requirePrefix: false, prefixChar: ";" };
+        const { root } = mount();
+        const toggle = toggleSettingEl(root).querySelector(
+            "input[type=checkbox]",
+        ) as HTMLInputElement;
+
+        toggle.checked = true;
+        toggle.dispatchEvent(new Event("change"));
+        await flush();
+
+        expect(plugin.settings.expansion).toEqual({ requirePrefix: true, prefixChar: ";" });
+    });
+});

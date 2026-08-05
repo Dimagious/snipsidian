@@ -18,12 +18,24 @@ import { splitKey } from "./keys";
  * `core/install-plan.ts` (community-pack install), and
  * `ui/components/community/EspansoSection.ts` (Espanso import).
  * Tests in `snippets.test.ts` pin the alphabetical-sort tiebreaker.
+ *
+ * **B-138 per-group disable:** entries whose group is listed in
+ * `settings.disabledGroups` are skipped entirely — they neither
+ * expand (this is the hot-path trigger map) nor win the first-wins
+ * collision resolution above. A disabled group's winning entry
+ * simply falls through to the next candidate group with the same
+ * trigger name, if any. Ungrouped entries (`group === ""`) can never
+ * be disabled — the UI has no affordance for it, and this function
+ * doesn't special-case it either (an empty string would never appear
+ * in `disabledGroups` in practice).
  */
 export function getDict(settings: SnipSidianSettings): Record<string, string> {
     const src = settings.snippets || {};
+    const disabled = new Set(settings.disabledGroups ?? []);
     const out: Record<string, string> = {};
     for (const [fullKey, val] of Object.entries(src).sort(([a], [b]) => a.localeCompare(b))) {
-        const { name } = splitKey(fullKey);
+        const { group, name } = splitKey(fullKey);
+        if (disabled.has(group)) continue;
         if (out[name] === undefined) {
             out[name] = val;
         }
@@ -70,15 +82,26 @@ export function mergeDefaults(
 // `BasicTab.ts` calls `isRecordOfString` from `shared/guards` directly.
 
 /**
- * Returns a flat list of all snippets from user settings
+ * Returns a flat list of all snippets from user settings.
+ *
+ * B-138: entries whose group is in `settings.disabledGroups` are
+ * excluded — this feeds the snippet picker (`core/snippet-picker.ts`),
+ * so a disabled group is hidden there too, matching the pinned
+ * semantics: disabled = doesn't expand AND hidden from the picker.
+ * `SnippetsTab.ts` (the settings UI) does NOT use this function — it
+ * reads `settings.snippets` directly so disabled groups stay visible
+ * (dimmed) and editable there; only the two use-facing surfaces
+ * (expansion + picker) hide them.
  */
 export function getAllSnippetsFlat(settings: SnipSidianSettings): SnippetItem[] {
     const snippets: SnippetItem[] = [];
+    const disabled = new Set(settings.disabledGroups ?? []);
 
     // User snippets
     const userSnippets = settings.snippets || {};
     for (const [fullKey, replacement] of Object.entries(userSnippets)) {
         const { group, name } = splitKey(fullKey);
+        if (disabled.has(group)) continue;
         snippets.push({
             id: `user:${fullKey}`,
             folder: group || "user",

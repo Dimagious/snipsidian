@@ -230,4 +230,118 @@ describe("findTrigger", () => {
         const m = findTrigger(input, withOwn, delims);
         expect(m?.trigger).toBe("toString");
     });
+
+    // ---- B-137: opt-in trigger-prefix mode ----
+    //
+    // `prefix` is unset for the entire suite above (mode off) — every
+    // one of those cases stays byte-identical, which the next test
+    // pins explicitly. The cases below cover the mode itself.
+    describe("prefix mode (B-137)", () => {
+        const pdict: Dict = { todo: "- [ ] " };
+
+        it("mode off: the entire suite above is unaffected by the new `prefix` field existing on ExpandInput", () => {
+            // Sanity: omitting `prefix` entirely (as every prior test
+            // in this file does) behaves exactly like passing
+            // `prefix: undefined` — both are "mode off".
+            const before = "todo";
+            const input = { textBefore: before, textAfter: "", lastTyped: " ", sepCh: before.length };
+            const m1 = findTrigger(input, pdict, delims);
+            const m2 = findTrigger({ ...input, prefix: undefined }, pdict, delims);
+            expect(m1).toEqual({ trigger: "todo", fromCh: 0, toCh: 4 });
+            expect(m2).toEqual(m1);
+        });
+
+        it("requires the prefix char immediately before the trigger", () => {
+            const before = ":todo";
+            const input = { textBefore: before, textAfter: "", lastTyped: " ", sepCh: before.length, prefix: ":" };
+            const m = findTrigger(input, pdict, delims);
+            expect(m?.trigger).toBe("todo");
+        });
+
+        it("consumes the prefix: fromCh extends one char left of the bare-trigger geometry", () => {
+            const before = ":todo";
+            const input = { textBefore: before, textAfter: "", lastTyped: " ", sepCh: before.length, prefix: ":" };
+            const m = findTrigger(input, pdict, delims);
+            // Bare (mode-off) geometry would be fromCh=1 (right after
+            // the colon), toCh=5. Prefix mode extends fromCh to 0 so
+            // the colon itself is part of the replaced range.
+            expect(m?.fromCh).toBe(0);
+            expect(m?.toCh).toBe(5);
+        });
+
+        it("does not match when the trigger has no prefix at all (bare word stays literal)", () => {
+            const before = "todo";
+            const input = { textBefore: before, textAfter: "", lastTyped: " ", sepCh: before.length, prefix: ":" };
+            expect(findTrigger(input, pdict, delims)).toBeNull();
+        });
+
+        it("applies with a punctuation separator too, not just space", () => {
+            const before = ":todo";
+            const input = { textBefore: before, textAfter: "", lastTyped: ".", sepCh: before.length, prefix: ":" };
+            const m = findTrigger(input, pdict, delims);
+            expect(m?.trigger).toBe("todo");
+            expect(m?.fromCh).toBe(0);
+        });
+
+        it("prefix right after another separator: only the adjacent char is checked, not the wider context", () => {
+            const before = "hi :todo";
+            const input = { textBefore: before, textAfter: "", lastTyped: " ", sepCh: before.length, prefix: ":" };
+            const m = findTrigger(input, pdict, delims);
+            expect(m?.trigger).toBe("todo");
+            expect(m?.fromCh).toBe("hi ".length); // the colon's index
+        });
+
+        it("double prefix `::todo`: matches, consuming only the ADJACENT colon — the outer one stays literal", () => {
+            const before = "::todo";
+            const input = { textBefore: before, textAfter: "", lastTyped: " ", sepCh: before.length, prefix: ":" };
+            const m = findTrigger(input, pdict, delims);
+            expect(m?.trigger).toBe("todo");
+            // fromCh sits at index 1 (the second colon) — index 0 (the
+            // first colon) is left outside the replaced range.
+            expect(m?.fromCh).toBe(1);
+            expect(m?.toCh).toBe(6);
+        });
+
+        it("wrong prefix char: mode is \":\", user typed \";todo\" — no match", () => {
+            const before = ";todo";
+            const input = { textBefore: before, textAfter: "", lastTyped: " ", sepCh: before.length, prefix: ":" };
+            expect(findTrigger(input, pdict, delims)).toBeNull();
+        });
+
+        it("supports \";\" as the configured prefix char instead of \":\"", () => {
+            const before = ";todo";
+            const input = { textBefore: before, textAfter: "", lastTyped: " ", sepCh: before.length, prefix: ";" };
+            const m = findTrigger(input, pdict, delims);
+            expect(m?.trigger).toBe("todo");
+            expect(m?.fromCh).toBe(0);
+        });
+
+        it("Enter-path geometry: \"...:todo\" before a newline separator expands with the prefix consumed", () => {
+            // The Enter-as-separator path (B-148) builds ExpandInput
+            // the same way as any other separator — `lastTyped: "\n"`
+            // — so prefix mode applies identically without any
+            // special-casing in the adapter.
+            const before = "notes: :todo";
+            const input = { textBefore: before, textAfter: "", lastTyped: "\n", sepCh: before.length, prefix: ":" };
+            const m = findTrigger(input, pdict, delims);
+            expect(m?.trigger).toBe("todo");
+            expect(m?.fromCh).toBe(before.length - 5); // consumes the ":" too
+        });
+
+        it("Enter-path: \"...todo\" (no prefix) before a newline separator does NOT expand when mode is on", () => {
+            const before = "notes: todo";
+            const input = { textBefore: before, textAfter: "", lastTyped: "\n", sepCh: before.length, prefix: ":" };
+            expect(findTrigger(input, pdict, delims)).toBeNull();
+        });
+
+        it("64-char lookback edge: a trigger exactly at the cap still matches with a prefix one char further back", () => {
+            const exactTrigger = "x".repeat(64);
+            const richDict = { ...pdict, [exactTrigger]: "ok" };
+            const before = `:${exactTrigger}`;
+            const input = { textBefore: before, textAfter: "", lastTyped: " ", sepCh: before.length, prefix: ":" };
+            const m = findTrigger(input, richDict, delims);
+            expect(m?.trigger).toBe(exactTrigger);
+            expect(m?.fromCh).toBe(0);
+        });
+    });
 });

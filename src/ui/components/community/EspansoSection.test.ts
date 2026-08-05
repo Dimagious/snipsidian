@@ -292,3 +292,136 @@ describe("EspansoSection — import flow (B-045)", () => {
         expect(saveSpy).toHaveBeenCalled();
     });
 });
+
+// ---- B-139: Espanso import honesty ----
+
+describe("EspansoSection — skip reporting (B-139)", () => {
+    async function flush() {
+        await Promise.resolve();
+        await Promise.resolve();
+    }
+
+    it("zero-skip pack: no skip status UI, no mention of skips in the Notice", async () => {
+        const { yaml, importBtn } = mount();
+        yaml.value = SIMPLE_YAML;
+        importBtn.click();
+        await flush();
+
+        const status = document.body.querySelector(".snipsy-espanso-skip-status") as HTMLElement;
+        expect(status.style.display).toBe("none");
+        expect(noticeCalls.some((m) => m.includes("skipped"))).toBe(false);
+    });
+
+    it("mixed pack: imports the good matches, reports the skipped ones with a reason", async () => {
+        const mixedYaml = `
+matches:
+  - trigger: ":brb"
+    replace: "be right back"
+  - trigger: ":addr"
+    form: "Address"
+    form_fields:
+      a: {}
+`.trim();
+        const { yaml, importBtn } = mount();
+        yaml.value = mixedYaml;
+        importBtn.click();
+        await flush();
+
+        expect(plugin.settings.snippets["espanso-import/brb"]).toBe("be right back");
+        expect(plugin.settings.snippets["espanso-import/addr"]).toBeUndefined();
+
+        const status = document.body.querySelector(".snipsy-espanso-skip-status") as HTMLElement;
+        expect(status.style.display).not.toBe("none");
+        expect(status.textContent).toContain("1 imported, 1 skipped");
+        expect(status.textContent).toContain("addr");
+        expect(status.getAttribute("aria-live")).toBe("polite");
+
+        expect(
+            noticeCalls.some((m) => m.includes("Installed 1 snippets") && m.includes("skipped")),
+        ).toBe(true);
+    });
+
+    it("all-skipped pack: clear message, nothing written, saveSettings never called", async () => {
+        const allSkippedYaml = `
+matches:
+  - trigger: ":addr"
+    form: "Address"
+    form_fields:
+      a: {}
+  - trigger: ":img"
+    image_path: "./x.png"
+`.trim();
+        const saveSpy = vi.spyOn(plugin, "saveSettings");
+        const before = JSON.stringify(plugin.settings.snippets);
+        const { yaml, importBtn } = mount();
+        yaml.value = allSkippedYaml;
+        importBtn.click();
+        await flush();
+
+        expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+        expect(saveSpy).not.toHaveBeenCalled();
+
+        const status = document.body.querySelector(".snipsy-espanso-skip-status") as HTMLElement;
+        expect(status.style.display).not.toBe("none");
+        expect(status.textContent).toContain("Nothing to import");
+        expect(status.textContent).toContain("2 matches use");
+
+        expect(noticeCalls.some((m) => m.startsWith("Nothing to import"))).toBe(true);
+    });
+
+    it("skip summary caps the listed trigger names at 3, with an ellipsis for the rest", async () => {
+        const manySkipsYaml = `
+matches:
+  - trigger: ":a"
+    image_path: "./a.png"
+  - trigger: ":b"
+    image_path: "./b.png"
+  - trigger: ":c"
+    image_path: "./c.png"
+  - trigger: ":d"
+    image_path: "./d.png"
+`.trim();
+        const { yaml, importBtn } = mount();
+        yaml.value = manySkipsYaml;
+        importBtn.click();
+        await flush();
+
+        const status = document.body.querySelector(".snipsy-espanso-skip-status") as HTMLElement;
+        expect(status.textContent).toContain("a, b, c, …");
+        expect(status.textContent).not.toContain(": d");
+    });
+
+    it("the confirm-modal path (a real conflict) also shows the skip summary inside the modal", async () => {
+        // Pre-seed a conflicting value so the diff has a real conflict
+        // and the PackagePreviewModal path is exercised.
+        plugin.settings.snippets["espanso-import/brb"] = "an existing different value";
+
+        const mixedYaml = `
+matches:
+  - trigger: ":brb"
+    replace: "be right back"
+  - trigger: ":addr"
+    form: "Address"
+    form_fields:
+      a: {}
+`.trim();
+        const { groupInput, yaml, importBtn } = mount();
+        // Force the same group slug as the pre-seeded conflict above —
+        // otherwise the auto-incrementing default ("Espanso import 2",
+        // since "espanso-import" is now taken) would land in a
+        // different group and never collide.
+        groupInput.value = "Espanso import";
+        yaml.value = mixedYaml;
+        importBtn.click();
+        await flush();
+
+        // The conflict modal is open — its contentEl should carry a
+        // skip-status block too (not just the section's own).
+        const modalSkip = document.body.querySelector(
+            ".modal-content .snipsy-espanso-skip-status",
+        );
+        expect(modalSkip).toBeTruthy();
+        expect(modalSkip?.textContent).toContain("skipped");
+        expect(modalSkip?.textContent).toContain("addr");
+    });
+});
