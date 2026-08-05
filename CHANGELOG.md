@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-08-05
+
 ### Fixed
 
 - **The Expansion section now matches the plugin's card style instead of floating as raw Obsidian `Setting` rows** (B-150). Commands/Backup/Defaults on the General tab render as bordered `.snipsy-about-row` cards; the Expansion section (prefix toggle + prefix-char dropdown) dropped `new Setting(container)` items into that same container, and Obsidian's own `.setting-item` chrome (its own padding/typography/borders) made the two rows look like alien blocks bolted onto the card list. Both rows now use the same card-row shell as everything else, with a real `ToggleComponent`/`DropdownComponent` mounted into the row's action slot instead of a button. Behavior unchanged — toggle still writes `expansion.requirePrefix`, dropdown still writes `prefixChar`, dropdown still disables with the toggle off. Mount tests updated to the new DOM, plus a new consistency-guard test asserting both rows carry `.snipsy-about-row` and no `.setting-item`.
