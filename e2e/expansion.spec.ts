@@ -128,6 +128,41 @@ test.describe("expansion fires in the real editor", () => {
         // and only the partial `br` + space remains.
         expect(text).not.toContain("brb");
     });
+
+    test("[B-132] undo after expansion restores the pre-expansion text and does not re-trigger", async ({
+        win,
+    }) => {
+        // The expansion hot path (cm6-bridge -> tryExpandAtSeparator)
+        // decides purely from document state (cursor.ch, last typed
+        // char) with no check of the editor-change's origin. Undo
+        // replays the pre-expansion document, which — from the
+        // handler's point of view — looks exactly like a user who
+        // just typed a trailing separator after `brb`. If the
+        // programmatic replacement isn't isolated from history in a
+        // way that skips re-triggering, undo becomes a trap: the
+        // expansion instantly reapplies.
+        await ui.typeInEditor(win, "brb ");
+        let text = await ui.editorText(win);
+        expect(text).toContain("be right back");
+        expect(text).not.toContain("brb");
+
+        await win.keyboard.press("Meta+Z");
+        // Give the editor-change handler a chance to react to the
+        // undo's document mutation before we assert.
+        await win.waitForTimeout(300);
+
+        text = await ui.editorText(win);
+        expect(text).not.toContain("be right back");
+        expect(text).toContain("brb");
+
+        // The critical assertion: undo must not be a trap. Wait
+        // again to catch any delayed re-expansion, then confirm the
+        // document is still in the undone state.
+        await win.waitForTimeout(300);
+        text = await ui.editorText(win);
+        expect(text).not.toContain("be right back");
+        expect(text).toContain("brb");
+    });
 });
 
 test.describe("expansion respects markdown context", () => {

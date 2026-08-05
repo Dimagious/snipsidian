@@ -36,14 +36,27 @@ export function makeContext(
     };
 }
 
-export function applyEditPlan(editor: Editor, plan: EditPlan) {
-    const cur = editor.getCursor();
-    const from: EditorPosition = { line: cur.line, ch: plan.fromCh };
-    const to: EditorPosition = { line: cur.line, ch: plan.toCh };
+/**
+ * Applies an `EditPlan` at an explicit target `line`.
+ *
+ * B-136: this used to re-read `editor.getCursor()` internally rather
+ * than take the line as a parameter. `tryExpandAtSeparator` computes
+ * `plan` via `await expand(...)`, which does a real await when the
+ * replacement contains `$clipboard` (`readClipboard` hits
+ * `navigator.clipboard`). If the user pressed Enter or clicked
+ * elsewhere during that await, the live cursor no longer pointed at
+ * the line the trigger was on — the old code would apply
+ * `plan.fromCh/toCh` to whatever line the cursor happened to be on
+ * *now*, corrupting unrelated text. Callers must snapshot the target
+ * line before any await and pass it explicitly.
+ */
+export function applyEditPlan(editor: Editor, plan: EditPlan, line: number) {
+    const from: EditorPosition = { line, ch: plan.fromCh };
+    const to: EditorPosition = { line, ch: plan.toCh };
     editor.replaceRange(plan.insert, from, to);
     if (plan.newCursor !== undefined) {
         editor.setCursor({
-            line: cur.line + plan.newCursor.lineDelta,
+            line: line + plan.newCursor.lineDelta,
             ch: plan.newCursor.ch,
         });
     }
@@ -77,13 +90,29 @@ export async function tryExpandAtSeparator(
     if (!isSeparator(lastTyped)) return;
 
     const sepCh = cursor.ch - 1;
+    // B-136: snapshot the target line now — `expand()` below may
+    // await an async clipboard read, during which the user can keep
+    // typing, press Enter, or click elsewhere. `applyEditPlan` must
+    // apply the plan to THIS line, not whatever line the cursor ends
+    // up on after the await.
+    const targetLine = cursor.line;
     const input = makeExpandInput(editor, sepCh, lastTyped);
     const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard);
 
     const plan = await expand(input, dict, ctx);
     if (!plan) return;
 
-    applyEditPlan(editor, plan);
+    // Cheap staleness guard: if the text the plan expects to replace
+    // (the trigger + separator, as it read before the await) no
+    // longer matches what's actually at that range now, the document
+    // changed under us in some other way — skip the edit instead of
+    // overwriting whatever is there now.
+    const currentLineText = editor.getLine(targetLine) ?? "";
+    const expectedSlice = lineText.slice(plan.fromCh, plan.toCh);
+    const actualSlice = currentLineText.slice(plan.fromCh, plan.toCh);
+    if (actualSlice !== expectedSlice) return;
+
+    applyEditPlan(editor, plan, targetLine);
 }
 
 /**

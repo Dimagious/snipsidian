@@ -208,6 +208,30 @@ describe("SnippetPickerModal — naming + microcopy (U-004 / U-005)", () => {
     });
 });
 
+// B-134: the modal used to carry only `.snippet-picker-modal` for
+// layout while a separate viewport cap was designed on `.snipsy-picker`
+// — a class no TypeScript ever added, so the cap never applied and
+// `min-width: 520px` alone overflowed phone-width viewports. The fix
+// folds the viewport-bounded width onto the class that's actually
+// wired here. Pin the wiring so the CSS selector always has a live
+// target.
+describe("SnippetPickerModal — viewport-bounded width class is wired (B-134)", () => {
+    it("contentEl carries .snippet-picker-modal, the class the width-cap CSS targets", () => {
+        const { modal } = mount({
+            snippets: [makeSnippet({ trigger: ":hi", replacement: "hello" })],
+        });
+        expect(modal.contentEl.classList.contains("snippet-picker-modal")).toBe(true);
+    });
+
+    it("keyboard hints row keeps its class for the coarse-pointer media query to target", () => {
+        const { modal } = mount({
+            snippets: [makeSnippet({ trigger: ":hi", replacement: "hello" })],
+        });
+        const hints = modal.contentEl.querySelector(".snippet-hints");
+        expect(hints).not.toBeNull();
+    });
+});
+
 describe("SnippetPickerModal — search filters live", () => {
     it("re-renders the results list when the user types (after the debounce)", async () => {
         const { modal } = mount({

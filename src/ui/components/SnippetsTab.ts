@@ -3,7 +3,7 @@ import type SnipSidianPlugin from "../../main";
 import { splitKey, slugifyGroup } from "../../store/keys";
 import { GroupManager } from "../utils/group-utils";
 import { UIStateManager } from "../utils/ui-state";
-import { AddSnippetModal, ConfirmModal, GroupPickerModal, TextPromptModal } from "./Modals";
+import { AddSnippetModal, ConfirmModal, GroupPickerModal, TextPromptModal, type SnippetOpResult } from "./Modals";
 import { planAddSnippet, planEditSnippet } from "../../core/snippet-ops";
 
 export class SnippetsTab {
@@ -666,18 +666,24 @@ export class SnippetsTab {
     }
 
     private showAddSnippetModal() {
-        const modal = new AddSnippetModal(this.app, async (snippet) => {
-            if (!snippet.trigger || !snippet.replacement) return;
+        // B-133: report success/failure back to the modal instead of
+        // firing a Notice — the modal renders `plan.reason` inline and
+        // only closes on `{ ok: true }`, so an invalid trigger or a
+        // collision no longer discards what the user typed.
+        const modal = new AddSnippetModal(this.app, async (snippet): Promise<SnippetOpResult> => {
+            if (!snippet.trigger || !snippet.replacement) {
+                return { ok: false, error: "Trigger and replacement are required." };
+            }
 
             const plan = planAddSnippet(snippet, this.plugin.settings);
             if (!plan.ok) {
-                new Notice(plan.reason);
-                return;
+                return { ok: false, error: plan.reason };
             }
 
             this.plugin.settings.snippets[plan.data.key] = plan.data.value;
             await this.plugin.saveSettings();
             this.renderList();
+            return { ok: true };
         });
         modal.open();
     }

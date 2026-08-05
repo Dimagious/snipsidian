@@ -446,23 +446,6 @@
   color: var(--snipsy-text-faint);
 }
 
-.modal.snipsy-picker { width: 640px; max-width: calc(100vw - 40px); }
-.modal.snipsy-picker .picker-input {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  font-size: 15px;
-  padding: 14px 16px 14px 42px;
-}
-.modal.snipsy-picker .picker-item {
-  display: grid;
-  grid-template-columns: minmax(80px, 160px) 1fr auto;
-  gap: 14px;
-  padding: 8px 16px;
-  cursor: pointer;
-}
-.modal.snipsy-picker .picker-item.is-active { background: var(--snipsy-active); }
-
 .modal.snipsy-install .diff-row {
   display: grid;
   grid-template-columns: 70px 1fr;
@@ -825,8 +808,15 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-width: 520px;
-  max-width: 800px;
+  /* B-134: a bare 520px min-width overflowed phone-width viewports
+     (~390 CSS px) — the plugin declares isDesktopOnly: false. The
+     `min()`/`max()` pair keeps the roomy desktop layout while never
+     forcing the modal wider than the viewport allows. There was a
+     separate designed cap on a `.snipsy-picker` class that no
+     TypeScript ever applied (dead CSS, removed) — folded the intent
+     into this, the actually-wired, rule instead. */
+  min-width: min(520px, 100%);
+  max-width: min(800px, calc(100vw - 40px));
 }
 
 /* Search label — small all-caps eyebrow above the input */
@@ -1036,9 +1026,19 @@
   .snipsidian-settings.snipsidian-settings *,
   .snipsidian-settings.snipsidian-settings *::before,
   .snipsidian-settings.snipsidian-settings *::after,
-  .modal.snipsy-picker.snipsy-picker *,
+  .snippet-picker-modal.snippet-picker-modal *,
   .modal.snipsy-install.snipsy-install * {
     animation: none;
     transition: none;
+  }
+}
+
+/* B-134: the keyboard hints row ("↑/↓ to navigate, Enter to insert…")
+   is meaningless on touch devices — hide it under a coarse-pointer
+   (touch) media query rather than a platform sniff, so it still shows
+   for external keyboards on tablets. */
+@media (pointer: coarse) {
+  .snippet-picker-modal .snippet-hints {
+    display: none;
   }
 }
