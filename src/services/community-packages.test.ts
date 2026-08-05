@@ -19,7 +19,6 @@ vi.mock("obsidian", async () => {
 });
 
 import {
-  loadDynamicCommunityPackages,
   loadAllCommunityPackages,
   loadCommunityPackagesWithCache
 } from "./community-packages";
@@ -32,72 +31,51 @@ describe("community-packages", () => {
     vi.clearAllMocks();
   });
 
-  describe("loadDynamicCommunityPackages", () => {
-    it("should return empty array in test environment", async () => {
-      const mockApp = {
-        vault: {
-          getAbstractFileByPath: vi.fn(),
-          read: vi.fn()
-        }
-      };
-      
-      const packages = await loadDynamicCommunityPackages(mockApp);
-      expect(packages).toEqual([]);
-    });
-
-    it("should handle missing dynamic directory gracefully", async () => {
-      const mockApp = {
-        vault: {
-          getAbstractFileByPath: vi.fn().mockReturnValue(null),
-          read: vi.fn()
-        }
-      };
-      
-      // Mock process.env to simulate non-test environment
-      const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'production';
-      
-      const packages = await loadDynamicCommunityPackages(mockApp);
-      expect(packages).toEqual([]);
-      
-      // Restore original environment
-      process.env.NODE_ENV = originalEnv;
-    });
-  });
-
+  // B-143: the vault-backed `loadDynamicCommunityPackages` loader and
+  // the router's plugin-omitted fallback branch were removed — the
+  // only production caller (`PackageBrowser.ts`) always passed a
+  // `plugin`, so that path was unreachable outside tests. Coverage
+  // for the router now lives entirely in "mocking the cache host"
+  // below; `loadCommunityPackagesWithCache` itself is exercised in
+  // the dedicated describe block further down.
   describe("loadAllCommunityPackages", () => {
-    it("returns an empty `live` result when no vault packages exist", async () => {
-      const mockApp = {
-        vault: {
-          getAbstractFileByPath: vi.fn(),
-          read: vi.fn()
-        }
+    it("delegates to loadCommunityPackagesWithCache and returns its result verbatim (cache hit)", async () => {
+      const mockPlugin = {
+        settings: {
+          communityPackages: {
+            cache: {
+              packages: [{ label: "Cached", snippets: { a: "1" } }],
+              lastUpdated: Date.now() - 1000,
+            },
+          },
+        },
+        saveSettings: vi.fn(),
       };
 
-      const result = await loadAllCommunityPackages(mockApp);
-      expect(result.packages).toEqual([]);
-      expect(result.source).toBe("live");
+      const result = await loadAllCommunityPackages(mockPlugin);
+      expect(result.source).toBe("cache");
+      expect(result.packages).toHaveLength(1);
+      expect(requestUrl).not.toHaveBeenCalled();
     });
 
-    it("returns empty live result when the vault loader's internal try/catch swallows", async () => {
-      // `loadDynamicCommunityPackages` has its own try/catch that
-      // logs and returns `[]` — the outer `loadAllCommunityPackages`
-      // never sees the throw. Document this contract so a future
-      // refactor that removes the inner catch doesn't silently
-      // change the source label.
+    it("swallows an unexpected throw from the cache host into a `fallback`/`network` result", async () => {
+      // Last-resort safety net around e.g. a rejecting `saveSettings()`
+      // — the cache layer's own GitHub-fetch errors already resolve
+      // to a `fallback` result rather than throwing (see the
+      // `loadCommunityPackagesWithCache` suite below). Force a live
+      // fetch to succeed, then reject on the persist step so the
+      // throw escapes `loadCommunityPackagesWithCache` itself.
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      const mockApp = {
-        vault: {
-          getAbstractFileByPath: vi.fn().mockImplementation(() => {
-            throw new Error("Vault error");
-          }),
-          read: vi.fn()
-        }
+      const mockPlugin = {
+        settings: {},
+        saveSettings: vi.fn().mockRejectedValue(new Error("disk full")),
       };
+      vi.mocked(requestUrl).mockResolvedValue({ status: 200, text: "[]" } as any);
 
-      const result = await loadAllCommunityPackages(mockApp);
+      const result = await loadAllCommunityPackages(mockPlugin);
+      expect(result.source).toBe("fallback");
+      expect(result.error).toBe("network");
       expect(result.packages).toEqual([]);
-      expect(result.source).toBe("live");
       consoleSpy.mockRestore();
     });
   });

@@ -268,6 +268,36 @@ describe("EspansoSection — import flow (B-045)", () => {
         expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
     });
 
+    it("[B-140] same-key re-import with an edited value is NOT a hard refusal, even when another group also holds the trigger — goes through the conflict preview instead", async () => {
+        // Pins the exact PackageBrowser/Espanso divergence B-140 closed.
+        // Pre-B-140 Espanso only skipped its collision check on an
+        // IDENTICAL same-key value; a same-key value that differs (the
+        // reinstall-over-an-edit case) fell through to a real
+        // cross-group `hasReplacementCollision` check — and with
+        // "other-group/brb" also present, THAT would have fired a hard
+        // "Skipped install" refusal. Unified semantics (matching
+        // PackageBrowser's pre-B-140 behavior): an existing key at the
+        // same grouped path is never a cross-group collision,
+        // regardless of value — this becomes a diff/preview conflict
+        // instead.
+        plugin.settings.snippets["espanso-import/brb"] = "USER EDIT";
+        plugin.settings.snippets["other-group/brb"] = "yet another different value";
+
+        const { groupInput, yaml, importBtn } = mount();
+        groupInput.value = "Espanso import";
+        yaml.value = SIMPLE_YAML;
+        importBtn.click();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(
+            noticeCalls.some((msg) => msg.startsWith("Skipped install: trigger name collision")),
+        ).toBe(false);
+
+        const modalConflict = document.body.querySelector(".modal-content");
+        expect(modalConflict).toBeTruthy();
+    });
+
     it("allows re-import: same-value trigger in same group is a no-op, not a collision", async () => {
         // Pre-seed the exact same keys at the same values.
         plugin.settings.snippets["espanso-import/brb"] = "be right back";
@@ -337,7 +367,7 @@ matches:
         expect(status.getAttribute("aria-live")).toBe("polite");
 
         expect(
-            noticeCalls.some((m) => m.includes("Installed 1 snippets") && m.includes("skipped")),
+            noticeCalls.some((m) => m.includes("Installed 1 snippet") && m.includes("skipped")),
         ).toBe(true);
     });
 
@@ -423,5 +453,62 @@ matches:
         expect(modalSkip).toBeTruthy();
         expect(modalSkip?.textContent).toContain("skipped");
         expect(modalSkip?.textContent).toContain("addr");
+    });
+});
+
+// ---- Fold-in (ux#7, B-140): honest install counts ----
+describe("EspansoSection — reported install count reflects actual changes, not pack size", () => {
+    function modalApplyButton(): HTMLButtonElement {
+        const btn = Array.from(
+            document.body.querySelectorAll(".modal-button-container button"),
+        ).find((b) => b.textContent === "Apply") as HTMLButtonElement | undefined;
+        if (!btn) throw new Error("Modal Apply button not found");
+        return btn;
+    }
+
+    it("'keep current' on every conflict reports 'No changes', not the full pack size", async () => {
+        // Both triggers already exist at the SAME group with different
+        // values — re-importing is a pure conflict, no additions.
+        plugin.settings.snippets["espanso-import/brb"] = "USER EDIT 1";
+        plugin.settings.snippets["espanso-import/omw"] = "USER EDIT 2";
+
+        const { groupInput, yaml, importBtn } = mount();
+        groupInput.value = "Espanso import";
+        yaml.value = SIMPLE_YAML;
+        importBtn.click();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // Default per-row choice is "keep current" — Apply with no
+        // per-row changes.
+        modalApplyButton().click();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(plugin.settings.snippets["espanso-import/brb"]).toBe("USER EDIT 1");
+        expect(
+            noticeCalls.some((m) => m.startsWith('No changes — "Espanso import"')),
+        ).toBe(true);
+        expect(noticeCalls.some((m) => m.startsWith("Installed"))).toBe(false);
+    });
+
+    it("a mixed conflict (one new, one kept) reports only the new one, not the pack size", async () => {
+        // "brb" is a user-edited conflict; "omw" doesn't exist yet.
+        plugin.settings.snippets["espanso-import/brb"] = "USER EDIT";
+
+        const { groupInput, yaml, importBtn } = mount();
+        groupInput.value = "Espanso import";
+        yaml.value = SIMPLE_YAML;
+        importBtn.click();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        modalApplyButton().click();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(plugin.settings.snippets["espanso-import/brb"]).toBe("USER EDIT");
+        expect(plugin.settings.snippets["espanso-import/omw"]).toBe("on my way");
+        expect(noticeCalls).toContain('Installed 1 snippet into "Espanso import"');
     });
 });

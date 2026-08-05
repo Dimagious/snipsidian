@@ -509,6 +509,16 @@
   margin: 6px 0 0;
 }
 
+/* ---- ConfirmModal message body ----
+   Fold-in (2026-08 improvement audit): callers write deliberate `\n\n`
+   paragraph breaks into the confirm message (e.g. "…this cannot be
+   undone." on its own line, SnippetsTab.ts / PackageBrowser.ts), but
+   the default inline-text rendering collapsed them into one run-on
+   line. `pre-wrap` preserves both the newlines AND normal word-wrap. */
+.snipsidian-modal .confirm-message {
+  white-space: pre-wrap;
+}
+
 /* ---- Modals: tame the picker + diff layouts ---- */
 /* Result-count badge in the picker (B-040 / U-003). Shown only when
    `total > items.length` so the user knows their query had more
@@ -679,6 +689,13 @@
 }
 .snipsidian-settings .snipsy-about-row-action:hover {
   background: var(--snipsy-hover);
+}
+/* B-150: action slot for non-button row controls (Expansion section's
+   toggle + dropdown) so they align the same way a button would. */
+.snipsidian-settings .snipsy-about-row-action-slot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
 }
 .snipsidian-settings .snipsy-about-version {
   margin-top: 16px;

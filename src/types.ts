@@ -1,12 +1,30 @@
 import type { PackageItem } from "./services/community-packages";
 
+/**
+ * Shape of the object `app.setting.openTabById("hotkeys")` returns —
+ * Obsidian's internal `HotkeysSettingTab`. Undocumented (not part of
+ * `obsidian.d.ts`); every member is optional so callers must feature-
+ * detect before use (see `BasicTab.applyHotkeySearchQuery`) rather
+ * than assume the shape. Community plugins commonly reach for either
+ * a `setQuery` method or the raw `searchComponent` — we try both and
+ * no-op if neither is present, so an Obsidian internals change never
+ * throws, it just silently loses the search-prefill nicety.
+ */
+export interface HotkeysTabHandle {
+    setQuery?(query: string): void;
+    searchComponent?: {
+        setValue?(value: string): void;
+        onChanged?(): void;
+    };
+}
+
 // Augment Obsidian's App type with internal APIs we rely on. These exist at
 // runtime but aren't part of the public obsidian.d.ts.
 declare module "obsidian" {
     interface App {
         setting: {
             open(): void;
-            openTabById(id: string): void;
+            openTabById(id: string): HotkeysTabHandle | undefined;
         };
         version: string;
     }

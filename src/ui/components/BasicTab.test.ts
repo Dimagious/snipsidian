@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 
 // Stub `new Notice(msg)` so tests can assert on toast copy.
 const noticeCalls: string[] = [];
@@ -30,6 +30,7 @@ import { makeMockPlugin } from "../../test/factories/plugin";
 import { BasicTab } from "./BasicTab";
 import { DEFAULT_SNIPPETS } from "../../presets";
 import { defaultSnippetsAsGroup, DEFAULT_SNIPPETS_GROUP } from "../../store/presets";
+import { Platform } from "obsidian";
 import type { App } from "obsidian";
 import type SnipSidianPlugin from "../../main";
 
@@ -139,19 +140,28 @@ describe("BasicTab — Restore default snippets (B-131)", () => {
     });
 });
 
-// ---- B-137: Expansion section (require-prefix mode) ----
+// ---- B-137/B-150: Expansion section (require-prefix mode) ----
 //
-// The obsidian test stub's `Setting.setName`/`setDesc` are no-ops
-// (they don't render text into the DOM), so rows can't be located by
-// their label text the way real Obsidian markup could. BasicTab
-// mounts exactly two `Setting` rows (both added for this section, in
-// a fixed order: toggle first, dropdown second) — index-based lookup
-// is precise and doesn't require touching the shared stub.
-function toggleSettingEl(root: HTMLElement): HTMLElement {
-    return root.querySelectorAll(".setting-item")[0] as HTMLElement;
+// B-150 restyled these two rows onto the plugin's card-row markup
+// (`.snipsy-about-row` — same shell as Commands/Backup/Defaults)
+// instead of raw `new Setting(container)` items, so Obsidian's
+// `.setting-item` chrome no longer applies. BasicTab mounts exactly
+// two rows for this section, in a fixed order: toggle first, dropdown
+// second — index-based lookup within the Expansion list is precise.
+function expansionListEl(root: HTMLElement): HTMLElement {
+    const heading = Array.from(root.querySelectorAll("h4")).find(
+        (h) => h.textContent === "Expansion",
+    );
+    if (!heading) throw new Error("Expansion heading not found");
+    const list = heading.nextElementSibling as HTMLElement | null;
+    if (!list) throw new Error("Expansion list container not found");
+    return list;
 }
-function dropdownSettingEl(root: HTMLElement): HTMLElement {
-    return root.querySelectorAll(".setting-item")[1] as HTMLElement;
+function toggleRowEl(root: HTMLElement): HTMLElement {
+    return expansionListEl(root).querySelectorAll(".snipsy-about-row")[0] as HTMLElement;
+}
+function dropdownRowEl(root: HTMLElement): HTMLElement {
+    return expansionListEl(root).querySelectorAll(".snipsy-about-row")[1] as HTMLElement;
 }
 
 async function flush() {
@@ -159,27 +169,45 @@ async function flush() {
     await Promise.resolve();
 }
 
-describe("BasicTab — Expansion section (B-137)", () => {
+describe("BasicTab — Expansion section (B-137/B-150)", () => {
     it("renders the Expansion heading with a toggle and a prefix-char dropdown", () => {
         const { root } = mount();
         const headings = Array.from(root.querySelectorAll("h4")).map((h) => h.textContent);
         expect(headings).toContain("Expansion");
 
-        const toggleSetting = toggleSettingEl(root);
-        expect(toggleSetting.querySelector("input[type=checkbox]")).toBeTruthy();
+        expect(toggleRowEl(root).querySelector("input[type=checkbox]")).toBeTruthy();
+        expect(dropdownRowEl(root).querySelector("select")).toBeTruthy();
+    });
 
-        const dropdownSetting = dropdownSettingEl(root);
-        expect(dropdownSetting.querySelector("select")).toBeTruthy();
+    it("both Expansion rows use the plugin's card-row style (consistency guard, B-150)", () => {
+        const { root } = mount();
+        const list = expansionListEl(root);
+        expect(list.classList.contains("snipsy-about-list")).toBe(true);
+
+        for (const row of [toggleRowEl(root), dropdownRowEl(root)]) {
+            expect(row.classList.contains("snipsy-about-row")).toBe(true);
+            expect(row.querySelector(".snipsy-about-row-title")).toBeTruthy();
+            expect(row.querySelector(".snipsy-about-row-desc")).toBeTruthy();
+            // No leftover Obsidian `.setting-item` chrome from the old
+            // `new Setting(container)` rendering.
+            expect(row.classList.contains("setting-item")).toBe(false);
+            expect(row.querySelector(".setting-item")).toBeNull();
+        }
+
+        expect(
+            toggleRowEl(root).querySelector(".snipsy-about-row-title")?.textContent,
+        ).toBe("Require a prefix before triggers");
+        expect(
+            dropdownRowEl(root).querySelector(".snipsy-about-row-title")?.textContent,
+        ).toBe("Prefix character");
     });
 
     it("defaults: toggle unchecked, dropdown disabled, value \":\"", () => {
         const { root } = mount();
-        const toggle = toggleSettingEl(root).querySelector(
+        const toggle = toggleRowEl(root).querySelector(
             "input[type=checkbox]",
         ) as HTMLInputElement;
-        const select = dropdownSettingEl(root).querySelector(
-            "select",
-        ) as HTMLSelectElement;
+        const select = dropdownRowEl(root).querySelector("select") as HTMLSelectElement;
 
         expect(toggle.checked).toBe(false);
         expect(select.disabled).toBe(true);
@@ -189,12 +217,10 @@ describe("BasicTab — Expansion section (B-137)", () => {
     it("reflects an already-on setting: toggle checked, dropdown enabled with the stored char", () => {
         plugin.settings.expansion = { requirePrefix: true, prefixChar: ";" };
         const { root } = mount();
-        const toggle = toggleSettingEl(root).querySelector(
+        const toggle = toggleRowEl(root).querySelector(
             "input[type=checkbox]",
         ) as HTMLInputElement;
-        const select = dropdownSettingEl(root).querySelector(
-            "select",
-        ) as HTMLSelectElement;
+        const select = dropdownRowEl(root).querySelector("select") as HTMLSelectElement;
 
         expect(toggle.checked).toBe(true);
         expect(select.disabled).toBe(false);
@@ -203,12 +229,10 @@ describe("BasicTab — Expansion section (B-137)", () => {
 
     it("toggling on writes requirePrefix:true and persists, and enables the dropdown", async () => {
         const { root } = mount();
-        const toggle = toggleSettingEl(root).querySelector(
+        const toggle = toggleRowEl(root).querySelector(
             "input[type=checkbox]",
         ) as HTMLInputElement;
-        const select = dropdownSettingEl(root).querySelector(
-            "select",
-        ) as HTMLSelectElement;
+        const select = dropdownRowEl(root).querySelector("select") as HTMLSelectElement;
 
         toggle.checked = true;
         toggle.dispatchEvent(new Event("change"));
@@ -222,12 +246,10 @@ describe("BasicTab — Expansion section (B-137)", () => {
     it("toggling off writes requirePrefix:false and disables the dropdown", async () => {
         plugin.settings.expansion = { requirePrefix: true, prefixChar: ":" };
         const { root } = mount();
-        const toggle = toggleSettingEl(root).querySelector(
+        const toggle = toggleRowEl(root).querySelector(
             "input[type=checkbox]",
         ) as HTMLInputElement;
-        const select = dropdownSettingEl(root).querySelector(
-            "select",
-        ) as HTMLSelectElement;
+        const select = dropdownRowEl(root).querySelector("select") as HTMLSelectElement;
 
         toggle.checked = false;
         toggle.dispatchEvent(new Event("change"));
@@ -240,9 +262,7 @@ describe("BasicTab — Expansion section (B-137)", () => {
     it("changing the dropdown writes prefixChar and persists", async () => {
         plugin.settings.expansion = { requirePrefix: true, prefixChar: ":" };
         const { root } = mount();
-        const select = dropdownSettingEl(root).querySelector(
-            "select",
-        ) as HTMLSelectElement;
+        const select = dropdownRowEl(root).querySelector("select") as HTMLSelectElement;
 
         select.value = ";";
         select.dispatchEvent(new Event("change"));
@@ -255,7 +275,7 @@ describe("BasicTab — Expansion section (B-137)", () => {
     it("toggling the mode does not clobber an already-chosen prefixChar", async () => {
         plugin.settings.expansion = { requirePrefix: false, prefixChar: ";" };
         const { root } = mount();
-        const toggle = toggleSettingEl(root).querySelector(
+        const toggle = toggleRowEl(root).querySelector(
             "input[type=checkbox]",
         ) as HTMLInputElement;
 
@@ -264,5 +284,192 @@ describe("BasicTab — Expansion section (B-137)", () => {
         await flush();
 
         expect(plugin.settings.expansion).toEqual({ requirePrefix: true, prefixChar: ";" });
+    });
+});
+
+// ---- B-144: Export snippets on mobile ----
+//
+// `exportJson`'s blob-anchor download is a silent no-op in iOS
+// WKWebView — nothing happens, no error, no Notice. On
+// `!Platform.isDesktop`, the export should land in the vault instead
+// (falling back to the clipboard if that fails too), always with an
+// honest Notice. `Platform` is a plain mutable object in the obsidian
+// test stub — mutate it directly per test, restore in `afterEach`.
+describe("BasicTab — Export snippets on mobile (B-144)", () => {
+    const originalIsDesktop = Platform.isDesktop;
+
+    beforeAll(() => {
+        // jsdom doesn't implement the Blob-URL APIs the (unchanged)
+        // desktop download path uses. Only the desktop test below
+        // exercises that path — stub just enough that it doesn't
+        // throw, so the async `exportJson()` call the click handler
+        // fires doesn't produce an unhandled rejection.
+        if (typeof URL.createObjectURL !== "function") {
+            URL.createObjectURL = vi.fn(() => "blob:mock");
+        }
+        if (typeof URL.revokeObjectURL !== "function") {
+            URL.revokeObjectURL = vi.fn();
+        }
+    });
+
+    afterEach(() => {
+        Platform.isDesktop = originalIsDesktop;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- cleanup only, test stub shape
+        delete (navigator as any).clipboard;
+    });
+
+    function exportButton(root: HTMLElement): HTMLButtonElement {
+        const btn = Array.from(root.querySelectorAll("button")).find(
+            (b) => b.textContent === "Export JSON",
+        ) as HTMLButtonElement | undefined;
+        if (!btn) throw new Error("Export JSON button not found");
+        return btn;
+    }
+
+    async function flush() {
+        // The mobile path chains up to two sequential `vault.create`
+        // attempts (plain filename, then timestamped retry) before
+        // falling back to the clipboard — each `await` hop needs its
+        // own microtask tick, so a couple of `Promise.resolve()`s
+        // isn't always enough to drain the whole chain.
+        for (let i = 0; i < 8; i++) {
+            await Promise.resolve();
+        }
+    }
+
+    it("desktop: unchanged blob-anchor path, vault.create is never called", async () => {
+        Platform.isDesktop = true;
+        const { root } = mount();
+        const createSpy = vi.spyOn(plugin.app.vault, "create");
+        exportButton(root).click();
+        await flush();
+
+        expect(createSpy).not.toHaveBeenCalled();
+    });
+
+    it("mobile: writes the export into the vault root and shows a Notice with the filename", async () => {
+        Platform.isDesktop = false;
+        plugin.settings.snippets = { hello: "world" };
+        const { root } = mount();
+        const createSpy = vi.spyOn(plugin.app.vault, "create");
+        exportButton(root).click();
+        await flush();
+
+        expect(createSpy).toHaveBeenCalledTimes(1);
+        const [filename, data] = createSpy.mock.calls[0] as [string, string];
+        expect(filename).toBe("snipsidian-snippets.json");
+        expect(JSON.parse(data)).toEqual({ hello: "world" });
+        expect(noticeCalls).toContain("Exported to snipsidian-snippets.json in your vault");
+    });
+
+    it("mobile: a name collision on the plain filename retries once with a timestamp", async () => {
+        Platform.isDesktop = false;
+        const { root } = mount();
+        let calls = 0;
+        vi.spyOn(plugin.app.vault, "create").mockImplementation(async (path: string) => {
+            calls++;
+            if (path === "snipsidian-snippets.json") {
+                throw new Error("File already exists");
+            }
+            return undefined as never;
+        });
+        exportButton(root).click();
+        await flush();
+
+        expect(calls).toBe(2);
+        expect(
+            noticeCalls.some(
+                (m) =>
+                    m.startsWith("Exported to snipsidian-snippets-") &&
+                    m.endsWith(" in your vault"),
+            ),
+        ).toBe(true);
+    });
+
+    it("mobile: falls back to the clipboard when the vault write fails twice", async () => {
+        Platform.isDesktop = false;
+        plugin.settings.snippets = { hello: "world" };
+        const { root } = mount();
+        vi.spyOn(plugin.app.vault, "create").mockRejectedValue(new Error("read-only vault"));
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, "clipboard", {
+            value: { writeText },
+            configurable: true,
+        });
+
+        exportButton(root).click();
+        await flush();
+
+        expect(writeText).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(writeText.mock.calls[0][0] as string)).toEqual({ hello: "world" });
+        expect(noticeCalls).toContain("Export copied to clipboard");
+    });
+
+    it("mobile: reports failure honestly when both the vault write and the clipboard fail", async () => {
+        Platform.isDesktop = false;
+        const { root } = mount();
+        vi.spyOn(plugin.app.vault, "create").mockRejectedValue(new Error("read-only vault"));
+        // No `navigator.clipboard` defined at all — the guard treats
+        // this the same as a clipboard failure.
+
+        exportButton(root).click();
+        await flush();
+
+        expect(noticeCalls.some((m) => m.startsWith("Export failed:"))).toBe(true);
+    });
+});
+
+// ---- Fold-in: "Set hotkey" prefills the Hotkeys tab's search query ----
+//
+// `openHotkeyTab` used to only scroll-hunt for a `data-id` attribute
+// that isn't documented anywhere; on a miss the user faced the full,
+// unfiltered command list. Prefilling the search box (the community
+// pattern) is the primary fix; the scroll stays as best-effort on top.
+describe("BasicTab — Set hotkey prefills the Hotkeys search box", () => {
+    function setHotkeyButton(root: HTMLElement, title: string): HTMLButtonElement {
+        const btn = Array.from(root.querySelectorAll(".snipsy-about-row")).find(
+            (row) => row.querySelector(".snipsy-about-row-title")?.textContent === title,
+        )?.querySelector("button") as HTMLButtonElement | undefined;
+        if (!btn) throw new Error(`Set-hotkey row "${title}" not found`);
+        return btn;
+    }
+
+    it("calls setQuery with the command's display name when the tab exposes it", () => {
+        const setQuery = vi.fn();
+        vi.spyOn(app.setting, "openTabById").mockReturnValue({ setQuery });
+        const { root } = mount();
+
+        setHotkeyButton(root, "Insert snippet").click();
+
+        expect(setQuery).toHaveBeenCalledWith("Insert snippet…");
+    });
+
+    it("falls back to searchComponent.setValue + onChanged when setQuery isn't present", () => {
+        const setValue = vi.fn();
+        const onChanged = vi.fn();
+        vi.spyOn(app.setting, "openTabById").mockReturnValue({
+            searchComponent: { setValue, onChanged },
+        });
+        const { root } = mount();
+
+        setHotkeyButton(root, "Open settings").click();
+
+        expect(setValue).toHaveBeenCalledWith("Open settings");
+        expect(onChanged).toHaveBeenCalledOnce();
+    });
+
+    it("does not throw when openTabById returns undefined (real Obsidian internals may not match)", () => {
+        vi.spyOn(app.setting, "openTabById").mockReturnValue(undefined);
+        const { root } = mount();
+
+        expect(() => setHotkeyButton(root, "Insert snippet").click()).not.toThrow();
+    });
+
+    it("does not throw when the returned tab has neither setQuery nor searchComponent", () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- deliberately shape-mismatched internal-API stub
+        vi.spyOn(app.setting, "openTabById").mockReturnValue({} as any);
+        const { root } = mount();
+
+        expect(() => setHotkeyButton(root, "Insert snippet").click()).not.toThrow();
     });
 });

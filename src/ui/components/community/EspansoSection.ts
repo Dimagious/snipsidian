@@ -1,10 +1,8 @@
 import { App, Notice } from "obsidian";
 import type SnipSidianPlugin from "../../../main";
 import { espansoYamlToSnippets, type EspansoSkip } from "../../../packages/espanso";
-import { diffIncoming } from "../../../store/diff";
 import { PackagePreviewModal } from "../Modals";
-import { hasReplacementCollision } from "../../../store/snippets";
-import { validatePackageForInstall } from "../../../services/package-validator";
+import { countAppliedChanges, planGroupedInstall } from "../../../core/install-plan";
 import { joinKey, slugifyGroup } from "../../../store/keys";
 import { GroupManager } from "../../utils/group-utils";
 
@@ -165,55 +163,69 @@ export class EspansoSection {
         return;
       }
 
-      // S-009: the community-pack install path gates on
-      // `validatePackageForInstall`, but Espanso YAML is pasted from an
-      // untrusted source and historically skipped every size/count/shape
-      // limit — nullifying the whole limit system on this write path.
-      // Run the same install-time validation on the bare-trigger map
-      // before it reaches the diff/write. `parsed.snippets` has the
-      // same `{ trigger: replacement }` shape the validator expects.
-      const v = validatePackageForInstall({ label: groupSlug, snippets: parsed.snippets });
-      if (!v.isValid) {
-        const first = v.errors[0] ?? "Import failed validation";
-        const more = v.errors.length > 1 ? ` (and ${v.errors.length - 1} more)` : "";
+      // B-140: validate → cross-group collision gate → diff, via the
+      // one planner shared with `PackageBrowser.installPackage` —
+      // Espanso used to hand-copy this sequence and had already
+      // diverged from the community-pack path (the exact duplication
+      // shape that produced S-009: Espanso skipped
+      // `validatePackageForInstall` for a year because a gate was
+      // added on one path only). `planGroupedInstall` runs that
+      // validation before the diff/write on every caller, and its
+      // pinned collision semantics replace Espanso's old
+      // "skip only on identical value" check — a same-key re-import of
+      // an edited snippet now goes through the shared conflict preview
+      // instead of a hard refusal (user-visible change, matches
+      // community-pack behavior).
+      const plan = planGroupedInstall(parsed.snippets, groupSlug, this.plugin.settings);
+
+      if (!plan.validation.isValid) {
+        const first = plan.validation.errors[0] ?? "Import failed validation";
+        const more =
+          plan.validation.errors.length > 1
+            ? ` (and ${plan.validation.errors.length - 1} more)`
+            : "";
         new Notice(`Cannot import Espanso package: ${first}${more}`);
-        console.error("[snipsy] Espanso import validation failed", v.errors);
+        console.error("[snipsy] Espanso import validation failed", plan.validation.errors);
         return;
       }
 
-      // B-045: build the grouped map. Triggers stay reachable via
+      if (plan.collisions.length > 0) {
+        const collisions = plan.collisions.join(", ");
+        new Notice(`Skipped install: trigger name collision with existing snippets (${collisions})`);
+        return;
+      }
+
+      // B-045: build the grouped map for the direct-install (no
+      // conflicts) path below. Triggers stay reachable via
       // `<groupSlug>/<trigger>` keys — same shape as community packs.
       const incoming: Record<string, string> = {};
       for (const [trigger, replacement] of Object.entries(parsed.snippets)) {
         incoming[joinKey(groupSlug, trigger)] = replacement;
       }
 
-      // Cross-group collision check on the BARE trigger names — the
-      // same trigger living in another group with a different
-      // replacement is still a conflict for the engine
-      // (`getDict`'s first-wins). Skip if the same grouped-key
-      // already exists at the same value (re-import).
-      const triggerCollisions = Object.entries(parsed.snippets).filter(([trigger, replacement]) => {
-        const groupedKey = joinKey(groupSlug, trigger);
-        if (this.plugin.settings.snippets[groupedKey] === replacement) return false;
-        return hasReplacementCollision(this.plugin.settings, trigger, replacement, groupedKey);
-      });
+      // B-139 skip summary is a PARSE-time concept — "how many matches
+      // parsed vs. got skipped" — and stays constant regardless of
+      // what the user later chooses in the conflict modal. Keep it
+      // decoupled from the ux#7 "what actually changed" count below.
+      const parsedCount = Object.keys(parsed.snippets).length;
 
-      if (triggerCollisions.length > 0) {
-        const collisions = triggerCollisions.map(([trigger]) => trigger).join(", ");
-        new Notice(`Skipped install: trigger name collision with existing snippets (${collisions})`);
-        return;
-      }
-
-      const diff = diffIncoming(incoming, this.plugin.settings.snippets);
-      const importedCount = Object.keys(incoming).length;
-      if (diff.conflicts.length > 0) {
+      if (plan.diff.conflicts.length > 0) {
         // B-060: conflict modal title matches the section heading.
-        const modal = new PackagePreviewModal(this.app, this.plugin, "Import from Espanso YAML", diff);
+        const modal = new PackagePreviewModal(
+          this.app,
+          this.plugin,
+          "Import from Espanso YAML",
+          plan.diff,
+        );
         modal.onConfirm = async (resolved) => {
           this.plugin.settings.snippets = resolved;
           await this.plugin.saveSettings();
-          this.reportInstalled(espansoStatusEl, importedCount, rawGroupLabel, parsed.skipped);
+          // Fold-in (ux#7): report what actually changed given the
+          // user's per-conflict choices, not the full pack size — a
+          // "keep everything" resolution used to still claim every
+          // entry as "imported".
+          const changedCount = countAppliedChanges(plan.diff, resolved);
+          this.reportInstalled(espansoStatusEl, changedCount, parsedCount, rawGroupLabel, parsed.skipped);
         };
         modal.open();
         // B-139: the skip list must also be visible in the confirm
@@ -221,45 +233,74 @@ export class EspansoSection {
         // it as the modal's first block so the user sees it BEFORE
         // deciding how to resolve conflicts, without touching the
         // shared `PackagePreviewModal` class (also used by
-        // `PackageBrowser`; B-140 keeps that unification separate).
+        // `PackageBrowser`).
         if (parsed.skipped.length > 0) {
           const skipEl = modal.contentEl.createDiv({
             cls: "snipsy-espanso-skip-status",
             attr: { "aria-live": "polite" },
           });
-          skipEl.setText(formatSkipSummary(importedCount, parsed.skipped));
+          skipEl.setText(formatSkipSummary(parsedCount, parsed.skipped));
           modal.contentEl.insertBefore(skipEl, modal.contentEl.firstChild);
         }
       } else {
-        void this.installFromIncoming(incoming, rawGroupLabel, espansoStatusEl, parsed.skipped);
+        // No conflicts: every incoming entry is either genuinely new
+        // (`plan.diff.added`) or an identical-value no-op re-import
+        // that `diffIncoming` silently drops — `plan.diff.added.length`
+        // is the honest "actually changed" count (ux#7), not
+        // `Object.keys(incoming).length`.
+        void this.installFromIncoming(
+          incoming,
+          plan.diff.added.length,
+          parsedCount,
+          rawGroupLabel,
+          espansoStatusEl,
+          parsed.skipped,
+        );
       }
     };
   }
 
   /** B-139: shared success-reporting tail for both the direct-install
-   *  and conflict-resolved-install paths — Notice text + (if
-   *  anything was skipped) the status line, both mentioning the skip
-   *  count so "N imported" never overclaims what actually landed. */
+   *  and conflict-resolved-install paths.
+   *
+   *  `changedCount` (ux#7, B-140) is what actually landed in
+   *  `settings.snippets` given the user's keep/overwrite choices — 0
+   *  when every conflict was resolved as "keep current" gets an
+   *  honest "no changes" Notice instead of claiming an install that
+   *  didn't happen. `parsedCount` (B-139) is the parse-time "how many
+   *  matches parsed vs. skipped" figure fed to `formatSkipSummary` —
+   *  independent of `changedCount`, since a skip is a parsing outcome,
+   *  not a settings-write outcome. */
   private reportInstalled(
     statusEl: HTMLElement,
-    importedCount: number,
+    changedCount: number,
+    parsedCount: number,
     groupLabel: string,
     skipped: EspansoSkip[],
   ) {
+    const base =
+      changedCount === 0
+        ? `No changes — "${groupLabel}" already matches your library`
+        : `Installed ${changedCount} snippet${changedCount === 1 ? "" : "s"} into "${groupLabel}"`;
+
     if (skipped.length > 0) {
-      const msg = formatSkipSummary(importedCount, skipped);
+      const msg = formatSkipSummary(parsedCount, skipped);
       statusEl.setText(msg);
       statusEl.show();
-      new Notice(`Installed ${importedCount} snippets into "${groupLabel}". ${msg}`);
+      new Notice(`${base}. ${msg}`);
     } else {
-      new Notice(`Installed ${importedCount} snippets into "${groupLabel}"`);
+      new Notice(base);
     }
   }
 
   /** Apply already-prefixed snippets to settings. Caller has done the
-   *  collision check + diff computation. B-061: no re-parse. */
+   *  collision check + diff computation. B-061: no re-parse.
+   *  `changedCount` is `plan.diff.added.length` — see the ux#7 note at
+   *  the call site. */
   private async installFromIncoming(
     incoming: Record<string, string>,
+    changedCount: number,
+    parsedCount: number,
     groupLabel: string,
     statusEl: HTMLElement,
     skipped: EspansoSkip[],
@@ -269,7 +310,7 @@ export class EspansoSection {
         this.plugin.settings.snippets[groupedKey] = replacement;
       }
       await this.plugin.saveSettings();
-      this.reportInstalled(statusEl, Object.keys(incoming).length, groupLabel, skipped);
+      this.reportInstalled(statusEl, changedCount, parsedCount, groupLabel, skipped);
     } catch (err) {
       new Notice(`Failed to install from YAML: ${err instanceof Error ? err.message : String(err)}`);
     }

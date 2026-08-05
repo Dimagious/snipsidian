@@ -93,7 +93,7 @@ What's safe:
 - ✅ Triggers don't expand inside fenced code blocks (`` ``` ``)
 - ✅ Triggers don't expand inside inline code (`` ` ``)
 - ✅ Triggers don't expand inside YAML frontmatter
-- ✅ The cursor lands where the snippet defines it (`$|`), with support for `$date` / `$time` / `$filename` / `$clipboard` placeholders and `$1`/`$2` tabstops
+- ✅ The cursor lands where the snippet defines it (`$|`), with support for `$date` / `$time` / `$filename` / `$clipboard` placeholders. `$1`/`$2` are shown highlighted in the snippet picker's preview, and `$1` receives the selected text when you wrap a selection with a snippet — they aren't Tab-navigable tabstops
 
 ---
 

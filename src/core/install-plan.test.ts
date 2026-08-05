@@ -1,10 +1,17 @@
 import { describe, it, expect } from "vitest";
 import {
     buildPackageDiff,
+    countAppliedChanges,
     isPackageInstalled,
     listPackageKeys,
+    planGroupedInstall,
     removePackageSnippets,
 } from "./install-plan";
+import type { SnipSidianSettings } from "../types";
+
+function settingsWith(snippets: Record<string, string>): SnipSidianSettings {
+    return { snippets };
+}
 
 describe("install-plan.buildPackageDiff", () => {
     it("splits incoming snippets into added vs conflicts, prefixed by group", () => {
@@ -242,5 +249,133 @@ describe("install-plan.removePackageSnippets", () => {
         const next = removePackageSnippets("", current);
         expect(next).toEqual({ "Pack/a": "1" });
         expect(next).not.toBe(current);
+    });
+});
+
+describe("install-plan.planGroupedInstall (B-140: unified grouped-install pipeline)", () => {
+    it("validation failure propagates — collisions/diff stay empty, no write happens", () => {
+        // Empty snippets bag is enough to fail validatePackageForInstall
+        // ("Package has no snippets to install").
+        const plan = planGroupedInstall({}, "Pack", settingsWith({}));
+        expect(plan.validation.isValid).toBe(false);
+        expect(plan.validation.errors.length).toBeGreaterThan(0);
+        expect(plan.collisions).toEqual([]);
+        expect(plan.diff).toEqual({ added: [], conflicts: [] });
+    });
+
+    it("same-key-any-value is NOT a collision — a reinstall over a user edit at the same grouped key is not blocked", () => {
+        // "Pack/todo" already exists with a DIFFERENT value than the
+        // incoming package. Pre-B-140 PackageBrowser semantics: this is
+        // not a cross-group collision, it's a same-key overwrite —
+        // the diff/preview's job (surfaced as a conflict entry, not a
+        // hard refusal).
+        const current = settingsWith({ "Pack/todo": "- [ ] USER EDIT" });
+        const plan = planGroupedInstall({ todo: "- [ ]" }, "Pack", current);
+
+        expect(plan.validation.isValid).toBe(true);
+        expect(plan.collisions).toEqual([]);
+        expect(plan.diff.conflicts).toEqual([
+            { key: "Pack/todo", incoming: "- [ ]", current: "- [ ] USER EDIT" },
+        ]);
+    });
+
+    it("cross-group different-value IS a collision — hard refusal, empty diff", () => {
+        // "todo" already lives in a DIFFERENT group ("Other") with a
+        // different replacement — the engine's getDict first-wins
+        // resolution would silently pick one; this must hard-block.
+        const current = settingsWith({ "Other/todo": "- [ ] different" });
+        const plan = planGroupedInstall({ todo: "- [ ]" }, "Pack", current);
+
+        expect(plan.validation.isValid).toBe(true);
+        expect(plan.collisions).toEqual(["todo"]);
+        expect(plan.diff).toEqual({ added: [], conflicts: [] });
+    });
+
+    it("cross-group same-value is NOT a collision (matches hasReplacementCollision semantics)", () => {
+        // Same trigger, same replacement, different group — no engine
+        // ambiguity (both groups would resolve to the same text), so
+        // this must NOT block the install.
+        const current = settingsWith({ "Other/todo": "- [ ]" });
+        const plan = planGroupedInstall({ todo: "- [ ]" }, "Pack", current);
+
+        expect(plan.validation.isValid).toBe(true);
+        expect(plan.collisions).toEqual([]);
+        expect(plan.diff.added).toEqual([{ key: "Pack/todo", value: "- [ ]" }]);
+    });
+
+    it("diff correctness with group prefixing — added + conflict classification matches buildPackageDiff", () => {
+        const current = settingsWith({ "Pack/done": "- [DONE]" });
+        const plan = planGroupedInstall(
+            { todo: "- [ ]", done: "- [x]" },
+            "Pack",
+            current,
+        );
+
+        expect(plan.collisions).toEqual([]);
+        expect(plan.diff.added).toEqual([{ key: "Pack/todo", value: "- [ ]" }]);
+        expect(plan.diff.conflicts).toEqual([
+            { key: "Pack/done", incoming: "- [x]", current: "- [DONE]" },
+        ]);
+    });
+
+    it("multiple cross-group collisions are all reported, not just the first", () => {
+        const current = settingsWith({
+            "Other/todo": "- [ ] diff 1",
+            "Other/done": "- [x] diff 2",
+        });
+        const plan = planGroupedInstall(
+            { todo: "- [ ]", done: "- [x]" },
+            "Pack",
+            current,
+        );
+        expect(plan.collisions.sort()).toEqual(["done", "todo"]);
+    });
+
+    it("no-op re-install (identical value, same key) is neither a collision nor an added/conflict entry", () => {
+        const current = settingsWith({ "Pack/todo": "- [ ]" });
+        const plan = planGroupedInstall({ todo: "- [ ]" }, "Pack", current);
+        expect(plan.collisions).toEqual([]);
+        expect(plan.diff.added).toEqual([]);
+        expect(plan.diff.conflicts).toEqual([]);
+    });
+});
+
+describe("install-plan.countAppliedChanges (ux#7: honest install/import Notice counts)", () => {
+    it("counts every added entry", () => {
+        const diff = { added: [{ key: "a", value: "1" }, { key: "b", value: "2" }], conflicts: [] };
+        expect(countAppliedChanges(diff, { a: "1", b: "2" })).toBe(2);
+    });
+
+    it("a conflict resolved as 'keep current' (resolved value === diff's captured current) contributes 0", () => {
+        const diff = {
+            added: [],
+            conflicts: [{ key: "a", incoming: "new", current: "old" }],
+        };
+        // "Keep current" means the resolved map still holds "old".
+        expect(countAppliedChanges(diff, { a: "old" })).toBe(0);
+    });
+
+    it("a conflict resolved as 'overwrite' (resolved value === incoming) contributes 1", () => {
+        const diff = {
+            added: [],
+            conflicts: [{ key: "a", incoming: "new", current: "old" }],
+        };
+        expect(countAppliedChanges(diff, { a: "new" })).toBe(1);
+    });
+
+    it("mixed: added entries always count, conflicts count only when actually changed", () => {
+        const diff = {
+            added: [{ key: "new1", value: "x" }],
+            conflicts: [
+                { key: "kept", incoming: "new", current: "old" },
+                { key: "overwritten", incoming: "new", current: "old" },
+            ],
+        };
+        const resolved = { new1: "x", kept: "old", overwritten: "new" };
+        expect(countAppliedChanges(diff, resolved)).toBe(2);
+    });
+
+    it("empty diff (a pure no-op reinstall) counts 0", () => {
+        expect(countAppliedChanges({ added: [], conflicts: [] }, {})).toBe(0);
     });
 });

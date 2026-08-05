@@ -1,7 +1,3 @@
-import * as YAML from "yaml";
-import { App, TFolder, TFile } from "obsidian";
-import type { PackageData } from "./package-types";
-import { convertSnippetsToObject } from "./community-api";
 import {
     loadCommunityPackagesWithCache,
     type PluginCacheHost,
@@ -11,8 +7,17 @@ import {
 // Module split (B-025, 1.1.7):
 //   - GitHub I/O                  → community-api.ts
 //   - 24h cache wrapper           → community-cache.ts
-// This file is now the facade: PackageItem type, vault-backed loader,
-// and the router `loadAllCommunityPackages`.
+// This file is now the facade: PackageItem type + the router
+// `loadAllCommunityPackages`.
+//
+// B-143: the vault-backed `loadDynamicCommunityPackages` loader (and
+// the router's fallback branch that called it when `plugin` was
+// omitted) were removed here. The only production caller
+// (`PackageBrowser.ts`) always passed `plugin`, so that path was
+// unreachable outside tests — it also carried the repo's only
+// `process.env.NODE_ENV === 'test'` sniff. If vault-backed dynamic
+// packages come back as a real feature, reintroduce it deliberately
+// rather than resurrecting this dead branch.
 
 export interface PackageItem {
     id?: string;
@@ -31,68 +36,10 @@ export interface PackageItem {
 }
 
 
-// Active load paths are loadCommunityPackagesWithCache (GitHub-backed, 24h cache)
-// and loadDynamicCommunityPackages (vault-backed). Earlier stubs were removed in 1.0.9.
-
-/**
- * Loads dynamic community packages from user's vault
- * These are packages that users have submitted and are stored locally
- */
-export async function loadDynamicCommunityPackages(app: App): Promise<PackageItem[]> {
-  const packages: PackageItem[] = [];
-  
-  try {
-    // In test environment, return empty array to match test expectations
-    if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
-      return [];
-    }
-    
-    // Look for dynamic packages in the vault
-    const dynamicPath = "Snipsidian/community-packages/approved";
-    const dynamicFolder = app.vault.getAbstractFileByPath(dynamicPath);
-    
-    if (!dynamicFolder || !(dynamicFolder instanceof TFolder) || !dynamicFolder.children) {
-      return packages;
-    }
-    
-    // Load all YAML files from the dynamic directory
-    for (const file of dynamicFolder.children) {
-      if (file instanceof TFile && (file.path.endsWith('.yml') || file.path.endsWith('.yaml'))) {
-        try {
-          const content = await app.vault.read(file);
-          const packageData = YAML.parse(content) as PackageData;
-          
-          if (packageData && typeof packageData === 'object' && 'name' in packageData && typeof packageData.name === 'string') {
-            const tags = Array.isArray(packageData.tags) ? packageData.tags.filter((t): t is string => typeof t === 'string') : [];
-            const snippets = packageData.snippets ? convertSnippetsToObject(packageData.snippets) : undefined;
-            const packageItem: PackageItem = {
-              id: file.basename,
-              label: packageData.name,
-              description: typeof packageData.description === 'string' ? packageData.description : undefined,
-              author: typeof packageData.author === 'string' ? packageData.author : undefined,
-              version: typeof packageData.version === 'string' ? packageData.version : undefined,
-              downloads: 0, // Will be updated when packages are actually downloaded
-              tags: tags,
-              verified: true, // Dynamic packages are also verified
-              rating: 0, // Will be updated based on actual user ratings
-              snippets: snippets && Object.keys(snippets).length > 0 ? snippets : undefined
-            };
-            
-            packages.push(packageItem);
-          }
-        } catch (error) {
-          console.error(`Failed to load dynamic package ${file.path}:`, error);
-        }
-      }
-    }
-    
-    return packages;
-  } catch (error) {
-    console.error("Failed to load dynamic community packages:", error);
-    return [];
-  }
-}
-
+// The active load path is loadCommunityPackagesWithCache
+// (GitHub-backed, 24h cache). Earlier stubs were removed in 1.0.9; the
+// vault-backed dynamic loader was removed in 1.3.1 (B-143, see note
+// above).
 
 // `createPackageIssue` removed in 1.1.7 — was the legacy direct-API
 // submission flow, replaced by `services/github-issue-url.ts`
@@ -105,23 +52,23 @@ export async function loadDynamicCommunityPackages(app: App): Promise<PackageIte
 export { loadCommunityPackagesWithCache, type PluginCacheHost, type CommunityLoadResult };
 
 /**
- * Router for the Packages-tab data load. With a `plugin` argument,
- * goes through the 24-hour `community-cache`; without one (test
- * paths, niche callers), falls back to the vault-backed dynamic
- * loader. This is the single entry point UI components should call.
+ * Router for the Packages-tab data load — the single entry point UI
+ * components should call. `plugin` is required (B-143: the pre-1.3.1
+ * vault-backed fallback for an omitted `plugin` was unreachable in
+ * production, since the only caller always passed one).
  *
  * Returns a `CommunityLoadResult` so the UI can differentiate
  * "live-fresh / cache-hit / fallback-after-failure" — the
- * Notice text in `PackageBrowser.refresh` keys off `source`.
+ * Notice text in `PackageBrowser.refresh` keys off `source`. The
+ * try/catch is a last-resort safety net around `saveSettings()` (the
+ * cache layer's own GitHub-fetch errors already resolve to a
+ * `fallback` result rather than throwing).
  */
 export async function loadAllCommunityPackages(
-    app: App,
-    plugin?: PluginCacheHost,
+    plugin: PluginCacheHost,
 ): Promise<CommunityLoadResult> {
     try {
-        if (plugin) return await loadCommunityPackagesWithCache(plugin);
-        const packages = await loadDynamicCommunityPackages(app);
-        return { packages, source: "live" };
+        return await loadCommunityPackagesWithCache(plugin);
     } catch (error) {
         console.error("Failed to load community packages:", error);
         return { packages: [], source: "fallback", error: "network" };
