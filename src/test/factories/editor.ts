@@ -55,15 +55,41 @@ export class MockEditor {
         return this.selection;
     }
 
+    /**
+     * Fold-in (2026-08 improvement audit, tests#6): the pre-fix
+     * version spliced `text` into the selection's line verbatim,
+     * never splitting on embedded `\n` — a multi-line wrap result
+     * (e.g. a snippet's `$1` replaced by a multi-line selection)
+     * produced a single "line" that actually contained newline
+     * characters, an editor state no real Obsidian document can be
+     * in. Delegates to `replaceRange` (which already splits
+     * correctly) over the selection's `[from, to)` span — the
+     * selection itself is assumed single-line (Snipsy never selects
+     * across lines for the wrap-with-snippet flow this mock backs),
+     * so only the FROM/TO computation stays a same-line approximation;
+     * the inserted `text` is free to be multi-line.
+     */
     replaceSelection(text: string): void {
         if (this.selection) {
             const cursor = this.getCursor();
-            const line = this.getLine(cursor.line);
-            const before = line.slice(0, cursor.ch - this.selection.length);
-            const after = line.slice(cursor.ch);
-            this.lines[cursor.line] = before + text + after;
+            const from: CursorPos = { line: cursor.line, ch: cursor.ch - this.selection.length };
+            const to: CursorPos = { line: cursor.line, ch: cursor.ch };
+            this.replaceRange(text, from, to);
             this.selection = "";
-            this.cursor.ch = before.length + text.length;
+
+            // `replaceRange` only auto-advances the cursor for a
+            // zero-width `from === to` insert (the hot-path
+            // expansion case) — a selection replacement always has
+            // `from.ch !== to.ch`, so land the cursor here instead,
+            // at the real end of the inserted text.
+            const insertLines = text.split("\n");
+            this.cursor =
+                insertLines.length === 1
+                    ? { line: from.line, ch: from.ch + text.length }
+                    : {
+                          line: from.line + insertLines.length - 1,
+                          ch: insertLines[insertLines.length - 1]?.length ?? 0,
+                      };
         } else {
             const cursor = this.getCursor();
             this.replaceRange(text, cursor, cursor);

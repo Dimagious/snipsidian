@@ -315,7 +315,15 @@ describe("adapters/obsidian-editor: wrapSelectionWithSnippet", () => {
 
         wrapSelectionWithSnippet(ed as any, "A\n$|${SEL}\nB");
 
-        expect(ed.getLine(0)).toBe("Hello A\nworld\nB");
+        // Fold-in (tests#6): the multiline template must actually
+        // split the document into three real lines — a single "line"
+        // containing embedded `\n` characters (as this test asserted
+        // pre-fix) is an editor state no real Obsidian document can
+        // be in; `MockEditor.replaceSelection` now delegates to
+        // `replaceRange`, which splits correctly.
+        expect(ed.getLine(0)).toBe("Hello A");
+        expect(ed.getLine(1)).toBe("world");
+        expect(ed.getLine(2)).toBe("B");
         expect(ed.getCursor()).toEqual({ line: 1, ch: 0 });
     });
 

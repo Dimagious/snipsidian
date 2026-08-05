@@ -1,6 +1,6 @@
-import { App, Notice, Platform, Setting } from "obsidian";
-import type { DropdownComponent } from "obsidian";
+import { App, DropdownComponent, Notice, Platform, ToggleComponent } from "obsidian";
 import type SnipSidianPlugin from "../../main";
+import type { HotkeysTabHandle } from "../../types";
 import { isRecordOfString } from "../../shared/guards";
 import { ImportPreviewModal } from "./Modals";
 import { DEFAULT_SNIPPETS_GROUP, planRestoreDefaults } from "../../store/presets";
@@ -42,14 +42,14 @@ export class BasicTab {
             title: "Insert snippet",
             description: "Open the snippet picker.",
             buttonText: "Set hotkey",
-            onClick: () => this.openHotkeyTab("snipsidian:insert-snippet"),
+            onClick: () => this.openHotkeyTab("snipsidian:insert-snippet", "Insert snippet…"),
         });
 
         this.renderRow(commands, {
             title: "Open settings",
             description: "Jump straight to Snipsy settings.",
             buttonText: "Set hotkey",
-            onClick: () => this.openHotkeyTab("snipsidian:open-settings"),
+            onClick: () => this.openHotkeyTab("snipsidian:open-settings", "Open settings"),
         });
 
         // ---- Expansion ----
@@ -65,7 +65,7 @@ export class BasicTab {
             title: "Export snippets",
             description: "Download your library as JSON.",
             buttonText: "Export JSON",
-            onClick: () => this.exportJson(),
+            onClick: () => void this.exportJson(),
         });
 
         this.renderRow(backup, {
@@ -127,45 +127,73 @@ export class BasicTab {
      * prefix-char dropdown (":" or ";"), dropdown disabled while the
      * toggle is off. Scope guard per the backlog item: ONE global
      * mode, no per-snippet opt-out.
+     *
+     * B-150: rendered as two `.snipsy-about-row` card rows (same shell
+     * as the Commands/Backup/Defaults sections via `renderRowShell`)
+     * instead of raw `new Setting(container)` items — Obsidian's
+     * `.setting-item` chrome made these two rows look like floating
+     * blocks inside the bordered-card container. The toggle/dropdown
+     * mount into the row's action slot instead of a button.
      */
     private renderExpansionSettings(container: HTMLElement) {
         const current = this.plugin.settings.expansion ?? {};
         const requirePrefix = current.requirePrefix ?? false;
         const prefixChar = current.prefixChar ?? DEFAULT_PREFIX_CHAR;
 
-        let dropdown: DropdownComponent | undefined;
+        // Build both row shells first so DOM order (toggle row, then
+        // dropdown row — the mount tests index into the Expansion
+        // list by position) is independent of the order the
+        // components below are wired up in.
+        const toggleAction = this.renderRowShell(container, {
+            title: "Require a prefix before triggers",
+            description: "With this on, todo stays text; :todo expands.",
+        });
+        const dropdownAction = this.renderRowShell(container, {
+            title: "Prefix character",
+            description:
+                "Which character must come right before a trigger when the toggle above is on.",
+        });
 
-        new Setting(container)
-            .setName("Require a prefix before triggers")
-            .setDesc("With this on, todo stays text; :todo expands.")
-            .addToggle((toggle) => {
-                toggle.setValue(requirePrefix).onChange(async (value: boolean) => {
-                    this.plugin.settings.expansion = {
-                        ...this.plugin.settings.expansion,
-                        requirePrefix: value,
-                    };
-                    await this.plugin.saveSettings();
-                    dropdown?.setDisabled(!value);
-                });
+        const dropdown = new DropdownComponent(dropdownAction)
+            .addOption(":", ":")
+            .addOption(";", ";")
+            .setValue(prefixChar)
+            .setDisabled(!requirePrefix)
+            .onChange(async (value: string) => {
+                this.plugin.settings.expansion = {
+                    ...this.plugin.settings.expansion,
+                    prefixChar: value,
+                };
+                await this.plugin.saveSettings();
             });
 
-        new Setting(container)
-            .setName("Prefix character")
-            .setDesc("Which character must come right before a trigger when the toggle above is on.")
-            .addDropdown((dd) => {
-                dropdown = dd;
-                dd.addOption(":", ":")
-                    .addOption(";", ";")
-                    .setValue(prefixChar)
-                    .setDisabled(!requirePrefix)
-                    .onChange(async (value: string) => {
-                        this.plugin.settings.expansion = {
-                            ...this.plugin.settings.expansion,
-                            prefixChar: value,
-                        };
-                        await this.plugin.saveSettings();
-                    });
-            });
+        new ToggleComponent(toggleAction).setValue(requirePrefix).onChange(
+            async (value: boolean) => {
+                this.plugin.settings.expansion = {
+                    ...this.plugin.settings.expansion,
+                    requirePrefix: value,
+                };
+                await this.plugin.saveSettings();
+                dropdown.setDisabled(!value);
+            },
+        );
+    }
+
+    /**
+     * Shared card-row shell: a `.snipsy-about-row` with title/desc text
+     * on the left and an action slot on the right. `renderRow` fills
+     * the slot with a button; `renderExpansionSettings` mounts a real
+     * `ToggleComponent`/`DropdownComponent` there instead (B-150).
+     */
+    private renderRowShell(
+        parent: HTMLElement,
+        opts: { title: string; description: string },
+    ): HTMLElement {
+        const row = parent.createDiv({ cls: "snipsy-about-row" });
+        const text = row.createDiv({ cls: "snipsy-about-text" });
+        text.createDiv({ cls: "snipsy-about-row-title", text: opts.title });
+        text.createDiv({ cls: "snipsy-about-row-desc", text: opts.description });
+        return row.createDiv({ cls: "snipsy-about-row-action-slot" });
     }
 
     private renderRow(
@@ -177,12 +205,8 @@ export class BasicTab {
             onClick: () => void;
         },
     ) {
-        const row = parent.createDiv({ cls: "snipsy-about-row" });
-        const text = row.createDiv({ cls: "snipsy-about-text" });
-        text.createDiv({ cls: "snipsy-about-row-title", text: opts.title });
-        text.createDiv({ cls: "snipsy-about-row-desc", text: opts.description });
-
-        const btn = row.createEl("button", {
+        const action = this.renderRowShell(parent, opts);
+        const btn = action.createEl("button", {
             cls: "snipsy-about-row-action",
             text: opts.buttonText,
             attr: { type: "button", "aria-label": `${opts.buttonText}: ${opts.title}` },
@@ -190,9 +214,21 @@ export class BasicTab {
         btn.addEventListener("click", opts.onClick);
     }
 
-    private openHotkeyTab(commandId: string) {
+    /**
+     * Opens the Hotkeys tab and, per the established community
+     * pattern, prefills its search box with the command's display
+     * name so the user lands on an already-filtered list instead of
+     * scroll-hunting through every command in the vault. The search
+     * box is undocumented internal API — typed via `HotkeysTabHandle`
+     * in `src/types.ts` and feature-detected in
+     * `applyHotkeySearchQuery` rather than force-cast — so the
+     * scroll-into-view stays as a best-effort fallback regardless of
+     * whether the search prefill worked.
+     */
+    private openHotkeyTab(commandId: string, commandName: string) {
         this.app.setting.open();
-        this.app.setting.openTabById("hotkeys");
+        const tab = this.app.setting.openTabById("hotkeys");
+        this.applyHotkeySearchQuery(tab, commandName);
         activeWindow.setTimeout(() => {
             const hotkeyTab = activeDocument.querySelector(
                 `.setting-item[data-id="${commandId}"]`,
@@ -203,8 +239,39 @@ export class BasicTab {
         }, 100);
     }
 
-    private exportJson() {
+    /** Best-effort: filters the Hotkeys pane via its internal
+     *  (undocumented) search box. Tries `setQuery` first, then the
+     *  raw `searchComponent`; no-ops silently if neither shape is
+     *  present so a future Obsidian internals change never throws —
+     *  the caller's scroll-into-view fallback still runs either way. */
+    private applyHotkeySearchQuery(tab: HotkeysTabHandle | undefined, query: string): void {
+        if (!tab) return;
+        if (typeof tab.setQuery === "function") {
+            tab.setQuery(query);
+            return;
+        }
+        const search = tab.searchComponent;
+        if (search && typeof search.setValue === "function") {
+            search.setValue(query);
+            search.onChanged?.();
+        }
+    }
+
+    /**
+     * B-144: `<a download>` blob-anchor is a silent no-op in iOS
+     * WKWebView (and other mobile WebViews) — no error, no Notice,
+     * nothing happens; the settings UI promises a backup path mobile
+     * users can't actually use. Desktop keeps the anchor-download
+     * path unchanged; mobile writes the export into the vault instead.
+     */
+    private async exportJson() {
         const data = JSON.stringify(this.plugin.settings.snippets, null, 2);
+
+        if (!Platform.isDesktop) {
+            await this.exportJsonToVaultOrClipboard(data);
+            return;
+        }
+
         const blob = new Blob([data], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const a = createEl("a");
@@ -212,6 +279,44 @@ export class BasicTab {
         a.download = "snipsidian-snippets.json";
         a.click();
         URL.revokeObjectURL(url);
+    }
+
+    /** Mobile export path. Tries the plain filename first; a name
+     *  collision (or any other `vault.create` failure) retries once
+     *  with a timestamp appended. If both attempts fail, falls back
+     *  to the system clipboard so the user still gets *something*,
+     *  with an honest Notice either way. */
+    private async exportJsonToVaultOrClipboard(data: string) {
+        const base = "snipsidian-snippets.json";
+        if (await this.tryCreateExportFile(base, data)) return;
+
+        const timestamped = `snipsidian-snippets-${Date.now()}.json`;
+        if (await this.tryCreateExportFile(timestamped, data)) return;
+
+        try {
+            if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+                throw new Error("Clipboard API not available");
+            }
+            await navigator.clipboard.writeText(data);
+            new Notice("Export copied to clipboard");
+        } catch (err) {
+            new Notice(
+                `Export failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+        }
+    }
+
+    /** Returns `true` on success (and fires the success Notice);
+     *  `false` on failure so the caller can retry/fall back. */
+    private async tryCreateExportFile(filename: string, data: string): Promise<boolean> {
+        try {
+            await this.app.vault.create(filename, data);
+            new Notice(`Exported to ${filename} in your vault`);
+            return true;
+        } catch (err) {
+            console.error("[snipsy] failed to export to vault", filename, err);
+            return false;
+        }
     }
 
     private startImport() {

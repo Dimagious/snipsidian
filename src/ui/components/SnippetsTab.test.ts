@@ -633,3 +633,133 @@ describe("SnippetsTab — per-group enable/disable (B-138)", () => {
         expect(plugin.settings.disabledGroups).toEqual(["office"]);
     });
 });
+
+// ---- B-142: bulk delete + bulk move wiring ----
+//
+// `SnippetsTab.ts` is coverage-excluded (vitest.config.ts) — the pure
+// helpers underneath (`bulkMoveKeys`, `safeRenameKey`) are tested in
+// `ui/utils/group-utils.test.ts`, but the wiring from the bulk-bar
+// buttons through the confirm/picker modals to `saveSettings` had no
+// mount test. Precedent for exactly this class of bug: B-118
+// (PackagePreviewModal DOM duplication) shipped and was only caught
+// manually. These tests drive the real selection-mode UI end to end.
+describe("SnippetsTab — bulk delete + bulk move (B-142)", () => {
+    async function flush(): Promise<void> {
+        await Promise.resolve();
+        await Promise.resolve();
+    }
+
+    function enterSelectionMode(): void {
+        const selectBtn = Array.from(root.querySelectorAll(".snipsy-snippet-toolbar button")).find(
+            (b) => b.textContent === "Select",
+        ) as HTMLButtonElement;
+        selectBtn.click();
+    }
+
+    function checkboxFor(triggerName: string): HTMLInputElement {
+        const row = findRow(triggerName);
+        if (!row) throw new Error(`Row "${triggerName}" not found`);
+        const cb = row.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+        if (!cb) throw new Error(`Checkbox for "${triggerName}" not found`);
+        return cb;
+    }
+
+    function selectRows(triggerNames: string[]): void {
+        for (const name of triggerNames) {
+            const cb = checkboxFor(name);
+            cb.checked = true;
+            cb.dispatchEvent(new Event("change"));
+        }
+    }
+
+    function bulkBarButton(text: string): HTMLButtonElement {
+        const btn = Array.from(root.querySelectorAll(".snipsy-bulk-bar button")).find(
+            (b) => b.textContent === text,
+        ) as HTMLButtonElement | undefined;
+        if (!btn) throw new Error(`Bulk bar button "${text}" not found`);
+        return btn;
+    }
+
+    function modalConfirmButton(text: string): HTMLButtonElement {
+        // Scoped to `.modal-button-container` (not all of
+        // `document.body`) — the bulk bar's own "Delete" button has
+        // the same text and lives in `root`, which is also a
+        // `document.body` descendant; an unscoped query would find
+        // that button again instead of the modal's.
+        const btn = Array.from(
+            document.body.querySelectorAll(".modal-button-container button"),
+        ).find((b) => b.textContent === text) as HTMLButtonElement | undefined;
+        if (!btn) throw new Error(`Modal button "${text}" not found`);
+        return btn;
+    }
+
+    it("selecting 2 of 3 snippets then bulk-deleting removes exactly the selected keys and saves", async () => {
+        mount({ a: "1", b: "2", c: "3" });
+        expandGroup("Ungrouped");
+        enterSelectionMode();
+        selectRows(["a", "c"]);
+
+        bulkBarButton("Delete").click();
+        modalConfirmButton("Delete").click();
+        await flush();
+
+        expect(plugin.settings.snippets).toEqual({ b: "2" });
+        expect(plugin._saveCalls.length).toBe(1);
+    });
+
+    it("bulk delete leaves unselected snippets untouched", async () => {
+        mount({ a: "1", b: "2", c: "3" });
+        expandGroup("Ungrouped");
+        enterSelectionMode();
+        selectRows(["b"]);
+
+        bulkBarButton("Delete").click();
+        modalConfirmButton("Delete").click();
+        await flush();
+
+        expect(plugin.settings.snippets.a).toBe("1");
+        expect(plugin.settings.snippets.c).toBe("3");
+        expect(plugin.settings.snippets.b).toBeUndefined();
+    });
+
+    it("cancelling the bulk-delete confirm modal writes nothing", () => {
+        mount({ a: "1", b: "2", c: "3" });
+        expandGroup("Ungrouped");
+        enterSelectionMode();
+        selectRows(["a", "c"]);
+
+        bulkBarButton("Delete").click();
+        modalConfirmButton("Cancel").click();
+
+        expect(plugin.settings.snippets).toEqual({ a: "1", b: "2", c: "3" });
+        expect(plugin._saveCalls.length).toBe(0);
+    });
+
+    it("selecting 2 of 3 snippets then bulk-moving them lands under the target group; the rest stay put", async () => {
+        mount({ a: "1", b: "2", c: "3" });
+        expandGroup("Ungrouped");
+        enterSelectionMode();
+        selectRows(["a", "c"]);
+
+        bulkBarButton("Move to group").click();
+        const select = document.body.querySelector(
+            ".snipsidian-move-form select",
+        ) as HTMLSelectElement;
+        select.value = "__new__";
+        select.dispatchEvent(new Event("change"));
+        const input = document.body.querySelector(
+            ".snipsidian-newgroup-wrap input",
+        ) as HTMLInputElement;
+        input.value = "Archive";
+        modalConfirmButton("Move").click();
+        await flush();
+
+        expect(plugin.settings.snippets["archive/a"]).toBe("1");
+        expect(plugin.settings.snippets["archive/c"]).toBe("3");
+        expect(plugin.settings.snippets.a).toBeUndefined();
+        expect(plugin.settings.snippets.c).toBeUndefined();
+        // Untouched.
+        expect(plugin.settings.snippets.b).toBe("2");
+        expect(plugin._saveCalls.length).toBe(1);
+    });
+});

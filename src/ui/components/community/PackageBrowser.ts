@@ -2,16 +2,16 @@ import { App, Modal, Notice } from "obsidian";
 import type SnipSidianPlugin from "../../../main";
 import { loadAllCommunityPackages } from "../../../services/community-packages";
 import type { CommunityFetchError } from "../../../services/community-cache";
-import { validatePackageForInstall } from "../../../services/package-validator";
 import { ConfirmModal, PackagePreviewModal } from "../Modals";
-import { joinKey, splitKey } from "../../../store/keys";
+import { splitKey } from "../../../store/keys";
+import type { DiffResult } from "../../../store/diff";
 import {
-    buildPackageDiff,
+    countAppliedChanges,
     isPackageInstalled,
     listPackageKeys,
+    planGroupedInstall,
     removePackageSnippets,
 } from "../../../core/install-plan";
-import { hasReplacementCollision } from "../../../store/snippets";
 
 interface PackageItem {
     id?: string;
@@ -141,7 +141,7 @@ export class PackageBrowser {
         this.refreshBtn?.setAttr("aria-busy", "true");
         this.renderSkeleton();
         try {
-            const result = await loadAllCommunityPackages(this.app, this.plugin);
+            const result = await loadAllCommunityPackages(this.plugin);
             const items = [...result.packages];
             items.sort((a, b) => a.label.localeCompare(b.label));
             this.packages = items;
@@ -361,36 +361,34 @@ export class PackageBrowser {
                 return;
             }
 
-            // Re-validate at install time even though the submission flow
-            // ran the same checks — content fetched from GitHub bypasses
-            // that path (it's already-approved content). Catches
-            // attacker-controlled triggers / replacements / size before
-            // they land in settings.
-            const v = validatePackageForInstall(pkg);
-            if (!v.isValid) {
-                const first = v.errors[0] ?? "Package failed install-time validation";
-                const more = v.errors.length > 1 ? ` (and ${v.errors.length - 1} more)` : "";
+            // B-140: validate → cross-group collision gate → diff, all via
+            // the one shared planner both this class and `EspansoSection`
+            // call. Re-validating at install time (even though the
+            // submission flow ran the same checks) matters because
+            // content fetched from GitHub bypasses that path (it's
+            // already-approved content) — catches attacker-controlled
+            // triggers / replacements / size before they land in settings
+            // (S-009).
+            const packageGroup = pkg.label;
+            const plan = planGroupedInstall(pkg.snippets, packageGroup, this.plugin.settings);
+
+            if (!plan.validation.isValid) {
+                const first = plan.validation.errors[0] ?? "Package failed install-time validation";
+                const more =
+                    plan.validation.errors.length > 1
+                        ? ` (and ${plan.validation.errors.length - 1} more)`
+                        : "";
                 new Notice(`Cannot install "${pkg.label}": ${first}${more}`);
-                console.error("[snipsy] install validation failed for", pkg.label, v.errors);
+                console.error(
+                    "[snipsy] install validation failed for",
+                    pkg.label,
+                    plan.validation.errors,
+                );
                 return;
             }
 
-            const packageGroup = pkg.label;
-            const triggerCollisions = Object.entries(pkg.snippets).filter(
-                ([trigger, replacement]) => {
-                    const groupedKey = joinKey(packageGroup, trigger);
-                    if (this.plugin.settings.snippets[groupedKey] !== undefined) return false;
-                    return hasReplacementCollision(
-                        this.plugin.settings,
-                        trigger,
-                        replacement,
-                        groupedKey,
-                    );
-                },
-            );
-
-            if (triggerCollisions.length > 0) {
-                const collisions = triggerCollisions.map(([trigger]) => trigger).join(", ");
+            if (plan.collisions.length > 0) {
+                const collisions = plan.collisions.join(", ");
                 new Notice(
                     `Skipped install: trigger name collision with existing snippets (${collisions})`,
                 );
@@ -399,14 +397,9 @@ export class PackageBrowser {
 
             // Always preview (HANDOFF §2d) — even with zero conflicts the
             // user should see the diff before the install happens.
-            const diff = buildPackageDiff(
-                pkg.snippets,
-                packageGroup,
-                this.plugin.settings.snippets,
-            );
-            const modal = new PackagePreviewModal(this.app, this.plugin, pkg.label, diff);
+            const modal = new PackagePreviewModal(this.app, this.plugin, pkg.label, plan.diff);
             modal.onConfirm = async (resolved) => {
-                await this.applyResolvedInstallation(pkg, resolved);
+                await this.applyResolvedInstallation(pkg, plan.diff, resolved);
             };
             modal.open();
         } catch (error) {
@@ -418,13 +411,22 @@ export class PackageBrowser {
 
     private async applyResolvedInstallation(
         pkg: PackageItem,
+        diff: DiffResult,
         resolved: Record<string, string>,
     ) {
         try {
             this.plugin.settings.snippets = resolved;
             await this.plugin.saveSettings();
-            const installedCount = Object.keys(pkg.snippets || {}).length;
-            new Notice(`Installed ${pkg.label} (${installedCount} snippets)`);
+            // Fold-in (ux#7): report what actually changed given the
+            // user's per-conflict choices, not the full pack size — a
+            // "Reinstall, keep everything" run used to claim
+            // "Installed N snippets" when nothing changed.
+            const changedCount = countAppliedChanges(diff, resolved);
+            new Notice(
+                changedCount === 0
+                    ? `No changes — "${pkg.label}" already matches your library`
+                    : `Installed ${pkg.label} (${changedCount} snippet${changedCount === 1 ? "" : "s"})`,
+            );
             this.renderList();
         } catch (error) {
             new Notice(
