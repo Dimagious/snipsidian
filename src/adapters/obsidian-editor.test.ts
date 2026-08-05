@@ -110,6 +110,38 @@ describe("adapters/obsidian-editor: tryExpandAtSeparator", () => {
         expect(ed.getLine(0)).toBe("before `fn ` after"); // unchanged
     });
 
+    // B-148: on the Obsidian/CM6 versions this now actually runs
+    // against (e2e infra was dead — B-146 — until this test round),
+    // pressing Enter right after a trigger reports the cursor at
+    // column 0 of the brand-new line, not at the end of the line the
+    // trigger lived on. `if (cursor.ch === 0) return;` alone used to
+    // silently no-op every Enter-terminated trigger.
+    it("[B-148] expands when Enter is the separator, reported as cursor at column 0 of a new line", async () => {
+        const ed = new MockEditor("fn\n");
+        ed.setCursor({ line: 1, ch: 0 }); // as Enter now reports it
+        await tryExpandAtSeparator(ed as any, dict, { now: new Date() });
+        expect(ed.getLine(0)).toBe("function () {}");
+        // The blank line Enter created is untouched.
+        expect(ed.getLine(1)).toBe("");
+        // B-147: the user's cursor (where Enter put it) is left alone
+        // — not yanked back onto the line above.
+        expect(ed.getCursor()).toEqual({ line: 1, ch: 0 });
+    });
+
+    it("[B-148] does nothing when the previous line does not end with a registered trigger", async () => {
+        const ed = new MockEditor("hello world\n");
+        ed.setCursor({ line: 1, ch: 0 });
+        await tryExpandAtSeparator(ed as any, dict, { now: new Date() });
+        expect(ed.getLine(0)).toBe("hello world");
+    });
+
+    it("[B-148] does nothing at column 0 of the very first line (nothing precedes it)", async () => {
+        const ed = new MockEditor("fn");
+        ed.setCursor({ line: 0, ch: 0 });
+        await tryExpandAtSeparator(ed as any, dict, { now: new Date() });
+        expect(ed.getLine(0)).toBe("fn");
+    });
+
     // B-136: `expand()` awaits `readClipboard()` for real when the
     // matched replacement contains `$clipboard`. If the user keeps
     // typing / presses Enter / moves the cursor during that await,
@@ -118,7 +150,15 @@ describe("adapters/obsidian-editor: tryExpandAtSeparator", () => {
     // cursor ended up on — not the line the trigger was actually
     // typed on. This pins the fix: the target line is captured
     // BEFORE the await and the edit always lands there.
-    it("[B-136] applies an async $clipboard expansion to the original trigger line, not wherever the cursor moved to", async () => {
+    //
+    // B-147: the pre-fix code ALSO unconditionally repositioned the
+    // cursor per `plan.newCursor` after the edit — even though the
+    // user had since moved to a completely different line. That
+    // teleported their cursor back onto the (now off-screen) trigger
+    // line mid-edit-elsewhere. This test pins both halves: the text
+    // edit lands on the original line, and the user's cursor is left
+    // exactly where they put it.
+    it("[B-136/B-147] applies an async $clipboard expansion to the original trigger line, and does not teleport the cursor away from wherever the user moved it", async () => {
         const ed = new MockEditor("clip ");
         ed.setCursor({ line: 0, ch: 5 }); // cursor right after the separator
 
@@ -142,7 +182,8 @@ describe("adapters/obsidian-editor: tryExpandAtSeparator", () => {
         // now has a second line and the cursor has moved off the
         // trigger's line entirely.
         ed.lines.push("second line");
-        ed.setCursor({ line: 1, ch: "second line".length });
+        const userCursorPosition = { line: 1, ch: "second line".length };
+        ed.setCursor(userCursorPosition);
 
         resolveClipboard("PASTED");
         await expandPromise;
@@ -152,6 +193,9 @@ describe("adapters/obsidian-editor: tryExpandAtSeparator", () => {
         // Line 1, where the cursor moved to during the await, is
         // untouched — no text surgery on the wrong line.
         expect(ed.getLine(1)).toBe("second line");
+        // B-147: the cursor was NOT yanked back to the trigger line —
+        // it's exactly where the user put it.
+        expect(ed.getCursor()).toEqual(userCursorPosition);
     });
 
     // B-136 staleness guard: if the trigger text itself changed

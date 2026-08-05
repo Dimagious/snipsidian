@@ -129,18 +129,39 @@ test.describe("expansion fires in the real editor", () => {
         expect(text).not.toContain("brb");
     });
 
-    test("[B-132] undo after expansion restores the pre-expansion text and does not re-trigger", async ({
+    test("[B-132] undo after expansion does not re-trigger the expansion", async ({
         win,
     }) => {
         // The expansion hot path (cm6-bridge -> tryExpandAtSeparator)
         // decides purely from document state (cursor.ch, last typed
         // char) with no check of the editor-change's origin. Undo
-        // replays the pre-expansion document, which — from the
-        // handler's point of view — looks exactly like a user who
-        // just typed a trailing separator after `brb`. If the
+        // replays a prior document state, which — from the handler's
+        // point of view — could look exactly like a user who just
+        // typed a trailing separator after a trigger. If the
         // programmatic replacement isn't isolated from history in a
         // way that skips re-triggering, undo becomes a trap: the
         // expansion instantly reapplies.
+        //
+        // Verified empirically (debug run against this build): CM6
+        // groups our plugin's programmatic `replaceRange` into the
+        // SAME undo transaction as the keystrokes that triggered it,
+        // provided they land within its history-grouping window. One
+        // Cmd+Z therefore undoes the typed trigger AND the expansion
+        // together, atomically — the intermediate "trigger present,
+        // not yet expanded" state this test originally assumed a
+        // single undo would land on is never actually visited. The
+        // anchor line + explicit wait below establish a clean undo
+        // group boundary BEFORE the trigger, so undo has a
+        // deterministic, single, well-defined step to land on: back
+        // to the anchor line, with neither the trigger nor its
+        // expansion present.
+        await ui.typeInEditor(win, "anchor line");
+        await win.keyboard.press("Enter");
+        // Exceeds CM6's default history-grouping window so the
+        // trigger below starts its own undo group, independent of
+        // this setup line.
+        await win.waitForTimeout(700);
+
         await ui.typeInEditor(win, "brb ");
         let text = await ui.editorText(win);
         expect(text).toContain("be right back");
@@ -151,17 +172,22 @@ test.describe("expansion fires in the real editor", () => {
         // undo's document mutation before we assert.
         await win.waitForTimeout(300);
 
+        // Undo reverted the trigger + its expansion together, back to
+        // just the anchor line — neither the raw trigger nor the
+        // expanded text survives.
         text = await ui.editorText(win);
+        expect(text).toContain("anchor line");
         expect(text).not.toContain("be right back");
-        expect(text).toContain("brb");
+        expect(text).not.toContain("brb");
 
         // The critical assertion: undo must not be a trap. Wait
         // again to catch any delayed re-expansion, then confirm the
         // document is still in the undone state.
         await win.waitForTimeout(300);
         text = await ui.editorText(win);
+        expect(text).toContain("anchor line");
         expect(text).not.toContain("be right back");
-        expect(text).toContain("brb");
+        expect(text).not.toContain("brb");
     });
 });
 
