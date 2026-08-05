@@ -400,11 +400,33 @@ export class ConfirmModal extends Modal {
     }
 }
 
-/** Add new snippet modal */
-export class AddSnippetModal extends Modal {
-    onConfirm?: (snippet: { trigger: string; replacement: string; group: string }) => void | Promise<void>;
+/** Result of a snippet-write callback invoked from a modal: `ok: true`
+ *  on a successful write, or `ok: false` with a user-readable reason
+ *  the modal should display without closing. A `void` return (or a
+ *  promise resolving to `void`) is treated as success for backward
+ *  compatibility with callers that don't need to report failure. */
+export type SnippetOpResult = { ok: true } | { ok: false; error: string };
 
-    constructor(app: App, onConfirm?: (snippet: { trigger: string; replacement: string; group: string }) => void | Promise<void>) {
+/** Add new snippet modal.
+ *
+ * B-133: the modal used to call `onConfirm` and unconditionally
+ * close — real validation (bad trigger chars, duplicate/cross-group
+ * collision) happens downstream in `planAddSnippet`, so any failure
+ * there closed the modal anyway and discarded everything the user
+ * typed. `onConfirm` now reports success/failure via `SnippetOpResult`
+ * and the modal only closes on success, mirroring the inline-edit
+ * flow (`SnippetsTab.saveEdit`) which already stays open on failure. */
+export class AddSnippetModal extends Modal {
+    onConfirm?: (
+        snippet: { trigger: string; replacement: string; group: string }
+    ) => void | SnippetOpResult | Promise<void | SnippetOpResult>;
+
+    constructor(
+        app: App,
+        onConfirm?: (
+            snippet: { trigger: string; replacement: string; group: string }
+        ) => void | SnippetOpResult | Promise<void | SnippetOpResult>
+    ) {
         super(app);
         this.onConfirm = onConfirm;
     }
@@ -462,7 +484,14 @@ export class AddSnippetModal extends Modal {
                     });
             });
 
-        const err = contentEl.createDiv({ cls: "snipsidian-error" });
+        // B-088: aria-live="polite" so AT users hear validation errors
+        // (including the B-133 planAddSnippet failure path below) as
+        // they appear, without losing input focus — same pattern as
+        // TextPromptModal's error div.
+        const err = contentEl.createDiv({
+            cls: "snipsidian-error",
+            attr: { "aria-live": "polite" },
+        });
         err.hide();
 
         const footer = contentEl.createDiv({ cls: "modal-button-container" });
@@ -491,13 +520,31 @@ export class AddSnippetModal extends Modal {
                 return;
             }
 
-            const result = this.onConfirm?.({ trigger: trimmedTrigger, replacement, group: trimmedGroup });
-            if (result instanceof Promise) {
-                void result.catch((error) => {
+            const outcome = this.onConfirm?.({ trigger: trimmedTrigger, replacement, group: trimmedGroup });
+            void Promise.resolve(outcome)
+                .then((result) => {
+                    if (result && result.ok === false) {
+                        err.empty();
+                        err.createSpan({ text: result.error });
+                        err.show();
+                        return;
+                    }
+                    // `undefined`/`void` (no result reported) or
+                    // `{ ok: true }`: treat as success.
+                    this.close();
+                })
+                .catch((error) => {
+                    // CLAUDE.md §4: never swallow errors. A rejected
+                    // onConfirm (e.g. plugin.saveSettings() failing)
+                    // used to leave the modal open with zero user
+                    // feedback — log AND surface it inline, same as
+                    // every other failure path in this handler.
                     console.error("Error in onConfirm callback:", error);
+                    const message = error instanceof Error ? error.message : String(error);
+                    err.empty();
+                    err.createSpan({ text: `Could not save snippet: ${message}` });
+                    err.show();
                 });
-            }
-            this.close();
         };
 
         const cancel = footer.createEl("button", { text: "Cancel" });

@@ -329,3 +329,120 @@ describe("SnippetsTab — group header click target (B-124)", () => {
         expect(root.querySelectorAll(".snippet-row").length).toBe(2);
     });
 });
+
+// B-133 regression: `AddSnippetModal`'s Add handler used to call
+// `onConfirm` then unconditionally `this.close()` — real validation
+// (`planAddSnippet`) runs downstream in `showAddSnippetModal`, so any
+// failure there closed the modal anyway and discarded everything the
+// user typed. `onConfirm` now reports success/failure via
+// `SnippetOpResult`; the modal only closes on `{ ok: true }`.
+describe("SnippetsTab — Add-snippet modal stays open on failure (B-133)", () => {
+    function openAddModal(): void {
+        const addBtn = Array.from(
+            root.querySelectorAll("button.snippet-action"),
+        ).find((b) => b.textContent === "Add snippet") as HTMLButtonElement;
+        addBtn.click();
+    }
+
+    function modalField(placeholder: string): HTMLInputElement | HTMLTextAreaElement {
+        return document.body.querySelector(
+            `input[placeholder="${placeholder}"], textarea[placeholder="${placeholder}"]`,
+        ) as HTMLInputElement | HTMLTextAreaElement;
+    }
+
+    function modalSubmitButton(): HTMLButtonElement {
+        return Array.from(
+            document.body.querySelectorAll(".modal-content button"),
+        ).find((b) => b.textContent === "Add snippet") as HTMLButtonElement;
+    }
+
+    function fillAndSubmit(trigger: string, replacement: string, group = ""): void {
+        const triggerInput = modalField("Example: :hello") as HTMLInputElement;
+        triggerInput.value = trigger;
+        triggerInput.dispatchEvent(new Event("input"));
+        const replacementInput = modalField("Example: hello, world!") as HTMLTextAreaElement;
+        replacementInput.value = replacement;
+        replacementInput.dispatchEvent(new Event("input"));
+        if (group) {
+            const groupInput = modalField("Example: greetings") as HTMLInputElement;
+            groupInput.value = group;
+            groupInput.dispatchEvent(new Event("input"));
+        }
+        modalSubmitButton().click();
+    }
+
+    // The `onConfirm` callback in `showAddSnippetModal` is async
+    // (`await this.plugin.saveSettings()`), and the modal itself
+    // resolves the outcome through a promise chain — flush the
+    // microtask queue before asserting.
+    async function flush(): Promise<void> {
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+    }
+
+    it("invalid trigger keeps the modal open, shows the error, writes nothing", async () => {
+        mount({});
+        openAddModal();
+        expect(document.body.querySelector(".modal-content")).not.toBeNull();
+
+        fillAndSubmit("e-mail", "test@example.com");
+        await flush();
+
+        // Modal still attached — did NOT close.
+        expect(document.body.querySelector(".modal-content")).not.toBeNull();
+        const err = document.body.querySelector(".snipsidian-error");
+        expect(err?.textContent).toContain("Invalid trigger");
+        expect(Object.keys(plugin.settings.snippets).length).toBe(0);
+        // B-088: the error div is aria-live="polite" so AT users hear
+        // the validation failure without losing input focus.
+        expect(err?.getAttribute("aria-live")).toBe("polite");
+    });
+
+    it("duplicate/cross-group trigger collision keeps the modal open and shows the error", async () => {
+        mount({ "work/brb": "be right back" });
+        openAddModal();
+
+        fillAndSubmit("brb", "something else", "personal");
+        await flush();
+
+        expect(document.body.querySelector(".modal-content")).not.toBeNull();
+        const err = document.body.querySelector(".snipsidian-error");
+        expect(err?.textContent).toContain("already exists");
+        expect(plugin.settings.snippets["personal/brb"]).toBeUndefined();
+    });
+
+    it("valid input closes the modal, writes the snippet, and saves", async () => {
+        mount({});
+        openAddModal();
+
+        fillAndSubmit("brb", "be right back");
+        await flush();
+
+        // Modal closed — removed from the DOM.
+        expect(document.body.querySelector(".modal-content")).toBeNull();
+        expect(plugin.settings.snippets["brb"]).toBe("be right back");
+    });
+
+    // Checker finding (2026-08-05 review): a rejected `onConfirm`
+    // (e.g. `plugin.saveSettings()` failing) used to be swallowed —
+    // `console.error` only, modal left open with zero user-visible
+    // feedback. CLAUDE.md §4: never swallow errors.
+    it("a rejected save shows an inline error instead of failing silently, and keeps the modal open", async () => {
+        mount({});
+        plugin.saveSettings = async () => {
+            throw new Error("disk full");
+        };
+        openAddModal();
+
+        fillAndSubmit("brb", "be right back");
+        await flush();
+
+        // Did NOT close on a failed save.
+        expect(document.body.querySelector(".modal-content")).not.toBeNull();
+        const err = document.body.querySelector(".snipsidian-error");
+        expect(err?.textContent).toContain("Could not save snippet");
+        expect(err?.textContent).toContain("disk full");
+        expect(err?.getAttribute("aria-live")).toBe("polite");
+    });
+});

@@ -175,11 +175,14 @@ test.describe("delete flows: ConfirmModal surface", () => {
             .getByRole("button", { name: `Delete group ${groupTitle}` })
             .click();
 
-        // Confirm modal mentions the snippet count.
+        // Confirm modal's body previews the snippet count + the
+        // first 5 trigger names. Copy last changed in B-053 (1.1.7);
+        // `.snipsidian-confirm-modal` is the content element — the
+        // title lives in a sibling `titleEl`, not checked here.
         const confirmModal = win.locator(".snipsidian-confirm-modal");
         await expect(confirmModal).toBeVisible();
         await expect(confirmModal).toContainText(
-            `Delete group "${groupTitle}" with 2 snippet(s)?`,
+            `Delete 2 snippets from "${groupTitle}": alpha, beta.`,
         );
 
         await confirmModal

@@ -25,6 +25,34 @@ interface PackageItem {
 }
 
 /**
+ * Decides whether a `keydown` bubbling up to a package row should
+ * open the package-details modal (B-135).
+ *
+ * The row itself is `role="button"` + `tabindex="0"` so Enter/Space
+ * open details when the row is focused directly. But keydown always
+ * bubbles regardless of the inner Install/Uninstall buttons' click
+ * handlers `stopPropagation()`-ing — those only stop the `click`
+ * event, not `keydown`. Without this guard, a keyboard user tabbed
+ * onto the Install button and pressing Enter would have the row's
+ * listener `preventDefault()` the event, cancelling the browser's
+ * native "activate the focused button" default action before the
+ * button's own click handler ever runs — the install silently never
+ * fires and the details modal opens instead.
+ *
+ * Pure so the hijack case (event target is a descendant, e.g. the
+ * Install button) and the row case (event target is the row itself)
+ * can be unit-tested without mounting the full component.
+ */
+export function shouldOpenPackageDetailsOnKeydown(
+    key: string,
+    eventTarget: EventTarget | null,
+    row: EventTarget,
+): boolean {
+    if (eventTarget !== row) return false;
+    return key === "Enter" || key === " ";
+}
+
+/**
  * Community package browser. Per the 1.1.0 redesign (HANDOFF §2d):
  * - List-of-rows layout (table replaced — tables waste columns at the
  *   600px settings width and force long descriptions to clip).
@@ -320,10 +348,9 @@ export class PackageBrowser {
         const openDetails = () => this.showPackageDetails(pkg);
         row.addEventListener("click", openDetails);
         row.addEventListener("keydown", (e) => {
-            if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                openDetails();
-            }
+            if (!shouldOpenPackageDetailsOnKeydown(e.key, e.target, row)) return;
+            e.preventDefault();
+            openDetails();
         });
     }
 

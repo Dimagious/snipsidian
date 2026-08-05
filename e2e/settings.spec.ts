@@ -204,7 +204,7 @@ test.describe("settings: Add snippet validation (B-107)", () => {
         expect(after["e2e-badgroup"]).toBeUndefined();
     });
 
-    test("rejects a duplicate trigger via Notice (no overwrite)", async ({
+    test("rejects a duplicate trigger via an in-modal error, modal stays open (no overwrite)", async ({
         win,
     }) => {
         await openAddSnippetModal(win);
@@ -221,10 +221,13 @@ test.describe("settings: Add snippet validation (B-107)", () => {
 
         await win.getByRole("button", { name: "Add snippet" }).nth(1).click();
 
-        // Notice mentions the duplicate.
-        await expect(
-            win.locator(".notice", { hasText: "already exists" }),
-        ).toBeVisible({ timeout: 5_000 });
+        // B-133: `planAddSnippet` failures (this collision included)
+        // now render inline and keep the modal open, instead of
+        // firing a `Notice` and closing — closing on failure used to
+        // discard everything the user had typed.
+        const err = win.locator(".snipsidian-modal .snipsidian-error");
+        await expect(err).toBeVisible();
+        await expect(err).toContainText("already exists");
 
         // Original replacement preserved.
         const after = await readSnippets(win);
