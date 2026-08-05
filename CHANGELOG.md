@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-08-05
+
 The "writing-safety" batch: the only organic user signal this project has received (issues [#55](https://github.com/Dimagious/snipsidian/issues/55)/[#56](https://github.com/Dimagious/snipsidian/issues/56)) is "Snipsy fires when I didn't mean it to." This release attacks that from three angles — an opt-in prefix mode, per-group muting, and honest Espanso-import reporting — plus closes the change-source gap the 1.2.1 audit flagged on the expansion hot path.
 
 ### Added
