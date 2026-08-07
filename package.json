@@ -20,13 +20,14 @@
         "lint:fix": "eslint . --fix",
         "tree": "tree -L 3 -I 'node_modules|coverage'",
         "e2e:setup": "./scripts/e2e-setup.sh",
-        "e2e": "./scripts/e2e-setup.sh && env -u ELECTRON_RUN_AS_NODE playwright test --grep-invert='interactive recording|Snipsy README demo'",
-        "e2e:headed": "./scripts/e2e-setup.sh && env -u ELECTRON_RUN_AS_NODE playwright test --headed --grep-invert='interactive recording|Snipsy README demo'",
+        "e2e": "./scripts/e2e-setup.sh && env -u ELECTRON_RUN_AS_NODE playwright test --grep-invert='interactive recording|Snipsy README demo|Snipsy article clips'",
+        "e2e:headed": "./scripts/e2e-setup.sh && env -u ELECTRON_RUN_AS_NODE playwright test --headed --grep-invert='interactive recording|Snipsy README demo|Snipsy article clips'",
         "e2e:ui": "./scripts/e2e-setup.sh && env -u ELECTRON_RUN_AS_NODE playwright test --ui",
         "e2e:record": "./scripts/e2e-setup.sh && env -u ELECTRON_RUN_AS_NODE PWDEBUG=1 E2E_RECORD=1 playwright test e2e/record.spec.ts --headed --timeout=0",
         "demo:rehearse": "./scripts/e2e-setup.sh && env -u ELECTRON_RUN_AS_NODE DEMO_REHEARSE=1 playwright test e2e/demo/demo.spec.ts --headed --reporter=list --workers=1",
         "demo:record": "./scripts/record-demo.sh",
-        "demo:record:_inner": "./scripts/e2e-setup.sh && env -u ELECTRON_RUN_AS_NODE playwright test e2e/demo/demo.spec.ts --headed --reporter=list --workers=1"
+        "demo:record:_inner": "./scripts/e2e-setup.sh && env -u ELECTRON_RUN_AS_NODE playwright test e2e/demo/demo.spec.ts --headed --reporter=list --workers=1",
+        "article-clips:record": "./scripts/record-article-clips.sh"
     },
     "dependencies": {
         "yaml": "^2.9.0"

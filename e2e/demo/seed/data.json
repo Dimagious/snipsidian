@@ -1,0 +1,9 @@
+{
+    "snippets": {
+        "todo": "- [ ] $|",
+        "done": "- [x] $|",
+        "callout": "> [!note]\n> $|",
+        "today": "$date",
+        "bold": "**$|**"
+    }
+}
