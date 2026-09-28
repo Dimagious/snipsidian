@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **GitHub Pages website** (B-156), deployed on release tags via `.github/workflows/pages.yml`: `site/index.html` (single-file site) plus `robots.txt`, `sitemap.xml` and `llms.txt`. `scripts/site-check.cjs` gates broken images, dead anchors, stray `.claude` paths, typographic dashes and third-party requests, and now also runs in CI (`npm run site:check`); `scripts/assemble-site.cjs` copies `site/` to `_site/` and fills in `{{version}}`/`{{minAppVersion}}` from `manifest.json` at deploy time.
+- **README rewrite**, leading with what Snipsy does, install steps, and a link to the new website.
+
 ## [1.3.2] - 2026-08-05
 
 ### Fixed

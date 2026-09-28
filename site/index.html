@@ -1,0 +1,1446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snipsy</title>
+<meta name="description" content="Snipsy is an Obsidian plugin: type todo and a space, get a checkbox. Hotstrings for Obsidian, markdown-aware, no scripting.">
+<link rel="canonical" href="https://dimagious.github.io/snipsidian/">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='7' fill='%230b8466'/%3E%3Crect x='7' y='8' width='8' height='3' rx='1.5' fill='%23fff' fill-opacity='.6'/%3E%3Cpath d='M18.5 7l3 2.5-3 2.5' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3Crect x='7' y='15' width='18' height='3' rx='1.5' fill='%23fff'/%3E%3Crect x='7' y='21' width='10' height='3' rx='1.5' fill='%23fff'/%3E%3Crect x='19.5' y='19.5' width='2' height='6' rx='1' fill='%23fff'/%3E%3C/svg%3E">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Snipsy">
+<meta property="og:url" content="https://dimagious.github.io/snipsidian/">
+<meta property="og:title" content="Snipsy: hotstrings for Obsidian">
+<meta property="og:description" content="Type todo and a space, get a checkbox. Markdown-aware, no scripting.">
+<meta property="og:image" content="https://dimagious.github.io/snipsidian/img/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="Snipsy: typing note and a space turns into a Note callout. Type a trigger and a space. Get the text.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://dimagious.github.io/snipsidian/img/social-preview.png">
+<meta name="twitter:image:alt" content="Snipsy: typing note and a space turns into a Note callout. Type a trigger and a space. Get the text.">
+<meta name="twitter:title" content="Snipsy: hotstrings for Obsidian">
+<meta name="twitter:description" content="Type todo and a space, get a checkbox. Markdown-aware, no scripting.">
+<style>
+/* ---------- self-hosted fonts: Inter and JetBrains Mono, latin, woff2 only ---------- */
+/* From @fontsource/inter and @fontsource/jetbrains-mono (SIL Open Font License 1.1,
+   full text in assets/fonts/OFL.txt). No request leaves this page to load them. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url(assets/fonts/inter-latin-400-normal.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url(assets/fonts/inter-latin-500-normal.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url(assets/fonts/inter-latin-600-normal.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url(assets/fonts/inter-latin-700-normal.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url(assets/fonts/jetbrains-mono-latin-400-normal.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url(assets/fonts/jetbrains-mono-latin-500-normal.woff2) format('woff2');
+}
+
+/* ---------- tokens: Obsidian's default theme, light first ---------- */
+/* Accent: teal-green. Light #0b8466 carries white labels at 4.7:1; accent text #0a7a5f is 5.3:1 on white.
+   Dark #2fc49a carries a near-black label; accent text #5fd6b2 is 9.3:1 on #1e1e1e. */
+:root {
+  --accent: #0b8466;
+  --accent-hover: #097058;
+  --accent-soft: rgba(11, 132, 102, 0.11);
+  --accent-text: #0a7a5f;
+  --on-accent: #ffffff;
+  --bg: #ffffff;
+  --bg-2: #f6f6f6;
+  --bg-3: #ececec;
+  --bg-code: #f5f5f5;
+  --border: #e3e3e3;
+  --border-strong: #d0d0d0;
+  --text: #222222;
+  --muted: #5c5c5c;
+  --faint: #8e8e8e;
+  --hover: rgba(0, 0, 0, 0.05);
+  --active: rgba(0, 0, 0, 0.08);
+  --shadow: 0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.08);
+  --tok-key: #b3417a;
+  --tok-str: #2f7d4f;
+  --tok-num: #b06a00;
+  --tok-punc: #8e8e8e;
+  --tok-fence: #8e8e8e;
+  --callout-note: 8, 109, 221;
+  --callout-tip: 0, 150, 136;
+  --callout-warn: 205, 110, 0;
+  --callout-quote: 120, 120, 120;
+  --callout-accent: 11, 132, 102;
+  --flash: rgba(11, 132, 102, 0.22);
+  --scrim: rgba(20, 20, 20, 0.35);
+  --star: #d99a00;
+  --coffee-bg: #ffdd00;
+  --coffee-text: #1f1a00;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --accent: #2fc49a;
+    --accent-hover: #45d0a8;
+    --accent-soft: rgba(47, 196, 154, 0.14);
+    --accent-text: #5fd6b2;
+    --on-accent: #06231b;
+    --bg: #1e1e1e;
+    --bg-2: #262626;
+    --bg-3: #2e2e2e;
+    --bg-code: #242424;
+    --border: #363636;
+    --border-strong: #454545;
+    --text: #dadada;
+    --muted: #a8a8a8;
+    --faint: #707070;
+    --hover: rgba(255, 255, 255, 0.05);
+    --active: rgba(255, 255, 255, 0.09);
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    --tok-key: #e38bb6;
+    --tok-str: #8fd19e;
+    --tok-num: #e8b465;
+    --tok-punc: #7a7a7a;
+    --tok-fence: #7a7a7a;
+    --callout-note: 2, 122, 255;
+    --callout-tip: 83, 223, 221;
+    --callout-warn: 233, 151, 63;
+    --callout-quote: 158, 158, 158;
+    --callout-accent: 95, 214, 178;
+    --flash: rgba(47, 196, 154, 0.26);
+    --scrim: rgba(0, 0, 0, 0.55);
+    --star: #f2c14e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --accent: #2fc49a;
+  --accent-hover: #45d0a8;
+  --accent-soft: rgba(47, 196, 154, 0.14);
+  --accent-text: #5fd6b2;
+  --on-accent: #06231b;
+  --bg: #1e1e1e;
+  --bg-2: #262626;
+  --bg-3: #2e2e2e;
+  --bg-code: #242424;
+  --border: #363636;
+  --border-strong: #454545;
+  --text: #dadada;
+  --muted: #a8a8a8;
+  --faint: #707070;
+  --hover: rgba(255, 255, 255, 0.05);
+  --active: rgba(255, 255, 255, 0.09);
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  --tok-key: #e38bb6;
+  --tok-str: #8fd19e;
+  --tok-num: #e8b465;
+  --tok-punc: #7a7a7a;
+  --tok-fence: #7a7a7a;
+  --callout-note: 2, 122, 255;
+  --callout-tip: 83, 223, 221;
+  --callout-warn: 233, 151, 63;
+  --callout-quote: 158, 158, 158;
+  --callout-accent: 95, 214, 178;
+  --flash: rgba(47, 196, 154, 0.26);
+  --scrim: rgba(0, 0, 0, 0.55);
+  --star: #f2c14e;
+  color-scheme: dark;
+}
+
+/* ---------- base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 56px; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.6 Inter, -apple-system, "Segoe UI", system-ui, sans-serif;
+  overflow-x: hidden;
+}
+a { color: var(--accent-text); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { color: var(--accent-hover); }
+code, pre, kbd { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; font-variant-ligatures: none; font-feature-settings: "calt" 0, "liga" 0; }
+:not(pre) > code {
+  font-size: .86em; background: var(--bg-code); border: 1px solid var(--border);
+  padding: .08em .35em; border-radius: 4px; color: var(--tok-key); white-space: nowrap;
+}
+kbd {
+  font-size: .78em; padding: .1em .45em; border-radius: 4px; border: 1px solid var(--border-strong);
+  border-bottom-width: 2px; background: var(--bg-2); color: var(--muted);
+}
+img { max-width: 100%; display: block; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- app shell: ribbon + file explorer + note pane ---------- */
+.app { display: grid; grid-template-columns: 44px 264px minmax(0, 1fr); min-height: 100vh; }
+.ribbon {
+  position: sticky; top: 0; height: 100vh; background: var(--bg-2);
+  border-right: 1px solid var(--border); display: flex; flex-direction: column;
+  align-items: center; gap: 4px; padding: 10px 0;
+}
+.icon-btn {
+  width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 6px;
+  background: transparent; color: var(--muted); cursor: pointer; text-decoration: none;
+}
+.icon-btn:hover { background: var(--hover); color: var(--text); }
+.icon-btn svg { width: 18px; height: 18px; }
+.ribbon .spacer { flex: 1; }
+
+.explorer {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto; background: var(--bg-2);
+  border-right: 1px solid var(--border); padding: 12px 8px 24px; font-size: 14px;
+}
+.vault-head { display: flex; align-items: center; gap: 10px; padding: 4px 8px 14px; }
+.vault-head .brand { display: flex; align-items: center; gap: 9px; text-decoration: none; color: var(--text); }
+.wordmark { font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
+.wordmark .id { font: 500 11px "JetBrains Mono", monospace; color: var(--faint); margin-left: 6px; letter-spacing: 0; }
+.search-btn {
+  display: flex; align-items: center; gap: 8px; width: 100%; margin: 0 0 12px; padding: 6px 10px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--faint);
+  cursor: pointer; font-size: 13px; text-align: left;
+}
+.search-btn:hover { border-color: var(--border-strong); }
+.search-btn kbd { margin-left: auto; }
+.tree-label { font-size: 11px; font-weight: 600; color: var(--faint); padding: 6px 8px; letter-spacing: .02em; }
+.tree, .tree ul { list-style: none; margin: 0; padding: 0; }
+.tree ul { margin-left: 13px; padding-left: 8px; border-left: 1px solid var(--border); }
+.tree a, .tree .folder {
+  display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 5px;
+  color: var(--muted); text-decoration: none; line-height: 1.5; cursor: pointer; user-select: none;
+}
+.tree a svg { flex: none; }
+.tree a:hover, .tree .folder:hover { background: var(--hover); color: var(--text); }
+.tree a.active { background: var(--active); color: var(--text); font-weight: 500; }
+.tree .folder { font-weight: 500; color: var(--text); }
+.tree .folder svg { width: 12px; height: 12px; transition: transform .15s; color: var(--faint); }
+.tree li.closed > .folder svg { transform: rotate(-90deg); }
+.tree li.closed > ul { display: none; }
+.tree .ext { color: var(--faint); font-size: 12px; }
+.explorer-foot { margin-top: 18px; padding: 12px 8px 0; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--faint); }
+.explorer-foot a { color: var(--muted); }
+
+.pane { min-width: 0; display: flex; flex-direction: column; }
+.tabbar {
+  position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 6px; height: 44px;
+  padding: 0 10px; background: var(--bg-2); border-bottom: 1px solid var(--border);
+}
+.tab {
+  display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; margin-top: 12px;
+  background: var(--bg); border: 1px solid var(--border); border-bottom: 0; border-radius: 8px 8px 0 0;
+  font-size: 13px; max-width: 280px; min-width: 0;
+}
+.tab span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab svg { width: 14px; height: 14px; color: var(--faint); flex: none; }
+.tabbar .grow { flex: 1; }
+.menu-btn { display: none; }
+.view-header {
+  display: flex; align-items: center; justify-content: center; gap: 6px; height: 38px;
+  font-size: 13px; color: var(--faint); border-bottom: 1px solid transparent; padding: 0 16px;
+  overflow: hidden; white-space: nowrap;
+}
+.view-header b { color: var(--muted); font-weight: 500; }
+
+.note { width: 100%; max-width: 860px; margin: 0 auto; padding: 18px 40px 120px; }
+.note.wide { max-width: 1120px; }
+section.file { padding-top: 34px; }
+section.file + section.file { border-top: 1px solid var(--border); margin-top: 46px; }
+.crumb { font-size: 12.5px; color: var(--faint); font-family: "JetBrains Mono", monospace; margin-bottom: 4px; }
+h1, h2, h3 { line-height: 1.25; letter-spacing: -0.015em; }
+h1.inline-title { font-size: 44px; margin: 6px 0 14px; font-weight: 700; }
+h2 { font-size: 28px; margin: 4px 0 12px; font-weight: 700; }
+h3 { font-size: 19px; margin: 30px 0 8px; font-weight: 600; }
+p { margin: 0 0 14px; }
+.lede { font-size: 19px; color: var(--text); max-width: 42em; }
+.lede code { font-size: .8em; }
+.muted { color: var(--muted); }
+.prose { max-width: 720px; }
+
+/* ---------- Properties panel ---------- */
+.props { margin: 4px 0 24px; border-bottom: 1px solid var(--border); padding-bottom: 14px; }
+.props-title { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+.props-title svg { width: 14px; height: 14px; }
+.prop { display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: center; font-size: 14px; min-height: 32px; border-radius: 5px; }
+.prop:hover { background: var(--hover); }
+.prop .k { display: flex; align-items: center; gap: 8px; color: var(--muted); padding: 0 6px; }
+.prop .k svg { width: 14px; height: 14px; color: var(--faint); flex: none; }
+.prop .v { padding: 3px 6px; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.pill { font-size: 12.5px; background: var(--accent-soft); color: var(--accent-text); padding: 1px 9px; border-radius: 999px; font-family: "JetBrains Mono", monospace; }
+.check {
+  width: 15px; height: 15px; border-radius: 4px; background: var(--accent); display: inline-grid; place-items: center;
+}
+.check.off { background: transparent; border: 1.5px solid var(--border-strong); }
+.check svg { width: 11px; height: 11px; color: var(--on-accent); }
+
+/* ---------- buttons ---------- */
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0 28px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 7px;
+  font-weight: 500; font-size: 15px; text-decoration: none; border: 1px solid var(--border-strong);
+  background: var(--bg); color: var(--text); cursor: pointer;
+}
+.btn:hover { background: var(--hover); color: var(--text); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover { background: var(--accent-hover); color: var(--on-accent); }
+.btn svg { width: 16px; height: 16px; }
+.btn.star svg { color: var(--star); }
+.btn.coffee { background: var(--coffee-bg); border-color: var(--coffee-bg); color: var(--coffee-text); }
+.btn.coffee:hover { filter: brightness(.95); background: var(--coffee-bg); color: var(--coffee-text); }
+.icon-btn.star-i:hover { color: var(--star); }
+.support { margin: 40px 0 0; }
+.support .actions { margin: 12px 0 0; }
+
+/* ---------- screenshots ---------- */
+.shot {
+  margin: 18px 0; max-width: 720px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  background: var(--bg-2); box-shadow: var(--shadow);
+}
+.shot img { display: block; width: 100%; height: auto; }
+.shot figcaption { font-size: 13px; color: var(--faint); padding: 8px 12px; border-top: 1px solid var(--border); background: var(--bg); }
+
+/* ---------- fenced block + render pair ---------- */
+.pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin: 18px 0 8px; }
+.pair > * { max-width: 720px; }
+.note.wide .pair.side { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: start; }
+.codeblock {
+  position: relative; background: var(--bg-code); border: 1px solid var(--border); border-radius: 8px;
+  min-width: 0;
+}
+.codeblock .bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 12px;
+  border-bottom: 1px solid var(--border); font: 500 12px "JetBrains Mono", monospace; color: var(--faint);
+}
+.copy {
+  border: 1px solid var(--border); background: var(--bg); border-radius: 5px; padding: 2px 8px; cursor: pointer;
+  font: 500 12px Inter, sans-serif; color: var(--muted);
+}
+.copy:hover { color: var(--text); border-color: var(--border-strong); }
+pre { margin: 0; padding: 12px 14px; overflow-x: auto; font-size: 13px; line-height: 1.6; tab-size: 2; }
+.t-fence { color: var(--tok-fence); }
+.t-lang { color: var(--accent-text); font-weight: 500; }
+.t-key { color: var(--tok-key); }
+.t-str { color: var(--tok-str); }
+.t-num { color: var(--tok-num); }
+.t-p { color: var(--tok-punc); }
+.renders {
+  display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--faint); margin: 0 0 6px;
+  font-family: "JetBrains Mono", monospace;
+}
+.renders::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+/* ---------- callouts ---------- */
+.callout {
+  --c: var(--callout-note);
+  margin: 18px 0; padding: 12px 16px; border-radius: 6px; max-width: 760px;
+  background: rgba(var(--c), 0.09); border-left: 3px solid rgb(var(--c));
+}
+.callout.tip { --c: var(--callout-tip); }
+.callout.warn { --c: var(--callout-warn); }
+.callout.quote { --c: var(--callout-quote); }
+.callout.accent { --c: var(--callout-accent); }
+.callout-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: rgb(var(--c)); margin-bottom: 4px; }
+.callout-title svg { width: 16px; height: 16px; flex: none; }
+.callout p:last-child, .callout ul:last-child { margin-bottom: 0; }
+.callout ul { padding-left: 20px; margin: 4px 0 0; }
+details.callout > summary { list-style: none; cursor: pointer; margin: 0; }
+details.callout > summary::-webkit-details-marker { display: none; }
+details.callout > summary .chev { margin-left: auto; transition: transform .15s; width: 14px; height: 14px; }
+details.callout[open] > summary .chev { transform: rotate(90deg); }
+details.callout[open] > summary { margin-bottom: 6px; }
+details.callout .callout-title { margin-bottom: 0; }
+
+/* ---------- feature index ---------- */
+.six { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 18px 0; }
+.six a {
+  display: block; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; text-decoration: none;
+  color: var(--text); background: var(--bg);
+}
+.six a:hover { border-color: var(--accent); background: var(--accent-soft); }
+.six b { font-size: 14.5px; color: var(--accent-text); font-weight: 600; }
+.six span { display: block; font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+
+/* ---------- trigger → result chips ---------- */
+.chip {
+  display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 0 7px; padding: 4px 10px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg-code); font: 13px/1.55 "JetBrains Mono", monospace;
+  max-width: 100%;
+}
+.chip .tr { color: var(--accent-text); font-weight: 500; background: none; border: 0; padding: 0; font-size: 1em; }
+.chip .ar { color: var(--faint); }
+.chip .rs { color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.chip .nl { color: var(--faint); font-size: .9em; }
+.chip .ph { color: var(--tok-key); }
+.cur {
+  display: inline-block; width: 2px; height: 1.05em; margin: 0 1px; background: var(--accent);
+  vertical-align: -.16em; border-radius: 1px;
+}
+.chips { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin: 10px 0 4px; }
+.chip-group { margin: 16px 0 0; }
+.chip-group > .lbl { font-size: 12px; font-weight: 600; color: var(--faint); letter-spacing: .02em; }
+.chip-group .note-s { font: 12.5px Inter, sans-serif; color: var(--faint); align-self: center; }
+
+/* ---------- the editor demo: an Obsidian note that types and expands ---------- */
+.ed {
+  border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; background: var(--bg);
+  box-shadow: var(--shadow); max-width: 760px; margin: 6px 0 0;
+}
+.ed-tabs { display: flex; align-items: flex-end; gap: 6px; height: 36px; padding: 0 10px; background: var(--bg-2); border-bottom: 1px solid var(--border); }
+.ed-dots { display: flex; gap: 6px; align-self: center; margin-right: 8px; }
+.ed-dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--bg-3); border: 1px solid var(--border-strong); }
+.ed-tab {
+  display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 12px; background: var(--bg);
+  border: 1px solid var(--border); border-bottom: 0; border-radius: 7px 7px 0 0; font-size: 12.5px; color: var(--text);
+  margin-bottom: -1px;
+}
+.ed-tab svg { width: 13px; height: 13px; color: var(--faint); }
+.ed-crumb { text-align: center; font-size: 12px; color: var(--faint); padding: 8px 0 0; }
+.ed-crumb b { color: var(--muted); font-weight: 500; }
+.ed-doc { padding: 14px 36px 22px; font: 16px/1.75 Inter, -apple-system, "Segoe UI", system-ui, sans-serif; min-height: 15.5em; }
+.ed-title { font-size: 26px; font-weight: 700; letter-spacing: -0.015em; margin: 0 0 8px; line-height: 1.3; }
+.ed-static { color: var(--text); }
+.ed-line { min-height: 1.75em; white-space: pre-wrap; word-break: break-word; }
+.ed-live.fade { opacity: 0; transition: opacity .28s ease; }
+.m-mark { color: var(--faint); }
+.m-quote { color: var(--faint); }
+.m-callout { color: var(--accent-text); }
+.fl { animation: flash 1.5s ease-out both; border-radius: 3px; }
+@keyframes flash { 0%, 35% { background: var(--flash); } 100% { background: transparent; } }
+.ed .caret {
+  display: inline-block; width: 2px; height: 1.22em; margin: 0 -1px; background: var(--accent);
+  vertical-align: -.24em; border-radius: 1px; animation: blink 1.06s steps(1) infinite;
+}
+.ed.typing .caret { animation: none; }
+.ed-hud {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 9px 14px; min-height: 46px;
+  border-top: 1px solid var(--border); background: var(--bg-2); font-size: 12.5px; color: var(--faint);
+}
+.ed-hud .lbl { font: 500 11px "JetBrains Mono", monospace; letter-spacing: .02em; }
+.ed-keys { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; min-height: 22px; }
+.ed-keys kbd { font-size: 12px; min-width: 1.7em; text-align: center; color: var(--text); background: var(--bg); }
+.ed-keys kbd.sep { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
+.ed-hud .grow { flex: 1; }
+.ed-out .chip { background: var(--bg); padding: 2px 8px; font-size: 12.5px; }
+.ed-out:empty { display: none; }
+.ed-cap { font-size: 13px; color: var(--faint); margin: 8px 0 0; max-width: 760px; }
+
+/* a small static editor, for "renders as" */
+.ed.mini .ed-doc { min-height: 0; padding: 12px 20px 14px; font-size: 15px; }
+.ed.mini .caret { animation: none; }
+
+/* ---------- command palette (install demo + site search) ---------- */
+.palette-demo {
+  border: 1px solid var(--border-strong); border-radius: 10px; background: var(--bg); box-shadow: var(--shadow);
+  overflow: hidden; margin: 18px 0; max-width: 560px;
+}
+.palette-demo .q { padding: 12px 16px; border-bottom: 1px solid var(--border); color: var(--text); font-size: 15px; }
+.palette-demo .q .caret { display: inline-block; width: 1px; height: 1.1em; background: var(--accent); vertical-align: -3px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.palette-demo ul { list-style: none; margin: 0; padding: 6px; }
+.palette-demo li { padding: 6px 10px; border-radius: 6px; font-size: 14px; }
+.palette-demo li.sel { background: var(--active); }
+.palette-demo li b { font-weight: 600; }
+.palette-demo li small { display: block; color: var(--faint); font-size: 12.5px; }
+.palette-demo li .grp { color: var(--faint); font-size: 12.5px; margin-left: 6px; }
+.palette-demo li .pv { display: block; color: var(--muted); font: 12.5px "JetBrains Mono", monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.palette-demo .mt { padding: 10px 16px 0; font-weight: 600; font-size: 15px; }
+.palette-demo .pvw { border-top: 1px solid var(--border); padding: 8px 16px 12px; }
+.palette-demo .pvw .lbl { font-size: 12px; font-weight: 600; color: var(--faint); margin-bottom: 4px; }
+.palette-demo .pvw pre { padding: 8px 10px; background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px; font-size: 12.5px; }
+.steps { counter-reset: s; list-style: none; padding: 0; margin: 14px 0; max-width: 720px; }
+.steps li { counter-increment: s; position: relative; padding: 0 0 12px 38px; }
+.steps li::before {
+  content: counter(s); position: absolute; left: 0; top: 0; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent-text); font-weight: 600; font-size: 13px; display: grid; place-items: center;
+}
+.path { font-weight: 500; }
+.path i { font-style: normal; color: var(--faint); margin: 0 4px; }
+
+.overlay { position: fixed; inset: 0; background: var(--scrim); z-index: 60; display: none; }
+.overlay.open { display: block; }
+.palette {
+  position: fixed; left: 50%; top: 12vh; transform: translateX(-50%); width: min(600px, calc(100vw - 32px));
+  background: var(--bg); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: var(--shadow);
+  z-index: 61; display: none; overflow: hidden;
+}
+.palette.open { display: block; }
+.palette input {
+  width: 100%; border: 0; border-bottom: 1px solid var(--border); padding: 14px 16px; font: 16px Inter, sans-serif;
+  background: transparent; color: var(--text); outline: none;
+}
+.palette ul { list-style: none; margin: 0; padding: 6px; max-height: 52vh; overflow-y: auto; }
+.palette li a { display: block; padding: 7px 10px; border-radius: 6px; color: var(--text); text-decoration: none; font-size: 14.5px; }
+.palette li a small { color: var(--faint); margin-left: 8px; font-size: 12.5px; }
+.palette li a.sel { background: var(--active); }
+.palette .hint { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 12px; color: var(--faint); display: flex; gap: 14px; flex-wrap: wrap; }
+
+/* ---------- misc ---------- */
+.keys { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+.keys code { font-size: 12.5px !important; }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 18px 0; }
+.packs { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 16px; max-width: 760px; }
+.pack { border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; font-size: 14px; background: var(--bg); }
+.nope { list-style: none; padding: 0; margin: 8px 0 0; }
+.nope li { padding: 2px 0 2px 22px; position: relative; }
+.nope li::before { content: "-"; position: absolute; left: 4px; color: var(--faint); }
+ul.plain-list { padding-left: 20px; max-width: 720px; }
+ul.plain-list li { margin: 0 0 6px; }
+footer.note-foot { border-top: 1px solid var(--border); margin-top: 56px; padding-top: 18px; font-size: 14px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 22px; }
+footer.note-foot a { color: var(--muted); }
+.statusbar {
+  position: fixed; right: 0; bottom: 0; z-index: 15; display: flex; gap: 14px; padding: 3px 12px;
+  font-size: 12px; color: var(--faint); background: var(--bg-2); border: 1px solid var(--border);
+  border-right: 0; border-bottom: 0; border-top-left-radius: 8px;
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 1180px) {
+  .note.wide .pair.side { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .ribbon { display: none; }
+  .explorer {
+    position: fixed; left: 0; top: 0; bottom: 0; width: min(300px, 84vw); height: auto; z-index: 50;
+    transform: translateX(-102%); transition: transform .2s ease; box-shadow: var(--shadow);
+  }
+  body.drawer .explorer { transform: none; }
+  body.drawer .overlay.drawer-scrim { display: block; z-index: 49; }
+  .menu-btn { display: grid; }
+  .tabbar { height: 48px; }
+  .tab { margin-top: 0; border-radius: 8px; border-bottom: 1px solid var(--border); }
+  .note { padding: 8px 16px 96px; }
+  h1.inline-title { font-size: 36px; }
+  h2 { font-size: 24px; }
+  .lede { font-size: 17px; }
+  .six { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .two { grid-template-columns: minmax(0, 1fr); }
+  .prop { grid-template-columns: 118px minmax(0, 1fr); }
+  .statusbar { display: none; }
+  .view-header { display: none; }
+  .ed-doc { padding: 12px 18px 18px; font-size: 15px; min-height: 14.5em; }
+  .ed-title { font-size: 22px; }
+}
+@media (max-width: 420px) {
+  .six { grid-template-columns: minmax(0, 1fr); }
+  .actions .btn { flex: 1 1 100%; justify-content: center; }
+  pre { font-size: 12px; }
+  .ed-dots { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></symbol>
+    <symbol id="i-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></symbol>
+    <symbol id="i-git" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7M18 10.5c0 4-6 3-10.5 6"/></symbol>
+    <symbol id="i-sidebar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 12V4h8l9 9-8 8z"/><circle cx="7.5" cy="8.5" r="1.2" fill="currentColor"/></symbol>
+    <symbol id="i-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5h16v2M12 5v14M9 19h6"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 3 3 5-6"/></symbol>
+    <symbol id="i-hash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 9h14M5 15h14M10 4 8 20M16 4l-2 16"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3c1 4 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-5 1-8.5z"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></symbol>
+    <symbol id="i-quote" viewBox="0 0 24 24" fill="currentColor"><path d="M4 11c0-3 2-5 5-6v2c-1.6.6-2.6 1.6-2.8 3H9v6H4zm10 0c0-3 2-5 5-6v2c-1.6.6-2.6 1.6-2.8 3H19v6h-5z"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h.01"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/></symbol>
+    <symbol id="i-coffee" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M17 11h1.5a2.5 2.5 0 0 1 0 5H17M8 3v3M12 3v3"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+    <!-- Snipsy mark: a short trigger, an arrow, and the longer text it becomes, with the caret on line two. -->
+    <symbol id="snipsy-mark" viewBox="0 0 32 32">
+      <rect x="2" y="2" width="28" height="28" rx="7" fill="var(--accent)"/>
+      <rect x="7" y="8" width="8" height="3" rx="1.5" fill="#fff" fill-opacity=".6"/>
+      <path d="M18.5 7l3 2.5-3 2.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="7" y="15" width="18" height="3" rx="1.5" fill="#fff"/>
+      <rect x="7" y="21" width="10" height="3" rx="1.5" fill="#fff"/>
+      <rect x="19.5" y="19.5" width="2" height="6" rx="1" fill="#fff"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="app">
+  <!-- Ribbon: Obsidian's left strip of actions -->
+  <nav class="ribbon" aria-label="Actions">
+    <button class="icon-btn" data-open-palette title="Quick switcher (Ctrl/Cmd+K)"><svg><use href="#i-search"/></svg><span class="sr-only">Search the page</span></button>
+    <a class="icon-btn" href="https://github.com/Dimagious/snipsidian" title="Source on GitHub"><svg><use href="#i-git"/></svg><span class="sr-only">GitHub</span></a>
+    <a class="icon-btn" href="https://community.obsidian.md/plugins/snipsidian" title="Community plugin listing"><svg><use href="#i-plug"/></svg><span class="sr-only">Plugin listing</span></a>
+    <div class="spacer"></div>
+    <a class="icon-btn star-i" href="https://github.com/Dimagious/snipsidian" title="Star on GitHub"><svg><use href="#i-star"/></svg><span class="sr-only">Star on GitHub</span></a>
+    <a class="icon-btn" href="https://buymeacoffee.com/dimagious" title="Buy me a coffee"><svg><use href="#i-coffee"/></svg><span class="sr-only">Buy me a coffee</span></a>
+    <button class="icon-btn" data-theme-toggle title="Theme"><svg><use href="#i-auto"/></svg><span class="sr-only">Switch theme</span></button>
+  </nav>
+
+  <!-- File explorer: the site's navigation -->
+  <aside class="explorer" id="explorer" aria-label="Pages">
+    <div class="vault-head">
+      <a class="brand" href="#snipsy">
+        <svg width="26" height="26" aria-hidden="true"><use href="#snipsy-mark"/></svg>
+        <span class="wordmark">Snipsy<span class="id">snipsidian</span></span>
+      </a>
+    </div>
+    <button class="search-btn" data-open-palette><svg width="14" height="14"><use href="#i-search"/></svg>Jump to a note<kbd>⌘K</kbd></button>
+    <div class="tree-label">SNIPSY VAULT</div>
+    <ul class="tree" id="tree">
+      <li><a href="#snipsy"><svg width="14" height="14"><use href="#i-file"/></svg>Snipsy<span class="ext">.md</span></a></li>
+      <li><a href="#install"><svg width="14" height="14"><use href="#i-file"/></svg>Install<span class="ext">.md</span></a></li>
+      <li><a href="#defaults"><svg width="14" height="14"><use href="#i-file"/></svg>Defaults<span class="ext">.md</span></a></li>
+      <li>
+        <div class="folder" data-folder><svg><use href="#i-chev"/></svg>Writing snippets</div>
+        <ul>
+          <li><a href="#first"><svg width="14" height="14"><use href="#i-file"/></svg>Your first snippet<span class="ext">.md</span></a></li>
+          <li><a href="#placeholders"><svg width="14" height="14"><use href="#i-file"/></svg>Placeholders<span class="ext">.md</span></a></li>
+          <li><a href="#groups"><svg width="14" height="14"><use href="#i-file"/></svg>Groups<span class="ext">.md</span></a></li>
+        </ul>
+      </li>
+      <li>
+        <div class="folder" data-folder><svg><use href="#i-chev"/></svg>Behaviour</div>
+        <ul>
+          <li><a href="#expansion"><svg width="14" height="14"><use href="#i-file"/></svg>How expansion works<span class="ext">.md</span></a></li>
+          <li><a href="#quiet"><svg width="14" height="14"><use href="#i-file"/></svg>Where it stays quiet<span class="ext">.md</span></a></li>
+          <li><a href="#prefix"><svg width="14" height="14"><use href="#i-file"/></svg>Prefix mode<span class="ext">.md</span></a></li>
+        </ul>
+      </li>
+      <li>
+        <div class="folder" data-folder><svg><use href="#i-chev"/></svg>Packages</div>
+        <ul>
+          <li><a href="#catalog"><svg width="14" height="14"><use href="#i-file"/></svg>Community catalog<span class="ext">.md</span></a></li>
+          <li><a href="#espanso"><svg width="14" height="14"><use href="#i-file"/></svg>Espanso import<span class="ext">.md</span></a></li>
+          <li><a href="#backup"><svg width="14" height="14"><use href="#i-file"/></svg>Backup<span class="ext">.md</span></a></li>
+        </ul>
+      </li>
+      <li><a href="#privacy"><svg width="14" height="14"><use href="#i-file"/></svg>Privacy<span class="ext">.md</span></a></li>
+      <li><a href="#scope"><svg width="14" height="14"><use href="#i-file"/></svg>What it leaves out<span class="ext">.md</span></a></li>
+      <li><a href="#faq"><svg width="14" height="14"><use href="#i-file"/></svg>Questions<span class="ext">.md</span></a></li>
+    </ul>
+    <div class="explorer-foot">
+      <a href="https://github.com/Dimagious/snipsidian">GitHub</a> ·
+      <a href="https://github.com/Dimagious/snipsidian/blob/main/CHANGELOG.md">Changelog</a> ·
+      <a href="https://github.com/Dimagious/snipsidian/issues">Issues</a> ·
+      <a href="https://buymeacoffee.com/dimagious">Buy me a coffee</a>
+    </div>
+  </aside>
+
+  <div class="pane">
+    <header class="tabbar">
+      <button class="icon-btn menu-btn" id="menuBtn" aria-controls="explorer" aria-expanded="false" title="Pages"><svg><use href="#i-sidebar"/></svg><span class="sr-only">Open pages</span></button>
+      <div class="tab"><svg><use href="#i-file"/></svg><span id="tabTitle">Snipsy</span></div>
+      <div class="grow"></div>
+      <button class="icon-btn menu-btn" data-open-palette title="Search"><svg><use href="#i-search"/></svg><span class="sr-only">Search the page</span></button>
+      <button class="icon-btn menu-btn" data-theme-toggle title="Theme"><svg><use href="#i-auto"/></svg><span class="sr-only">Switch theme</span></button>
+    </header>
+    <div class="view-header"><span>Snipsy vault</span><span>/</span><b id="viewPath">Snipsy</b></div>
+
+    <main class="note wide" id="note">
+
+      <!-- ============ Snipsy.md ============ -->
+      <section class="file" id="snipsy" data-title="Snipsy" data-path="Snipsy">
+        <h1 class="inline-title">Snipsy</h1>
+
+        <div class="props" aria-label="Properties">
+          <div class="props-title"><svg><use href="#i-list"/></svg>Properties</div>
+          <div class="prop"><div class="k"><svg><use href="#i-text"/></svg>plugin id</div><div class="v"><code>snipsidian</code></div></div>
+          <div class="prop"><div class="k"><svg><use href="#i-tag"/></svg>defaults</div><div class="v"><span class="pill">todo</span><span class="pill">note</span><span class="pill">today</span><span class="pill">h1</span><span class="pill">bold</span><span class="pill">brb</span></div></div>
+          <div class="prop"><div class="k"><svg><use href="#i-box"/></svg>needs templater</div><div class="v"><span class="check off" aria-label="no"></span></div></div>
+          <div class="prop"><div class="k"><svg><use href="#i-box"/></svg>mobile</div><div class="v"><span class="check" aria-label="yes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg></span></div></div>
+          <div class="prop"><div class="k"><svg><use href="#i-hash"/></svg>version</div><div class="v">{{version}} <span class="muted" style="font-size:13px">· Obsidian {{minAppVersion}} or later</span></div></div>
+          <div class="prop"><div class="k"><svg><use href="#i-text"/></svg>license</div><div class="v">MIT</div></div>
+        </div>
+
+        <p class="lede">Type <code>todo</code> and a space, get <code>- [ ]</code>. Hotstrings for Obsidian, markdown-aware, no scripting.</p>
+
+        <div class="actions">
+          <a class="btn primary" href="#install"><svg><use href="#i-plug"/></svg>Get it from Community plugins</a>
+          <a class="btn" href="#catalog">Browse the catalog</a>
+          <a class="btn star" href="https://github.com/Dimagious/snipsidian"><svg><use href="#i-star"/></svg>Star on GitHub</a>
+        </div>
+
+        <!-- The signature element: an Obsidian note that types a trigger and expands it.
+             The static markup below is the reduced-motion state; the script replaces it with the loop. -->
+        <div class="ed" id="ed" role="img" aria-label="An Obsidian note. Typing todo and a space turns the line into a task checkbox. Typing note and a space opens a callout with the caret on its second line. Typing today and a space writes the date. A custom sig snippet writes a two-line sign-off.">
+          <div class="ed-tabs" aria-hidden="true">
+            <div class="ed-dots"><i></i><i></i><i></i></div>
+            <div class="ed-tab"><svg><use href="#i-file"/></svg>Monday.md</div>
+          </div>
+          <div class="ed-crumb" aria-hidden="true">Notes / <b>Monday</b></div>
+          <div class="ed-doc" aria-hidden="true">
+            <div class="ed-title">Monday</div>
+            <div class="ed-line ed-static">The printer wants the proofs this week.</div>
+            <div class="ed-live" id="edLive"><div class="ed-line"><span class="m-mark">- [ ] </span>Send the proofs</div><div class="ed-line"><span class="m-quote">&gt; </span><span class="m-callout">[!note]</span></div><div class="ed-line"><span class="m-quote">&gt; </span>Printer closes at six.</div><div class="ed-line">Proofs due <span data-today>2026-09-28</span></div><div class="ed-line">Best,</div><div class="ed-line">Dmitriy<span class="caret"></span> </div></div>
+          </div>
+          <div class="ed-hud" aria-hidden="true">
+            <span class="lbl">keys</span>
+            <span class="ed-keys" id="edKeys"><kbd>s</kbd><kbd>i</kbd><kbd>g</kbd><kbd class="sep">Space</kbd></span>
+            <span class="grow"></span>
+            <span class="ed-out" id="edOut"><span class="chip"><code class="tr">sig</code><span class="ar">→</span><span class="rs">Best,<span class="nl">↵</span>Dmitriy<i class="cur"></i></span></span></span>
+          </div>
+        </div>
+        <p class="ed-cap">A trigger expands when a separator lands after it. The separator stays where you typed it, and the caret goes where the snippet says.</p>
+
+        <h3>What is in it</h3>
+        <div class="six">
+          <a href="#defaults"><b>Defaults</b><span>Sixteen triggers for tasks, headings, callouts, tables and dates</span></a>
+          <a href="#placeholders"><b>Placeholders</b><span>Caret position, date, time, file name, clipboard</span></a>
+          <a href="#groups"><b>Groups</b><span>Mute a whole group with one toggle</span></a>
+          <a href="#prefix"><b>Prefix mode</b><span>Only <code>:todo</code> expands, plain <code>todo</code> stays a word</span></a>
+          <a href="#catalog"><b>Community catalog</b><span>Twelve packs, one click each, preview before writing</span></a>
+          <a href="#espanso"><b>Espanso import</b><span>Paste a <code>.yml</code>, see what came across and what did not</span></a>
+        </div>
+
+        <div class="callout accent">
+          <div class="callout-title"><svg><use href="#i-info"/></svg>Where it stays out of the way</div>
+          <p>Not in fenced code, not in inline code, not in frontmatter, not in the middle of a word. Only real typing expands: a paste, an undo or another plugin's edit never does. <a href="#quiet">The full list</a>.</p>
+        </div>
+      </section>
+
+      <!-- ============ Install.md ============ -->
+      <section class="file" id="install" data-title="Install" data-path="Install">
+        <div class="crumb">Install.md</div>
+        <h2>Install</h2>
+        <p>Snipsy is in Obsidian's community plugin catalog.</p>
+        <ol class="steps">
+          <li><span class="path">Settings<i>›</i>Community plugins<i>›</i>Browse</span></li>
+          <li>Search for <b>Snipsy</b>, then <b>Install</b> and <b>Enable</b>.</li>
+          <li>Open any note, type <code>todo</code> and a space. The line becomes <code>- [ ]</code> with the caret after it.</li>
+        </ol>
+
+        <h3>Insert snippet…</h3>
+        <p class="prose">For a snippet whose trigger you do not remember, run <b>Snipsy: Insert snippet…</b> from the command palette (<kbd>Ctrl/Cmd</kbd> <kbd>P</kbd>). It searches your triggers and shows the whole expansion before you pick one. With text selected, the same picker opens as <b>Wrap selection</b>.</p>
+
+        <div class="palette-demo" aria-label="Obsidian's command palette, filtered to Snipsy's two commands">
+          <div class="q">snipsy<span class="caret"></span></div>
+          <ul>
+            <li class="sel"><b>Snipsy: Insert snippet…</b></li>
+            <li><b>Snipsy: Open settings</b></li>
+          </ul>
+        </div>
+
+        <div class="palette-demo" aria-label="The Insert snippet picker with a query and a preview">
+          <div class="mt">Insert snippet</div>
+          <div class="q">no<span class="caret"></span></div>
+          <ul>
+            <li class="sel"><b>note</b><span class="grp">(Defaults)</span><span class="pv">&gt; [!note] ↵ &gt;</span></li>
+            <li><b>now</b><span class="grp">(Defaults)</span><span class="pv">$time</span></li>
+          </ul>
+          <div class="pvw">
+            <div class="lbl">Preview</div>
+<pre>&gt; [!note]
+&gt; </pre>
+          </div>
+        </div>
+        <p class="muted" style="font-size:14px">A sketch of the picker: the query, the matching triggers with their group, and a preview of the one under the cursor. Command id <code>insert-snippet</code>.</p>
+
+        <figure class="shot">
+          <picture>
+            <source data-dark srcset="img/picker-dark.png" media="(prefers-color-scheme: dark)">
+            <img src="img/picker-light.png" width="1232" height="1260" loading="lazy" alt="The Insert snippet dialog over a note: the query da, seven matching triggers with their groups, and a preview of the highlighted one">
+          </picture>
+          <figcaption>Insert snippet with da typed. The query matches triggers, replacements and group names, and the preview shows the highlighted snippet.</figcaption>
+        </figure>
+
+        <h3>A hotkey</h3>
+        <p class="prose">The second command, <b>Snipsy: Open settings</b>, opens the plugin's settings tab. To put a key on either one, go to <span class="path">Settings<i>›</i>Hotkeys</span> and search for "snipsy". The plugin's own <b>Set hotkey</b> button opens that screen with the search already filled in.</p>
+      </section>
+
+      <!-- ============ Defaults.md ============ -->
+      <section class="file" id="defaults" data-title="Defaults" data-path="Defaults">
+        <div class="crumb">Defaults.md</div>
+        <h2>Sixteen defaults, one group</h2>
+        <p class="prose">A fresh install comes with these, all in one group called <b>Defaults</b>. <i class="cur" aria-hidden="true"></i> marks where the caret lands, <span class="muted">↵</span> is a line break.</p>
+
+        <div class="chip-group"><div class="lbl">WORDS</div><div class="chips">
+          <span class="chip"><code class="tr">brb</code><span class="ar">→</span><span class="rs">be right back</span></span>
+          <span class="chip"><code class="tr">omw</code><span class="ar">→</span><span class="rs">on my way</span></span>
+          <span class="chip"><code class="tr">ty</code><span class="ar">→</span><span class="rs">thank you</span></span>
+          <span class="chip"><code class="tr">imo</code><span class="ar">→</span><span class="rs">in my opinion</span></span>
+        </div></div>
+        <div class="chip-group"><div class="lbl">HEADINGS AND TASKS</div><div class="chips">
+          <span class="chip"><code class="tr">h1</code><span class="ar">→</span><span class="rs"># <i class="cur"></i></span></span>
+          <span class="chip"><code class="tr">h2</code><span class="ar">→</span><span class="rs">## <i class="cur"></i></span></span>
+          <span class="chip"><code class="tr">h3</code><span class="ar">→</span><span class="rs">### <i class="cur"></i></span></span>
+          <span class="chip"><code class="tr">todo</code><span class="ar">→</span><span class="rs">- [ ] <i class="cur"></i></span></span>
+          <span class="chip"><code class="tr">done</code><span class="ar">→</span><span class="rs">- [x] <i class="cur"></i></span></span>
+        </div></div>
+        <div class="chip-group"><div class="lbl">INLINE</div><div class="chips">
+          <span class="chip"><code class="tr">bold</code><span class="ar">→</span><span class="rs">**<i class="cur"></i>**</span></span>
+          <span class="chip"><code class="tr">italic</code><span class="ar">→</span><span class="rs">_<i class="cur"></i>_</span></span>
+          <span class="chip"><code class="tr">code</code><span class="ar">→</span><span class="rs">`<i class="cur"></i>`</span></span>
+        </div></div>
+        <div class="chip-group"><div class="lbl">BLOCKS</div><div class="chips">
+          <span class="chip"><code class="tr">note</code><span class="ar">→</span><span class="rs">&gt; [!note]<span class="nl">↵</span>&gt; <i class="cur"></i></span></span>
+          <span class="chip"><code class="tr">table</code><span class="ar">→</span><span class="rs">| H1 | H2 | H3 |<span class="nl">↵</span><br>| --- | --- | --- |<span class="nl">↵</span><br>| <i class="cur"></i> | | |</span></span>
+        </div></div>
+        <div class="chip-group"><div class="lbl">DATE AND TIME</div><div class="chips">
+          <span class="chip"><code class="tr">today</code><span class="ar">→</span><span class="rs"><span class="ph">$date</span></span></span><span class="note-s">YYYY-MM-DD</span>
+          <span class="chip"><code class="tr">now</code><span class="ar">→</span><span class="rs"><span class="ph">$time</span></span></span><span class="note-s">HH:MM</span>
+        </div></div>
+
+        <div class="callout tip">
+          <div class="callout-title"><svg><use href="#i-flame"/></svg>Not your words? Delete them</div>
+          <p>Delete the group and the defaults stay deleted, through restarts and updates. <span class="path">General<i>›</i>Restore default snippets</span> brings back the missing ones and leaves yours alone: a trigger that already exists in any group is skipped.</p>
+        </div>
+      </section>
+
+      <!-- ============ Writing snippets/Your first snippet.md ============ -->
+      <section class="file" id="first" data-title="Your first snippet" data-path="Writing snippets / Your first snippet">
+        <div class="crumb">Writing snippets/Your first snippet.md</div>
+        <h2>Your first snippet</h2>
+        <ol class="steps">
+          <li><span class="path">Settings<i>›</i>Snipsy<i>›</i>Snippets<i>›</i>Add new snippet</span></li>
+          <li>Trigger: <code>sig</code>. The dialog answers under the field: <i>Will expand when you type: sig</i>.</li>
+          <li>Replacement: two lines, <code>Best,</code> and your name. Save.</li>
+          <li>In a note, type <code>sig</code> and a space.</li>
+        </ol>
+        <div class="pair side">
+          <div class="codeblock" data-code>
+            <div class="bar"><span>Add new snippet</span><button class="copy" type="button">Copy</button></div>
+<pre><code class="yaml-plain">trigger: sig
+replacement: |
+  Best,
+  Dmitriy</code></pre>
+          </div>
+          <div>
+            <div class="renders">renders as</div>
+            <div class="ed mini" aria-label="The note after typing sig and a space: Best, then Dmitriy on the next line">
+              <div class="ed-doc" aria-hidden="true"><div class="ed-line">Best,</div><div class="ed-line">Dmitriy<span class="caret"></span> </div></div>
+            </div>
+          </div>
+        </div>
+        <p class="muted prose" style="font-size:14.5px">The two fields above are what you fill in; the dialog is a form, not YAML. The caret ends up after the last character, with the space you typed still after it.</p>
+        <figure class="shot">
+          <picture>
+            <source data-dark srcset="img/add-snippet-dark.png" media="(prefers-color-scheme: dark)">
+            <img src="img/add-snippet-light.png" width="1216" height="780" loading="lazy" alt="The Add new snippet dialog: trigger :sig, the hint Will expand when you type: sig, replacement Best, then Dmitriy on a second line, group work">
+          </picture>
+          <figcaption>Typing :sig in the Trigger field: the hint says the snippet will fire on sig, because the colon is stripped.</figcaption>
+        </figure>
+      </section>
+
+      <!-- ============ Writing snippets/Placeholders.md ============ -->
+      <section class="file" id="placeholders" data-title="Placeholders" data-path="Writing snippets / Placeholders">
+        <div class="crumb">Writing snippets/Placeholders.md</div>
+        <h2>Placeholders</h2>
+        <p class="prose">A replacement is plain text with a few words that fill in when it expands.</p>
+        <div class="keys" style="flex-direction:column;gap:8px;max-width:720px">
+          <div><code>$|</code> where the caret lands. Without it, the caret goes after the text.</div>
+          <div><code>$date</code> today, as <code>YYYY-MM-DD</code>.</div>
+          <div><code>$time</code> the time now, as <code>HH:MM</code>.</div>
+          <div><code>$filename</code> the name of the note you are typing in.</div>
+          <div><code>$clipboard</code> what is on the clipboard, read at the moment the snippet expands.</div>
+          <div><code>$1</code> the selected text, when you wrap a selection through <b>Insert snippet…</b>.</div>
+        </div>
+        <div class="pair side" style="margin-top:22px">
+          <div class="codeblock" data-code>
+            <div class="bar"><span>replacement</span><button class="copy" type="button">Copy</button></div>
+<pre><code class="yaml-plain">## $filename, $date $time
+- $|</code></pre>
+          </div>
+          <div>
+            <div class="renders">renders as</div>
+            <div class="ed mini" aria-label="The note after expansion: a heading with the note name, date and time, and a list item with the caret in it">
+              <div class="ed-doc" aria-hidden="true"><div class="ed-line"><span class="m-mark">## </span>Standup, <span data-today>2026-09-28</span> <span data-now>09:30</span></div><div class="ed-line"><span class="m-mark">- </span><span class="caret"></span> </div></div>
+            </div>
+          </div>
+        </div>
+        <div class="callout warn">
+          <div class="callout-title"><svg><use href="#i-alert"/></svg><code style="background:none;border:0;padding:0;color:inherit">$1</code> and <code style="background:none;border:0;padding:0;color:inherit">$2</code> are not Tab-stops</div>
+          <p>Snipsy has one caret position per snippet. Pressing Tab after an expansion does not jump to a next field. <code>$1</code> only means "the selection" when you wrap one.</p>
+        </div>
+      </section>
+
+      <!-- ============ Writing snippets/Groups.md ============ -->
+      <section class="file" id="groups" data-title="Groups" data-path="Writing snippets / Groups">
+        <div class="crumb">Writing snippets/Groups.md</div>
+        <h2>Groups</h2>
+        <p class="prose">Every snippet lives in a group. The defaults are one, and each pack or import you add gets its own.</p>
+        <ul class="plain-list">
+          <li>The toggle on a group header mutes the whole group: its triggers stop expanding and leave the picker. The group stays in the list, dimmed, and you can still edit it.</li>
+          <li>Select several snippets to move or delete them together.</li>
+          <li>Deleting asks first, and names the first five triggers it is about to remove.</li>
+        </ul>
+        <figure class="shot">
+          <picture>
+            <source data-dark srcset="img/groups-dark.png" media="(prefers-color-scheme: dark)">
+            <img src="img/groups-light.png" width="1464" height="1430" loading="lazy" alt="The Snippets tab in selection mode: the Callouts group muted and dimmed with its enable checkbox off, and three Meetings snippets selected with a bar offering Move to group, Delete and Clear">
+          </picture>
+          <figcaption>Callouts is muted: dimmed, its toggle off. Three meeting snippets are selected, ready to move or delete together.</figcaption>
+        </figure>
+      </section>
+
+      <!-- ============ Behaviour/How expansion works.md ============ -->
+      <section class="file" id="expansion" data-title="How expansion works" data-path="Behaviour / How expansion works">
+        <div class="crumb">Behaviour/How expansion works.md</div>
+        <h2>How expansion works</h2>
+        <p class="prose">A trigger expands when a separator lands right after it. These count as separators:</p>
+        <div class="keys"><kbd>Space</kbd><kbd>Tab</kbd><kbd>Enter</kbd><code>.</code><code>,</code><code>!</code><code>?</code><code>;</code><code>:</code><code>(</code><code>)</code><code>[</code><code>]</code><code>{</code><code>}</code><code>"</code><code>'</code></div>
+        <p class="prose" style="margin-top:16px">The separator stays where you typed it. Type <code>brb</code> and a comma, and you get <code>be right back,</code>. A snippet that spans lines puts the caret on the line it names, so <code>note</code> leaves you inside the callout, ready to write.</p>
+        <div class="pair side">
+          <div class="chips" style="flex-direction:column;align-items:flex-start;margin:0">
+            <span class="chip"><code class="tr">brb,</code><span class="ar">→</span><span class="rs">be right back<i class="cur"></i>,</span></span>
+            <span class="chip"><code class="tr">note␣</code><span class="ar">→</span><span class="rs">&gt; [!note]<span class="nl">↵</span>&gt; <i class="cur"></i>␣</span></span>
+          </div>
+          <div>
+            <div class="renders">renders as</div>
+            <div class="ed mini" aria-label="A callout header, and the caret on the second line of the callout">
+              <div class="ed-doc" aria-hidden="true"><div class="ed-line"><span class="m-quote">&gt; </span><span class="m-callout">[!note]</span></div><div class="ed-line"><span class="m-quote">&gt; </span><span class="caret"></span> </div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ Behaviour/Where it stays quiet.md ============ -->
+      <section class="file" id="quiet" data-title="Where it stays quiet" data-path="Behaviour / Where it stays quiet">
+        <div class="crumb">Behaviour/Where it stays quiet.md</div>
+        <h2>Where it stays quiet</h2>
+        <p class="prose">Snipsy never expands:</p>
+        <ul class="nope">
+          <li>inside a fenced code block</li>
+          <li>inside inline code</li>
+          <li>in YAML frontmatter</li>
+          <li>in the middle of a word: <code>photodo</code> is left alone</li>
+        </ul>
+        <p class="prose" style="margin-top:16px">Since 1.3.0 only real typing triggers it. None of these expand, even when they end in a trigger:</p>
+        <ul class="nope">
+          <li>a paste</li>
+          <li>undo and redo</li>
+          <li>drag and drop</li>
+          <li>another plugin's edit</li>
+          <li>IME composition, so Chinese, Japanese and Korean input works as usual</li>
+        </ul>
+        <div class="callout tip">
+          <div class="callout-title"><svg><use href="#i-flame"/></svg>One undo takes it back</div>
+          <p>Press undo right after an expansion and it takes back the trigger and the expansion together, in one step.</p>
+        </div>
+      </section>
+
+      <!-- ============ Behaviour/Prefix mode.md ============ -->
+      <section class="file" id="prefix" data-title="Prefix mode" data-path="Behaviour / Prefix mode">
+        <div class="crumb">Behaviour/Prefix mode.md</div>
+        <h2>Prefix mode</h2>
+        <p class="prose">For writers who kept getting <code>now</code> and <code>today</code> expanded in the middle of a sentence. In <span class="path">General<i>›</i>Expansion</span>, turn on <b>Require a prefix before triggers</b> and pick <code>:</code> or <code>;</code>.</p>
+        <div class="chips" style="flex-direction:column;align-items:flex-start">
+          <span class="chip"><code class="tr">todo␣</code><span class="ar">→</span><span class="rs">todo␣</span><span class="nl" style="font-family:Inter,sans-serif">stays a word</span></span>
+          <span class="chip"><code class="tr">:todo␣</code><span class="ar">→</span><span class="rs">- [ ] <i class="cur"></i>␣</span></span>
+        </div>
+        <p class="prose" style="margin-top:14px">The prefix is consumed: it does not stay in the note. It is one switch for every trigger, and it is off by default.</p>
+        <figure class="shot">
+          <picture>
+            <source data-dark srcset="img/prefix-dark.png" media="(prefers-color-scheme: dark)">
+            <img src="img/prefix-light.png" width="1464" height="358" loading="lazy" alt="The Expansion section of the General tab: Require a prefix before triggers switched on, and the prefix character set to a colon">
+          </picture>
+          <figcaption>General › Expansion with the prefix required and : as the prefix character.</figcaption>
+        </figure>
+      </section>
+
+      <!-- ============ Packages/Community catalog.md ============ -->
+      <section class="file" id="catalog" data-title="Community catalog" data-path="Packages / Community catalog">
+        <div class="crumb">Packages/Community catalog.md</div>
+        <h2>Community catalog</h2>
+        <p class="prose"><span class="path">Settings<i>›</i>Packages</span> lists ready-made packs from the <a href="https://github.com/Dimagious/snipsidian-community">catalog repository</a>. One click installs a pack into its own group; uninstalling deletes that group.</p>
+        <div class="packs">
+          <span class="pack">Markdown Essentials</span>
+          <span class="pack">Obsidian Power-User</span>
+          <span class="pack">Daily Journal</span>
+          <span class="pack">GTD &amp; Productivity</span>
+          <span class="pack">Meetings</span>
+          <span class="pack">Developer Boilerplate</span>
+          <span class="pack">Code Review</span>
+          <span class="pack">Research &amp; Academic</span>
+          <span class="pack">Symbols &amp; Math</span>
+          <span class="pack">Date &amp; Time</span>
+          <span class="pack">Obsidian Callouts</span>
+          <span class="pack">Basic Emojis</span>
+        </div>
+        <p class="prose">Reinstall a pack whose snippets you have edited, and a preview asks before anything is written: keep yours, or overwrite it. A pack that wants a trigger used by a different snippet in another group is not installed, and the notice names the trigger. The list is cached for 24 hours, and works offline from that cache.</p>
+        <p class="prose">Have a set worth sharing? Submit it from the plugin, and Snipsy opens a GitHub issue with it already filled in.</p>
+        <figure class="shot">
+          <picture>
+            <source data-dark srcset="img/packages-dark.png" media="(prefers-color-scheme: dark)">
+            <img src="img/packages-light.png" width="1464" height="1468" loading="lazy" alt="The Packages tab: a filter box and a list of community packs, each with its description, author, version, snippet count and an Install button">
+          </picture>
+          <figcaption>The Packages tab, loaded from the catalog repository.</figcaption>
+        </figure>
+        <figure class="shot">
+          <picture>
+            <source data-dark srcset="img/conflict-dark.png" media="(prefers-color-scheme: dark)">
+            <img src="img/conflict-light.png" width="1216" height="718" loading="lazy" alt="The install preview for Daily Journal: 7 new snippets and one conflict on gratitude, showing the current and incoming text with a Keep current or Overwrite choice">
+          </picture>
+          <figcaption>Reinstalling Daily Journal after editing its gratitude snippet. The preview lists the conflict and asks: keep current or overwrite.</figcaption>
+        </figure>
+      </section>
+
+      <!-- ============ Packages/Espanso import.md ============ -->
+      <section class="file" id="espanso" data-title="Espanso import" data-path="Packages / Espanso import">
+        <div class="crumb">Packages/Espanso import.md</div>
+        <h2>Espanso import</h2>
+        <p class="prose">Paste an Espanso <code>.yml</code>, from <a href="https://hub.espanso.org">hub.espanso.org</a> or your own config, name the group, and press <b>Import snippets</b>.</p>
+        <div class="pair side">
+          <div class="codeblock" data-code>
+            <div class="bar"><span>base.yml</span><button class="copy" type="button">Copy</button></div>
+<pre><code class="yaml-plain">matches:
+  - trigger: ":sig"
+    replace: "Best,\nDmitriy$|$"
+  - trigger: ":paste"
+    replace: "&gt; {{clipboard}}"
+  - trigger: ":ymd"
+    replace: "{{d}}"
+    vars:
+      - name: d
+        type: date
+        params:
+          format: "%Y-%m-%d"
+  - trigger: ":ask"
+    form: "Hi [[name]]"</code></pre>
+          </div>
+          <div>
+            <div class="renders">imports as</div>
+            <div class="chips" style="flex-direction:column;align-items:flex-start;margin:0">
+              <span class="chip"><code class="tr">sig</code><span class="ar">→</span><span class="rs">Best,<span class="nl">↵</span>Dmitriy<span class="ph">$|</span></span></span>
+              <span class="chip"><code class="tr">paste</code><span class="ar">→</span><span class="rs">&gt; <span class="ph">$clipboard</span></span></span>
+              <span class="chip"><code class="tr">ymd</code><span class="ar">→</span><span class="rs"><span class="ph">$date</span></span></span>
+            </div>
+            <div class="callout quote" style="margin-top:14px">
+              <div class="callout-title"><svg><use href="#i-quote"/></svg>The report</div>
+              <p><code>3 imported, 1 skipped: ask</code>, followed by why.</p>
+            </div>
+          </div>
+        </div>
+        <p class="prose"><code>$|$</code> becomes <code>$|</code>, <code>{{clipboard}}</code> becomes <code>$clipboard</code>, and a plain date variable becomes <code>$date</code> or <code>$time</code>. Forms, scripts, shell commands, regex triggers and images have no Snipsy equivalent. They are skipped and listed by name, instead of arriving broken. The same size limits apply as for a catalog install.</p>
+        <figure class="shot">
+          <picture>
+            <source data-dark srcset="img/espanso-dark.png" media="(prefers-color-scheme: dark)">
+            <img src="img/espanso-light.png" width="1456" height="1184" loading="lazy" alt="The Import from Espanso YAML section with a pasted file of four matches and the result line 3 imported, 1 skipped: ask">
+          </picture>
+          <figcaption>The YAML above, pasted and imported: three snippets land in the Espanso base group, and the form-based ask is skipped by name.</figcaption>
+        </figure>
+      </section>
+
+      <!-- ============ Packages/Backup.md ============ -->
+      <section class="file" id="backup" data-title="Backup" data-path="Packages / Backup">
+        <div class="crumb">Packages/Backup.md</div>
+        <h2>Backup</h2>
+        <p class="prose">In <b>General</b>, <b>Export</b> and <b>Import</b> move your snippets as one JSON file. On mobile, export writes <code>snipsidian-snippets.json</code> to the root of the vault, and falls back to the clipboard when it cannot.</p>
+      </section>
+
+      <!-- ============ Privacy.md ============ -->
+      <section class="file" id="privacy" data-title="Privacy" data-path="Privacy">
+        <div class="crumb">Privacy.md</div>
+        <h2>Privacy</h2>
+        <p class="prose">Snipsy works offline. Everything it keeps is in one file: <code>.obsidian/plugins/snipsidian/data.json</code>.</p>
+        <div class="callout note">
+          <div class="callout-title"><svg><use href="#i-lock"/></svg>The only network calls</div>
+          <p>Both happen in the Packages tab:<code>api.github.com</code> for the list of packs, <code>raw.githubusercontent.com</code> to download the one you install. No analytics, no telemetry, no account.</p>
+        </div>
+        <p class="prose"><code>$clipboard</code> reads the clipboard only when a snippet containing it expands. None of the defaults use it.</p>
+      </section>
+
+      <!-- ============ What it leaves out.md ============ -->
+      <section class="file" id="scope" data-title="What it leaves out" data-path="What it leaves out">
+        <div class="crumb">What it leaves out.md</div>
+        <h2>What it leaves out</h2>
+        <p class="prose">Snipsy replaces a word with text. It does not do these, by design:</p>
+        <ul class="nope">
+          <li>templates with JavaScript (see <a href="https://github.com/SilentVoid13/Templater">Templater</a>)</li>
+          <li>expansion outside Obsidian, in every app (see <a href="https://espanso.org">Espanso</a>)</li>
+          <li>a snippet library you search but never type (see Snippets Manager)</li>
+          <li>Tab-stops that jump from field to field</li>
+          <li>scripting of any kind</li>
+        </ul>
+        <p style="margin-top:14px" class="prose">If one of these stops you, <a href="https://github.com/Dimagious/snipsidian/issues">say what you tried</a>.</p>
+      </section>
+
+      <!-- ============ Questions.md ============ -->
+      <section class="file" id="faq" data-title="Questions" data-path="Questions">
+        <div class="crumb">Questions.md</div>
+        <h2>Questions</h2>
+
+        <details class="callout">
+          <summary class="callout-title"><svg><use href="#i-help"/></svg>Does it work on my phone?<svg class="chev"><use href="#i-right"/></svg></summary>
+          <p>Yes. The plugin is not desktop-only. Triggers expand on mobile the same way.</p>
+        </details>
+        <details class="callout">
+          <summary class="callout-title"><svg><use href="#i-help"/></svg>Will it fire in my code blocks?<svg class="chev"><use href="#i-right"/></svg></summary>
+          <p>No. Fenced code, inline code and frontmatter are left alone. <a href="#quiet">Where it stays quiet</a>.</p>
+        </details>
+        <details class="callout">
+          <summary class="callout-title"><svg><use href="#i-help"/></svg><code style="background:none;border:0;padding:0;color:inherit">now</code> keeps expanding in my sentences<svg class="chev"><use href="#i-right"/></svg></summary>
+          <p>Three ways out. Delete that one snippet. Mute the whole Defaults group with its toggle. Or turn on <a href="#prefix">prefix mode</a>, and only <code>:now</code> expands.</p>
+        </details>
+        <details class="callout">
+          <summary class="callout-title"><svg><use href="#i-help"/></svg>Does it send my text anywhere?<svg class="chev"><use href="#i-right"/></svg></summary>
+          <p>No. Your snippets stay in <code>data.json</code> in your vault. The only network traffic is the pack list and pack downloads in the Packages tab. <a href="#privacy">Privacy</a>.</p>
+        </details>
+        <details class="callout">
+          <summary class="callout-title"><svg><use href="#i-help"/></svg>Can I bring my Espanso snippets?<svg class="chev"><use href="#i-right"/></svg></summary>
+          <p>Yes. Paste the <code>.yml</code>. What Snipsy can map comes across, and what it cannot is listed by name. <a href="#espanso">Espanso import</a>.</p>
+        </details>
+        <details class="callout">
+          <summary class="callout-title"><svg><use href="#i-help"/></svg>How do I report a bug?<svg class="chev"><use href="#i-right"/></svg></summary>
+          <p>Open an issue on <a href="https://github.com/Dimagious/snipsidian/issues">the issue tracker</a>. Your Obsidian version, your OS and the trigger involved help the most.</p>
+        </details>
+
+        <div class="callout accent support">
+          <div class="callout-title"><svg><use href="#i-star"/></svg>If Snipsy is useful to you</div>
+          <p>Snipsy is free and made by one developer. A star on GitHub tells others the plugin is worth a look, and a coffee is a way to say thanks.</p>
+          <div class="actions">
+            <a class="btn star" href="https://github.com/Dimagious/snipsidian"><svg><use href="#i-star"/></svg>Star on GitHub</a>
+            <a class="btn coffee" href="https://buymeacoffee.com/dimagious"><svg><use href="#i-coffee"/></svg>Buy me a coffee</a>
+          </div>
+        </div>
+
+        <footer class="note-foot">
+          <span>MIT © Dmitriy Yurkin</span>
+          <a href="https://github.com/Dimagious/snipsidian">GitHub</a>
+          <a href="https://community.obsidian.md/plugins/snipsidian">Plugin listing</a>
+          <a href="https://github.com/Dimagious/snipsidian-community">Catalog</a>
+          <a href="https://github.com/Dimagious/snipsidian/blob/main/CHANGELOG.md">Changelog</a>
+          <a href="https://buymeacoffee.com/dimagious">Support the author</a>
+        </footer>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div class="statusbar" aria-hidden="true"><span>16 defaults</span><span>12 packs</span><span>MIT</span></div>
+
+<div class="overlay drawer-scrim" id="drawerScrim"></div>
+<div class="overlay" id="paletteScrim"></div>
+<div class="palette" id="palette" role="dialog" aria-modal="true" aria-label="Jump to a note">
+  <input id="paletteInput" type="text" placeholder="Find a note…" autocomplete="off" spellcheck="false">
+  <ul id="paletteList"></ul>
+  <div class="hint"><span><kbd>↑</kbd> <kbd>↓</kbd> to move</span><span><kbd>↵</kbd> to open</span><span><kbd>esc</kbd> to close</span></div>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  /* ---------- theme: system, light, dark ---------- */
+  var order = ["system", "light", "dark"];
+  var icons = { system: "#i-auto", light: "#i-sun", dark: "#i-moon" };
+  function readTheme() { try { return localStorage.getItem("snipsy-theme") || "system"; } catch (e) { return "system"; } }
+  function applyTheme(mode) {
+    if (mode === "system") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", mode);
+    // <picture> follows the OS on its own; a manual choice rewrites the dark source's media query.
+    var media = mode === "dark" ? "all" : mode === "light" ? "not all" : "(prefers-color-scheme: dark)";
+    document.querySelectorAll("source[data-dark]").forEach(function (s) { s.media = media; });
+    document.querySelectorAll("[data-theme-toggle]").forEach(function (b) {
+      b.querySelector("use").setAttribute("href", icons[mode]);
+      b.title = "Theme: " + mode + " (click to change)";
+    });
+  }
+  var theme = readTheme();
+  if (order.indexOf(theme) < 0) theme = "system";
+  applyTheme(theme);
+  document.querySelectorAll("[data-theme-toggle]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      theme = order[(order.indexOf(theme) + 1) % order.length];
+      try { localStorage.setItem("snipsy-theme", theme); } catch (e) { /* storage blocked: the choice lasts for this visit */ }
+      applyTheme(theme);
+    });
+  });
+
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  /* ---------- light highlighting for the plain key: value blocks ---------- */
+  document.querySelectorAll("code.yaml-plain").forEach(function (el) {
+    var raw = el.textContent;
+    el.dataset.raw = raw;
+    el.innerHTML = raw.split("\n").map(function (l) {
+      var m = l.match(/^(\s*-?\s*)([\w-]+):(\s?)(.*)$/);
+      if (!m) return esc(l);
+      var v = m[4] ? '<span class="t-str">' + esc(m[4]) + "</span>" : "";
+      return '<span class="t-p">' + esc(m[1]) + '</span><span class="t-key">' + m[2] + '</span><span class="t-p">:</span>' + m[3] + v;
+    }).join("\n");
+  });
+
+  /* ---------- copy buttons ---------- */
+  document.querySelectorAll("[data-code] .copy").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var code = btn.closest("[data-code]").querySelector("code");
+      var text = code.dataset.raw || code.textContent;
+      function done(msg) { btn.textContent = msg; setTimeout(function () { btn.textContent = "Copy"; }, 1600); }
+      if (!navigator.clipboard) { done("Select and copy"); return; }
+      navigator.clipboard.writeText(text).then(function () { done("Copied"); }, function () { done("Copy blocked"); });
+    });
+  });
+
+  /* ---------- real date and time in the examples ---------- */
+  function pad(n) { return n < 10 ? "0" + n : String(n); }
+  var now = new Date();
+  var todayStr = now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate());
+  var timeStr = pad(now.getHours()) + ":" + pad(now.getMinutes());
+  document.querySelectorAll("[data-today]").forEach(function (el) { el.textContent = todayStr; });
+  document.querySelectorAll("[data-now]").forEach(function (el) { el.textContent = timeStr; });
+
+  /* ---------- the editor demo ---------- */
+  (function () {
+    var ed = document.getElementById("ed");
+    var live = document.getElementById("edLive");
+    var keys = document.getElementById("edKeys");
+    var outEl = document.getElementById("edOut");
+    if (!ed || !live) return;
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) return; // the static final state in the markup stays
+
+    // Each example: text typed before the trigger, the trigger, its replacement ($| = caret),
+    // and what the writer types next, which lands at the caret.
+    var EXAMPLES = [
+      { pre: "", trig: "todo", rep: "- [ ] $|", after: "Send the proofs" },
+      { pre: "", trig: "note", rep: "> [!note]\n> $|", after: "Printer closes at six." },
+      { pre: "Proofs due ", trig: "today", rep: todayStr, after: "" },
+      { pre: "", trig: "sig", rep: "Best,\nDmitriy", after: "" }
+    ];
+
+    var lines = [""], caret = { l: 0, c: 0 }, flash = null;
+
+    function classify(t) {
+      var cls = [], i, m;
+      for (i = 0; i < t.length; i++) cls.push("");
+      function mark(from, to, c) { for (var k = from; k < to && k < t.length; k++) cls[k] = c; }
+      if ((m = t.match(/^- \[[ x]\] /))) mark(0, m[0].length, "m-mark");
+      else if ((m = t.match(/^#{1,6} /))) mark(0, m[0].length, "m-mark");
+      if ((m = t.match(/^> /))) {
+        mark(0, 2, "m-quote");
+        var co = t.indexOf("[!note]");
+        if (co === 2) mark(2, 9, "m-callout");
+      }
+      return cls;
+    }
+    function before(a, b) { return a.l < b.l || (a.l === b.l && a.c < b.c); }
+    function inFlash(l, c) {
+      if (!flash) return false;
+      var p = { l: l, c: c };
+      return !before(p, flash.from) && before(p, flash.to);
+    }
+    function render() {
+      var elapsed = flash ? Date.now() - flash.at : 0;
+      if (flash && elapsed > 1500) flash = null;
+      live.innerHTML = lines.map(function (t, i) {
+        var cls = classify(t), s = "", open = null, j;
+        for (j = 0; j <= t.length; j++) {
+          if (caret.l === i && caret.c === j) {
+            if (open !== null) { s += "</span>"; open = null; }
+            s += '<span class="caret"></span>';
+          }
+          if (j === t.length) break;
+          var fl = inFlash(i, j);
+          var key = cls[j] + (fl ? " fl" : "");
+          if (key !== open) {
+            if (open !== null) s += "</span>";
+            s += '<span class="' + key + '"' + (fl ? ' style="animation-delay:-' + elapsed + 'ms"' : "") + ">";
+            open = key;
+          }
+          s += esc(t[j]);
+        }
+        if (open !== null) s += "</span>";
+        return '<div class="ed-line">' + s + "</div>";
+      }).join("");
+    }
+    function insert(text) {
+      var parts = text.split("\n");
+      var line = lines[caret.l];
+      var head = line.slice(0, caret.c), tail = line.slice(caret.c);
+      if (parts.length === 1) {
+        lines[caret.l] = head + text + tail;
+        caret = { l: caret.l, c: caret.c + text.length };
+      } else {
+        var rows = [head + parts[0]].concat(parts.slice(1, -1)).concat([parts[parts.length - 1] + tail]);
+        lines.splice.apply(lines, [caret.l, 1].concat(rows));
+        caret = { l: caret.l + parts.length - 1, c: parts[parts.length - 1].length };
+      }
+    }
+    // What the plugin does: replace the trigger (just before the separator) with the
+    // replacement, keep the separator, put the caret at $| or at the end of the insert.
+    function expand(ex) {
+      var sepAt = caret.c - 1, from = sepAt - ex.trig.length, l = caret.l;
+      var at = ex.rep.indexOf("$|");
+      var text = ex.rep.replace(/\$\|/g, "");
+      var line = lines[l];
+      lines[l] = line.slice(0, from) + line.slice(sepAt);
+      caret = { l: l, c: from };
+      var start = { l: l, c: from };
+      insert(text);
+      var end = { l: caret.l, c: caret.c };
+      if (at >= 0) {
+        var head = text.slice(0, at).split("\n");
+        caret = head.length === 1 ? { l: l, c: from + head[0].length } : { l: l + head.length - 1, c: head[head.length - 1].length };
+      }
+      flash = { from: start, to: end, at: Date.now() };
+    }
+    function chipHTML(ex) {
+      var rep = esc(ex.rep).replace(/\n/g, '<span class="nl">↵</span>').replace(/\$\|/g, '<i class="cur"></i>');
+      if (ex.rep.indexOf("$|") < 0) rep += '<i class="cur"></i>';
+      return '<span class="chip"><code class="tr">' + esc(ex.trig) + '</code><span class="ar">→</span><span class="rs">' + rep + "</span></span>";
+    }
+    function addKey(label, sep) {
+      var k = document.createElement("kbd");
+      k.textContent = label;
+      if (sep) k.className = "sep";
+      keys.appendChild(k);
+    }
+
+    // Pause while the demo is off screen or the tab is hidden.
+    var visible = true;
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(function (entries) { visible = entries[0].isIntersecting; }).observe(ed);
+    }
+    function ready() {
+      if (visible && !document.hidden) return Promise.resolve();
+      return new Promise(function (resolve) {
+        var t = setInterval(function () { if (visible && !document.hidden) { clearInterval(t); resolve(); } }, 200);
+      });
+    }
+    function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }).then(ready); }
+    function jitter(base, spread) { return base + Math.random() * spread; }
+    function typing(on) { ed.classList.toggle("typing", on); }
+
+    async function typeText(text, fast, isTrigger) {
+      typing(true);
+      for (var i = 0; i < text.length; i++) {
+        insert(text[i]);
+        if (isTrigger) addKey(text[i], false);
+        render();
+        await sleep(fast ? jitter(38, 40) : jitter(95, 70));
+      }
+    }
+    async function play(ex) {
+      lines = [""]; caret = { l: 0, c: 0 }; flash = null;
+      keys.innerHTML = ""; outEl.innerHTML = "";
+      live.classList.remove("fade");
+      render(); typing(false);
+      await sleep(700);
+      if (ex.pre) await typeText(ex.pre, true, false);
+      await typeText(ex.trig, false, true);
+      typing(false);
+      await sleep(380);
+      typing(true);
+      insert(" "); addKey("Space", true); render();
+      await sleep(170);
+      expand(ex); render();
+      outEl.innerHTML = chipHTML(ex);
+      typing(false);
+      await sleep(1250);
+      if (ex.after) { await typeText(ex.after, true, false); typing(false); }
+      await sleep(2300);
+      live.classList.add("fade");
+      await sleep(320);
+    }
+    async function loop() {
+      for (;;) {
+        for (var i = 0; i < EXAMPLES.length; i++) await play(EXAMPLES[i]);
+      }
+    }
+    loop();
+  })();
+
+  /* ---------- folders ---------- */
+  document.querySelectorAll("[data-folder]").forEach(function (f) {
+    f.addEventListener("click", function () { f.parentElement.classList.toggle("closed"); });
+  });
+
+  /* ---------- mobile drawer ---------- */
+  var menuBtn = document.getElementById("menuBtn");
+  function drawer(open) {
+    document.body.classList.toggle("drawer", open);
+    menuBtn.setAttribute("aria-expanded", String(open));
+  }
+  menuBtn.addEventListener("click", function () { drawer(!document.body.classList.contains("drawer")); });
+  document.getElementById("drawerScrim").addEventListener("click", function () { drawer(false); });
+  document.querySelectorAll("#tree a, .vault-head a").forEach(function (a) { a.addEventListener("click", function () { drawer(false); }); });
+
+  /* ---------- the open note follows the scroll ---------- */
+  var sections = Array.prototype.slice.call(document.querySelectorAll("section.file"));
+  var links = {};
+  document.querySelectorAll("#tree a").forEach(function (a) { links[a.getAttribute("href").slice(1)] = a; });
+  var tabTitle = document.getElementById("tabTitle"), viewPath = document.getElementById("viewPath");
+  var current = null;
+  function setActive(sec) {
+    if (!sec || sec === current) return;
+    current = sec;
+    Object.keys(links).forEach(function (k) { links[k].classList.toggle("active", k === sec.id); });
+    tabTitle.textContent = sec.dataset.title;
+    viewPath.textContent = sec.dataset.path;
+  }
+  function onScroll() {
+    var y = 120, pick = sections[0];
+    sections.forEach(function (s) { if (s.getBoundingClientRect().top <= y) pick = s; });
+    setActive(pick);
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  /* ---------- quick switcher ---------- */
+  var pal = document.getElementById("palette"), palScrim = document.getElementById("paletteScrim");
+  var input = document.getElementById("paletteInput"), list = document.getElementById("paletteList");
+  var entries = sections.map(function (s) { return { id: s.id, title: s.dataset.title, path: s.dataset.path }; });
+  var sel = 0, shown = [];
+  function render() {
+    var q = input.value.trim().toLowerCase();
+    shown = entries.filter(function (e) { return !q || (e.path + " " + e.title).toLowerCase().indexOf(q) >= 0; });
+    sel = Math.min(sel, Math.max(shown.length - 1, 0));
+    list.innerHTML = shown.length ? shown.map(function (e, i) {
+      var folder = e.path.indexOf(" / ") > 0 ? e.path.split(" / ")[0] + "/" : "";
+      return '<li><a href="#' + e.id + '" class="' + (i === sel ? "sel" : "") + '">' + esc(e.title) + (folder ? "<small>" + esc(folder) + "</small>" : "") + "</a></li>";
+    }).join("") : '<li style="padding:8px 10px;color:var(--faint);font-size:14px">No note by that name.</li>';
+  }
+  function openPal() { pal.classList.add("open"); palScrim.classList.add("open"); input.value = ""; sel = 0; render(); input.focus(); drawer(false); }
+  function closePal() { pal.classList.remove("open"); palScrim.classList.remove("open"); }
+  function go(e) { closePal(); location.hash = e.id; }
+  document.querySelectorAll("[data-open-palette]").forEach(function (b) { b.addEventListener("click", openPal); });
+  palScrim.addEventListener("click", closePal);
+  input.addEventListener("input", function () { sel = 0; render(); });
+  list.addEventListener("click", function () { closePal(); });
+  input.addEventListener("keydown", function (ev) {
+    if (ev.key === "ArrowDown") { sel = Math.min(sel + 1, shown.length - 1); render(); ev.preventDefault(); }
+    else if (ev.key === "ArrowUp") { sel = Math.max(sel - 1, 0); render(); ev.preventDefault(); }
+    else if (ev.key === "Enter" && shown[sel]) { go(shown[sel]); }
+  });
+  document.addEventListener("keydown", function (ev) {
+    if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "k") { ev.preventDefault(); pal.classList.contains("open") ? closePal() : openPal(); }
+    else if (ev.key === "Escape") { closePal(); drawer(false); }
+  });
+})();
+</script>
+</body>
+</html>

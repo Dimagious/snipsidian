@@ -12,6 +12,8 @@
         "test": "vitest run --coverage",
         "coverage": "vitest run --coverage",
         "scorecard:check": "node scripts/scorecard-check.cjs",
+        "site:check": "node scripts/site-check.cjs",
+        "site:assemble": "node scripts/assemble-site.cjs",
         "release:check": "node scripts/version-sync.cjs && npm run scorecard:check && npm run test && npm run build",
         "release:zip": "node scripts/make-zip.cjs",
         "release": "npm run release:check && npm run release:zip",
