@@ -64,7 +64,7 @@ describe("PackagePreviewModal — bulk actions update selects in place", () => {
         const summariesBefore =
             modal.contentEl.querySelectorAll(".modal-button-container").length;
         const selectsBefore = modal.contentEl.querySelectorAll(
-            ".conflict-action select",
+            ".snipsidian-conflict-choice",
         );
         expect(selectsBefore.length).toBe(3);
         // Initial state: all default to "keep"
@@ -82,7 +82,7 @@ describe("PackagePreviewModal — bulk actions update selects in place", () => {
 
         // Selects updated to "overwrite"
         const selectsAfter = modal.contentEl.querySelectorAll(
-            ".conflict-action select",
+            ".snipsidian-conflict-choice",
         );
         for (const s of selectsAfter) {
             expect((s as HTMLSelectElement).value).toBe("overwrite");
@@ -90,16 +90,19 @@ describe("PackagePreviewModal — bulk actions update selects in place", () => {
 
         // No DOM duplication: still exactly one footer (the regression
         // against the close()+open() bug — that path appended a second
-        // footer / table / summary line on every bulk click).
+        // footer / card list / summary line on every bulk click).
         const summariesAfter =
             modal.contentEl.querySelectorAll(".modal-button-container").length;
         expect(summariesAfter).toBe(summariesBefore);
         expect(summariesAfter).toBe(1);
 
-        // Still exactly one conflicts table.
+        // Still exactly one conflicts list, with one card per conflict.
         expect(
-            modal.contentEl.querySelectorAll(".snipsidian-preview-table").length,
+            modal.contentEl.querySelectorAll(".snipsidian-conflicts-list").length,
         ).toBe(1);
+        expect(
+            modal.contentEl.querySelectorAll(".snipsidian-conflict-card").length,
+        ).toBe(3);
     });
 
     it("'Keep all current' sets every <select>.value to 'keep' without re-rendering", () => {
@@ -108,7 +111,7 @@ describe("PackagePreviewModal — bulk actions update selects in place", () => {
         // Flip one to overwrite manually so the "keep all" action has
         // something to undo.
         const selects = modal.contentEl.querySelectorAll<HTMLSelectElement>(
-            ".conflict-action select",
+            ".snipsidian-conflict-choice",
         );
         selects[0].value = "overwrite";
         selects[0].dispatchEvent(new Event("change"));
@@ -123,7 +126,7 @@ describe("PackagePreviewModal — bulk actions update selects in place", () => {
         keepAll.click();
 
         const selectsAfter = modal.contentEl.querySelectorAll<HTMLSelectElement>(
-            ".conflict-action select",
+            ".snipsidian-conflict-choice",
         );
         for (const s of selectsAfter) {
             expect(s.value).toBe("keep");
@@ -154,9 +157,9 @@ describe("PackagePreviewModal — bulk actions update selects in place", () => {
         overwriteAll.click();
         keepAll.click();
 
-        // Tables, button bars, and footers should all still be singleton.
+        // Card list, button bars, and footers should all still be singleton.
         expect(
-            modal.contentEl.querySelectorAll(".snipsidian-preview-table").length,
+            modal.contentEl.querySelectorAll(".snipsidian-conflicts-list").length,
         ).toBe(1);
         expect(
             modal.contentEl.querySelectorAll(".snipsidian-bulk-actions").length,
@@ -166,9 +169,73 @@ describe("PackagePreviewModal — bulk actions update selects in place", () => {
         ).toBe(1);
         // Final state: all "keep" (last click was Keep all).
         for (const s of modal.contentEl.querySelectorAll<HTMLSelectElement>(
-            ".conflict-action select",
+            ".snipsidian-conflict-choice",
         )) {
             expect(s.value).toBe("keep");
         }
+    });
+});
+
+describe("PackagePreviewModal — conflict cards", () => {
+    it("renders one card per conflict with key, current and incoming text", () => {
+        const modal = mount(makeDiff(1));
+
+        const cards = modal.contentEl.querySelectorAll(".snipsidian-conflict-card");
+        expect(cards.length).toBe(1);
+
+        const card = cards[0];
+        expect(card.querySelector(".snipsidian-conflict-key")?.textContent).toBe("Pack/c0");
+        expect(
+            card.querySelector(".snipsidian-conflict-key-group")?.textContent,
+        ).toBe("Pack/");
+        expect(card.querySelector(".snipsidian-conflict-current")?.textContent).toContain(
+            "local-0",
+        );
+        expect(card.querySelector(".snipsidian-conflict-incoming")?.textContent).toContain(
+            "upstream-0",
+        );
+        // No table left over from the pre-redesign layout.
+        expect(modal.contentEl.querySelector("table")).toBeNull();
+    });
+
+    it("has no group prefix span for an ungrouped key", () => {
+        const modal = mount({
+            added: [],
+            conflicts: [{ key: "plainkey", current: "a", incoming: "b" }],
+        });
+
+        const card = modal.contentEl.querySelector(".snipsidian-conflict-card");
+        expect(card?.querySelector(".snipsidian-conflict-key-group")).toBeNull();
+        expect(card?.querySelector(".snipsidian-conflict-key")?.textContent).toBe("plainkey");
+    });
+
+    it("passes the resolved map (respecting per-conflict choices) to onConfirm", () => {
+        const diff = makeDiff(2, 1);
+        const modal = mount(diff);
+        let resolved: Record<string, string> | undefined;
+        modal.onConfirm = (result) => {
+            resolved = result;
+        };
+
+        // Flip the first conflict's choice to "overwrite" via its own
+        // select; leave the second on the "keep" default.
+        const selects = modal.contentEl.querySelectorAll<HTMLSelectElement>(
+            ".snipsidian-conflict-choice",
+        );
+        selects[0].value = "overwrite";
+        selects[0].dispatchEvent(new Event("change"));
+
+        const apply = Array.from(
+            modal.contentEl.querySelectorAll<HTMLButtonElement>(
+                ".modal-button-container button",
+            ),
+        ).find((b) => b.textContent === "Apply")!;
+        apply.click();
+
+        expect(resolved).toEqual({
+            "Pack/new0": "v0",
+            "Pack/c0": "upstream-0",
+            "Pack/c1": "local-1",
+        });
     });
 });

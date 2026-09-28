@@ -1,7 +1,7 @@
 import { App, ButtonComponent, Modal, Setting, TextComponent } from "obsidian";
 import type SnipSidianPlugin from "../../main";
 import { DiffResult } from "../../store/diff";
-import { displayGroupTitle, slugifyGroup } from "../../store/keys";
+import { displayGroupTitle, slugifyGroup, splitKey } from "../../store/keys";
 import { computeImportDiff } from "../../services/import-diff";
 import { normalizeTrigger } from "../../engine/triggers";
 
@@ -64,18 +64,28 @@ export class PackagePreviewModal extends Modal {
     onOpen(): void {
         const { contentEl, titleEl } = this;
         titleEl.setText(this.titleText);
+        // Was missing: every `.snipsidian-conflicts-*` / `.snipsidian-
+        // preview-table` rule in main.css is scoped under
+        // `.snipsidian-modal`, but this modal never added the class, so
+        // that whole block was dead CSS. Needed now so the redesigned
+        // conflict cards actually pick up their styling.
+        contentEl.addClass("snipsidian-modal");
 
+        // Wording (redesign): "Will add 7 new snippet(s). Conflicts: 1."
+        // reads like a status log; "7 new snippets, 1 conflict." reads
+        // as a sentence, with real plurals instead of "(s)".
         const summary = contentEl.createDiv();
-        summary.createEl("p", {
-            text: `Will add ${this.diff.added.length} new snippet(s). Conflicts: ${this.diff.conflicts.length}.`,
-        });
+        const addedCount = this.diff.added.length;
+        const conflictCount = this.diff.conflicts.length;
+        const parts = [`${addedCount} new snippet${addedCount === 1 ? "" : "s"}`];
+        if (conflictCount > 0) {
+            parts.push(`${conflictCount} conflict${conflictCount === 1 ? "" : "s"}`);
+        }
+        summary.createEl("p", { text: `${parts.join(", ")}.` });
 
         if (this.diff.conflicts.length) {
-            contentEl.createEl("h3", { text: "Conflicts" });
-            const table = contentEl.createEl("table", { cls: "snipsidian-preview-table" });
-            const thead = table.createEl("thead");
-            const headRow = thead.createEl("tr");
-            ["Trigger", "Current", "Incoming", "Action"].forEach((h) => headRow.createEl("th", { text: h }));
+            const conflictsHead = contentEl.createDiv({ cls: "snipsidian-conflicts-head" });
+            conflictsHead.createEl("h3", { text: "Conflicts" });
 
             // Keep a handle to each conflict's <select> so the bulk
             // actions ("Keep all current" / "Overwrite all") can
@@ -85,19 +95,51 @@ export class PackagePreviewModal extends Modal {
             // contentEl, so onOpen() ran a second time and appended.
             const selects: Array<{ key: string; el: HTMLSelectElement }> = [];
 
-            const tbody = table.createEl("tbody");
-            for (const c of this.diff.conflicts) {
-                const tr = tbody.createEl("tr");
-                tr.createEl("td", { text: c.key });
-                tr.createEl("td", { text: c.current });
-                tr.createEl("td", { text: c.incoming });
+            // Bulk actions sit next to the "Conflicts" heading they
+            // act on, instead of glued under the table (AUDIT: "Keep
+            // all current / Overwrite all are glued together and sit
+            // under the table, detached from the column they act on").
+            const bulk = conflictsHead.createDiv({ cls: "snipsidian-bulk-actions" });
+            const btnKeepAll = bulk.createEl("button", { text: "Keep all current", cls: "snippet-action" });
+            const btnOverwriteAll = bulk.createEl("button", {
+                text: "Overwrite all",
+                cls: "snippet-action",
+            });
 
-                const actionTd = tr.createEl("td", { cls: "conflict-action" });
-                const sel = actionTd.createEl("select");
+            // One card per conflict (redesign #418) instead of a table —
+            // the table centred headers over left-aligned cells and
+            // wrapped long keys (AUDIT). Each card carries its own
+            // `.snipsidian-conflict-card` hook and the choice `<select>`
+            // carries `.snipsidian-conflict-choice`, so tests can target
+            // them without depending on layout.
+            const list = contentEl.createDiv({ cls: "snipsidian-conflicts-list" });
+            for (const c of this.diff.conflicts) {
+                const card = list.createDiv({ cls: "snipsidian-conflict-card" });
+
+                const top = card.createDiv({ cls: "snipsidian-conflict-top" });
+                const keyEl = top.createEl("code", { cls: "snipsidian-conflict-key" });
+                const { group, name } = splitKey(c.key);
+                if (group) {
+                    keyEl.createSpan({
+                        cls: "snipsidian-conflict-key-group",
+                        text: `${displayGroupTitle(group)}/`,
+                    });
+                }
+                keyEl.createSpan({ text: name });
+
+                const sel = top.createEl("select", { cls: "snipsidian-conflict-choice" });
                 sel.append(new Option("Keep current", "keep"), new Option("Overwrite", "overwrite"));
                 sel.value = this.choices.get(c.key) ?? "keep";
                 sel.onchange = () => this.choices.set(c.key, sel.value as "keep" | "overwrite");
                 selects.push({ key: c.key, el: sel });
+
+                const compare = card.createDiv({ cls: "snipsidian-conflict-compare" });
+                const currentEl = compare.createDiv({ cls: "snipsidian-conflict-current" });
+                currentEl.createEl("small", { text: "Current" });
+                currentEl.createSpan({ text: c.current });
+                const incomingEl = compare.createDiv({ cls: "snipsidian-conflict-incoming" });
+                incomingEl.createEl("small", { text: "Incoming" });
+                incomingEl.createSpan({ text: c.incoming });
             }
 
             const setAll = (choice: "keep" | "overwrite") => {
@@ -106,11 +148,7 @@ export class PackagePreviewModal extends Modal {
                     el.value = choice;
                 }
             };
-
-            const bulk = contentEl.createDiv({ cls: "snipsidian-bulk-actions" });
-            const btnKeepAll = bulk.createEl("button", { text: "Keep all current" });
             btnKeepAll.onclick = () => setAll("keep");
-            const btnOverwriteAll = bulk.createEl("button", { text: "Overwrite all" });
             btnOverwriteAll.onclick = () => setAll("overwrite");
         }
 
@@ -259,9 +297,8 @@ export class TextPromptModal extends Modal {
 
         // Row: label + input (как в Settings)
         let input!: TextComponent;
-        new Setting(contentEl)
+        const nameSetting = new Setting(contentEl)
             .setName("New name")
-            .setDesc("")
             .addText((t) => {
                 input = t;
                 t.setPlaceholder(this.opts.placeholder ?? "Type a name…");
@@ -273,10 +310,13 @@ export class TextPromptModal extends Modal {
                 });
             });
 
-        // B-051: live hint below the input. Hidden until formatHint
-        // returns a non-null string. `aria-live="polite"` so AT users
-        // hear the "Will be saved as: …" preview as they type.
-        const hintEl = contentEl.createDiv({
+        // B-051/F5f: live hint lives in the row's own `descEl` (a
+        // second line under it), not a separate div after the row —
+        // so it reads as feedback on the input, not a floating extra
+        // setting. Hidden until formatHint returns a non-null string.
+        // `aria-live="polite"` so AT users hear the "Will be saved
+        // as: …" preview as they type.
+        const hintEl = nameSetting.descEl.createDiv({
             cls: "snipsy-hint snipsidian-prompt-hint",
             attr: { "aria-live": "polite" },
         });
@@ -350,6 +390,14 @@ export class ConfirmModal extends Modal {
             message: string;
             confirmText?: string;
             cancelText?: string;
+            /** Destructive confirms (delete group/snippet, bulk
+             *  delete, uninstall package) map to `mod-warning` instead
+             *  of the accent `mod-cta` — Obsidian's own convention for
+             *  "this is hard to undo", and a fix for the redesign's
+             *  finding that delete-group used accent styling for a
+             *  destructive action. Defaults to `false` so existing
+             *  non-destructive confirms are unaffected. */
+            danger?: boolean;
             onConfirm: () => void | Promise<void>;
         }
     ) {
@@ -366,16 +414,16 @@ export class ConfirmModal extends Modal {
         message.createEl("p", { text: this.opts.message });
 
         const footer = contentEl.createDiv({ cls: "modal-button-container" });
-        
+
         const cancel = footer.createEl("button", { text: this.opts.cancelText || "Cancel" });
         cancel.onclick = () => {
             this.confirmed = false;
             this.close();
         };
 
-        const confirm = footer.createEl("button", { 
+        const confirm = footer.createEl("button", {
             text: this.opts.confirmText || "Confirm",
-            cls: "mod-cta"
+            cls: this.opts.danger ? "mod-warning" : "mod-cta",
         });
         confirm.onclick = () => {
             this.confirmed = true;
@@ -477,7 +525,10 @@ export class AddSnippetModal extends Modal {
 
     onOpen(): void {
         const { contentEl, titleEl } = this;
-        titleEl.setText("Add new snippet");
+        // Wording (redesign): title now matches the button that opens
+        // it ("Add snippet") — "Add new snippet" vs. "Add snippet" was
+        // two names for one thing.
+        titleEl.setText("Add snippet");
         contentEl.addClass("snipsidian-modal");
 
         let trigger = "";
@@ -488,7 +539,7 @@ export class AddSnippetModal extends Modal {
         // analysis can't prove the callback ran before later code).
         const refs: { trigger?: HTMLInputElement } = {};
 
-        new Setting(contentEl)
+        const triggerSetting = new Setting(contentEl)
             .setName("Trigger")
             .setDesc("The text that expands into your replacement")
             .addText((text) => {
@@ -502,11 +553,15 @@ export class AddSnippetModal extends Modal {
                     });
             });
 
-        // B-137: live hint, same `aria-live="polite"` pattern as the
-        // group-rename modal's "Will be saved as: …" hint — shown
-        // only when normalization (or prefix mode) changes what the
-        // user typed.
-        const hintEl = contentEl.createDiv({
+        // B-137/F5f: live hint, same `aria-live="polite"` pattern as
+        // the group-rename modal's "Will be saved as: …" hint — lives
+        // in the Trigger row's own `descEl`, as a second line under
+        // its static description, instead of a separate div after the
+        // row (AUDIT: "renders as a full-size line with a divider
+        // under it, so it looks like a fourth setting"). Shown only
+        // when normalization (or prefix mode) changes what the user
+        // typed.
+        const hintEl = triggerSetting.descEl.createDiv({
             cls: "snipsy-hint snipsidian-addsnippet-hint",
             attr: { "aria-live": "polite" },
         });
@@ -763,7 +818,9 @@ export class ImportPreviewModal extends Modal {
             const row = el.createDiv({ cls: "snipsy-import-row" });
             row.createSpan({
                 cls: `snipsy-import-tag snipsy-import-tag-${tag}`,
-                text: tag === "new" ? "NEW" : tag === "update" ? "UPDATE" : "REMOVE",
+                // Wording (redesign): sentence case instead of
+                // shouting all-caps tags.
+                text: tag === "new" ? "New" : tag === "update" ? "Update" : "Remove",
             });
             row.createSpan({ cls: "snipsy-import-key", text: key });
             row.createSpan({ cls: "snipsy-import-value", text: value });

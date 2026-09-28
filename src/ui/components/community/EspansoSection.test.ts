@@ -87,16 +87,40 @@ matches:
 `.trim();
 
 describe("EspansoSection — render", () => {
-    it("mounts the heading + group-input + textarea + import button", () => {
+    // B-153/wording: "Import from Espanso YAML" becomes "Espanso
+    // import" — rendered as the group's sentence-case heading
+    // (renderSettingGroup), not a `.section-title` div.
+    it("mounts the 'Espanso import' heading + group-input + textarea + import button", () => {
         const { root } = mount();
-        expect(root.querySelector(".section-title")?.textContent).toBe(
-            "Import from Espanso YAML",
-        );
+        const heading = Array.from(
+            root.querySelectorAll(".setting-item-heading .setting-item-name"),
+        ).find((el) => el.textContent === "Espanso import");
+        expect(heading).toBeTruthy();
         expect(root.querySelector(".snipsy-espanso-group-input")).toBeTruthy();
         expect(root.querySelector(".yaml-textarea")).toBeTruthy();
         expect(
             Array.from(root.querySelectorAll("button")).map((b) => b.textContent),
         ).toContain("Import snippets");
+    });
+
+    // B-153/wording + AUDIT X8 (em dashes in UI copy).
+    // V2 fix (2026-09 UI-redesign follow-up): the intro is now a real
+    // (nameless) row's `descEl` — same pattern as
+    // `PackageSubmissionSection`'s "Share a package" intro — instead
+    // of a bare `createDiv`, so it picks up correct row padding on
+    // every Obsidian version. It's the first Setting this section
+    // mounts, so its `descEl` is the first `.setting-item-description`
+    // in document order (the "Group name" row's own desc comes after).
+    it("intro copy reads the new sentence, linking 'Espanso hub', with no em dash", () => {
+        const { root } = mount();
+        const intro = root.querySelector(".setting-item-description") as HTMLElement;
+        expect(intro.textContent).toBe(
+            "Paste package YAML. Plain text triggers become snippets; forms and scripts are skipped. Find packages on the Espanso hub.",
+        );
+        expect(intro.textContent).not.toContain("—");
+        const link = intro.querySelector("a");
+        expect(link?.textContent).toBe("Espanso hub");
+        expect(link?.getAttribute("href")).toBe("https://hub.espanso.org/search");
     });
 });
 
@@ -365,6 +389,11 @@ matches:
         expect(status.textContent).toContain("1 imported, 1 skipped");
         expect(status.textContent).toContain("addr");
         expect(status.getAttribute("aria-live")).toBe("polite");
+        // B-153/wording + AUDIT X8: no em dash; a plain sentence instead.
+        expect(status.textContent).not.toContain("—");
+        expect(status.textContent).toBe(
+            "1 imported, 1 skipped: addr. Forms and scripts are not supported.",
+        );
 
         expect(
             noticeCalls.some((m) => m.includes("Installed 1 snippet") && m.includes("skipped")),

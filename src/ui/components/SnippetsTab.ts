@@ -1,4 +1,4 @@
-import { App, Notice, setIcon } from "obsidian";
+import { App, Notice, ToggleComponent, setIcon } from "obsidian";
 import type SnipSidianPlugin from "../../main";
 import { splitKey, slugifyGroup } from "../../store/keys";
 import { GroupManager } from "../utils/group-utils";
@@ -36,14 +36,18 @@ export class SnippetsTab {
     render(root: HTMLElement) {
         root.empty();
 
-        // Real heading element (B-091): screen readers need <h3>, not
-        // a styled-div `.setting-item-heading`.
-        root.createEl("h3", { text: "Snippets", cls: "snipsy-tab-heading" });
+        // No redundant page heading (AUDIT X3 / redesign principle
+        // "say it once") — the active tab button already says
+        // "Snippets", and the tabpanel carries
+        // `aria-labelledby="snipsy-tab-snippets"` (SettingsTab.ts),
+        // so screen-reader users still get an accessible name for
+        // this region without a duplicate heading.
+        const wrap = root.createDiv({ cls: "snipsy-snippet-list" });
 
-        this.renderToolbar(root);
-        this.renderBulkBar(root);
+        this.renderToolbar(wrap);
+        this.renderBulkBar(wrap);
 
-        this.listEl = root.createDiv({ cls: "snippet-list" });
+        this.listEl = wrap.createDiv({ cls: "snippet-list" });
         this.renderList();
     }
 
@@ -70,14 +74,23 @@ export class SnippetsTab {
         });
         this.searchInput = input;
 
-        // Result-count badge (B-099). Hidden by default; the list
-        // renderer fills it in when there's a non-empty search query.
-        this.countBadge = toolbar.createSpan({ cls: "snipsy-filter-count is-hidden" });
+        // Result-count badge (B-099/F5g). Lives inside the search
+        // field itself, like a search suffix, so the toolbar doesn't
+        // shift while typing (mockup: "the match count moves inside
+        // the search field on the right"). Hidden by default; the
+        // list renderer fills it in when there's a non-empty query.
+        this.countBadge = searchWrap.createSpan({ cls: "snipsy-filter-count is-hidden" });
 
+        // Select and Expand-all are clickable icons with tooltips
+        // (owner decision #2), not text buttons — `setIcon` + an
+        // `aria-label`/`title` tooltip carries the meaning instead of
+        // visible text, matching the "Select" chip in Obsidian's own
+        // Hotkeys/Community-plugins lists.
         const selBtn = toolbar.createEl("button", {
-            cls: "snippet-action",
+            cls: "snippet-icon-action",
             attr: { type: "button" },
         });
+        setIcon(selBtn, "list-checks");
         this.refreshSelectionButton(selBtn);
         selBtn.addEventListener("click", () => {
             const next = !this.uiState.getSelectionMode();
@@ -88,9 +101,10 @@ export class SnippetsTab {
         });
 
         const expandBtn = toolbar.createEl("button", {
-            cls: "snippet-action",
+            cls: "snippet-icon-action",
             attr: { type: "button" },
         });
+        setIcon(expandBtn, "unfold-vertical");
         this.refreshExpandButton(expandBtn);
         expandBtn.addEventListener("click", () => {
             const groups = this.groupManager.allGroupsFrom(this.plugin.settings.snippets);
@@ -116,8 +130,12 @@ export class SnippetsTab {
     }
 
     private refreshSelectionButton(btn: HTMLButtonElement) {
-        btn.textContent = this.uiState.getSelectionMode() ? "Done selecting" : "Select";
-        btn.setAttr("aria-pressed", this.uiState.getSelectionMode() ? "true" : "false");
+        const active = this.uiState.getSelectionMode();
+        const label = active ? "Done selecting" : "Select snippets";
+        btn.setAttr("aria-label", label);
+        btn.setAttr("title", label);
+        btn.setAttr("aria-pressed", active ? "true" : "false");
+        btn.toggleClass("is-active", active);
     }
 
     private refreshExpandButton(btn: HTMLButtonElement) {
@@ -125,7 +143,9 @@ export class SnippetsTab {
         const allOpen =
             groups.length > 0 &&
             groups.every((g) => this.uiState.loadOpenState(g, false));
-        btn.textContent = allOpen ? "Collapse all" : "Expand all";
+        const label = allOpen ? "Collapse all" : "Expand all";
+        btn.setAttr("aria-label", label);
+        btn.setAttr("title", label);
     }
 
     private renderBulkBar(root: HTMLElement) {
@@ -183,7 +203,7 @@ export class SnippetsTab {
         });
 
         const deleteBtn = this.bulkBar.createEl("button", {
-            cls: "snippet-action is-danger",
+            cls: "snippet-action mod-warning",
             text: "Delete",
             attr: { type: "button" },
         });
@@ -193,6 +213,7 @@ export class SnippetsTab {
                 title: "Delete snippets",
                 message: `Delete ${n} snippet(s)?`,
                 confirmText: "Delete",
+                danger: true,
                 onConfirm: async () => {
                     for (const key of this.uiState.getSelected()) {
                         delete this.plugin.settings.snippets[key];
@@ -313,6 +334,45 @@ export class SnippetsTab {
             this.renderList();
         });
 
+        // F5b: select-all sits at the left edge, before the chevron —
+        // the same edge row checkboxes use — so it can no longer be
+        // mistaken for the mute toggle (AUDIT: "two identical
+        // checkboxes in the header"). Indeterminate (some, not all,
+        // selected) is a DOM property, not an attribute/class.
+        //
+        // `refreshSelectAll` is also handed to each row's own
+        // checkbox (below) — a row toggle doesn't trigger a full
+        // `renderList()` (same B-052 rationale as `updateBulkBar`:
+        // avoid a flicker + listener-reallocation on every click), so
+        // without this the header's checked/indeterminate state would
+        // go stale after checking/unchecking a single row.
+        let refreshSelectAll: (() => void) | undefined;
+        if (this.uiState.getSelectionMode()) {
+            const selectAllCb = header.createEl("input", {
+                type: "checkbox",
+                cls: "group-select-all",
+                attr: { "aria-label": `Select all in group ${title}` },
+            });
+            refreshSelectAll = () => {
+                const selectedCount = items.filter(([key]) => this.uiState.getSelected().has(key)).length;
+                selectAllCb.checked = items.length > 0 && selectedCount === items.length;
+                selectAllCb.indeterminate = selectedCount > 0 && selectedCount < items.length;
+            };
+            refreshSelectAll();
+            // Same pattern as the other header controls: stop the
+            // click reaching the header's own listener so toggling
+            // selection doesn't also collapse/expand the accordion.
+            selectAllCb.addEventListener("click", (e) => e.stopPropagation());
+            selectAllCb.addEventListener("change", () => {
+                if (selectAllCb.checked) {
+                    items.forEach(([key]) => this.uiState.getSelected().add(key));
+                } else {
+                    items.forEach(([key]) => this.uiState.getSelected().delete(key));
+                }
+                this.renderList();
+            });
+        }
+
         // Chevron is the AT-accessible affordance + visual indicator.
         // setIcon renders an SVG; we toggle the `.open` class to
         // rotate it 90° via CSS (no glyph swap). No own click handler —
@@ -330,55 +390,69 @@ export class SnippetsTab {
 
         header.createSpan({ text: title, cls: "group-title" });
         header.createSpan({ text: `${items.length}`, cls: "group-count" });
-
-        const actions = header.createDiv({ cls: "group-actions" });
-
-        if (this.uiState.getSelectionMode()) {
-            const selectAllCb = actions.createEl("input", {
-                type: "checkbox",
-                attr: { "aria-label": `Select all in group ${title}` },
-            });
-            selectAllCb.checked = items.every(([key]) => this.uiState.getSelected().has(key));
-            selectAllCb.addEventListener("change", () => {
-                if (selectAllCb.checked) {
-                    items.forEach(([key]) => this.uiState.getSelected().add(key));
-                } else {
-                    items.forEach(([key]) => this.uiState.getSelected().delete(key));
-                }
-                this.renderList();
-            });
+        // A muted group shows an "Off" flair so the state is readable
+        // without hovering (AUDIT: "only dims the title... no visible
+        // off state when not hovering").
+        if (isDisabled) {
+            header.createSpan({ text: "Off", cls: "group-off-flair" });
         }
+
+        // F5a: the mute toggle is its own wrapper, NOT inside
+        // `.group-actions` — it stays visible on hover-capable devices
+        // where Rename/Delete are hover-revealed (AUDIT: mockup #2,
+        // "always visible, right of the name"). `margin-left: auto`
+        // (main.css) on this wrapper pushes it — and `.group-actions`
+        // right after it — to the header's right edge; kept even for
+        // Ungrouped (no toggle inside) so that push still happens.
+        const muteWrap = header.createDiv({ cls: "group-mute" });
 
         // B-138: per-group enable/disable — mute a group's expansion
         // + picker visibility without the destructive round-trip of
         // deleting and reinstalling it. Ungrouped has no toggle: it's
         // not a real group slug, there's nothing to record.
+        //
+        // Real `ToggleComponent` (not a bare `<input type=checkbox>`)
+        // so it reads as Obsidian's own on/off switch instead of a
+        // second checkbox easily confused with selection mode's
+        // select-all checkbox (AUDIT: "two identical checkboxes sit
+        // side by side"). `toggleEl` is the `label.checkbox-container`
+        // that WRAPS the real `<input type=checkbox>` (verified against
+        // real Obsidian 1.13.7 — it's the focusable element, the input
+        // itself is `tabindex="-1"`), in both the real API and the
+        // test stub, so `.checked` (on the wrapped input) /
+        // `.snipsy-group-enable-toggle` (on the wrapper) stay
+        // queryable exactly as before. No explicit `aria-label` call
+        // here: `setTooltip()` below already sets one on `toggleEl`
+        // (verified live — its own `aria-label` matches the tooltip
+        // text), so a second identical `setAttr` was redundant.
         if (group !== "") {
-            const disableCb = actions.createEl("input", {
-                type: "checkbox",
-                cls: "snipsy-group-enable-toggle",
-                attr: { "aria-label": `Enable/disable group ${title}` },
-            });
-            disableCb.checked = !isDisabled;
+            const toggle = new ToggleComponent(muteWrap)
+                .setValue(!isDisabled)
+                .setTooltip(`Enable/disable group ${title}`);
+            toggle.toggleEl.addClass("snipsy-group-enable-toggle");
             // Same pattern as the other header action controls: stop
             // the click reaching the header's own listener so toggling
             // doesn't also collapse/expand the accordion.
-            disableCb.addEventListener("click", (e) => e.stopPropagation());
-            disableCb.addEventListener("change", () => {
-                void this.setGroupEnabled(group, disableCb.checked);
+            toggle.toggleEl.addEventListener("click", (e: Event) => e.stopPropagation());
+            toggle.onChange((value) => {
+                void this.setGroupEnabled(group, value);
             });
         }
 
+        const actions = header.createDiv({ cls: "group-actions" });
+
         const renameBtn = actions.createEl("button", {
-            cls: "snippet-action",
+            cls: "snippet-icon-action",
             attr: { type: "button", "aria-label": `Rename group ${title}` },
         });
         setIcon(renameBtn, "pencil");
         renameBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             const modal = new TextPromptModal(this.app, {
-                title: "Rename group:",
+                // B-153/wording: "Rename group:" drops the trailing colon.
+                title: "Rename group",
                 initial: title,
+                cta: "Rename",
                 validate: (v) => {
                     const trimmed = v.trim();
                     if (!trimmed) return "Group name cannot be empty";
@@ -408,7 +482,7 @@ export class SnippetsTab {
         });
 
         const deleteBtn = actions.createEl("button", {
-            cls: "snippet-action is-danger",
+            cls: "snippet-icon-action is-danger",
             attr: { type: "button", "aria-label": `Delete group ${title}` },
         });
         setIcon(deleteBtn, "trash");
@@ -430,6 +504,7 @@ export class SnippetsTab {
                 title: `Delete group "${title}"?`,
                 message,
                 confirmText: "Delete",
+                danger: true,
                 onConfirm: async () => {
                     for (const [key] of items) {
                         delete this.plugin.settings.snippets[key];
@@ -455,12 +530,17 @@ export class SnippetsTab {
         if (isOpen) {
             const content = groupEl.createDiv({ cls: "group-content" });
             for (const [key, replacement] of items) {
-                this.renderSnippetRow(content, key, replacement);
+                this.renderSnippetRow(content, key, replacement, refreshSelectAll);
             }
         }
     }
 
-    private renderSnippetRow(content: HTMLElement, key: string, replacement: string) {
+    private renderSnippetRow(
+        content: HTMLElement,
+        key: string,
+        replacement: string,
+        onRowSelectionChange?: () => void,
+    ) {
         const { name: triggerName } = splitKey(key);
         const editing = this.uiState.isEditing(key);
 
@@ -490,6 +570,7 @@ export class SnippetsTab {
                 else this.uiState.getSelected().delete(key);
                 this.updateBulkBar();
                 row.toggleClass("is-selected", cb.checked);
+                onRowSelectionChange?.();
             });
             triggerCell.createSpan({ text: ` ${triggerName}` });
         } else {
@@ -497,20 +578,19 @@ export class SnippetsTab {
         }
 
         const preview = row.createDiv({ cls: "snippet-replacement" });
-        preview.createSpan({ cls: "arrow", text: "→" });
-        preview.createSpan({ text: replacement || "" });
+        this.renderReplacementPreview(preview, replacement || "");
 
         const actionsContainer = row.createDiv({ cls: "snippet-actions" });
 
         const editBtn = actionsContainer.createEl("button", {
-            cls: "snippet-action",
+            cls: "snippet-icon-action",
             attr: { type: "button", "aria-label": `Edit snippet ${triggerName}` },
         });
         setIcon(editBtn, "pencil");
         editBtn.addEventListener("click", () => this.beginEdit(key, triggerName, replacement));
 
         const delBtn = actionsContainer.createEl("button", {
-            cls: "snippet-action is-danger",
+            cls: "snippet-icon-action is-danger",
             attr: { type: "button", "aria-label": `Delete snippet ${triggerName}` },
         });
         setIcon(delBtn, "trash");
@@ -519,6 +599,7 @@ export class SnippetsTab {
                 title: "Delete snippet",
                 message: `Delete snippet "${triggerName}"?`,
                 confirmText: "Delete",
+                danger: true,
                 onConfirm: async () => {
                     delete this.plugin.settings.snippets[key];
                     await this.plugin.saveSettings();
@@ -528,6 +609,19 @@ export class SnippetsTab {
                 },
             });
             modal.open();
+        });
+    }
+
+    /** Renders a single-line-height replacement preview where each
+     *  embedded newline shows as a faint ↵ marker instead of
+     *  flattening to invisible whitespace (AUDIT: "Newlines are
+     *  flattened with no ellipsis cue"). CSS `text-overflow: ellipsis`
+     *  on the container still clips an overlong single line. */
+    private renderReplacementPreview(container: HTMLElement, replacement: string) {
+        const lines = replacement.split("\n");
+        lines.forEach((line, i) => {
+            if (i > 0) container.createSpan({ cls: "nl", text: "↵" });
+            container.appendChild(activeDocument.createTextNode(line));
         });
     }
 

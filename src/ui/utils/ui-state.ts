@@ -124,7 +124,16 @@ export class UIStateManager {
         this.activeTab = tab;
         this.saveActiveTab(tab);
         // Tab changes happen once per click — persist immediately.
-        void this.persist();
+        // B-155: this used to be a bare `void this.persist()` — a
+        // rejected save (e.g. `saveData` failing) was an unhandled
+        // promise rejection with zero user-facing signal. Same
+        // catch+log shape as `setGroupOpen`'s debounced save below:
+        // the tab still switches either way (the in-memory
+        // `activeTab` already updated above), we just log the failure
+        // instead of losing it silently (CLAUDE.md §4).
+        Promise.resolve(this.persist()).catch((err) => {
+            console.error("[snipsy] failed to save active tab", err);
+        });
     }
 
     getGroupOpen(): Map<string, boolean> {

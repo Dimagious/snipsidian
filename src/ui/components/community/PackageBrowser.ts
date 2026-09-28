@@ -1,4 +1,4 @@
-import { App, Modal, Notice } from "obsidian";
+import { App, ExtraButtonComponent, Modal, Notice, setIcon } from "obsidian";
 import type SnipSidianPlugin from "../../../main";
 import { loadAllCommunityPackages } from "../../../services/community-packages";
 import type { CommunityFetchError } from "../../../services/community-cache";
@@ -12,6 +12,7 @@ import {
     planGroupedInstall,
     removePackageSnippets,
 } from "../../../core/install-plan";
+import { renderSettingGroup } from "../../utils/setting-group";
 
 interface PackageItem {
     id?: string;
@@ -70,7 +71,7 @@ export class PackageBrowser {
     private state: "loading" | "ready" | "error" = "loading";
     private section: HTMLElement | null = null;
     private listEl: HTMLElement | null = null;
-    private refreshBtn: HTMLButtonElement | null = null;
+    private refreshBtn: ExtraButtonComponent | null = null;
     private filterCountEl: HTMLSpanElement | null = null;
 
     constructor(
@@ -79,47 +80,45 @@ export class PackageBrowser {
     ) {}
 
     async render(root: HTMLElement): Promise<void> {
-        this.section = root.createDiv({ cls: "snipsy-community-browse-section" });
-        this.section.createEl("h3", {
-            text: "Community packages",
-            cls: "snipsy-tab-heading",
-        });
-        this.section.createEl("p", {
-            text: "Curated snippet collections from the community.",
-            cls: "snipsy-hint",
-        });
-
-        // Toolbar: search + refresh. Same toolbar pattern as Snippets tab.
-        const toolbar = this.section.createDiv({ cls: "snipsy-snippet-toolbar" });
-
-        const searchWrap = toolbar.createDiv({ cls: "snipsy-search" });
-        const searchInput = searchWrap.createEl("input", {
-            type: "text",
-            attr: {
-                placeholder: "Filter packages",
-                "aria-label": "Filter community packages",
-            },
-        });
-        searchInput.addEventListener("input", () => {
-            this.searchQuery = searchInput.value.toLowerCase();
-            this.filterPackages();
-            this.renderList();
+        // Group with a Refresh clickable icon next to the heading —
+        // the same pattern Obsidian's own "Installed plugins" section
+        // uses — and a search docked at the top of the group.
+        const group = renderSettingGroup(root, "Community packages");
+        group.addExtraButton((b) => {
+            this.refreshBtn = b;
+            b.setIcon("refresh-cw")
+                .setTooltip("Refresh packages")
+                .onClick(() => void this.refresh());
         });
 
-        const refreshBtn = toolbar.createEl("button", {
-            cls: "snippet-action",
-            text: "Refresh",
-            attr: { type: "button", "aria-label": "Refresh packages from GitHub" },
+        this.section = group.bodyEl;
+        // V2 fix (2026-09 UI-redesign follow-up, same root cause as
+        // EspansoSection's intro): a bare `<p>` dropped directly into
+        // the group's body relied on `.setting-items` itself carrying
+        // the row inset as container padding — true on Obsidian 1.12,
+        // not on 1.13 (verified against the real 1.13.7 app.css),
+        // which moved that inset onto each `.setting-item` row
+        // individually. A real (nameless) row's `descEl` gets the
+        // correct inset on any Obsidian version, same pattern as
+        // `PackageSubmissionSection`'s "Share a package" intro.
+        group.addSetting((s) => {
+            s.descEl.setText("Curated snippet collections from the community.");
         });
-        this.refreshBtn = refreshBtn;
-        refreshBtn.addEventListener("click", () => {
-            void this.refresh();
+
+        group.addSearch((s) => {
+            s.setPlaceholder("Filter packages");
+            s.inputEl.setAttr("aria-label", "Filter community packages");
+            s.onChange((value) => {
+                this.searchQuery = value.toLowerCase();
+                this.filterPackages();
+                this.renderList();
+            });
         });
 
         // B-088: visually-hidden aria-live region announcing the
         // filtered count after every input. Sighted users see the
         // list change; AT users get a polite announcement.
-        this.filterCountEl = toolbar.createSpan({
+        this.filterCountEl = this.section.createSpan({
             cls: "snipsy-visually-hidden",
             attr: { "aria-live": "polite", "aria-atomic": "true" },
         });
@@ -138,7 +137,7 @@ export class PackageBrowser {
         if (!this.listEl) return;
         this.state = "loading";
         // B-088: announce loading state to AT.
-        this.refreshBtn?.setAttr("aria-busy", "true");
+        this.refreshBtn?.extraSettingsEl.setAttr("aria-busy", "true");
         this.renderSkeleton();
         try {
             const result = await loadAllCommunityPackages(this.plugin);
@@ -155,7 +154,7 @@ export class PackageBrowser {
             this.lastLoad = null;
             this.renderError();
         } finally {
-            this.refreshBtn?.removeAttribute("aria-busy");
+            this.refreshBtn?.extraSettingsEl.removeAttribute("aria-busy");
         }
     }
 
@@ -272,12 +271,29 @@ export class PackageBrowser {
         row.setAttr("tabindex", "0");
         row.setAttr("aria-label", `View details for ${pkg.label}`);
 
+        const installed = isPackageInstalled(
+            pkg.snippets,
+            pkg.label,
+            this.plugin.settings.snippets,
+        );
+
         const meta = row.createDiv({ cls: "package-meta-block" });
 
         const nameLine = meta.createDiv({ cls: "package-name-line" });
         nameLine.createSpan({ cls: "package-name", text: pkg.label });
+        // F5c: a quiet accent flair with an icon, not loud accent text
+        // (mockup: "'Verified' becomes a quiet accent flair with an
+        // icon instead of loud accent text").
         if (pkg.verified) {
-            nameLine.createSpan({ cls: "verified-badge", text: "Verified" });
+            const verifiedFlair = nameLine.createSpan({ cls: "verified-badge" });
+            setIcon(verifiedFlair, "badge-check");
+            verifiedFlair.createSpan({ text: "Verified" });
+        }
+        // F5c: an "Installed" flair makes the state visible before
+        // reading the row's buttons (mockup: "An 'Installed' flair
+        // makes the state visible before reading the buttons").
+        if (installed) {
+            nameLine.createSpan({ cls: "installed-badge", text: "Installed" });
         }
 
         if (pkg.description) {
@@ -293,11 +309,6 @@ export class PackageBrowser {
         });
 
         const actions = row.createDiv({ cls: "package-actions" });
-        const installed = isPackageInstalled(
-            pkg.snippets,
-            pkg.label,
-            this.plugin.settings.snippets,
-        );
 
         if (installed) {
             // B-042: replace the dead-end "Installed" disabled state
@@ -331,9 +342,14 @@ export class PackageBrowser {
                 this.uninstallPackage(pkg);
             });
         } else {
+            // F5c: no accent CTA in the list — a catalog of a dozen
+            // packages each carrying `mod-cta` reads as a dozen
+            // "primary" actions (mockup: "No accent buttons in a list
+            // of twelve"). The "Installed" flair above now carries the
+            // state instead of an accented button doing double duty.
             const btn = actions.createEl("button", {
                 text: "Install",
-                cls: "snippet-action mod-cta",
+                cls: "snippet-action",
                 attr: {
                     type: "button",
                     "aria-label": `Install ${pkg.label}`,
@@ -449,16 +465,21 @@ export class PackageBrowser {
             content.createEl("p", { text: pkg.description, cls: "package-desc" });
         }
 
+        // Wording: same "author · version · count" format as the
+        // catalog row — the "Author:"/"Version:" labels go, so the
+        // meta line reads identically in both places.
         const meta = content.createDiv({ cls: "package-meta" });
-        meta.createSpan({ text: `Author: ${pkg.author ?? "Unknown"}` });
-        meta.createSpan({ text: `Version: ${pkg.version ?? "1.0.0"}` });
+        meta.createSpan({ text: pkg.author ?? "Unknown" });
+        meta.createSpan({ text: `v${pkg.version ?? "1.0.0"}` });
         const snippetCount = Object.keys(pkg.snippets ?? {}).length;
         meta.createSpan({ text: `${snippetCount} snippet${snippetCount === 1 ? "" : "s"}` });
 
         if (pkg.tags && pkg.tags.length > 0) {
             const tagsContainer = content.createDiv({ cls: "package-tags" });
             for (const tag of pkg.tags) {
-                tagsContainer.createSpan({ text: tag, cls: "package-tag" });
+                // Shown with a leading # so tags read like tags in
+                // notes (Obsidian's own tag colours, see main.css).
+                tagsContainer.createSpan({ text: `#${tag}`, cls: "package-tag" });
             }
         }
 
@@ -548,6 +569,7 @@ export class PackageBrowser {
             title: `Uninstall ${pkg.label}?`,
             message,
             confirmText: "Uninstall",
+            danger: true,
             onConfirm: async () => {
                 try {
                     this.plugin.settings.snippets = removePackageSnippets(

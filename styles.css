@@ -48,35 +48,36 @@
 
   --snipsy-accent:    var(--interactive-accent);
   --snipsy-accent-hov:var(--interactive-accent-hover);
-  --snipsy-accent-soft: rgba(var(--interactive-accent-rgb, 138 92 246), 0.14);
+  /* UI redesign (2026-09): `--interactive-accent-translucent` and
+     `--interactive-accent-rgb` don't exist in Obsidian 1.13's
+     app.css, so every rule that referenced them (directly or via a
+     `rgba(var(--interactive-accent-rgb, ...))` fallback) silently
+     fell back to a hard-coded purple regardless of the active theme
+     or a custom accent colour. `--background-modifier-active-hover` is a real 1.13 token
+     Obsidian derives from the live accent colour, so this now tracks
+     community themes / custom accents automatically. */
+  --snipsy-accent-soft: var(--background-modifier-active-hover);
   --snipsy-on-accent: var(--text-on-accent);
 
   --snipsy-danger:    var(--text-error);
   --snipsy-success:   var(--text-success);
 
+  /* Filled "group" containers (Editor/Hotkeys-style sections) and tag
+     pills — see main.css `.snipsy-group` / `.snipsy-tag`. */
+  --snipsy-group-bg:  var(--background-primary-alt);
+  --snipsy-tag-bg:    var(--tag-background);
+
+  /* Soft success/danger tints for diff tags (NEW/UPDATE/REMOVE,
+     install validation result) — `color-mix()` instead of the old
+     literal `rgba(108,197,133,...)` / `rgba(232,113,106,...)` values
+     (AUDIT X6), so they track the theme's actual success/error hue. */
+  --snipsy-success-soft: color-mix(in oklch, var(--text-success) 14%, transparent);
+  --snipsy-danger-soft:  color-mix(in oklch, var(--text-error) 14%, transparent);
+  --snipsy-accent-tag-soft: color-mix(in oklch, var(--text-accent) 14%, transparent);
+
   --snipsy-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 }
 
-
-/* ---- Reset green-card era leftovers (older settings markup) ---- */
-/* `.snipsidian-settings.snipsidian-settings` is class-doubled to
- * raise specificity above any Obsidian-side `.setting-item` defaults
- * without resorting to priority overrides (Obsidian scorecard rule
- * `declaration-no-important`). The earlier priority override here
- * landed during the 1.1.0 CSS rewrite; specificity is the cleaner
- * tool when we control both sides of the cascade. */
-.snipsidian-settings.snipsidian-settings .snipsy-section,
-.snipsidian-settings.snipsidian-settings .snipsy-subsection,
-.snipsidian-settings.snipsidian-settings .snipsy-snippet-manager,
-.snipsidian-settings.snipsidian-settings .snipsy-commands-section,
-.snipsidian-settings.snipsidian-settings .snipsy-export-section,
-.snipsidian-settings.snipsidian-settings .snipsy-help-section,
-.snipsidian-settings.snipsidian-settings .snipsy-community-browse-section {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  margin: 0;
-}
 
 /* ---- Visually-hidden helper for aria-live regions ----
    Standard pattern: keep the element in DOM (so AT can read it)
@@ -94,58 +95,204 @@
   border: 0;
 }
 
-/* ---- Tabs (top of settings pane) ---- */
+/* ---- Tabs (top of settings pane) ----
+   Small pill navigation, the style of Obsidian's own
+   `.horizontal-tab-nav-item`: active item sits on
+   `--background-modifier-hover`, no accent underline (AUDIT: settings
+   shell §1). Tab order, roving tabindex and arrow-key handling stay
+   in SettingsTab.ts — this is a pure restyle. */
 .snipsidian-settings .snipsy-tabs {
   display: flex;
   gap: 2px;
-  border-bottom: 1px solid var(--snipsy-divider);
-  margin: 0 0 var(--snipsy-gap-xl);
+  margin: 0 0 var(--snipsy-gap-lg);
 }
 .snipsidian-settings .snipsy-tab {
   appearance: none;
   border: 0;
   background: transparent;
   color: var(--snipsy-text-muted);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  padding: 10px 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
 }
-.snipsidian-settings .snipsy-tab:hover { color: var(--snipsy-text); }
+.snipsidian-settings .snipsy-tab:hover { background: var(--snipsy-hover); color: var(--snipsy-text); }
 /* B-090: explicit focus-visible ring — the tab overrides Obsidian's
    default focus styles, so without this keyboard users couldn't
    tell which tab held focus. */
 .snipsidian-settings .snipsy-tab:focus-visible {
   outline: 2px solid var(--interactive-accent);
-  outline-offset: -2px;
-  border-radius: var(--snipsy-radius);
+  outline-offset: 2px;
 }
 .snipsidian-settings .snipsy-tab.is-active {
+  background: var(--snipsy-hover);
   color: var(--snipsy-text);
-  border-bottom-color: var(--snipsy-accent);
 }
 
-/* ---- Section headings ---- */
+/* ---- Content column ----
+   Obsidian's own pages (Editor, Hotkeys, …) centre their content in a
+   ~700px column regardless of pane width; ours ran full pane width
+   (AUDIT X5), so switching from a core tab to Snipsy visually jumped.
+   Tabs + panel share the same column so their left edges line up. */
+.snipsidian-settings .snipsy-tabs,
+.snipsidian-settings .snipsy-tab-content {
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ---- Section headings ----
+   Sentence-case, semibold — the same look Obsidian's own
+   `Setting().setHeading()` produces (Editor/Hotkeys section titles),
+   used here by both branches of `renderSettingGroup` (SnippetsTab.ts
+   §setting-group.ts). Closes AUDIT X2 (uppercase letter-spaced
+   subheadings) and X3 (redundant per-tab page heading — tabs no
+   longer render an extra `<h3>`/`<h4>` above their first group). */
 .snipsidian-settings .setting-item-heading {
   border: 0;
-  padding: 18px 0 6px;
-  margin-top: 12px;
+  /* Horizontal padding mirrors native's own unscoped/`.setting-group`
+     `.setting-item-heading` rule (`padding: 0 var(--size-4-4)`) so the
+     heading text lines up with the filled box's inner padding below
+     it, the way Obsidian's own Editor/Hotkeys pages do (V1 fix,
+     2026-09 UI-redesign follow-up). No padding-bottom here: native
+     spaces the heading from the box purely via its own
+     `margin-bottom: var(--size-4-4)`, which this rule doesn't touch
+     and which still applies (both branches) — adding our own
+     padding-bottom on top doubled that gap. */
+  padding: 0 var(--size-4-4, 16px);
 }
-.snipsidian-settings .setting-item-heading:first-child { margin-top: 0; padding-top: 4px; }
-.snipsidian-settings .setting-item-heading .setting-item-name { font-size: 16px; font-weight: 600; }
+.snipsidian-settings .setting-item-heading .setting-item-name { font-size: 15px; font-weight: 600; }
 
-/* ---- Standard setting row (no card, just a divided row) ---- */
-.snipsidian-settings .setting-item {
+/* Between-group spacing (F4). Native `SettingGroup` gets this for
+   free from Obsidian's own `.setting-group + .setting-group` rule
+   (app.css) — the heading now lives *inside* `.setting-group`
+   (setting-group.ts), so a heading-level margin-top would double up
+   with that native rule instead of replacing it. The pre-1.11
+   fallback has no wrapper to hang a `+` combinator off (its heading
+   and rows body are flat siblings under the tab root), so its heading
+   gets its own top margin, keyed off the PRECEDING group's body —
+   never true for the very first group on the tab, so this needs no
+   separate `:first-child` guard. */
+.snipsidian-settings .snipsy-group-fallback + .setting-item-heading {
+  margin-top: 22px;
+}
+
+/* ---- Grouped setting rows ("filled group") ----
+   Rounded, borderless, `--background-primary-alt` container — the
+   pattern Obsidian's own Editor / Hotkeys pages use for a section's
+   rows, replacing the old 1px-bordered transparent card (AUDIT X1).
+
+   `renderSettingGroup` (setting-group.ts) has two branches, and both
+   need a rule here:
+   - Native `SettingGroup` (Obsidian >= 1.11) ships its own
+     `.setting-group .setting-items` fill CSS (background/radius) —
+     adding our own on top would double it up, and (F4) `.snipsy-group`
+     now lives on the *outer* `.setting-group` (added via `addClass`),
+     which also wraps the heading — filling it directly would wrongly
+     paint the heading the same colour as the rows, unlike Obsidian's
+     own Editor/Hotkeys pages where the heading sits outside the card.
+     Horizontal padding on the box is a separate story though (V2 fix,
+     2026-09 UI-redesign follow-up, verified against the real 1.13.7
+     app.css, not the stale unpacked snapshot this comment originally
+     assumed): through Obsidian 1.12 native put a single
+     `--setting-items-padding` on `.setting-items` itself, which this
+     comment's "adding our own would double it up" reasoning held for.
+     1.13 replaced that with `--setting-items-padding-x`/`-y` applied
+     PER ROW instead — and our own `.setting-item:not(.setting-item-
+     heading) { padding: 14px 0 }` below has the same cascade
+     specificity as native's row rule and loads after it, so it wins
+     and zeroes that per-row horizontal padding on 1.13+. Net effect:
+     on 1.13+ NOTHING gave the box any horizontal inset any more, so
+     every row (not just a bare injected div — see EspansoSection's
+     and PackageBrowser's intro rows) sat flush against the box's
+     edges. The box carries the horizontal inset, the row carries the
+     vertical one — using the real `--setting-items-padding-x` token
+     (20px on 1.13.7) with `--size-4-5`/flat fallbacks for older or
+     hypothetical future installs where it's missing.
+   - The pre-1.11 fallback has no native fill CSS to lean on, so its
+     rows wrapper (`.snipsy-group-fallback`) gets one here, using the
+     same `--setting-items-*` tokens real Obsidian would use (with
+     fallbacks for pre-1.11 installs where those vars may not exist
+     yet — chained to other Obsidian tokens, never a literal colour). */
+.snipsidian-settings .setting-group .setting-items {
+  padding: 0 var(--setting-items-padding-x, var(--size-4-5, 20px));
+}
+/* Native branch's first row still picked up the divider `border-top`
+   from the generic `.setting-item:not(.setting-item-heading)` rule
+   below — that rule loads later in the file and matches every row
+   regardless of position, so the box's rounded top edge showed a
+   thin arc where the straight border met the radius (native
+   Obsidian pages like Editor/Hotkeys never draw a divider above a
+   group's first row). Mirrors the pre-1.11 fallback's own
+   `:first-child` rule two lines down. */
+.snipsidian-settings .setting-group .setting-items .setting-item:first-child {
+  border-top: 0;
+}
+.snipsidian-settings .snipsy-group-fallback {
+  background: var(--setting-items-background, var(--background-primary-alt));
+  padding: var(--setting-items-padding, 16px);
+  border-radius: var(--setting-items-radius, var(--snipsy-radius-lg));
+}
+.snipsidian-settings .snipsy-group-fallback .setting-item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.snipsidian-settings .snipsy-group-fallback .setting-item:last-child {
+  padding-bottom: 0;
+}
+
+/* ---- Standard setting row (no card, just a divided row) ----
+   `:not(.setting-item-heading)` (V1 fix, 2026-09 UI-redesign
+   follow-up): a heading is also a `.setting-item`, and this selector
+   has the same specificity as `.setting-item-heading` above, so
+   without the exclusion this rule — coming later in the file — won
+   the cascade and re-added a divider border + row padding on top of
+   every group heading (the "arc above the heading" defect). */
+.snipsidian-settings .setting-item:not(.setting-item-heading) {
   border-top: 1px solid var(--snipsy-divider);
   padding: 14px 0;
 }
 
-/* ---- Buttons: neutralize the CTA-everywhere problem ---- */
-.snipsidian-settings .setting-item .mod-cta {
+/* A row whose effect depends on a toggle above it (General tab's
+   Prefix character depends on Require-a-prefix) dims as a whole when
+   that toggle is off, not just its control glyph (AUDIT: "disabled
+   state is only a faint glyph... dependency is in prose"). */
+.snipsidian-settings .snipsy-row-disabled {
+  opacity: 0.5;
+}
+
+/* Copy-path row inside the B-047 "could not reveal" Notice fragment. */
+.snipsy-notice-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* ---- Buttons ----
+   Plain `<button>` elements already get Obsidian's native chrome
+   (background/shadow from `--interactive-normal`) for free — nothing
+   here needs to draw it. `.mod-cta` / `.mod-warning` apply everywhere
+   in the settings tab, not just inside a `.setting-item` (AUDIT X4:
+   `Add snippet` carried `.mod-cta` in code but the old scoped rule
+   only matched inside a `.setting-item`, so the accent never showed). */
+.snipsidian-settings .mod-cta {
   background: var(--snipsy-accent);
   color: var(--snipsy-on-accent);
+}
+.snipsidian-settings .mod-warning {
+  background: var(--background-modifier-error, var(--snipsy-danger));
+  color: var(--snipsy-on-accent);
+}
+/* F5c: package rows never carry an accent CTA (mockup: "no accent
+   buttons in a list of twelve" — PackageBrowser.ts no longer emits
+   `mod-cta` on the row Install button). Scope the broad rule above
+   away from `.packages-list` so a future regression there falls back
+   to Obsidian's own native button chrome instead of silently painting
+   every row's button the accent colour again. */
+.snipsidian-settings .packages-list .mod-cta {
+  background: var(--interactive-normal);
+  color: var(--text-normal);
 }
 
 /* Utility — used by tab JS to hide/show without setting inline
@@ -155,33 +302,9 @@
    to beat sibling rules. Keep near the top so anything can use it. */
 .snipsidian-settings.snipsidian-settings .is-hidden.is-hidden { display: none; }
 
-/* ---- Snippets-tab heading ---- */
-/* Real <h3> per accessibility audit (B-091) — `Setting().setHeading()`
-   renders a styled div, which is invisible to screen readers as a
-   structural heading. */
-.snipsidian-settings .snipsy-tab-heading {
-  font-size: 16px;
-  font-weight: 600;
-  margin: 4px 0 12px;
-}
-
 /* ---- Espanso import: group-name input (B-045) ---- */
-.snipsidian-settings .snipsy-espanso-group-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 8px 0 4px;
-}
-.snipsidian-settings .snipsy-espanso-group-row label {
-  flex: 0 0 auto;
-  font-size: 13px;
-  color: var(--snipsy-text-muted);
-}
 .snipsidian-settings .snipsy-espanso-group-input {
-  flex: 1 1 auto;
   max-width: 280px;
-  padding: 4px 8px;
-  font-size: 13px;
 }
 
 /* ---- Espanso import: skip summary (B-139) ---- */
@@ -208,6 +331,8 @@
 }
 .snipsidian-settings .snipsy-search input {
   padding-left: 30px;
+  /* Room for the result-count suffix (F5g) — harmless when hidden. */
+  padding-right: 70px;
   width: 100%;
 }
 .snipsidian-settings .snipsy-search .snipsy-search-icon {
@@ -227,27 +352,50 @@
   margin-bottom: 12px;
 }
 
-/* Filter count badge (B-099) — only rendered when a search query is
-   active. Tells the user how many results their query returned without
-   forcing them to scroll the list. */
-.snipsidian-settings .snipsy-filter-count {
+/* Filter count badge (B-099/F5g) — only shown while a search query is
+   active. Docked inside the search field itself as a right-aligned
+   suffix (mockup: "moves inside the search field on the right"), not
+   a separate toolbar element, so the toolbar layout never shifts
+   while typing. `padding-right` on the input (below) reserves room so
+   typed text never runs under it. */
+.snipsidian-settings .snipsy-search .snipsy-filter-count {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 12px;
   color: var(--snipsy-text-faint);
   white-space: nowrap;
+  pointer-events: none;
 }
 
-/* ---- Snippet list ---- */
+/* ---- Snippet list ----
+   One filled `.snipsy-group`-style container for the whole list
+   (toolbar + groups), density close to Obsidian's Hotkeys list: a
+   group header is ~38px (was 108px), a snippet row ~34px (was 84px)
+   — AUDIT "Group headers" / "Snippet rows" findings. */
+.snipsidian-settings .snipsy-snippet-list {
+  background: var(--snipsy-group-bg);
+  border-radius: var(--snipsy-radius-lg);
+  padding: 12px;
+}
 .snipsidian-settings .snippet-group {
-  margin-top: 12px;
+  margin-top: 0;
+}
+.snipsidian-settings .snippet-group + .snippet-group {
+  border-top: 1px solid var(--snipsy-divider);
 }
 .snipsidian-settings .group-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 0;
+  height: 38px;
+  padding: 0 6px;
+  border-radius: var(--snipsy-radius);
   cursor: pointer;
   user-select: none;
 }
+.snipsidian-settings .group-header:hover { background: var(--snipsy-hover); }
 .snipsidian-settings .group-toggle {
   background: transparent;
   border: 0;
@@ -259,10 +407,24 @@
   align-items: center;
   justify-content: center;
   transition: transform 0.12s ease;
+  flex: none;
 }
 .snipsidian-settings .group-toggle.open { transform: rotate(90deg); }
-.snipsidian-settings .group-title { font-size: 13px; font-weight: 600; }
-.snipsidian-settings .group-count { font-size: 12px; color: var(--snipsy-text-faint); }
+.snipsidian-settings .group-title { font-size: 14.5px; font-weight: 500; }
+.snipsidian-settings .group-count { font-size: 12.5px; color: var(--snipsy-text-faint); }
+/* B-138 fold-in: a muted group shows an "Off" flair so the state
+   reads without hovering (AUDIT: "only dims the title... no visible
+   off state when not hovering"). */
+.snipsidian-settings .group-off-flair {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--snipsy-hover);
+  color: var(--snipsy-text-muted);
+}
 
 /* B-138: per-group enable/disable. Dim the whole group (header +
    rows) when its trigger is muted — rows stay fully visible/editable
@@ -281,25 +443,29 @@
 
 .snipsidian-settings .snippet-row {
   display: grid;
-  grid-template-columns: minmax(80px, 200px) 1fr auto;
+  grid-template-columns: minmax(80px, 160px) 1fr auto;
   align-items: center;
-  gap: 14px;
-  padding: 6px 10px;
+  gap: 12px;
+  padding: 0 6px;
   border-radius: var(--snipsy-radius);
-  min-height: 32px;
+  height: 34px;
 }
 .snipsidian-settings .snippet-row:hover { background: var(--snipsy-hover); }
 .snipsidian-settings .snippet-row.is-selected { background: var(--snipsy-accent-soft); }
 .snipsidian-settings .snippet-row.is-editing {
   display: block;
+  height: auto;
   padding: 12px;
-  background: var(--snipsy-bg-alt);
+  border-radius: var(--snipsy-radius);
+  background: var(--snipsy-bg);
   border: 1px solid var(--snipsy-border);
 }
 .snipsidian-settings .snippet-trigger {
   font-family: var(--snipsy-mono);
   font-size: 13px;
-  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .snipsidian-settings .snippet-replacement {
   font-family: var(--snipsy-mono);
@@ -308,11 +474,11 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
-.snipsidian-settings .snippet-replacement .arrow { color: var(--snipsy-text-faint); flex: 0 0 auto; }
+/* Newlines in a multi-line replacement render as a faint ↵ marker
+   instead of flattening to invisible whitespace (AUDIT: "Newlines are
+   flattened with no ellipsis cue"). */
+.snipsidian-settings .snippet-replacement .nl { color: var(--snipsy-text-faint); padding: 0 1px; }
 
 /* Row + group action buttons (edit / delete / rename / save).
    By default visible everywhere — touch / mobile / stylus environments
@@ -324,28 +490,56 @@
   gap: 2px;
   opacity: 1;
 }
-.snipsidian-settings .group-actions { margin-left: auto; }
 
+/* F5a: mute toggle wrapper — always visible (never hover-hidden, so
+   it's outside the `.group-actions` opacity rule below), right of the
+   name/count/off-flair. `margin-left: auto` pushes it (and
+   `.group-actions`, which follows immediately after in the header's
+   flex row) to the header's right edge. */
+.snipsidian-settings .group-mute {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* `.snippet-action` is a plain `<button>` (bulk bar, Add snippet,
+   Packages Install/Refresh/Validate, …) — Obsidian's native button
+   chrome already applies, this class is a spacing/identity hook, not
+   a chrome override (AUDIT X4: the old rule stripped the native look
+   down to bare text). `.snippet-icon-action` is the bare
+   clickable-icon variant for row/group/toolbar icon actions (Edit,
+   Delete, Rename, Select, Expand all, Refresh) — same treatment
+   Obsidian gives its own `ExtraButtonComponent`. */
 .snipsidian-settings .snippet-action {
+  font-size: 13px;
+}
+.snipsidian-settings .snippet-icon-action,
+.snipsidian-settings .clickable-icon.snippet-icon-action {
   appearance: none;
-  border: 1px solid transparent;
+  border: 0;
   background: transparent;
   color: var(--snipsy-text-muted);
-  font-size: 12px;
-  padding: 4px 8px;
+  padding: 4px;
   border-radius: var(--snipsy-radius);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-.snipsidian-settings .snippet-action:hover { background: var(--snipsy-hover); color: var(--snipsy-text); }
-/* B-090: explicit focus-visible ring — the action button overrides
+.snipsidian-settings .snippet-icon-action:hover { background: var(--snipsy-hover); color: var(--snipsy-text); }
+.snipsidian-settings .snippet-icon-action.is-active {
+  background: var(--snipsy-hover);
+  color: var(--snipsy-accent);
+}
+/* B-090: explicit focus-visible ring — the icon action overrides
    Obsidian's default focus styles. Without this, keyboard users
    couldn't tell which row's Edit / Delete had focus. */
-.snipsidian-settings .snippet-action:focus-visible {
+.snipsidian-settings .snippet-icon-action:focus-visible {
   outline: 2px solid var(--interactive-accent);
   outline-offset: 2px;
 }
-.snipsidian-settings .snippet-action.is-danger:hover {
-  background: var(--background-modifier-error-hover, rgba(255, 80, 80, 0.1));
+.snipsidian-settings .snippet-icon-action.is-danger:hover {
+  background: var(--snipsy-danger-soft);
   color: var(--snipsy-danger);
 }
 
@@ -374,11 +568,14 @@
 .snipsidian-settings .snippet-edit .field { display: flex; flex-direction: column; gap: 4px; }
 .snipsidian-settings .snippet-edit .field.is-full { grid-column: 1 / -1; }
 .snipsidian-settings .snippet-edit label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--snipsy-text-faint);
-  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--snipsy-text-muted);
+  font-weight: 500;
+}
+.snipsidian-settings .snippet-edit input,
+.snipsidian-settings .snippet-edit textarea {
+  font-family: var(--snipsy-mono);
+  font-size: 13px;
 }
 .snipsidian-settings .snippet-edit .actions {
   grid-column: 1 / -1;
@@ -468,6 +665,21 @@
   padding: 1px 6px;
   border-radius: 999px;
 }
+.snipsidian-settings .verified-badge svg { width: 11px; height: 11px; }
+
+/* F5c: "Installed" flair — same neutral pill treatment as the
+   Snippets tab's "Off" flair (`.group-off-flair`), so installed state
+   reads at a glance without needing to parse the row's buttons. */
+.snipsidian-settings .installed-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--snipsy-hover);
+  color: var(--snipsy-text-muted);
+}
 
 /* Drop the old packages table entirely; if any legacy markup still emits
    `.packages-table`, hide it rather than letting it half-render. */
@@ -519,6 +731,142 @@
   white-space: pre-wrap;
 }
 
+/* ---- Setting rows with a full-width textarea control ----
+   A `Setting` row's control column is narrow by default (roughly half
+   the row) — fine for a single-line input, cramped for a multi-line
+   replacement/YAML paste (AUDIT: "Replacement is a small textarea
+   squeezed into the control column"; "the empty textarea is 300px
+   tall before anything is pasted" / Espanso's non-full-width dark
+   textarea). Any row containing a `<textarea>` stacks instead: label
+   above, textarea spanning the full row width below — Add snippet's
+   Replacement field, Share-a-package's YAML paste, Espanso's YAML
+   paste. `:has()` — supported by the Chromium build every Obsidian
+   desktop/mobile client ships. */
+.snipsidian-modal .setting-item:has(textarea),
+.snipsidian-settings .setting-item:has(textarea) {
+  display: block;
+}
+.snipsidian-modal .setting-item:has(textarea) .setting-item-control,
+.snipsidian-settings .setting-item:has(textarea) .setting-item-control {
+  width: 100%;
+  margin-top: 8px;
+}
+.snipsidian-modal .setting-item:has(textarea) textarea,
+.snipsidian-settings .setting-item:has(textarea) textarea {
+  width: 100%;
+  font-family: var(--snipsy-mono);
+  font-size: 13px;
+  min-height: 84px;
+}
+
+/* Generic muted hint line (GroupPickerModal's "Select a group…",
+   TextPromptModal's "Will be saved as: …", section intros). */
+.snipsidian-modal .snipsy-hint,
+.snipsidian-settings .snipsy-hint {
+  font-size: 13px;
+  color: var(--snipsy-text-muted);
+}
+
+/* F5f: Add-snippet's live "Will expand when you type: …" hint and the
+   rename-group modal's "Will be saved as: …" hint both live inside
+   their row's own `descEl` now (Modals.ts), as a second line directly
+   under the static description — so no negative margin is needed to
+   pull a separate sibling div back up against the row (AUDIT:
+   "renders as a full-size line with a divider under it, so it looks
+   like a fourth setting"). */
+.snipsidian-modal .snipsidian-addsnippet-hint,
+.snipsidian-modal .snipsidian-prompt-hint {
+  display: block;
+  margin-top: 4px;
+}
+.snipsidian-modal .snipsidian-addsnippet-hint {
+  color: var(--text-accent);
+}
+
+/* ---- Install conflict preview (PackagePreviewModal) ----
+   Redesign #418: one card per conflict instead of a table — the table
+   centred `<th>` headers over left-aligned cells by UA default (AUDIT)
+   and wrapped long keys. Bulk actions sit in the same flex row as the
+   "Conflicts" heading they act on, not glued under the list. */
+.snipsidian-modal .snipsidian-conflicts-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+.snipsidian-modal .snipsidian-conflicts-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.snipsidian-modal .snipsidian-bulk-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.snipsidian-modal .snipsidian-conflicts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.snipsidian-modal .snipsidian-conflict-card {
+  border: 1px solid var(--snipsy-divider);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--background-secondary-alt, var(--background-secondary));
+}
+
+.snipsidian-modal .snipsidian-conflict-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.snipsidian-modal .snipsidian-conflict-key {
+  flex: 1;
+  font-family: var(--snipsy-mono);
+  font-size: 12.5px;
+  word-break: break-word;
+  background: none;
+  padding: 0;
+}
+
+.snipsidian-modal .snipsidian-conflict-key-group {
+  color: var(--snipsy-text-faint, var(--text-faint));
+}
+
+.snipsidian-modal .snipsidian-conflict-choice {
+  flex: none;
+}
+
+.snipsidian-modal .snipsidian-conflict-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12.5px;
+}
+
+.snipsidian-modal .snipsidian-conflict-current,
+.snipsidian-modal .snipsidian-conflict-incoming {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--snipsy-text-muted);
+}
+
+.snipsidian-modal .snipsidian-conflict-current small,
+.snipsidian-modal .snipsidian-conflict-incoming small {
+  color: var(--snipsy-text-faint, var(--text-faint));
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
 /* ---- Modals: tame the picker + diff layouts ---- */
 /* Result-count badge in the picker (B-040 / U-003). Shown only when
    `total > items.length` so the user knows their query had more
@@ -540,16 +888,14 @@
   font-size: 12.5px;
 }
 .modal.snipsy-install .diff-tag {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   padding: 2px 6px;
   border-radius: 3px;
   width: fit-content;
 }
-.modal.snipsy-install .diff-tag.is-new      { background: rgba(108, 197, 133, 0.15); color: var(--snipsy-success); }
-.modal.snipsy-install .diff-tag.is-replace  { background: rgba(232, 113, 106, 0.14); color: var(--snipsy-danger); }
+.modal.snipsy-install .diff-tag.is-new      { background: var(--snipsy-success-soft); color: var(--snipsy-success); }
+.modal.snipsy-install .diff-tag.is-replace  { background: var(--snipsy-danger-soft); color: var(--snipsy-danger); }
 
 /* ---- Import preview modal (B-038 fix) ----
    Replaces the old silent-wipe import. Merge/replace picker + diff
@@ -600,24 +946,22 @@
 }
 .snipsidian-import-modal .snipsy-import-row:first-child { border-top: 0; }
 .snipsidian-import-modal .snipsy-import-tag {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   padding: 2px 6px;
   border-radius: 3px;
   width: fit-content;
 }
 .snipsidian-import-modal .snipsy-import-tag-new {
-  background: rgba(108, 197, 133, 0.15);
+  background: var(--snipsy-success-soft);
   color: var(--snipsy-success);
 }
 .snipsidian-import-modal .snipsy-import-tag-update {
-  background: rgba(108, 162, 232, 0.15);
+  background: var(--snipsy-accent-tag-soft);
   color: var(--snipsy-accent);
 }
 .snipsidian-import-modal .snipsy-import-tag-remove {
-  background: rgba(232, 113, 106, 0.14);
+  background: var(--snipsy-danger-soft);
   color: var(--snipsy-danger);
 }
 .snipsidian-import-modal .snipsy-import-key {
@@ -639,92 +983,29 @@
   border-top: 1px solid var(--snipsy-divider);
 }
 
-/* ---- About tab (1.1.0 rename of Feedback tab) ----
-   List of plain rows, one per resource. No CTAs — everything here is
-   equally-weighted (HANDOFF §2e). Google Forms feedback path is gone
-   (B-008); feedback flows through GitHub issues. */
-.snipsidian-settings .snipsy-tab-subheading {
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--snipsy-text-faint);
-  margin: 16px 0 8px;
-}
-.snipsidian-settings .snipsy-about-list {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--snipsy-divider);
-  border-radius: var(--snipsy-radius);
-  overflow: hidden;
-}
-.snipsidian-settings .snipsy-about-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
-  border-top: 1px solid var(--snipsy-divider);
-}
-.snipsidian-settings .snipsy-about-row:first-child { border-top: 0; }
-.snipsidian-settings .snipsy-about-text { flex: 1 1 auto; min-width: 0; }
-.snipsidian-settings .snipsy-about-row-title {
-  font-size: 13px;
-  font-weight: 500;
-}
-.snipsidian-settings .snipsy-about-row-desc {
-  font-size: 12.5px;
-  color: var(--snipsy-text-muted);
-  margin-top: 2px;
-}
-.snipsidian-settings .snipsy-about-row-action {
-  flex: 0 0 auto;
-  appearance: none;
-  background: transparent;
-  border: 1px solid var(--snipsy-divider);
-  color: var(--snipsy-text);
-  padding: 4px 10px;
-  border-radius: var(--snipsy-radius);
-  font-size: 12.5px;
-  cursor: pointer;
-}
-.snipsidian-settings .snipsy-about-row-action:hover {
-  background: var(--snipsy-hover);
-}
-/* B-150: action slot for non-button row controls (Expansion section's
-   toggle + dropdown) so they align the same way a button would. */
-.snipsidian-settings .snipsy-about-row-action-slot {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-}
+/* ---- About tab ----
+   Sections render via `renderSettingGroup` (see the "Grouped setting
+   rows" block above) — this is just the version footer, left-aligned
+   with the group content above it instead of centred (AUDIT: "Version
+   footer is centred while everything else is left-aligned"). */
 .snipsidian-settings .snipsy-about-version {
-  margin-top: 16px;
-  font-size: 11.5px;
+  margin: 14px 4px 0;
+  font-size: 13px;
   color: var(--snipsy-text-faint);
-  text-align: center;
 }
 
-/* ---- Package submission section (1.1.0 redesign of Submit) ----
+/* ---- Package submission section (Share a package) ----
    The old "giant green box" is gone (HANDOFF §4). YAML paste + in-app
    validate + a single "Open submission issue" button that opens a
-   prefilled GitHub issue (Google Forms path retired — B-008). */
-.snipsidian-settings .snipsy-submit-yaml {
-  margin: 8px 0;
-}
+   prefilled GitHub issue (Google Forms path retired — B-008). Renders
+   as a `renderSettingGroup` group — the textarea gets its full-width
+   treatment from the shared `.setting-item:has(textarea)` rule above;
+   `.snipsy-submit-textarea` here only adds the monospace/resize touch. */
 .snipsidian-settings .snipsy-submit-textarea {
-  width: 100%;
-  min-height: 160px;
-  font-family: var(--snipsy-mono);
-  font-size: 12.5px;
-  padding: 8px 10px;
-  border: 1px solid var(--snipsy-divider);
-  border-radius: var(--snipsy-radius);
-  background: var(--snipsy-bg-alt);
-  color: var(--snipsy-text);
   resize: vertical;
 }
 .snipsidian-settings .snipsy-submit-validation {
-  margin: 8px 0;
+  margin: 0 12px 0 0;
 }
 .snipsidian-settings .snipsy-submit-valid,
 .snipsidian-settings .snipsy-submit-invalid {
@@ -733,11 +1014,11 @@
   font-size: 12.5px;
 }
 .snipsidian-settings .snipsy-submit-valid {
-  background: rgba(108, 197, 133, 0.10);
+  background: var(--snipsy-success-soft);
   color: var(--snipsy-success);
 }
 .snipsidian-settings .snipsy-submit-invalid {
-  background: rgba(232, 113, 106, 0.10);
+  background: var(--snipsy-danger-soft);
   color: var(--snipsy-danger);
 }
 .snipsidian-settings .snipsy-submit-title {
@@ -751,12 +1032,6 @@
 .snipsidian-settings .snipsy-submit-item {
   font-size: 12px;
   margin: 2px 0;
-}
-.snipsidian-settings .snipsy-submit-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 8px;
 }
 
 /* ============================================================
@@ -777,11 +1052,10 @@
   display: inline-block;
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--interactive-accent-translucent, var(--background-modifier-active-hover));
+  background: var(--tag-background);
   color: var(--text-accent);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.3px;
   margin-bottom: 10px;
 }
 
@@ -796,19 +1070,23 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
+  gap: 6px;
   font-size: 12px;
   color: var(--text-faint);
   margin: 0 0 12px;
 }
 
-/* Subtle separator dots between meta items so "Author / Version /
-   N snippets" reads as a list, not a concatenation. */
+/* F5d: "author · version · count" separators. The previous rule
+   combined a 14px flex `gap` with an `::before` dot carrying its own
+   `margin-right: 14px; margin-left: -14px` — the negative margin was
+   meant to cancel the gap so the dot could add its own spacing, but
+   it left the dot glued to the following span with no gap on either
+   side. A 6px `gap` plus a plain `margin-right` on the dot (no
+   negative margin) reads as evenly spaced text instead. */
 .snipsidian-modal .package-meta > span + span::before {
   content: "·";
   color: var(--text-faint);
-  margin-right: 14px;
-  margin-left: -14px;
+  margin-right: 6px;
 }
 
 .snipsidian-modal .package-tags {
@@ -819,13 +1097,15 @@
 }
 
 .snipsidian-modal .package-tag {
+  /* Obsidian's own tag colours (AUDIT: "grey pills unrelated to
+     Obsidian tags") so tags in a package's details read like tags in
+     a note. */
   display: inline-block;
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
-  color: var(--text-muted);
-  font-size: 11px;
+  background: var(--tag-background);
+  color: var(--text-accent);
+  font-size: 12.5px;
   line-height: 1.5;
 }
 
@@ -838,6 +1118,12 @@
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
   background: var(--background-secondary-alt, var(--background-secondary));
+  /* Redesign #3 (package details): fade the bottom edge to hint there
+     is more to scroll. The mask operates on alpha only — "black" and
+     "transparent" here are opacity stops, not a themed colour, so this
+     stays theme-neutral in light, dark and any community theme. */
+  mask-image: linear-gradient(to bottom, black, black calc(100% - 24px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, black, black calc(100% - 24px), transparent);
 }
 
 .snipsidian-modal .package-snippet-preview .snippet-row {
@@ -911,34 +1197,34 @@
   max-width: min(800px, calc(100vw - 40px));
 }
 
-/* Search label — small all-caps eyebrow above the input */
-.snippet-picker-modal > label[for="snipsy-picker-search"] {
-  font-size: 10.5px;
+/* Looks like the Command palette / Quick switcher: modal title as a
+   small caption, a large borderless input — no visible "Search
+   snippet" label (it stays as the input's `aria-label`). */
+.modal:has(.snippet-picker-modal) .modal-title {
+  font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-faint);
-  margin-bottom: -4px;
+  color: var(--text-muted);
+  text-align: left;
 }
 
 .snippet-picker-modal .search-input {
   width: 100%;
-  padding: 9px 12px;
-  font-size: 14px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
-  background: var(--background-secondary);
+  padding: 6px 0;
+  font-size: 16px;
+  border: 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+  border-radius: 0;
+  background: transparent;
   color: var(--text-normal);
   outline: none;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  transition: border-color 0.12s ease;
 }
 .snippet-picker-modal .search-input:focus {
   border-color: var(--interactive-accent);
-  box-shadow: 0 0 0 2px var(--interactive-accent-translucent, rgba(125,103,255,0.22));
 }
 
 /* Results listbox — scrollable, bordered. The .snipsy-picker-count
-   selector already exists above (line 389); we leave it untouched. */
+   selector already exists above; we leave it untouched. */
 .snippet-picker-modal .snippet-results {
   display: flex;
   flex-direction: column;
@@ -973,11 +1259,20 @@
 .snippet-picker-modal .snippet-item:hover {
   background: var(--background-modifier-hover);
 }
+/* B-157: the selected row uses `--background-modifier-hover` with
+   `--text-normal` — exactly Obsidian's own `.suggestion-item.is-
+   selected` (Command palette, Quick switcher). The previous
+   `--interactive-accent-translucent` fallback resolved to a
+   hard-coded `rgba(125,103,255,.22)` on 1.13 (that variable doesn't
+   exist), with the trigger painted `--text-on-accent` (white) on top
+   — invisible in light theme. No accent fill on a light background
+   means the trigger stays readable in light, dark, and any community
+   theme's custom accent. */
 .snippet-picker-modal .snippet-item.selected {
-  background: var(--interactive-accent-translucent, var(--background-modifier-active-hover));
+  background: var(--background-modifier-hover);
 }
 .snippet-picker-modal .snippet-item.selected .snippet-name span {
-  color: var(--text-on-accent, var(--text-normal));
+  color: var(--text-normal);
 }
 
 .snippet-picker-modal .snippet-name span {
@@ -987,18 +1282,46 @@
   color: var(--text-normal);
 }
 
-.snippet-picker-modal .snippet-folder span {
-  display: inline-block;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
+/* Redesign: a faint flair (folder icon + group name) instead of the
+   pill badge with parenthesised "(folder)" text. */
+.snippet-picker-modal .snippet-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: var(--text-faint);
-  font-size: 10.5px;
-  line-height: 1.5;
-  letter-spacing: 0.2px;
+  font-size: 12px;
 }
 
+.snippet-picker-modal .snippet-folder span:not(.snippet-folder-icon) {
+  line-height: 1.4;
+}
+
+.snippet-picker-modal .snippet-folder-icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  color: var(--text-faint);
+}
+
+.snippet-picker-modal .snippet-folder-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* V4 fix (2026-09 UI-redesign follow-up): `.snippet-preview-text` is
+   the 3rd `1fr` track of `.snippet-item`'s grid (line ~1154). A grid
+   item's default `min-width` is `auto`, which floors it at its
+   content's intrinsic (unwrapped) width rather than letting it
+   shrink to the track — so the child span's own
+   `white-space: nowrap; text-overflow: ellipsis` below never got a
+   chance to clip; the row just grew past the modal edge instead, cut
+   hard by the modal's own overflow rather than a single-line
+   ellipsis. `min-width: 0` lets the grid item shrink to its track so
+   the span's ellipsis rule actually applies. */
+.snippet-picker-modal .snippet-preview-text {
+  min-width: 0;
+  overflow: hidden;
+}
 .snippet-picker-modal .snippet-preview-text span {
   font-family: var(--font-monospace);
   font-size: 12px;
@@ -1009,12 +1332,11 @@
   display: block;
 }
 
-/* Preview heading — small all-caps eyebrow */
+/* Preview heading — F5e: mockup's `.prev .lbl` is plain sentence
+   case, not an all-caps letter-spaced eyebrow. */
 .snippet-picker-modal .preview-label {
-  font-size: 10.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-size: 12px;
+  font-weight: 400;
   color: var(--text-faint);
   margin: 6px 0 -4px;
 }
@@ -1058,8 +1380,8 @@
   display: inline-block;
   padding: 0 4px;
   border-radius: 3px;
-  background: var(--interactive-accent-translucent, rgba(125,103,255,0.18));
-  color: var(--interactive-accent);
+  background: var(--tag-background);
+  color: var(--text-accent);
   font-weight: 600;
   font-family: var(--font-monospace);
 }
@@ -1084,25 +1406,18 @@
   padding: 16px 0;
 }
 
-/* Hints row — kbd-style chips for Navigation / Enter / Esc / Click */
+/* Hints row — one quiet centred line, Obsidian's own prompt-
+   instructions look ("↑↓ to navigate  ↵ to insert  esc to close"),
+   not two lines of `<kbd>`-style boxes. */
 .snippet-picker-modal .snippet-hints {
-  font-size: 11.5px;
-  color: var(--text-faint);
-  line-height: 2;
-  padding-top: 6px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding-top: 8px;
   border-top: 1px solid var(--background-modifier-border);
 }
 .snippet-picker-modal .snippet-hints strong {
-  display: inline-block;
-  padding: 1px 6px;
-  margin: 0 2px;
-  border-radius: 4px;
-  background: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
-  color: var(--text-muted);
-  font-size: 10.5px;
   font-weight: 600;
-  font-family: var(--font-monospace);
 }
 
 /* ---- Reduced motion ---- */
@@ -1134,3 +1449,38 @@
     display: none;
   }
 }
+
+/* ---- Mobile / narrow width (Snippets tab) ----
+   Container query on the tab panel (not a viewport media query) —
+   triggered by the *pane's* width, so the same rules apply to a
+   narrow desktop Settings window and to a phone-width Obsidian
+   client (AUDIT: "search input collapses… replacement column
+   disappears completely, leaving only arrows"). */
+.snipsidian-settings .snipsy-tab-content {
+  container-type: inline-size;
+  container-name: snipsy-pane;
+}
+@container snipsy-pane (max-width: 480px) {
+  .snipsidian-settings .snipsy-snippet-toolbar {
+    flex-wrap: wrap;
+  }
+  .snipsidian-settings .snipsy-search {
+    flex-basis: 100%;
+  }
+  /* Rows stack: trigger first line, replacement second — never drops
+     to a bare arrow the way the fixed-width grid columns used to. */
+  .snipsidian-settings .snippet-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "trigger actions" "replacement replacement";
+    height: auto;
+    padding: 7px 6px;
+    row-gap: 2px;
+  }
+  .snipsidian-settings .snippet-row .snippet-trigger { grid-area: trigger; }
+  .snipsidian-settings .snippet-row .snippet-actions { grid-area: actions; }
+  .snipsidian-settings .snippet-row .snippet-replacement { grid-area: replacement; }
+}
+/* Touch targets stay visible without hover regardless of pane width —
+   already the default (opacity: 1) everywhere except under the
+   `(hover: hover) and (pointer: fine)` gate above, which only ever
+   applies on devices that genuinely have hover. */

@@ -1,4 +1,5 @@
-import { test, expect } from "./fixtures";
+import { test, expect, ui } from "./fixtures";
+import type { ElectronApplication, Page } from "@playwright/test";
 
 /**
  * E2E: SnippetsTab edit-flow regression.
@@ -16,22 +17,23 @@ import { test, expect } from "./fixtures";
  *   3. Opening edit on row B discards row A's draft (single-edit-mode)
  */
 
-async function openSnipsy(win: import("@playwright/test").Page) {
-    await win.evaluate(() => {
-        const a = (globalThis as unknown as {
-            app?: { setting?: { open?: () => void; openTabById?: (id: string) => void } };
-        }).app;
-        a?.setting?.open?.();
-        a?.setting?.openTabById?.("snipsidian");
-    });
-    await win
+// B-158: Settings can render as a separate popout window rather than
+// inline in `win` (observed on Obsidian 1.13.7) — `ui.openSettings`
+// resolves whichever window actually got the Snipsy tab content, and
+// every UI locator below operates on that page. Data reads still go
+// through `win.evaluate` since `app`/the plugin instance are the same
+// singleton regardless of which window's global scope reaches them.
+async function openSnipsy(app: ElectronApplication, win: Page): Promise<Page> {
+    const sw = await ui.openSettings(app, win);
+    await sw
         .getByRole("button", { name: "Add snippet" })
         .first()
         .waitFor({ state: "visible" });
+    return sw;
 }
 
-async function expandUngrouped(win: import("@playwright/test").Page) {
-    const toggle = win.getByRole("button", { name: "Expand group Ungrouped" });
+async function expandUngrouped(sw: Page) {
+    const toggle = sw.getByRole("button", { name: "Expand group Ungrouped" });
     if (await toggle.isVisible().catch(() => false)) {
         await toggle.click();
     }
@@ -40,23 +42,24 @@ async function expandUngrouped(win: import("@playwright/test").Page) {
 test.describe("edit-flow: B-021 regression surface", () => {
     test("edits a snippet's replacement via Edit button and persists", async ({
         win,
+        app,
     }) => {
-        await openSnipsy(win);
-        await expandUngrouped(win);
+        const sw = await openSnipsy(app, win);
+        await expandUngrouped(sw);
 
         // `brb` is seeded in the pristine vault with replacement
         // "be right back". Click its Edit button.
-        const editBtn = win.getByRole("button", { name: "Edit snippet brb" });
+        const editBtn = sw.getByRole("button", { name: "Edit snippet brb" });
         await editBtn.click();
 
         // Edit-mode renders trigger + replacement inputs in-place.
-        const replacementInput = win.getByRole("textbox", {
+        const replacementInput = sw.getByRole("textbox", {
             name: "Snippet replacement",
         });
         await replacementInput.fill("be right back!! EDITED");
 
         // Save (mod-cta button inside the edit form's .actions row).
-        await win
+        await sw
             .locator(".snippet-row.is-editing .actions .mod-cta")
             .click();
 
@@ -72,29 +75,30 @@ test.describe("edit-flow: B-021 regression surface", () => {
 
     test("opening Edit on row B closes row A's edit form (single-edit-mode)", async ({
         win,
+        app,
     }) => {
-        await openSnipsy(win);
-        await expandUngrouped(win);
+        const sw = await openSnipsy(app, win);
+        await expandUngrouped(sw);
 
         // Open edit on `brb`.
-        await win.getByRole("button", { name: "Edit snippet brb" }).click();
+        await sw.getByRole("button", { name: "Edit snippet brb" }).click();
         // Type into A's replacement — should be tracked in the
         // UIStateManager draft, NOT yet persisted.
-        const replacementInputA = win.getByRole("textbox", {
+        const replacementInputA = sw.getByRole("textbox", {
             name: "Snippet replacement",
         });
         await replacementInputA.fill("UNSAVED EDIT");
 
         // Without saving, open edit on `h1`.
-        await win.getByRole("button", { name: "Edit snippet h1" }).click();
+        await sw.getByRole("button", { name: "Edit snippet h1" }).click();
 
         // Only ONE row should be in edit mode now (h1's).
-        const editingRows = win.locator(".snippet-row.is-editing");
+        const editingRows = sw.locator(".snippet-row.is-editing");
         await expect(editingRows).toHaveCount(1);
 
         // The active edit form should belong to h1 — its trigger
         // input contains "h1", not "brb".
-        const triggerInput = win.getByRole("textbox", { name: "Snippet trigger" });
+        const triggerInput = sw.getByRole("textbox", { name: "Snippet trigger" });
         await expect(triggerInput).toHaveValue("h1");
 
         // The unsaved A draft did NOT land in settings.
@@ -107,22 +111,22 @@ test.describe("edit-flow: B-021 regression surface", () => {
         expect(stillOriginal).toBe("be right back");
     });
 
-    test("Cancel discards the draft without writing", async ({ win }) => {
-        await openSnipsy(win);
-        await expandUngrouped(win);
+    test("Cancel discards the draft without writing", async ({ win, app }) => {
+        const sw = await openSnipsy(app, win);
+        await expandUngrouped(sw);
 
-        await win.getByRole("button", { name: "Edit snippet brb" }).click();
-        await win
+        await sw.getByRole("button", { name: "Edit snippet brb" }).click();
+        await sw
             .getByRole("textbox", { name: "Snippet replacement" })
             .fill("DISCARDED");
 
         // Click the non-CTA action (Cancel).
-        await win
+        await sw
             .locator(".snippet-row.is-editing .actions button:not(.mod-cta)")
             .click();
 
         // Editor closed.
-        await expect(win.locator(".snippet-row.is-editing")).toHaveCount(0);
+        await expect(sw.locator(".snippet-row.is-editing")).toHaveCount(0);
 
         // Settings still has the original value.
         const stored = await win.evaluate(() => {
@@ -134,23 +138,23 @@ test.describe("edit-flow: B-021 regression surface", () => {
         expect(stored).toBe("be right back");
     });
 
-    test("renames the trigger key via Edit (B-105)", async ({ win }) => {
+    test("renames the trigger key via Edit (B-105)", async ({ win, app }) => {
         // Renaming the trigger is a *different* path from editing
         // the replacement: it routes through `safeRenameKey` and
         // shifts the entry under a new key (touching splitKey /
         // joinKey / hasTriggerCollision). The replacement-edit test
         // above never exercises this path because the key stays
         // the same.
-        await openSnipsy(win);
-        await expandUngrouped(win);
+        const sw = await openSnipsy(app, win);
+        await expandUngrouped(sw);
 
-        await win.getByRole("button", { name: "Edit snippet brb" }).click();
+        await sw.getByRole("button", { name: "Edit snippet brb" }).click();
 
         // Change the trigger; keep the replacement intact.
-        const triggerInput = win.getByRole("textbox", { name: "Snippet trigger" });
+        const triggerInput = sw.getByRole("textbox", { name: "Snippet trigger" });
         await triggerInput.fill("bbb");
 
-        await win
+        await sw
             .locator(".snippet-row.is-editing .actions .mod-cta")
             .click();
 
@@ -169,10 +173,10 @@ test.describe("edit-flow: B-021 regression surface", () => {
         // UI reflects the rename — old edit-button gone, new one
         // present.
         await expect(
-            win.getByRole("button", { name: "Edit snippet brb" }),
+            sw.getByRole("button", { name: "Edit snippet brb" }),
         ).toHaveCount(0);
         await expect(
-            win.getByRole("button", { name: "Edit snippet bbb" }),
+            sw.getByRole("button", { name: "Edit snippet bbb" }),
         ).toBeVisible();
     });
 });

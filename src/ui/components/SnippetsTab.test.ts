@@ -95,20 +95,38 @@ function expandGroup(groupTitle: string): void {
 }
 
 describe("SnippetsTab — heading + toolbar shape", () => {
-    it("renders a real <h3> 'Snippets' heading (B-091)", () => {
+    // AUDIT X3: the redundant per-tab page heading is gone — the active
+    // tab button already says "Snippets", and the tabpanel carries
+    // `aria-labelledby` (SettingsTab.ts) for the accessible name, so no
+    // second heading duplicates it inside the panel content.
+    it("does not render a redundant page heading above the toolbar", () => {
         mount({ hello: "world" });
-        const heading = root.querySelector("h3.snipsy-tab-heading");
-        expect(heading?.textContent).toBe("Snippets");
+        expect(root.querySelector("h3.snipsy-tab-heading")).toBeNull();
+        expect(root.querySelector(".snipsy-snippet-list")).not.toBeNull();
     });
 
-    it("renders the toolbar with search input + count badge + action buttons", () => {
+    it("renders the toolbar with a search input, count badge, Add snippet, and icon actions", () => {
         mount({ a: "1", b: "2" });
         const toolbar = root.querySelector(".snipsy-snippet-toolbar");
         expect(toolbar).not.toBeNull();
         expect(toolbar?.querySelector("input[aria-label='Filter snippets']")).not.toBeNull();
-        // Three action buttons: Select / Expand-all / Add snippet
-        const buttons = toolbar?.querySelectorAll("button.snippet-action");
-        expect(buttons?.length ?? 0).toBeGreaterThanOrEqual(3);
+
+        // Add snippet is a real (accent) button.
+        const addBtn = Array.from(toolbar?.querySelectorAll("button.snippet-action") ?? []).find(
+            (b) => b.textContent === "Add snippet",
+        );
+        expect(addBtn).toBeTruthy();
+        expect(addBtn?.classList.contains("mod-cta")).toBe(true);
+
+        // Select and Expand all are clickable icons with a tooltip/
+        // aria-label instead of visible text (owner decision #2).
+        const selectIcon = toolbar?.querySelector('[aria-label="Select snippets"]');
+        const expandIcon = toolbar?.querySelector('[aria-label="Expand all"]');
+        expect(selectIcon).toBeTruthy();
+        expect(selectIcon?.classList.contains("snippet-icon-action")).toBe(true);
+        expect(selectIcon?.textContent).toBe("");
+        expect(expandIcon).toBeTruthy();
+        expect(expandIcon?.textContent).toBe("");
     });
 });
 
@@ -257,6 +275,58 @@ describe("SnippetsTab — empty + filtered empty states", () => {
 // nothing). Fix: click handler moved to the header div; chevron stays
 // as the AT-accessible affordance + visual indicator (no own click
 // handler — keyboard activation on the button bubbles to header).
+// UI redesign: a muted group shows an "Off" flair on its header so
+// the disabled state is readable without hovering, and a multi-line
+// replacement renders embedded newlines as a faint ↵ marker instead
+// of flattening them to invisible whitespace.
+describe("SnippetsTab — redesign: muted-group flair + multi-line preview", () => {
+    function mountWithDisabled(
+        snippets: Record<string, string>,
+        disabledGroups: string[] = [],
+    ): void {
+        const mockPlugin = makeMockPlugin({ settings: { snippets, disabledGroups } });
+        plugin = mockPlugin as unknown as SnipSidianPlugin;
+        app = mockPlugin.app as unknown as App;
+        new SnippetsTab(app, plugin).render(root);
+    }
+
+    it("shows an 'Off' flair on a disabled group's header, and none on an enabled one", () => {
+        mountWithDisabled(
+            { "work/sig": "Best", "personal/todo": "- [ ] " },
+            ["work"],
+        );
+        const headers = Array.from(root.querySelectorAll(".group-header"));
+        const workHeader = headers.find(
+            (h) => h.querySelector(".group-title")?.textContent === "Work",
+        );
+        const personalHeader = headers.find(
+            (h) => h.querySelector(".group-title")?.textContent === "Personal",
+        );
+        expect(workHeader?.querySelector(".group-off-flair")?.textContent).toBe("Off");
+        expect(personalHeader?.querySelector(".group-off-flair")).toBeNull();
+    });
+
+    it("renders a faint ↵ marker for each embedded newline in a snippet's replacement preview", () => {
+        mountWithDisabled({ mtg: "## Meeting: $|\n**Date:** $date" });
+        expandGroup("Ungrouped");
+        const row = findRow("mtg")!;
+        const preview = row.querySelector(".snippet-replacement") as HTMLElement;
+        const markers = preview.querySelectorAll(".nl");
+        expect(markers.length).toBe(1);
+        expect(markers[0]?.textContent).toBe("↵");
+        expect(preview.textContent).toBe("## Meeting: $|↵**Date:** $date");
+    });
+
+    it("renders a single-line replacement with no ↵ marker at all", () => {
+        mountWithDisabled({ hello: "world" });
+        expandGroup("Ungrouped");
+        const row = findRow("hello")!;
+        const preview = row.querySelector(".snippet-replacement") as HTMLElement;
+        expect(preview.querySelectorAll(".nl").length).toBe(0);
+        expect(preview.textContent).toBe("world");
+    });
+});
+
 describe("SnippetsTab — group header click target (B-124)", () => {
     it("expands the group when the title text is clicked, not just the chevron", () => {
         mount({ hello: "world", brb: "be right back" });
@@ -473,12 +543,24 @@ describe("SnippetsTab — per-group enable/disable (B-138)", () => {
         throw new Error(`Group "${groupTitle}" not found`);
     }
 
-    function enableToggleFor(groupTitle: string): HTMLInputElement {
+    // `.snipsy-group-enable-toggle` is `toggleEl` — the
+    // `label.checkbox-container` wrapper (real API and stub both
+    // match this now), not the checkbox input itself. It's what
+    // carries `aria-label` and receives the click; `enableCheckboxFor`
+    // below reaches into it for the actual `<input>` that carries
+    // `.checked` and fires `change`.
+    function enableToggleFor(groupTitle: string): HTMLElement {
         const toggle = groupHeaderFor(groupTitle).querySelector(
             ".snipsy-group-enable-toggle",
-        ) as HTMLInputElement | null;
+        ) as HTMLElement | null;
         if (!toggle) throw new Error(`Enable toggle for "${groupTitle}" not found`);
         return toggle;
+    }
+
+    function enableCheckboxFor(groupTitle: string): HTMLInputElement {
+        const input = enableToggleFor(groupTitle).querySelector("input") as HTMLInputElement | null;
+        if (!input) throw new Error(`Enable checkbox for "${groupTitle}" not found`);
+        return input;
     }
 
     async function flush() {
@@ -488,9 +570,8 @@ describe("SnippetsTab — per-group enable/disable (B-138)", () => {
 
     it("renders an enable/disable toggle on a real group's header, checked by default", () => {
         mountWithDisabled({ "work/sig": "Best" });
-        const toggle = enableToggleFor("Work");
-        expect(toggle.checked).toBe(true);
-        expect(toggle.getAttribute("aria-label")).toBe("Enable/disable group Work");
+        expect(enableCheckboxFor("Work").checked).toBe(true);
+        expect(enableToggleFor("Work").getAttribute("aria-label")).toBe("Enable/disable group Work");
     });
 
     it("does NOT render a toggle on the Ungrouped pseudo-group", () => {
@@ -501,17 +582,16 @@ describe("SnippetsTab — per-group enable/disable (B-138)", () => {
 
     it("a disabled group starts unchecked and its groupEl carries the dimming class", () => {
         mountWithDisabled({ "work/sig": "Best" }, ["work"]);
-        const toggle = enableToggleFor("Work");
-        expect(toggle.checked).toBe(false);
+        expect(enableCheckboxFor("Work").checked).toBe(false);
         const groupEl = groupHeaderFor("Work").closest(".snippet-group");
         expect(groupEl?.classList.contains("snippet-group-disabled")).toBe(true);
     });
 
     it("unchecking the toggle disables the group, persists, and dims it (round-trip: off)", async () => {
         mountWithDisabled({ "work/sig": "Best" });
-        const toggle = enableToggleFor("Work");
-        toggle.checked = false;
-        toggle.dispatchEvent(new Event("change"));
+        const checkbox = enableCheckboxFor("Work");
+        checkbox.checked = false;
+        checkbox.dispatchEvent(new Event("change"));
         await flush();
 
         expect(plugin.settings.disabledGroups).toEqual(["work"]);
@@ -522,17 +602,17 @@ describe("SnippetsTab — per-group enable/disable (B-138)", () => {
 
     it("re-checking the toggle re-enables the group and persists (round-trip: back on)", async () => {
         mountWithDisabled({ "work/sig": "Best" }, ["work"]);
-        let toggle = enableToggleFor("Work");
-        expect(toggle.checked).toBe(false);
+        let checkbox = enableCheckboxFor("Work");
+        expect(checkbox.checked).toBe(false);
 
-        toggle.checked = true;
-        toggle.dispatchEvent(new Event("change"));
+        checkbox.checked = true;
+        checkbox.dispatchEvent(new Event("change"));
         await flush();
 
         expect(plugin.settings.disabledGroups).toEqual([]);
         expect(plugin._saveCalls.length).toBe(1);
-        toggle = enableToggleFor("Work");
-        expect(toggle.checked).toBe(true);
+        checkbox = enableCheckboxFor("Work");
+        expect(checkbox.checked).toBe(true);
         const groupEl = groupHeaderFor("Work").closest(".snippet-group");
         expect(groupEl?.classList.contains("snippet-group-disabled")).toBe(false);
     });
@@ -542,9 +622,9 @@ describe("SnippetsTab — per-group enable/disable (B-138)", () => {
             { "work/sig": "Best", "personal/todo": "- [ ] " },
             ["personal"],
         );
-        const workToggle = enableToggleFor("Work");
-        workToggle.checked = false;
-        workToggle.dispatchEvent(new Event("change"));
+        const workCheckbox = enableCheckboxFor("Work");
+        workCheckbox.checked = false;
+        workCheckbox.dispatchEvent(new Event("change"));
         await flush();
 
         expect(new Set(plugin.settings.disabledGroups)).toEqual(new Set(["work", "personal"]));
@@ -575,10 +655,10 @@ describe("SnippetsTab — per-group enable/disable (B-138)", () => {
             plugin.saveSettings = async () => {
                 throw new Error("disk full");
             };
-            const toggle = enableToggleFor("Work");
-            toggle.checked = false;
+            const checkbox = enableCheckboxFor("Work");
+            checkbox.checked = false;
 
-            expect(() => toggle.dispatchEvent(new Event("change"))).not.toThrow();
+            expect(() => checkbox.dispatchEvent(new Event("change"))).not.toThrow();
             await flush();
 
             // The in-memory mutation is applied before the save is attempted
@@ -615,16 +695,16 @@ describe("SnippetsTab — per-group enable/disable (B-138)", () => {
             plugin.saveSettings = async () => {
                 throw new Error("disk full");
             };
-            const toggle = enableToggleFor("Work");
-            toggle.checked = false;
-            toggle.dispatchEvent(new Event("change"));
+            const checkbox = enableCheckboxFor("Work");
+            checkbox.checked = false;
+            checkbox.dispatchEvent(new Event("change"));
             await flush();
 
             const groupEl = groupHeaderFor("Work").closest(".snippet-group");
             expect(groupEl?.classList.contains("snippet-group-disabled")).toBe(true);
             // The re-rendered checkbox must also reflect the applied
             // (disabled) state, not the pre-toggle "enabled" default.
-            expect(enableToggleFor("Work").checked).toBe(false);
+            expect(enableCheckboxFor("Work").checked).toBe(false);
 
             plugin.saveSettings = async () => {};
             await vi.advanceTimersByTimeAsync(300);
@@ -706,10 +786,10 @@ describe("SnippetsTab — per-group enable/disable (B-138)", () => {
         ) as HTMLInputElement;
         modalInput.value = "Office";
         modalInput.dispatchEvent(new Event("input"));
-        const okBtn = Array.from(
+        const submitBtn = Array.from(
             document.body.querySelectorAll(".modal-button-container button"),
-        ).find((b) => b.textContent === "OK") as HTMLButtonElement;
-        okBtn.click();
+        ).find((b) => b.textContent === "Rename") as HTMLButtonElement;
+        submitBtn.click();
         await flush();
 
         expect(plugin.settings.snippets["office/sig"]).toBe("Best");
@@ -733,8 +813,8 @@ describe("SnippetsTab — bulk delete + bulk move (B-142)", () => {
     }
 
     function enterSelectionMode(): void {
-        const selectBtn = Array.from(root.querySelectorAll(".snipsy-snippet-toolbar button")).find(
-            (b) => b.textContent === "Select",
+        const selectBtn = root.querySelector(
+            '.snipsy-snippet-toolbar [aria-label="Select snippets"]',
         ) as HTMLButtonElement;
         selectBtn.click();
     }
@@ -844,5 +924,125 @@ describe("SnippetsTab — bulk delete + bulk move (B-142)", () => {
         // Untouched.
         expect(plugin.settings.snippets.b).toBe("2");
         expect(plugin._saveCalls.length).toBe(1);
+    });
+});
+
+// ---- F5a/F5b: group header layout ----
+//
+// F5a: the mute toggle is always visible, right of the group name —
+// NOT inside `.group-actions` (Rename/Delete stay hover-revealed on
+// devices that have hover; the mute control is exempt).
+// F5b: in selection mode, a select-all checkbox sits at the header's
+// left edge (same edge as row checkboxes), with an indeterminate
+// state when some-but-not-all of the group's rows are selected.
+describe("SnippetsTab — group header layout (F5a/F5b)", () => {
+    function groupHeaderFor(groupTitle: string): HTMLElement {
+        const headers = root.querySelectorAll(".group-header");
+        for (const header of headers) {
+            const title = header.querySelector(".group-title");
+            if (title?.textContent === groupTitle) return header as HTMLElement;
+        }
+        throw new Error(`Group "${groupTitle}" not found`);
+    }
+
+    function enterSelectionMode(): void {
+        const selectBtn = root.querySelector(
+            '.snipsy-snippet-toolbar [aria-label="Select snippets"]',
+        ) as HTMLButtonElement;
+        selectBtn.click();
+    }
+
+    it("the mute toggle lives outside .group-actions, right of the name/count", () => {
+        mount({ "work/a": "1", "work/b": "2" });
+        const header = groupHeaderFor("Work");
+        const muteWrap = header.querySelector(".group-mute") as HTMLElement;
+        const actions = header.querySelector(".group-actions") as HTMLElement;
+        expect(muteWrap).toBeTruthy();
+        expect(muteWrap.querySelector(".snipsy-group-enable-toggle")).toBeTruthy();
+        expect(actions.contains(muteWrap)).toBe(false);
+        expect(muteWrap.contains(actions)).toBe(false);
+        // Comes before the (hover-hidden) actions wrapper in the header.
+        expect(Boolean(muteWrap.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(
+            true,
+        );
+    });
+
+    it("selection mode adds a select-all checkbox at the header's left edge, before the chevron", () => {
+        mount({ "work/a": "1", "work/b": "2" });
+        enterSelectionMode();
+        const header = groupHeaderFor("Work");
+        const cb = header.querySelector(".group-select-all") as HTMLInputElement;
+        const chevron = header.querySelector(".group-toggle") as HTMLElement;
+        expect(cb).toBeTruthy();
+        expect(cb.getAttribute("aria-label")).toBe("Select all in group Work");
+        expect(Boolean(cb.compareDocumentPosition(chevron) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(
+            true,
+        );
+    });
+
+    it("select-all is unchecked with none selected, checked with all selected, indeterminate with some", () => {
+        mount({ "work/a": "1", "work/b": "2" });
+        expandGroup("Work");
+        enterSelectionMode();
+
+        let cb = groupHeaderFor("Work").querySelector(".group-select-all") as HTMLInputElement;
+        expect(cb.checked).toBe(false);
+        expect(cb.indeterminate).toBe(false);
+
+        const rowCb = findRow("a")!.querySelector('input[type="checkbox"]') as HTMLInputElement;
+        rowCb.checked = true;
+        rowCb.dispatchEvent(new Event("change"));
+
+        cb = groupHeaderFor("Work").querySelector(".group-select-all") as HTMLInputElement;
+        expect(cb.checked).toBe(false);
+        expect(cb.indeterminate).toBe(true);
+    });
+
+    it("checking select-all selects every row in the group (and only that group); unchecking clears them", () => {
+        mount({ "work/a": "1", "work/b": "2", "other/c": "3" });
+        expandGroup("Work");
+        expandGroup("Other");
+        enterSelectionMode();
+
+        let cb = groupHeaderFor("Work").querySelector(".group-select-all") as HTMLInputElement;
+        cb.checked = true;
+        cb.dispatchEvent(new Event("change"));
+
+        cb = groupHeaderFor("Work").querySelector(".group-select-all") as HTMLInputElement;
+        expect(cb.checked).toBe(true);
+        expect(cb.indeterminate).toBe(false);
+        expect(
+            (findRow("a")!.querySelector('input[type="checkbox"]') as HTMLInputElement).checked,
+        ).toBe(true);
+        expect(
+            (findRow("b")!.querySelector('input[type="checkbox"]') as HTMLInputElement).checked,
+        ).toBe(true);
+        // The other group's row is untouched.
+        expect(
+            (findRow("c")!.querySelector('input[type="checkbox"]') as HTMLInputElement).checked,
+        ).toBe(false);
+
+        cb = groupHeaderFor("Work").querySelector(".group-select-all") as HTMLInputElement;
+        cb.checked = false;
+        cb.dispatchEvent(new Event("change"));
+        expect(
+            (findRow("a")!.querySelector('input[type="checkbox"]') as HTMLInputElement).checked,
+        ).toBe(false);
+    });
+
+    it("clicking select-all does not also collapse/expand the group (stops propagation to the header)", () => {
+        mount({ "work/a": "1", "work/b": "2" });
+        expandGroup("Work");
+        enterSelectionMode();
+
+        const groupEl = groupHeaderFor("Work").closest(".snippet-group") as HTMLElement;
+        expect(groupEl.querySelector(".group-content")).toBeTruthy();
+
+        const cb = groupHeaderFor("Work").querySelector(".group-select-all") as HTMLInputElement;
+        cb.dispatchEvent(new Event("click", { bubbles: true }));
+
+        // Still open — the header's own click-to-toggle listener never
+        // fired from the checkbox's bubbled click.
+        expect(groupHeaderFor("Work").closest(".snippet-group")?.querySelector(".group-content")).toBeTruthy();
     });
 });

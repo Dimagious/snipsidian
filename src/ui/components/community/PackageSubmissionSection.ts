@@ -4,6 +4,7 @@ import { validatePackage, type ValidationResult } from "../../../services/packag
 import { buildPackageSubmissionUrl } from "../../../services/github-issue-url";
 import type { PackageData } from "../../../services/package-types";
 import * as YAML from "yaml";
+import { renderSettingGroup } from "../../utils/setting-group";
 
 /**
  * Submit a community package. The legacy Google Form path is gone
@@ -24,49 +25,59 @@ export class PackageSubmissionSection {
     ) {}
 
     render(root: HTMLElement): void {
-        root.createEl("h3", { text: "Share a package", cls: "snipsy-tab-heading" });
-        const intro = root.createDiv({ cls: "snipsy-hint" });
-        intro.createSpan({
-            text: "Paste your package YAML to validate it, then open a GitHub issue to submit it for review. ",
-        });
-        // B-058: the wiki page doesn't exist (GitHub wikis are off
-        // by default for new repos — the wiki URL redirects to the
-        // repo home). Point at the live catalog directory instead —
-        // submitters can browse real, accepted packs as templates.
-        const help = intro.createEl("a", {
-            text: "See existing packs as examples",
-            href: "https://github.com/Dimagious/snipsidian-community/tree/main/community-packages/approved",
-        });
-        help.setAttr("target", "_blank");
-        help.setAttr("rel", "noopener noreferrer");
+        const group = renderSettingGroup(root, "Share a package");
 
-        const yamlContainer = root.createDiv({ cls: "snipsy-submit-yaml" });
-        const yamlTextarea: HTMLTextAreaElement = yamlContainer.createEl("textarea", {
-            placeholder: "Paste your community package YAML here…",
-            cls: "snipsy-submit-textarea",
-            attr: { "aria-label": "Community package YAML" },
+        group.addSetting((s) => {
+            // Built directly into `descEl` (`appendText` + `createEl`)
+            // rather than a detached `DocumentFragment` passed to
+            // `setDesc` — both render identically in real Obsidian
+            // (`Element.prototype.setText` appends a Node value as-is,
+            // it doesn't stringify it), but this avoids relying on that
+            // less-obvious special case.
+            s.descEl.appendText(
+                "Paste your package YAML to validate it, then open a GitHub issue to submit it for review. ",
+            );
+            // B-058: the wiki page doesn't exist (GitHub wikis are off
+            // by default for new repos — the wiki URL redirects to the
+            // repo home). Point at the live catalog directory instead —
+            // submitters can browse real, accepted packs as templates.
+            s.descEl.createEl("a", {
+                text: "See existing packs as examples",
+                href: "https://github.com/Dimagious/snipsidian-community/tree/main/community-packages/approved",
+                attr: { target: "_blank", rel: "noopener noreferrer" },
+            });
         });
 
-        const validationContainer = root.createDiv({ cls: "snipsy-submit-validation" });
+        let yamlTextarea!: HTMLTextAreaElement;
+        group.addSetting((s) => {
+            s.addTextArea((t) => {
+                yamlTextarea = t.inputEl;
+                t.inputEl.addClass("snipsy-submit-textarea");
+                t.setPlaceholder("Paste your community package YAML here…");
+                t.inputEl.setAttr("aria-label", "Community package YAML");
+            });
+        });
 
-        const buttonRow = root.createDiv({ cls: "snipsy-submit-actions" });
-        const validateBtn = buttonRow.createEl("button", {
-            text: "Validate",
-            cls: "snippet-action",
-            attr: { type: "button" },
-        });
-        const submitBtn: HTMLButtonElement = buttonRow.createEl("button", {
-            text: "Open submission issue",
-            cls: "snippet-action mod-cta",
-            attr: { type: "button" },
-        });
-        submitBtn.disabled = true;
-
-        validateBtn.addEventListener("click", () => {
-            this.validate(yamlTextarea, validationContainer, submitBtn);
-        });
-        submitBtn.addEventListener("click", () => {
-            void this.openSubmissionIssue(yamlTextarea, validationContainer, submitBtn);
+        // Validation result sits on the same row as the buttons it
+        // unlocks, instead of a separate block above them.
+        let validationContainer!: HTMLDivElement;
+        let submitBtn!: HTMLButtonElement;
+        group.addSetting((s) => {
+            validationContainer = s.infoEl.createDiv({ cls: "snipsy-submit-validation" });
+            s.addButton((b) =>
+                b.setButtonText("Validate").onClick(() => {
+                    this.validate(yamlTextarea, validationContainer, submitBtn);
+                }),
+            );
+            s.addButton((b) => {
+                submitBtn = b.buttonEl;
+                b.setButtonText("Open submission issue")
+                    .setCta()
+                    .setDisabled(true)
+                    .onClick(() => {
+                        void this.openSubmissionIssue(yamlTextarea, validationContainer, submitBtn);
+                    });
+            });
         });
     }
 

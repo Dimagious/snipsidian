@@ -1,4 +1,4 @@
-import { App, DropdownComponent, Notice, Platform, ToggleComponent } from "obsidian";
+import { App, Notice, Platform } from "obsidian";
 import type SnipSidianPlugin from "../../main";
 import type { HotkeysTabHandle } from "../../types";
 import { isRecordOfString } from "../../shared/guards";
@@ -6,6 +6,7 @@ import { ImportPreviewModal } from "./Modals";
 import { DEFAULT_SNIPPETS_GROUP, planRestoreDefaults } from "../../store/presets";
 import { joinKey } from "../../store/keys";
 import { validatePackageForInstall } from "../../services/package-validator";
+import { renderSettingGroup } from "../utils/setting-group";
 
 /** B-137: default prefix char when the mode is on but the user
  *  hasn't picked one yet. Kept in sync with `plugin.ts`'s `getPrefix`
@@ -13,16 +14,21 @@ import { validatePackageForInstall } from "../../services/package-validator";
 const DEFAULT_PREFIX_CHAR = ":";
 
 /**
- * General tab. Visually aligned with the About tab: one section
- * heading at the top, then UPPERCASE-style subheadings (`<h4>`) and
- * bordered-list cards for each group. Help & Resources is gone —
- * it overlapped with the About tab, which is the canonical home for
- * documentation / community links.
+ * General tab. UI redesign (2026-09): sections render as native
+ * "filled group" containers via `renderSettingGroup` — a sentence-case
+ * heading over a `--background-primary-alt` group of `Setting` rows,
+ * the same look Obsidian's own Editor/Hotkeys pages use, replacing the
+ * old bordered-card + uppercase-subheading shell (AUDIT X1/X2). No
+ * page heading above the first group (AUDIT X3) — the tab button
+ * already says "General", and the tabpanel carries
+ * `aria-labelledby` (SettingsTab.ts).
+ *
+ * Section order: Expansion first (it's the only real preference),
+ * then Commands, Backup, Defaults — the old order put Commands first.
  *
  * All actions here are equally-weighted utilities, so no buttons
- * carry `.setCta()` (HANDOFF §2c). Import flow opens
- * `ImportPreviewModal` so the user can preview merge vs replace
- * before the write (B-038).
+ * carry `.setCta()`. Import flow opens `ImportPreviewModal` so the
+ * user can preview merge vs replace before the write (B-038).
  */
 export class BasicTab {
     constructor(
@@ -32,66 +38,68 @@ export class BasicTab {
 
     render(root: HTMLElement) {
         root.empty();
-        root.createEl("h3", { text: "Snipsy settings", cls: "snipsy-tab-heading" });
 
-        // ---- Commands ----
-        root.createEl("h4", { text: "Commands", cls: "snipsy-tab-subheading" });
-        const commands = root.createDiv({ cls: "snipsy-about-list" });
+        this.renderExpansionSettings(root);
+        this.renderCommands(root);
+        this.renderBackup(root);
+        this.renderDefaults(root);
+    }
 
-        this.renderRow(commands, {
-            title: "Insert snippet",
-            description: "Open the snippet picker.",
-            buttonText: "Set hotkey",
-            onClick: () => this.openHotkeyTab("snipsidian:insert-snippet", "Insert snippet…"),
+    private renderCommands(root: HTMLElement) {
+        const group = renderSettingGroup(root, "Commands");
+        group.addSetting((s) => {
+            s.setName("Insert snippet")
+                .setDesc("Open the snippet picker.")
+                .addButton((b) =>
+                    b
+                        .setButtonText("Set hotkey")
+                        .onClick(() => this.openHotkeyTab("snipsidian:insert-snippet", "Insert snippet…")),
+                );
+        });
+        group.addSetting((s) => {
+            s.setName("Open settings")
+                .setDesc("Jump straight to this plugin's settings.")
+                .addButton((b) =>
+                    b
+                        .setButtonText("Set hotkey")
+                        .onClick(() => this.openHotkeyTab("snipsidian:open-settings", "Open settings")),
+                );
+        });
+    }
+
+    private renderBackup(root: HTMLElement) {
+        const group = renderSettingGroup(root, "Backup");
+        group.addSetting((s) => {
+            s.setName("Export snippets")
+                .setDesc("Download your library as JSON.")
+                .addButton((b) => b.setButtonText("Export JSON").onClick(() => void this.exportJson()));
+        });
+        group.addSetting((s) => {
+            s.setName("Import snippets")
+                .setDesc("Preview a JSON file before merge or replace.")
+                .addButton((b) => b.setButtonText("Import JSON").onClick(() => this.startImport()));
         });
 
-        this.renderRow(commands, {
-            title: "Open settings",
-            description: "Jump straight to Snipsy settings.",
-            buttonText: "Set hotkey",
-            onClick: () => this.openHotkeyTab("snipsidian:open-settings", "Open settings"),
-        });
+        // B-047: on mobile this row is skipped entirely rather than
+        // rendered as a dead end that can only fail ("File manager
+        // access is only available on desktop").
+        if (Platform.isDesktop) {
+            group.addSetting((s) => {
+                s.setName("Reveal data file")
+                    .setDesc("Show the data file in your file manager.")
+                    .addButton((b) => b.setButtonText("Show in folder").onClick(() => this.revealDataFile()));
+            });
+        }
+    }
 
-        // ---- Expansion ----
-        root.createEl("h4", { text: "Expansion", cls: "snipsy-tab-subheading" });
-        const expansion = root.createDiv({ cls: "snipsy-about-list" });
-        this.renderExpansionSettings(expansion);
-
-        // ---- Backup ----
-        root.createEl("h4", { text: "Backup", cls: "snipsy-tab-subheading" });
-        const backup = root.createDiv({ cls: "snipsy-about-list" });
-
-        this.renderRow(backup, {
-            title: "Export snippets",
-            description: "Download your library as JSON.",
-            buttonText: "Export JSON",
-            onClick: () => void this.exportJson(),
-        });
-
-        this.renderRow(backup, {
-            title: "Import snippets",
-            description: "Preview a JSON file before merge or replace.",
-            buttonText: "Import JSON",
-            onClick: () => this.startImport(),
-        });
-
-        this.renderRow(backup, {
-            title: "Reveal data file",
-            description: "Open the data file in your file manager.",
-            buttonText: "Reveal",
-            onClick: () => this.revealDataFile(),
-        });
-
-        // ---- Defaults ----
-        root.createEl("h4", { text: "Defaults", cls: "snipsy-tab-subheading" });
-        const defaults = root.createDiv({ cls: "snipsy-about-list" });
-
-        this.renderRow(defaults, {
-            title: "Restore default snippets",
-            description:
-                "Re-add missing built-in snippets to the Defaults group. Existing snippets are not changed.",
-            buttonText: "Restore",
-            onClick: () => void this.restoreDefaults(),
+    private renderDefaults(root: HTMLElement) {
+        const group = renderSettingGroup(root, "Defaults");
+        group.addSetting((s) => {
+            s.setName("Restore default snippets")
+                .setDesc(
+                    "Re-add missing built-in snippets. Existing snippets are not changed.",
+                )
+                .addButton((b) => b.setButtonText("Restore").onClick(() => void this.restoreDefaults()));
         });
     }
 
@@ -128,90 +136,64 @@ export class BasicTab {
      * toggle is off. Scope guard per the backlog item: ONE global
      * mode, no per-snippet opt-out.
      *
-     * B-150: rendered as two `.snipsy-about-row` card rows (same shell
-     * as the Commands/Backup/Defaults sections via `renderRowShell`)
-     * instead of raw `new Setting(container)` items — Obsidian's
-     * `.setting-item` chrome made these two rows look like floating
-     * blocks inside the bordered-card container. The toggle/dropdown
-     * mount into the row's action slot instead of a button.
+     * Redesign: real `Setting` rows inside the "Expansion" group
+     * (previously hand-rolled card rows, B-150, to dodge Obsidian's
+     * `.setting-item` look — that's now the look we want). When the
+     * toggle is off, the whole Prefix-character row dims (not just
+     * the dropdown glyph), so the dependency between the two rows is
+     * visible at a glance (AUDIT: "disabled state is only a faint
+     * glyph").
      */
-    private renderExpansionSettings(container: HTMLElement) {
+    private renderExpansionSettings(root: HTMLElement) {
         const current = this.plugin.settings.expansion ?? {};
         const requirePrefix = current.requirePrefix ?? false;
         const prefixChar = current.prefixChar ?? DEFAULT_PREFIX_CHAR;
 
-        // Build both row shells first so DOM order (toggle row, then
-        // dropdown row — the mount tests index into the Expansion
-        // list by position) is independent of the order the
-        // components below are wired up in.
-        const toggleAction = this.renderRowShell(container, {
-            title: "Require a prefix before triggers",
-            description: "With this on, todo stays text; :todo expands.",
+        const group = renderSettingGroup(root, "Expansion");
+
+        let dropdownRowEl: HTMLElement | null = null;
+        let dropdownDisable: ((disabled: boolean) => void) | null = null;
+
+        group.addSetting((s) => {
+            s.setName("Require a prefix before triggers").setDesc(
+                "With this on, todo stays text; :todo expands.",
+            );
+            s.addToggle((t) =>
+                t.setValue(requirePrefix).onChange(async (value: boolean) => {
+                    this.plugin.settings.expansion = {
+                        ...this.plugin.settings.expansion,
+                        requirePrefix: value,
+                    };
+                    await this.plugin.saveSettings();
+                    dropdownDisable?.(!value);
+                    dropdownRowEl?.toggleClass("snipsy-row-disabled", !value);
+                }),
+            );
         });
-        const dropdownAction = this.renderRowShell(container, {
-            title: "Prefix character",
-            description:
+
+        group.addSetting((s) => {
+            s.setName("Prefix character").setDesc(
                 "Which character must come right before a trigger when the toggle above is on.",
-        });
-
-        const dropdown = new DropdownComponent(dropdownAction)
-            .addOption(":", ":")
-            .addOption(";", ";")
-            .setValue(prefixChar)
-            .setDisabled(!requirePrefix)
-            .onChange(async (value: string) => {
-                this.plugin.settings.expansion = {
-                    ...this.plugin.settings.expansion,
-                    prefixChar: value,
+            );
+            dropdownRowEl = s.settingEl;
+            dropdownRowEl.toggleClass("snipsy-row-disabled", !requirePrefix);
+            s.addDropdown((d) => {
+                d.addOption(":", ":")
+                    .addOption(";", ";")
+                    .setValue(prefixChar)
+                    .setDisabled(!requirePrefix)
+                    .onChange(async (value: string) => {
+                        this.plugin.settings.expansion = {
+                            ...this.plugin.settings.expansion,
+                            prefixChar: value,
+                        };
+                        await this.plugin.saveSettings();
+                    });
+                dropdownDisable = (disabled) => {
+                    d.setDisabled(disabled);
                 };
-                await this.plugin.saveSettings();
             });
-
-        new ToggleComponent(toggleAction).setValue(requirePrefix).onChange(
-            async (value: boolean) => {
-                this.plugin.settings.expansion = {
-                    ...this.plugin.settings.expansion,
-                    requirePrefix: value,
-                };
-                await this.plugin.saveSettings();
-                dropdown.setDisabled(!value);
-            },
-        );
-    }
-
-    /**
-     * Shared card-row shell: a `.snipsy-about-row` with title/desc text
-     * on the left and an action slot on the right. `renderRow` fills
-     * the slot with a button; `renderExpansionSettings` mounts a real
-     * `ToggleComponent`/`DropdownComponent` there instead (B-150).
-     */
-    private renderRowShell(
-        parent: HTMLElement,
-        opts: { title: string; description: string },
-    ): HTMLElement {
-        const row = parent.createDiv({ cls: "snipsy-about-row" });
-        const text = row.createDiv({ cls: "snipsy-about-text" });
-        text.createDiv({ cls: "snipsy-about-row-title", text: opts.title });
-        text.createDiv({ cls: "snipsy-about-row-desc", text: opts.description });
-        return row.createDiv({ cls: "snipsy-about-row-action-slot" });
-    }
-
-    private renderRow(
-        parent: HTMLElement,
-        opts: {
-            title: string;
-            description: string;
-            buttonText: string;
-            onClick: () => void;
-        },
-    ) {
-        const action = this.renderRowShell(parent, opts);
-        const btn = action.createEl("button", {
-            cls: "snipsy-about-row-action",
-            text: opts.buttonText,
-            attr: { type: "button", "aria-label": `${opts.buttonText}: ${opts.title}` },
         });
-        btn.addEventListener("click", opts.onClick);
     }
 
     /**
@@ -363,34 +345,79 @@ export class BasicTab {
         input.click();
     }
 
+    /** B-047: on failure, tells the user what actually happened
+     *  ("Electron shell not available" was internals jargon) and, when
+     *  the path was successfully computed, shows it with a Copy path
+     *  action — so the user can still get to the file manually. The
+     *  underlying error still goes to the console with context
+     *  (CLAUDE.md §4: never swallow errors). This row only renders on
+     *  desktop (`renderBackup` above), but the method stays defensive
+     *  about `Platform.isDesktop` in case it's ever reached another
+     *  way (e.g. a stale reference held across a platform change). */
     private revealDataFile() {
-        try {
-            if (Platform.isDesktop) {
-                const adapter = this.app.vault.adapter as { getBasePath?: () => string };
-                if (typeof adapter.getBasePath !== "function") {
-                    throw new Error("Not supported on this platform");
-                }
-                const base: string = adapter.getBasePath();
-                const configDir: string = this.app.vault.configDir;
-                const path = `${base}/${configDir}/plugins/snipsidian/data.json`;
-                const electron = (
-                    window as {
-                        require?: (m: string) => {
-                            shell?: { showItemInFolder?: (p: string) => void };
-                        };
-                    }
-                ).require?.("electron");
-                if (!electron?.shell?.showItemInFolder) {
-                    throw new Error("Electron shell not available");
-                }
-                electron.shell.showItemInFolder(path);
-            } else {
-                new Notice("File manager access is only available on desktop");
-            }
-        } catch (err) {
-            new Notice(
-                `Failed to reveal file: ${err instanceof Error ? err.message : String(err)}`,
-            );
+        if (!Platform.isDesktop) {
+            new Notice("File manager access is only available on desktop");
+            return;
         }
+        let path: string | undefined;
+        try {
+            const adapter = this.app.vault.adapter as { getBasePath?: () => string };
+            if (typeof adapter.getBasePath !== "function") {
+                throw new Error("Not supported on this platform");
+            }
+            const base: string = adapter.getBasePath();
+            const configDir: string = this.app.vault.configDir;
+            path = `${base}/${configDir}/plugins/snipsidian/data.json`;
+            const electron = (
+                window as {
+                    require?: (m: string) => {
+                        shell?: { showItemInFolder?: (p: string) => void };
+                    };
+                }
+            ).require?.("electron");
+            if (!electron?.shell?.showItemInFolder) {
+                throw new Error("Electron shell not available");
+            }
+            electron.shell.showItemInFolder(path);
+        } catch (err) {
+            console.error("[snipsy] failed to reveal data file", err);
+            this.showRevealFailureNotice(path);
+        }
+    }
+
+    /** Builds the B-047 failure notice: plain-language message, plus
+     *  the computed path (when we got far enough to have one) and a
+     *  Copy path button, so a failed file-manager launch still leaves
+     *  the user with something actionable. */
+    private showRevealFailureNotice(path: string | undefined): void {
+        // `Notice`'s message type is `string | DocumentFragment`.
+        // Obsidian's own `DocumentFragment` augment (obsidian.d.ts)
+        // extends `Node`, and `Node` is where `createEl`/`createDiv`/
+        // `createSpan` live — so a fragment built via the global
+        // `createFragment()` gets the same helpers `HTMLElement` does,
+        // no bare `document.*`/`createElement` needed.
+        const frag = createFragment((el) => {
+            el.createEl("b", { text: "Could not open the file manager." });
+            if (path) {
+                el.createEl("br");
+                el.appendText("Data file: ");
+                el.createEl("code", { text: path });
+                const row = el.createDiv({ cls: "snipsy-notice-row" });
+                const copyBtn = row.createEl("button", {
+                    text: "Copy path",
+                    attr: { type: "button" },
+                });
+                copyBtn.addEventListener("click", () => {
+                    void navigator.clipboard?.writeText(path).then(
+                        () => new Notice("Path copied"),
+                        (err: unknown) => {
+                            console.error("[snipsy] failed to copy data file path", err);
+                            new Notice("Could not copy the path");
+                        },
+                    );
+                });
+            }
+        });
+        new Notice(frag, 0);
     }
 }
