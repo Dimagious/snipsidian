@@ -12,11 +12,11 @@ jobs:
   test-build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install
@@ -49,20 +49,20 @@ jobs:
         run: npm run release:zip
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: ./coverage/lcov.info
           fail_ci_if_error: true
           verbose: true
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: coverage/**
 
       - name: Upload plugin bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: snipsidian-bundle
           path: |

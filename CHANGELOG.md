@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GitHub Pages website** (B-156), deployed on release tags via `.github/workflows/pages.yml`: `site/index.html` (single-file site) plus `robots.txt`, `sitemap.xml` and `llms.txt`. `scripts/site-check.cjs` gates broken images, dead anchors, stray `.claude` paths, typographic dashes and third-party requests, and now also runs in CI (`npm run site:check`); `scripts/assemble-site.cjs` copies `site/` to `_site/` and fills in `{{version}}`/`{{minAppVersion}}` from `manifest.json` at deploy time.
 - **README rewrite**, leading with what Snipsy does, install steps, and a link to the new website.
 
+### DX
+
+- **CI moved off the deprecated Node 20 Actions runtime.** All workflows now use `actions/checkout@v7`, `actions/setup-node@v7` (Node 22), `actions/upload-artifact@v7`, `codecov/codecov-action@v7`, `actions/attest-build-provenance@v4` and `softprops/action-gh-release@v3`. Inputs are unchanged; the majors mainly switch the action runtime to Node 24. `release.yml` is only exercised on the next tag.
+
 ## [1.3.2] - 2026-08-05
 
 ### Fixed
