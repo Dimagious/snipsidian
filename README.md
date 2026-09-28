@@ -16,6 +16,9 @@ Type `todo` and a space, get `- [ ]`. Snipsy turns short triggers into text as y
 Obsidian. **No scripting, and no templates to learn.** It knows where markdown is code, so it
 stays quiet in code blocks and frontmatter.
 
+**[Take the tour on the website](https://dimagious.github.io/snipsidian/)**: every feature, a live
+expansion demo, and screenshots in light and dark.
+
 <video src="https://github.com/user-attachments/assets/8e54d0ec-9b86-4741-b697-0a0a981a127b" autoplay muted loop playsinline width="100%">
   <a href="docs/screens/demo.mp4">Watch the 60-second demo</a>
 </video>
