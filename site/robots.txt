@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://dimagious.github.io/snipsidian/sitemap.xml

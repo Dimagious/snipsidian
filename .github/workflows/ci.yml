@@ -36,6 +36,9 @@ jobs:
       - name: Scorecard regression gate
         run: npm run scorecard:check
 
+      - name: Project site (broken images, dead anchors, dashes, required files)
+        run: npm run site:check
+
       - name: Unit tests (with coverage gates)
         run: npm run test
 

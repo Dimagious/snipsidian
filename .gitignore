@@ -15,6 +15,9 @@ pnpm-lock.yaml
 # Tests & reports
 coverage/
 
+# GitHub Pages site build output (scripts/assemble-site.cjs)
+_site/
+
 # E2E (Playwright + Obsidian)
 .obsidian-unpacked/
 playwright-report/

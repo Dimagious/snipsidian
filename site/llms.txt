@@ -1,0 +1,18 @@
+# Snipsy
+
+Snipsy is a text-expansion plugin for Obsidian: type a trigger and a space,
+get the text. Hotstrings, a searchable snippet picker, community packages,
+and Espanso import. It knows where markdown is code, so it stays quiet in
+code blocks and frontmatter.
+
+Site: https://dimagious.github.io/snipsidian/
+Repository: https://github.com/Dimagious/snipsidian
+Community plugin listing: https://community.obsidian.md/plugins/snipsidian
+Plugin id: snipsidian
+
+## Documentation
+
+- README, install steps and examples:
+  https://raw.githubusercontent.com/Dimagious/snipsidian/main/README.md
+- Changelog:
+  https://raw.githubusercontent.com/Dimagious/snipsidian/main/CHANGELOG.md
