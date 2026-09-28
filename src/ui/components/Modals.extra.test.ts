@@ -126,6 +126,42 @@ describe("ConfirmModal", () => {
         cancel.click();
         expect(onConfirm).not.toHaveBeenCalled();
     });
+
+    // UI redesign: destructive confirms (delete group/snippet, bulk
+    // delete, uninstall package) use `mod-warning` instead of the
+    // accent `mod-cta` — Obsidian's own convention for "hard to undo"
+    // actions (AUDIT: "Delete group confirm uses mod-cta (accent) for
+    // a destructive action").
+    it("danger:true maps the confirm button to mod-warning instead of mod-cta", () => {
+        const modal = new ConfirmModal(app, {
+            title: "Delete group?",
+            message: "This cannot be undone.",
+            confirmText: "Delete",
+            danger: true,
+            onConfirm: vi.fn(),
+        });
+        modal.open();
+        const confirm = Array.from(modal.contentEl.querySelectorAll("button")).find(
+            (b) => b.textContent === "Delete",
+        ) as HTMLButtonElement;
+        expect(confirm.classList.contains("mod-warning")).toBe(true);
+        expect(confirm.classList.contains("mod-cta")).toBe(false);
+    });
+
+    it("danger omitted (or false) keeps the non-destructive default mod-cta styling", () => {
+        const modal = new ConfirmModal(app, {
+            title: "Replace library?",
+            message: "M",
+            confirmText: "Replace",
+            onConfirm: vi.fn(),
+        });
+        modal.open();
+        const confirm = Array.from(modal.contentEl.querySelectorAll("button")).find(
+            (b) => b.textContent === "Replace",
+        ) as HTMLButtonElement;
+        expect(confirm.classList.contains("mod-cta")).toBe(true);
+        expect(confirm.classList.contains("mod-warning")).toBe(false);
+    });
 });
 
 // ---------- TextPromptModal (incl. B-051 formatHint) ----------
@@ -279,7 +315,7 @@ describe("AddSnippetModal", () => {
     it("renders title + 3 fields + Add/Cancel buttons", () => {
         const modal = new AddSnippetModal(app);
         modal.open();
-        expect(modal.titleEl.textContent).toBe("Add new snippet");
+        expect(modal.titleEl.textContent).toBe("Add snippet");
         expect(getInputByPlaceholder(modal, "Example: brb")).toBeTruthy();
         expect(getInputByPlaceholder(modal, "Example: hello, world!")).toBeTruthy();
         expect(getInputByPlaceholder(modal, "Example: greetings")).toBeTruthy();

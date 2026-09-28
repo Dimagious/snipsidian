@@ -5,6 +5,7 @@ import { PackagePreviewModal } from "../Modals";
 import { countAppliedChanges, planGroupedInstall } from "../../../core/install-plan";
 import { joinKey, slugifyGroup } from "../../../store/keys";
 import { GroupManager } from "../../utils/group-utils";
+import { renderSettingGroup } from "../../utils/setting-group";
 
 /** Default group label for Espanso imports when the user doesn't
  *  type one. Slugified at write time via `slugifyGroup`. */
@@ -19,6 +20,9 @@ const DEFAULT_GROUP_LABEL = "Espanso import";
  * why; this renders that into the one-line summary shown both as a
  * status message in the section and (for the conflict path) inside
  * the confirm modal.
+ *
+ * B-153/wording: dropped the em dash ("… — use forms/scripts …") for
+ * a plain sentence.
  */
 function formatSkipSummary(importedCount: number, skipped: EspansoSkip[]): string {
   const shown = skipped.slice(0, 3).map((s) => s.trigger);
@@ -27,7 +31,7 @@ function formatSkipSummary(importedCount: number, skipped: EspansoSkip[]): strin
     const plural = skipped.length === 1 ? "match uses" : "matches use";
     return `Nothing to import: ${skipped.length} ${plural} forms/scripts Snipsy doesn't support (${names})`;
   }
-  return `${importedCount} imported, ${skipped.length} skipped: ${names} — use forms/scripts Snipsy doesn't support`;
+  return `${importedCount} imported, ${skipped.length} skipped: ${names}. Forms and scripts are not supported.`;
 }
 
 export class EspansoSection {
@@ -59,67 +63,97 @@ export class EspansoSection {
   }
 
   render(root: HTMLElement): void {
-    const espansoSection = root.createDiv({ cls: "snipsy-section snipsy-espanso-section" });
-    // B-059: "Install package from hub" was misleading — Snipsy
-    // doesn't fetch from the Espanso hub, the user pastes YAML
-    // manually. Honest framing: "Import from Espanso YAML".
-    espansoSection.createEl("h3", { text: "Import from Espanso YAML", cls: "section-title" });
-    const espansoHelpText = espansoSection.createDiv({ cls: "help-text" });
-    espansoHelpText.createEl("p", { text: "Paste YAML from the Espanso hub or any other source — Snipsy parses the trigger list and imports it as snippets." });
-    const espansoLinkEl = espansoHelpText.createEl("p", { text: "Browse packages at ", cls: "snipsy-hint" });
-    const espansoLink = espansoLinkEl.createEl("a", {
-      text: "Espanso hub",
-      href: "https://hub.espanso.org/search",
-      cls: "snipsy-link",
+    // B-153/wording: "Import from Espanso YAML" (heading) becomes
+    // "Espanso import" — the tab already reads as a packages surface,
+    // and the section heading no longer needs to restate "Import".
+    const group = renderSettingGroup(root, "Espanso import");
+    const espansoSection = group.bodyEl;
+    espansoSection.addClass("snipsy-espanso-section");
+
+    // B-153/wording: the intro paragraph replaces the old two-line
+    // "Paste YAML from the Espanso hub…" + "Browse packages at Espanso
+    // hub" pair with one sentence, link on "Espanso hub".
+    //
+    // V2 fix (2026-09 UI-redesign follow-up): this used to be a bare
+    // `createDiv` dropped directly into the group's body — it relied
+    // on `.setting-items` itself carrying the row inset as container
+    // padding, which held on Obsidian 1.12 but not 1.13 (verified
+    // against the real 1.13.7 app.css): 1.13 moved that inset onto
+    // each `.setting-item` row individually (`--setting-items-padding-x/-y`,
+    // via `var(--setting-items-padding)` which no longer exists as a
+    // single token) and gives the divider between rows via a
+    // `::before` on the row rather than a plain `border-top`. A bare
+    // div gets neither, so the paragraph sat flush against the box's
+    // top-left corner instead of lining up with the rows below it.
+    // Building it as a real (nameless) row's `descEl` — the same
+    // pattern `PackageSubmissionSection`'s "Share a package" intro
+    // already uses — gets the correct inset for free, on any Obsidian
+    // version, because it's real row markup rather than our own guess
+    // at the row's padding.
+    group.addSetting((s) => {
+      s.descEl.appendText(
+        "Paste package YAML. Plain text triggers become snippets; forms and scripts are skipped. Find packages on the ",
+      );
+      const espansoLink = s.descEl.createEl("a", {
+        text: "Espanso hub",
+        href: "https://hub.espanso.org/search",
+        cls: "snipsy-link",
+      });
+      espansoLink.setAttribute("target", "_blank");
+      espansoLink.setAttribute("rel", "noopener noreferrer");
+      s.descEl.appendText(".");
     });
-    espansoLink.setAttribute("target", "_blank");
-    espansoLink.setAttribute("rel", "noopener noreferrer");
 
     // B-045: ask for a group name so the imported triggers land
     // under `<group>/<trigger>` (mirrors how PackageBrowser groups
     // community packs by label). Without this, two Espanso imports
     // can't be told apart and there's no bulk-uninstall path.
-    const groupRow = espansoSection.createDiv({ cls: "snipsy-espanso-group-row" });
-    groupRow.createEl("label", {
-      text: "Group name",
-      cls: "snipsy-hint",
-      attr: { for: "snipsy-espanso-group-input" },
-    });
-    const groupInput = groupRow.createEl("input", {
-      type: "text",
-      cls: "snipsy-espanso-group-input",
-      attr: {
-        id: "snipsy-espanso-group-input",
-        placeholder: "e.g. Espanso import",
-        "aria-label": "Group name for the imported snippets",
-      },
-    });
-    groupInput.value = this.nextDefaultGroupLabel();
-
-    const espansoYamlRow = espansoSection.createDiv({ cls: "yaml-input-row" });
-    espansoYamlRow.createEl("p", { text: "Paste an Espanso package's YAML below", cls: "yaml-instruction" });
-    const espansoYamlContainer = espansoYamlRow.createDiv({ cls: "yaml-container" });
-    const espansoTextarea: HTMLTextAreaElement = espansoYamlContainer.createEl("textarea", {
-      placeholder: "Paste Espanso YAML here…",
-      cls: "yaml-textarea",
-      attr: { "aria-label": "Espanso YAML to import" },
+    let groupInput!: HTMLInputElement;
+    group.addSetting((s) => {
+      s.setName("Group name").setDesc("Imported snippets go into this group.");
+      s.addText((t) => {
+        groupInput = t.inputEl;
+        t.inputEl.addClass("snipsy-espanso-group-input");
+        // B-153/wording: placeholder matches the computed default
+        // instead of the old "e.g. Espanso import" hint prefix.
+        t.setPlaceholder(DEFAULT_GROUP_LABEL);
+        t.inputEl.setAttr("aria-label", "Group name for the imported snippets");
+        t.setValue(this.nextDefaultGroupLabel());
+      });
     });
 
-    const espansoButtonRow = espansoSection.createDiv({ cls: "button-row" });
-    // B-056 + B-059: button text matches the section heading
-    // ("Import snippets" — verb form of "Import from Espanso YAML").
-    const espansoInstallBtn = espansoButtonRow.createEl("button", { text: "Import snippets", cls: "install-btn" });
+    let espansoTextarea!: HTMLTextAreaElement;
+    let espansoInstallBtn!: HTMLButtonElement;
+    group.addSetting((s) => {
+      s.setName("Package YAML");
+      s.addTextArea((t) => {
+        espansoTextarea = t.inputEl;
+        t.inputEl.addClass("yaml-textarea");
+        t.setPlaceholder("Paste package YAML here…");
+        t.inputEl.setAttr("aria-label", "Espanso YAML to import");
+      });
+    });
 
     // B-139: status line for the skip summary. Hidden by default —
     // "zero-skip pack → no skip UI" is the pinned contract, so this
     // only ever shows when `skipped.length > 0`. `aria-live="polite"`
     // per the house pattern (matches `TextPromptModal`'s hint,
-    // `AddSnippetModal`'s error div, etc.).
-    const espansoStatusEl = espansoSection.createDiv({
-      cls: "snipsy-espanso-skip-status",
-      attr: { "aria-live": "polite" },
+    // `AddSnippetModal`'s error div, etc.). Sits on the same row as
+    // the Import button, next to the action it unlocks.
+    let espansoStatusEl!: HTMLDivElement;
+    group.addSetting((s) => {
+      espansoStatusEl = s.controlEl.createDiv({
+        cls: "snipsy-espanso-skip-status",
+        attr: { "aria-live": "polite" },
+      });
+      espansoStatusEl.hide();
+      // B-056 + B-059: button text is the verb form of the section's
+      // purpose ("Import snippets").
+      s.addButton((b) => {
+        espansoInstallBtn = b.buttonEl;
+        b.setButtonText("Import snippets").setCta();
+      });
     });
-    espansoStatusEl.hide();
 
     espansoInstallBtn.onclick = () => {
       espansoStatusEl.hide();

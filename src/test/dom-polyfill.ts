@@ -53,15 +53,20 @@ function applyOptions(el: HTMLElement, opts: DomElementInfo | string | undefined
 }
 
 function createElImpl(
-    this: HTMLElement | Document,
+    this: HTMLElement | DocumentFragment | Document,
     tag: string,
     opts?: DomElementInfo | string,
     cb?: (el: HTMLElement) => void,
 ): HTMLElement {
     const doc = this instanceof Document ? this : this.ownerDocument;
-    const el = doc.createElement(tag);
+    const el = doc!.createElement(tag);
     applyOptions(el, opts);
-    if (this instanceof HTMLElement) this.appendChild(el);
+    // Member calls (`el.createEl(...)`) append into `this`, matching
+    // Obsidian's real `Node.prototype.createEl`; the global
+    // `createEl`/`createFragment` calls (this instanceof Document, or
+    // no `this` at all) leave the element detached until the caller
+    // appends it (or the fragment itself is inserted) somewhere.
+    if (this instanceof HTMLElement || this instanceof DocumentFragment) this.appendChild(el);
     if (cb) cb(el);
     return el;
 }
@@ -90,6 +95,37 @@ export function installObsidianDomHelpers(): void {
         cb?: (el: HTMLElement) => void,
     ): HTMLElement {
         return createElImpl.call(this, tag, opts, cb);
+    };
+
+    // Obsidian's `DocumentFragment` augment (obsidian.d.ts) extends
+    // `Node`, which is where `createEl`/`createDiv`/`createSpan` are
+    // declared — so a fragment built via the global `createFragment()`
+    // helper below needs the same three methods a `HTMLElement` gets.
+    // `appendText` is already installed on `Node.prototype` further
+    // down, which `DocumentFragment` inherits from without any extra
+    // work here.
+    const fragProto = DocumentFragment.prototype as unknown as Record<string, unknown>;
+    fragProto.createEl = function (
+        this: DocumentFragment,
+        tag: string,
+        opts?: DomElementInfo | string,
+        cb?: (el: HTMLElement) => void,
+    ): HTMLElement {
+        return createElImpl.call(this, tag, opts, cb);
+    };
+    fragProto.createDiv = function (
+        this: DocumentFragment,
+        opts?: DomElementInfo | string,
+        cb?: (el: HTMLDivElement) => void,
+    ): HTMLDivElement {
+        return createElImpl.call(this, "div", opts, cb as (el: HTMLElement) => void) as HTMLDivElement;
+    };
+    fragProto.createSpan = function (
+        this: DocumentFragment,
+        opts?: DomElementInfo | string,
+        cb?: (el: HTMLSpanElement) => void,
+    ): HTMLSpanElement {
+        return createElImpl.call(this, "span", opts, cb as (el: HTMLElement) => void) as HTMLSpanElement;
     };
 
     proto.createDiv = function (
@@ -136,6 +172,18 @@ export function installObsidianDomHelpers(): void {
 
     proto.setText = function (this: HTMLElement, text: string): void {
         this.textContent = text;
+    };
+
+    // `appendText` — Obsidian augments this onto `Node` (not just
+    // `HTMLElement`), so string fragments can be interleaved with
+    // child elements (e.g. EspansoSection's "…Find packages on the
+    // <a>Espanso hub</a>." intro line) without reaching for bare
+    // `document.createTextNode`.
+    (Node.prototype as unknown as Record<string, unknown>).appendText = function (
+        this: Node,
+        val: string,
+    ): void {
+        this.appendChild(this.ownerDocument!.createTextNode(val));
     };
 
     // `hide()` / `show()` are Obsidian's display-toggle helpers used
@@ -201,6 +249,20 @@ export function installObsidianDomHelpers(): void {
         cb?: (el: HTMLSpanElement) => void,
     ): HTMLSpanElement {
         return (g.createEl as CreateElFn)("span", opts, cb as (el: HTMLElement) => void) as HTMLSpanElement;
+    };
+
+    // Global `createFragment` — builds a `DocumentFragment`, invokes
+    // the optional callback with it (so callers can populate it via
+    // `el.createEl(...)`/`el.createDiv(...)`/`el.appendText(...)`
+    // rather than bare `document.createDocumentFragment()` +
+    // `document.createElement(...)`), and returns it. Used by B-047's
+    // reveal-data-file failure notice (`BasicTab.ts`).
+    g.createFragment = function (
+        cb?: (el: DocumentFragment) => void,
+    ): DocumentFragment {
+        const frag = document.createDocumentFragment();
+        if (cb) cb(frag);
+        return frag;
     };
 
     // `activeDocument` / `activeWindow` are Obsidian's popout-safe

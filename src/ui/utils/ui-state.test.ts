@@ -184,3 +184,50 @@ describe("UIStateManager — debounced group-open save (persist rejection handli
         }
     });
 });
+
+describe("UIStateManager — setActiveTab persist rejection handling (B-155)", () => {
+    // Regression test for B-155: `setActiveTab` used to call
+    // `void this.persist()` with no rejection handling — a save
+    // failure on tab switch was an unhandled promise rejection with
+    // zero user-facing signal. Fails before the
+    // `Promise.resolve(this.persist()).catch(...)` fix (same shape as
+    // `setGroupOpen`'s debounced save above).
+    it("a rejected persist on tab switch is caught and logged, and the tab still switches", async () => {
+        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        try {
+            const persist = vi.fn(async () => {
+                throw new Error("disk full");
+            });
+            const ui = new UIStateManager(makeSettings(), persist);
+
+            ui.setActiveTab("packages");
+            // In-memory state updates synchronously — the tab switch
+            // itself never depended on the save resolving.
+            expect(ui.getActiveTab()).toBe("packages");
+
+            // Flush the rejected promise's microtask queue.
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(persist).toHaveBeenCalledTimes(1);
+            expect(errorSpy).toHaveBeenCalledWith(
+                "[snipsy] failed to save active tab",
+                expect.any(Error),
+            );
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it("a resolving persist is still called once on tab switch, on the success path", async () => {
+        const persist = vi.fn(async () => {});
+        const ui = new UIStateManager(makeSettings(), persist);
+
+        ui.setActiveTab("about");
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(ui.getActiveTab()).toBe("about");
+        expect(persist).toHaveBeenCalledTimes(1);
+    });
+});

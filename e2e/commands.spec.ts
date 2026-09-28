@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, ui } from "./fixtures";
 
 /**
  * E2E: Snipsy's Obsidian commands surface.
@@ -19,6 +19,7 @@ import { test, expect } from "./fixtures";
 test.describe("Snipsy commands", () => {
     test("`snipsidian:open-settings` opens Settings on our tab (B-106)", async ({
         win,
+        app,
     }) => {
         // Trigger the command the way the user would via the
         // command palette — bypassing the palette UI itself to
@@ -33,12 +34,21 @@ test.describe("Snipsy commands", () => {
             a?.commands?.executeCommandById?.("snipsidian:open-settings");
         });
 
+        // B-158: the command's own `setting.open()` may render
+        // Settings as a separate popout window rather than inline in
+        // `win` (observed on Obsidian 1.13.7) — resolve whichever
+        // window actually got the content. Uses `resolveSettingsWindow`
+        // rather than `openSettings` since the command above already
+        // did the opening; this spec is testing that command, not the
+        // API `openSettings` itself calls.
+        const sw = await ui.resolveSettingsWindow(app, win);
+
         // The Settings modal opens with our tab active. The tab's
         // header is "Add snippet" toolbar button — that's
         // SnippetsTab.ts's first piece of content and is unique to
         // the Snipsy tab.
         await expect(
-            win.getByRole("button", { name: "Add snippet" }).first(),
+            sw.getByRole("button", { name: "Add snippet" }).first(),
         ).toBeVisible({ timeout: 5_000 });
 
         // The Settings sidebar's Snipsy entry is also highlighted.

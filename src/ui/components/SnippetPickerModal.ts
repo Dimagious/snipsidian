@@ -1,4 +1,4 @@
-import { Modal, App, MarkdownView, Notice } from "obsidian";
+import { Modal, App, MarkdownView, Notice, setIcon } from "obsidian";
 import type { SnippetItem, SnippetSearchQuery } from "../../types";
 import type { SnippetPickerAPI } from "../../core/snippet-picker";
 import { insertSnippetAtCursor, wrapSelectionWithSnippet } from "../../adapters/obsidian-editor";
@@ -54,19 +54,19 @@ export class SnippetPickerModal extends Modal {
         this.hasInitialSelection = this.detectInitialSelection();
         titleEl.setText(this.hasInitialSelection ? "Wrap selection" : "Insert snippet");
 
-        // Search field. `role="combobox"` + `aria-controls` is what the
-        // screen reader needs to announce the listbox; `aria-expanded`
-        // stays "true" because the list is always rendered.
-        contentEl.createEl("label", {
-            text: "Search snippet",
-            attr: { for: "snipsy-picker-search" },
-        });
+        // Search field. Looks like the Command palette / Quick
+        // switcher — a large borderless input, no visible "Search
+        // snippet" label (it stays as the input's `aria-label` for
+        // screen readers; `role="combobox"` + `aria-controls` is what
+        // announces the listbox; `aria-expanded` stays "true" because
+        // the list is always rendered).
         this.searchInput = contentEl.createEl("input", {
             type: "text",
             placeholder: "Type to search snippets…",
             cls: "search-input",
             attr: {
                 id: "snipsy-picker-search",
+                "aria-label": "Search snippet",
                 role: "combobox",
                 autocomplete: "off",
                 "aria-controls": SnippetPickerModal.LISTBOX_ID,
@@ -99,18 +99,17 @@ export class SnippetPickerModal extends Modal {
         contentEl.createEl("h3", { text: "Preview", cls: "preview-label" });
         this.previewDiv = contentEl.createDiv("snippet-preview");
 
-        // Hints. The "directly" in the old hint was redundant fluff
-        // (B-040 / U-005) — every click is direct.
+        // Hints. Obsidian's own prompts (Command palette, Quick
+        // switcher) use one quiet centred line — "Click any snippet to
+        // insert" is dropped as obvious, and the "directly" qualifier
+        // the old hint carried (B-040 / U-005) is gone along with it.
         const hints = contentEl.createDiv("snippet-hints");
-        hints.createEl("strong", { text: "Navigation:" });
-        hints.appendChild(activeDocument.createTextNode(" ↑/↓ to navigate, "));
-        hints.createEl("strong", { text: "Enter" });
+        hints.createEl("strong", { text: "↑↓" });
+        hints.appendChild(activeDocument.createTextNode(" to navigate, "));
+        hints.createEl("strong", { text: "↵" });
         hints.appendChild(activeDocument.createTextNode(" to insert, "));
         hints.createEl("strong", { text: "Esc" });
         hints.appendChild(activeDocument.createTextNode(" to close"));
-        hints.createEl("br");
-        hints.createEl("strong", { text: "Click" });
-        hints.appendChild(activeDocument.createTextNode(" any snippet to insert."));
 
         this.setupEventHandlers();
         this.performSearch("");
@@ -229,9 +228,12 @@ export class SnippetPickerModal extends Modal {
 
             // Group label — "Folder" was inconsistent with every other
             // surface in the plugin (B-040 / U-004). The data shape
-            // still uses `folder`; only the UI label changed.
+            // still uses `folder`; only the UI label changed. Redesign:
+            // a right-aligned flair with a folder icon instead of the
+            // parenthesised "(folder)" text.
             const groupEl = item.createDiv("snippet-folder");
-            groupEl.createSpan({ text: `(${snippet.folder})` });
+            setIcon(groupEl.createSpan({ cls: "snippet-folder-icon" }), "folder");
+            groupEl.createSpan({ text: snippet.folder });
 
             // Preview (first 50 chars)
             const preview = item.createDiv("snippet-preview-text");

@@ -33,11 +33,32 @@
 
   --snipsy-accent:    var(--interactive-accent);
   --snipsy-accent-hov:var(--interactive-accent-hover);
-  --snipsy-accent-soft: rgba(var(--interactive-accent-rgb, 138 92 246), 0.14);
+  /* UI redesign (2026-09): `--interactive-accent-translucent` and
+     `--interactive-accent-rgb` don't exist in Obsidian 1.13's
+     app.css, so every rule that referenced them (directly or via a
+     `rgba(var(--interactive-accent-rgb, ...))` fallback) silently
+     fell back to a hard-coded purple regardless of the active theme
+     or a custom accent colour. `--background-modifier-active-hover` is a real 1.13 token
+     Obsidian derives from the live accent colour, so this now tracks
+     community themes / custom accents automatically. */
+  --snipsy-accent-soft: var(--background-modifier-active-hover);
   --snipsy-on-accent: var(--text-on-accent);
 
   --snipsy-danger:    var(--text-error);
   --snipsy-success:   var(--text-success);
+
+  /* Filled "group" containers (Editor/Hotkeys-style sections) and tag
+     pills — see main.css `.snipsy-group` / `.snipsy-tag`. */
+  --snipsy-group-bg:  var(--background-primary-alt);
+  --snipsy-tag-bg:    var(--tag-background);
+
+  /* Soft success/danger tints for diff tags (NEW/UPDATE/REMOVE,
+     install validation result) — `color-mix()` instead of the old
+     literal `rgba(108,197,133,...)` / `rgba(232,113,106,...)` values
+     (AUDIT X6), so they track the theme's actual success/error hue. */
+  --snipsy-success-soft: color-mix(in oklch, var(--text-success) 14%, transparent);
+  --snipsy-danger-soft:  color-mix(in oklch, var(--text-error) 14%, transparent);
+  --snipsy-accent-tag-soft: color-mix(in oklch, var(--text-accent) 14%, transparent);
 
   --snipsy-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 }

@@ -194,17 +194,39 @@ describe("SnippetPickerModal — naming + microcopy (U-004 / U-005)", () => {
         expect(meta?.textContent).not.toContain("Folder:");
     });
 
-    it("drops the 'directly' filler from the click-to-insert hint (U-005)", () => {
-        // The old hint read 'Click any snippet to insert it
-        // **directly**'. The qualifier was filler; every click is
-        // direct. Pin the new wording so it can't regress.
+    it("renders one quiet instructions line, dropping 'Click any snippet to insert' as obvious (UI redesign)", () => {
+        // Obsidian's own prompts (Command palette, Quick switcher) use
+        // a single instructions line, not a two-line block with a
+        // redundant "click to insert" reminder. The old "directly"
+        // qualifier (B-040 / U-005) is gone along with the whole line.
         const { modal } = mount({
             snippets: [makeSnippet({ trigger: ":hi", replacement: "hello" })],
         });
         const hints = modal.contentEl.querySelector(".snippet-hints");
         expect(hints?.textContent).not.toContain("directly");
-        expect(hints?.textContent).toContain("Click");
-        expect(hints?.textContent).toContain("any snippet to insert");
+        expect(hints?.textContent).not.toContain("Click");
+        expect(hints?.textContent).not.toContain("any snippet to insert");
+        expect(hints?.querySelector("br")).toBeNull();
+        expect(hints?.textContent).toBe("↑↓ to navigate, ↵ to insert, Esc to close");
+    });
+
+    it("renders each result row's group as an icon flair, not '(folder)' parens", () => {
+        // Redesign #2: the result list's group label used to be plain
+        // parenthesised text, `(greetings)`. The mockup replaces it
+        // with a folder-icon flair. Pin both that the parens are gone
+        // and that the group name and an icon element are still there.
+        const { modal } = mount({
+            snippets: [makeSnippet({
+                trigger: ":hi",
+                replacement: "hello",
+                folder: "greetings",
+            })],
+        });
+        const groupEl = modal.contentEl.querySelector(".snippet-folder");
+        expect(groupEl?.textContent).toBe("greetings");
+        expect(groupEl?.textContent).not.toContain("(");
+        expect(groupEl?.textContent).not.toContain(")");
+        expect(groupEl?.querySelector(".snippet-folder-icon")).not.toBeNull();
     });
 });
 

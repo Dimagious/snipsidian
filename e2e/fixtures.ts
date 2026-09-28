@@ -256,6 +256,61 @@ export { expect } from "@playwright/test";
  * with the fixtures.
  */
 export const ui = {
+    /** Open Settings on the Snipsy tab via Obsidian's own API
+     *  (`app.setting.open()` + `openTabById`) and return the `Page`
+     *  Settings actually rendered into.
+     *
+     *  B-158: every tracked spec used to press `Meta+,` and then look
+     *  for settings content in `win` (the main workspace window).
+     *  That stopped working on Obsidian 1.13.7 — `Meta+,` opens
+     *  nothing there anymore (confirmed via `app.setting.open()` +
+     *  `openTabById()` instead, matching `design-audit`'s capture
+     *  spec) — but the deeper issue is that Settings itself doesn't
+     *  always render *inside* `win`: on this runtime it opens as a
+     *  separate popout `BrowserWindow` (Playwright sees it as a page
+     *  with `url() === "about:blank"`), so any locator built against
+     *  `win` never finds the Snipsy tab content and every test here
+     *  times out waiting for it.
+     *
+     *  This polls for either shape — a popout window appearing, or
+     *  the tab content rendering inline in `win` — and returns
+     *  whichever `Page` actually got the content, so callers always
+     *  interact with the right window regardless of which one
+     *  Obsidian chose. */
+    async openSettings(app: ElectronApplication, win: Page): Promise<Page> {
+        await win.evaluate(() => {
+            const a = (globalThis as unknown as {
+                app?: { setting?: { open?: () => void; openTabById?: (id: string) => void } };
+            }).app;
+            a?.setting?.open?.();
+            a?.setting?.openTabById?.("snipsidian");
+        });
+        return ui.resolveSettingsWindow(app, win);
+    },
+
+    /** The window-detection half of `openSettings`, split out for
+     *  callers that already triggered Settings some other way (e.g.
+     *  `commands.spec.ts` executes `snipsidian:open-settings`
+     *  directly, since that command itself is what's under test —
+     *  re-triggering via `openSettings` would test the command
+     *  palette path instead). Polls for either shape (see
+     *  `openSettings`'s doc comment) without opening anything itself. */
+    async resolveSettingsWindow(app: ElectronApplication, win: Page): Promise<Page> {
+        const deadline = Date.now() + 10_000;
+        while (Date.now() < deadline) {
+            const popout = app.windows().find((w) => w.url() === "about:blank");
+            if (popout) return popout;
+            if ((await win.locator(".vertical-tab-content-container").count()) > 0) {
+                return win;
+            }
+            await win.waitForTimeout(200);
+        }
+        // Fall back to `win` — callers' own locator waits surface a
+        // clear timeout error either way, and this keeps the helper
+        // from throwing its own less-specific one.
+        return win;
+    },
+
     /** Open the command palette via Cmd+P. Returns the palette input. */
     async openCommandPalette(win: Page) {
         await win.keyboard.press("Meta+P");
