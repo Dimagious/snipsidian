@@ -141,10 +141,22 @@ export const test = base.extend<SnipsyFixtures>({
             JSON.stringify(vaultRegistry),
         );
 
+        // Opt-in video recording for the README demo
+        // (`scripts/record-demo.sh`). Set SNIPSY_DEMO_VIDEO_DIR to an
+        // absolute path to capture the Obsidian window at 1280x720 via
+        // Playwright's Chromium pipeline (no macOS Screen Recording
+        // permission needed). Off by default: regular E2E runs never
+        // set it.
+        const recordVideoDir = process.env.SNIPSY_DEMO_VIDEO_DIR;
+        const recordVideo = recordVideoDir
+            ? { recordVideo: { dir: recordVideoDir, size: { width: 1280, height: 720 } } }
+            : {};
+
         const app = await _electron.launch({
             args: [OBSIDIAN_APP_ASAR, `--user-data-dir=${userDataDir}`],
             env,
             timeout: 45_000,
+            ...recordVideo,
         });
         await use(app);
         // Force-close with a hard timeout. Obsidian sometimes

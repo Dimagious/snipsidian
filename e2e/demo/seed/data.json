@@ -1,0 +1,12 @@
+{
+    "snippets": {
+        "tasks/todo": "- [ ] $|",
+        "tasks/done": "- [x] $|",
+        "callouts/callout": "> [!note]\n> $|",
+        "callouts/tip": "> [!tip]\n> $|",
+        "dates/today": "$date",
+        "dates/now": "$time",
+        "formatting/bold": "**$|**"
+    },
+    "ui": { "groupOpen": { "tasks": true, "callouts": true } }
+}
