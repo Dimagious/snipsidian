@@ -85,6 +85,11 @@ palette. It searches triggers and replacements, previews the result, and inserts
 Select some text first and `$1` in the snippet receives it. **Settings → Snipsy → General →
 Set hotkey** opens the Hotkeys tab already filtered to that command.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Dimagious/snipsidian/HEAD/site/img/picker-dark.png">
+  <img alt="The Insert snippet picker: the query da, seven matching triggers with their groups, and a preview of the selected one" src="site/img/picker-light.png" width="560">
+</picture>
+
 ## How expansion works
 
 A trigger expands when a separator lands after it: a space, Tab, Enter, or one of
@@ -106,6 +111,11 @@ header. Or turn on **Require a prefix before triggers** under **General → Expa
 then on `todo` stays a word, and only `:todo` (or `;todo`, your pick) expands. The prefix is
 eaten by the expansion. It is one switch for every snippet, off by default.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Dimagious/snipsidian/HEAD/site/img/prefix-dark.png">
+  <img alt="General tab, Expansion: Require a prefix before triggers is on, prefix character colon" src="site/img/prefix-light.png">
+</picture>
+
 ## Your own snippets
 
 **Settings → Snipsy → Snippets → Add snippet.** Trigger `sig`, replacement:
@@ -116,6 +126,11 @@ Dmitriy
 ```
 
 Save, and `sig` followed by a space is your signature in every note.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Dimagious/snipsidian/HEAD/site/img/add-snippet-dark.png">
+  <img alt="The Add snippet dialog: trigger :sig with the hint Will expand when you type: sig, and a two-line replacement" src="site/img/add-snippet-light.png" width="520">
+</picture>
 
 ### Placeholders
 
@@ -135,6 +150,11 @@ out the way it went in: delete its group. The toggle on a group's header mutes i
 deleting anything: its snippets stop expanding and leave the picker, and stay in the list,
 dimmed, for when you want them back. Selection mode moves or deletes many at once; a delete
 names the first five triggers before it asks.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Dimagious/snipsidian/HEAD/site/img/groups-dark.png">
+  <img alt="The Snippets tab: the Callouts group muted and dimmed, three Meetings snippets selected with Move to group, Delete and Clear" src="site/img/groups-light.png" width="600">
+</picture>
 
 ## Packages
 
@@ -158,6 +178,16 @@ trigger. The catalog lives in
 [Dimagious/snipsidian-community](https://github.com/Dimagious/snipsidian-community). Made a pack
 worth sharing? The Packages tab opens a GitHub issue with it already filled in.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Dimagious/snipsidian/HEAD/site/img/packages-dark.png">
+  <img alt="The Packages tab: community packs with Verified and Installed flairs and Install, Reinstall and Uninstall buttons" src="site/img/packages-light.png" width="600">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Dimagious/snipsidian/HEAD/site/img/conflict-dark.png">
+  <img alt="Reinstalling Daily Journal after editing one of its snippets: the preview shows current and incoming text and asks Keep current or Overwrite" src="site/img/conflict-light.png" width="520">
+</picture>
+
 ### Espanso import
 
 Paste the YAML of any package from [hub.espanso.org](https://hub.espanso.org/), name a group,
@@ -165,6 +195,11 @@ press **Import snippets**. Espanso's cursor marker, clipboard variable and plain
 become `$|`, `$clipboard` and `$date`. Forms, scripts, shell commands, regex triggers and images
 have no equivalent here. Those are skipped and named, "12 imported, 3 skipped: …", instead of
 landing in your notes as broken `{{text}}`.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Dimagious/snipsidian/HEAD/site/img/espanso-dark.png">
+  <img alt="Espanso import with a pasted YAML file and the result line: 3 imported, 1 skipped: ask" src="site/img/espanso-light.png" width="600">
+</picture>
 
 ### Backup
 
@@ -229,6 +264,17 @@ you got. Snipsy's own settings tab has an About page with the links.
 The feature list is short on purpose. No scripting, no Tab-stops, one prefix switch for
 everything. Those are decisions, and the fastest way to change one is to say what you tried to
 do and could not.
+
+## Also by the author
+
+**[Dashy](https://dimagious.github.io/dashsidian/)**: a dashboard inside an Obsidian note, built
+from six markdown blocks (tiles, number cards, progress bars, countdowns, a year heatmap). A few
+lines of YAML each, no JavaScript, no Dataview.
+[Plugin listing](https://community.obsidian.md/plugins/dashsidian) ·
+[GitHub](https://github.com/Dimagious/dashsidian)
+
+If Snipsy saves you keystrokes, a [star on GitHub](https://github.com/Dimagious/snipsidian) helps
+other people find it, and a [coffee](https://buymeacoffee.com/dimagious) says thanks.
 
 ## Development
 
