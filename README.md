@@ -53,8 +53,8 @@ Sixteen triggers, in one group called **Defaults**. Type the trigger, then a spa
 | `today` · `now` | `2026-09-28` · `14:05` |
 | `brb` · `omw` · `ty` · `imo` | be right back · on my way · thank you · in my opinion |
 
-Delete the group and it stays deleted. **Settings → Snipsy → General → Restore default
-snippets** brings back the missing ones and leaves everything you added alone.
+Delete the group and it stays deleted. **Settings → Snipsy → Restore default snippets**
+brings back the missing ones and leaves everything you added alone.
 
 ## How it differs from a template plugin
 
@@ -82,8 +82,18 @@ Then open a note, type `todo` and a space.
 
 For the snippets you do not remember by name, run **Snipsy: Insert snippet…** from the command
 palette. It searches triggers and replacements, previews the result, and inserts at the cursor.
-Select some text first and `$1` in the snippet receives it. **Settings → Snipsy → General →
-Set hotkey** opens the Hotkeys tab already filtered to that command.
+Select some text first and `$1` in the snippet receives it. **Settings → Snipsy → Set hotkey
+for Insert snippet** opens the Hotkeys tab already filtered to that command.
+
+On Obsidian 1.13 and later, Snipsy's settings are native: **Snippets** and **Packages** open as
+pages, everything else sits right on the Snipsy settings screen, and Obsidian's settings search
+finds them ("prefix", "hotstring", "export"). On older Obsidian the same settings are grouped
+into Snippets, Packages, General and About tabs.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Dimagious/snipsidian/HEAD/site/img/settings-root-dark.png">
+  <img alt="Snipsy settings on Obsidian 1.13: Snippets and Packages entries with their counts, then the Expansion group" src="site/img/settings-root-light.png" width="600">
+</picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Dimagious/snipsidian/HEAD/site/img/picker-dark.png">
@@ -107,13 +117,13 @@ expansion together, in one step.
 
 If `now` or `today` keeps turning into a time in the middle of your sentences, you have three
 answers. Delete that one snippet. Switch off the whole Defaults group with the toggle on its
-header. Or turn on **Require a prefix before triggers** under **General → Expansion**: from
+header. Or turn on **Require a prefix before triggers** under **Settings → Snipsy → Expansion**: from
 then on `todo` stays a word, and only `:todo` (or `;todo`, your pick) expands. The prefix is
 eaten by the expansion. It is one switch for every snippet, off by default.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Dimagious/snipsidian/HEAD/site/img/prefix-dark.png">
-  <img alt="General tab, Expansion: Require a prefix before triggers is on, prefix character colon" src="site/img/prefix-light.png">
+  <img alt="Expansion settings: Require a prefix before triggers is on, prefix character colon" src="site/img/prefix-light.png">
 </picture>
 
 ## Your own snippets
@@ -153,7 +163,7 @@ names the first five triggers before it asks.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Dimagious/snipsidian/HEAD/site/img/groups-dark.png">
-  <img alt="The Snippets tab: the Callouts group muted and dimmed, three Meetings snippets selected with Move to group, Delete and Clear" src="site/img/groups-light.png" width="600">
+  <img alt="The Snippets page: the Callouts group muted and dimmed, three Meetings snippets selected with Move to group, Delete and Clear" src="site/img/groups-light.png" width="600">
 </picture>
 
 ## Packages
@@ -176,11 +186,11 @@ keep your version or take the pack's, snippet by snippet. A pack that wants a tr
 used by a different snippet in another group is not installed, and the notice names the
 trigger. The catalog lives in
 [Dimagious/snipsidian-community](https://github.com/Dimagious/snipsidian-community). Made a pack
-worth sharing? The Packages tab opens a GitHub issue with it already filled in.
+worth sharing? The Packages page opens a GitHub issue with it already filled in.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Dimagious/snipsidian/HEAD/site/img/packages-dark.png">
-  <img alt="The Packages tab: community packs with Verified and Installed flairs and Install, Reinstall and Uninstall buttons" src="site/img/packages-light.png" width="600">
+  <img alt="The Packages page: community packs with Verified and Installed flairs and Install, Reinstall and Uninstall buttons" src="site/img/packages-light.png" width="600">
 </picture>
 
 <picture>
@@ -203,14 +213,15 @@ landing in your notes as broken `{{text}}`.
 
 ### Backup
 
-**General → Export JSON** saves every snippet to a file, **Import JSON** brings them back. On
+**Settings → Snipsy → Export snippets** saves every snippet to a JSON file, **Import snippets**
+brings them back. On
 a phone, where browsers cannot download, the export lands in the vault root as
 `snipsidian-snippets.json`.
 
 ## Privacy
 
 Snipsy reads and writes one file: `.obsidian/plugins/snipsidian/data.json`. It goes online
-only when you open the Packages tab, to `api.github.com` for the list and
+only when you open the Packages page, to `api.github.com` for the list and
 `raw.githubusercontent.com` for the pack you install. No analytics, no telemetry, no account.
 
 `$clipboard` reads your clipboard when a snippet with it expands. None of the defaults use it;
@@ -259,7 +270,7 @@ No. See [Privacy](#privacy).
 ## If something is wrong, or missing
 
 [Open an issue](https://github.com/Dimagious/snipsidian/issues) with what you typed and what
-you got. Snipsy's own settings tab has an About page with the links.
+you got. Snipsy's settings have Report a bug and Suggest a feature rows that open a prefilled issue.
 
 The feature list is short on purpose. No scripting, no Tab-stops, one prefix switch for
 everything. Those are decisions, and the fastest way to change one is to say what you tried to
