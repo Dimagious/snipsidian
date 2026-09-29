@@ -19,7 +19,7 @@ stays quiet in code blocks and frontmatter.
 **[Take the tour on the website](https://dimagious.github.io/snipsidian/)**: every feature, a live
 expansion demo, and screenshots in light and dark.
 
-<video src="https://github.com/user-attachments/assets/8e54d0ec-9b86-4741-b697-0a0a981a127b" autoplay muted loop playsinline width="100%">
+<video src="https://github.com/user-attachments/assets/2f26a7f5-7929-49c8-96c6-842def14f9f8" autoplay muted loop playsinline width="100%">
   <a href="docs/screens/demo.mp4">Watch the 60-second demo</a>
 </video>
 
