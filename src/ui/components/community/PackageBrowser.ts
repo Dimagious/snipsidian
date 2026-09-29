@@ -13,6 +13,7 @@ import {
     removePackageSnippets,
 } from "../../../core/install-plan";
 import { renderSettingGroup } from "../../utils/setting-group";
+import { formatTriggerList, sanitizeForNotice } from "../../../shared/notice-text";
 
 interface PackageItem {
     id?: string;
@@ -373,7 +374,10 @@ export class PackageBrowser {
     private installPackage(pkg: PackageItem) {
         try {
             if (!pkg.snippets || Object.keys(pkg.snippets).length === 0) {
-                new Notice(`Package "${pkg.label}" has no snippets to install.`);
+                // B-034 (finding #7): `pkg.label` comes from the
+                // community catalog (GitHub-fetched, untrusted) —
+                // sanitize before it reaches the Notice.
+                new Notice(`Package "${sanitizeForNotice(pkg.label)}" has no snippets to install.`);
                 return;
             }
 
@@ -394,7 +398,13 @@ export class PackageBrowser {
                     plan.validation.errors.length > 1
                         ? ` (and ${plan.validation.errors.length - 1} more)`
                         : "";
-                new Notice(`Cannot install "${pkg.label}": ${first}${more}`);
+                // B-034: both the package label and the validation
+                // errors can echo back untrusted text from the package
+                // (an oversized or control-char label, an echoed
+                // trigger name) — sanitize both before the Notice.
+                new Notice(
+                    `Cannot install "${sanitizeForNotice(pkg.label)}": ${sanitizeForNotice(`${first}${more}`)}`,
+                );
                 console.error(
                     "[snipsy] install validation failed for",
                     pkg.label,
@@ -404,9 +414,13 @@ export class PackageBrowser {
             }
 
             if (plan.collisions.length > 0) {
-                const collisions = plan.collisions.join(", ");
+                // B-034 (finding #7): `plan.collisions` are bare
+                // trigger names from the (GitHub-fetched, still not
+                // fully trusted) package's own `snippets` map — same
+                // unbounded-join issue `EspansoSection`'s identical
+                // Notice had.
                 new Notice(
-                    `Skipped install: trigger name collision with existing snippets (${collisions})`,
+                    `Skipped install: trigger name collision with existing snippets (${formatTriggerList(plan.collisions)})`,
                 );
                 return;
             }
@@ -438,10 +452,13 @@ export class PackageBrowser {
             // "Reinstall, keep everything" run used to claim
             // "Installed N snippets" when nothing changed.
             const changedCount = countAppliedChanges(diff, resolved);
+            // B-034 (finding #7): same untrusted-`pkg.label` rationale
+            // as `installPackage`'s guard above.
+            const safeLabel = sanitizeForNotice(pkg.label);
             new Notice(
                 changedCount === 0
-                    ? `No changes — "${pkg.label}" already matches your library`
-                    : `Installed ${pkg.label} (${changedCount} snippet${changedCount === 1 ? "" : "s"})`,
+                    ? `No changes — "${safeLabel}" already matches your library`
+                    : `Installed ${safeLabel} (${changedCount} snippet${changedCount === 1 ? "" : "s"})`,
             );
             this.renderList();
         } catch (error) {
@@ -551,7 +568,9 @@ export class PackageBrowser {
         const packageGroup = pkg.label;
         const keys = listPackageKeys(packageGroup, this.plugin.settings.snippets);
         if (keys.length === 0) {
-            new Notice(`"${pkg.label}" is not installed.`);
+            // B-034 (finding #7): same untrusted-`pkg.label` rationale
+            // as `installPackage`'s guard above.
+            new Notice(`"${sanitizeForNotice(pkg.label)}" is not installed.`);
             return;
         }
 
@@ -577,8 +596,10 @@ export class PackageBrowser {
                         this.plugin.settings.snippets,
                     );
                     await this.plugin.saveSettings();
+                    // B-034 (finding #7): same untrusted-`pkg.label`
+                    // rationale as `installPackage`'s guard above.
                     new Notice(
-                        `Uninstalled ${pkg.label} (${keys.length} snippet${
+                        `Uninstalled ${sanitizeForNotice(pkg.label)} (${keys.length} snippet${
                             keys.length === 1 ? "" : "s"
                         } removed)`,
                     );

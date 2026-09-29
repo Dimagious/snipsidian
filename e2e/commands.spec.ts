@@ -43,10 +43,17 @@ test.describe("Snipsy commands", () => {
         // API `openSettings` itself calls.
         const sw = await ui.resolveSettingsWindow(app, win);
 
-        // The Settings modal opens with our tab active. The tab's
-        // header is "Add snippet" toolbar button — that's
+        // B-151/ADR-0007: on Obsidian 1.13+ the tab opens on the
+        // declarative root (Snippets/Packages page entries + General/
+        // About groups), so "Add snippet" is one click deeper — a
+        // no-op below 1.13, where Snippets is already the default
+        // landing tab.
+        await ui.openSnippetsPage(sw);
+
+        // The Settings modal opens with our tab active, and the
+        // Snippets page's "Add snippet" toolbar button — that's
         // SnippetsTab.ts's first piece of content and is unique to
-        // the Snipsy tab.
+        // the Snipsy tab — is visible.
         await expect(
             sw.getByRole("button", { name: "Add snippet" }).first(),
         ).toBeVisible({ timeout: 5_000 });

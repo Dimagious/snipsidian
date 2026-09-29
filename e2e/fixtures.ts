@@ -306,21 +306,76 @@ export const ui = {
      *  directly, since that command itself is what's under test —
      *  re-triggering via `openSettings` would test the command
      *  palette path instead). Polls for either shape (see
-     *  `openSettings`'s doc comment) without opening anything itself. */
+     *  `openSettings`'s doc comment) without opening anything itself.
+     *
+     *  B-160: `url() === "about:blank"` alone doesn't prove a window
+     *  is the Settings popout — Obsidian 1.13.7 is the local e2e
+     *  runtime, and a window can carry that URL before Settings has
+     *  actually rendered into it, or belong to something else
+     *  entirely. This now (a) considers any window other than `win` a
+     *  popout CANDIDATE (`w !== win`, not a URL check) and (b) only
+     *  returns it once it actually contains Settings content —
+     *  either the pre-1.13 imperative shell
+     *  (`.vertical-tab-content-container`) or the 1.13+ declarative
+     *  one: the tab root renders straight into a `.vertical-tab-
+     *  content` div, and a `SettingPage` (e.g. this plugin's
+     *  "Snippets"/"Packages" pages, B-151) renders into its own
+     *  `.setting-page` — so a navigable sub-page still matches even
+     *  when the outer imperative shell class isn't present. `win`
+     *  itself is checked the same way, so in-window Settings
+     *  (`settingsPopoutWindow: false`) keeps working unchanged. */
     async resolveSettingsWindow(app: ElectronApplication, win: Page): Promise<Page> {
+        const SETTINGS_CONTENT_SELECTOR =
+            ".vertical-tab-content-container, .vertical-tab-content, .setting-page";
+
+        const hasSettingsContent = async (page: Page): Promise<boolean> => {
+            try {
+                return (await page.locator(SETTINGS_CONTENT_SELECTOR).count()) > 0;
+            } catch {
+                // A window mid-navigation/teardown can throw on a
+                // locator call — treat that as "not ready yet" rather
+                // than letting the poll loop die.
+                return false;
+            }
+        };
+
         const deadline = Date.now() + 10_000;
         while (Date.now() < deadline) {
-            const popout = app.windows().find((w) => w.url() === "about:blank");
-            if (popout) return popout;
-            if ((await win.locator(".vertical-tab-content-container").count()) > 0) {
-                return win;
+            for (const candidate of app.windows()) {
+                if (candidate === win) continue;
+                if (await hasSettingsContent(candidate)) return candidate;
             }
+            if (await hasSettingsContent(win)) return win;
             await win.waitForTimeout(200);
         }
         // Fall back to `win` — callers' own locator waits surface a
         // clear timeout error either way, and this keeps the helper
         // from throwing its own less-specific one.
         return win;
+    },
+
+    /** Navigates to the Snippets page content, regardless of whether
+     *  Settings rendered the pre-1.13 tab strip (Snippets is the
+     *  default landing tab there — `TABS[0]` in `SettingsTab.ts`) or
+     *  the 1.13+ declarative root, where "Snippets" is a
+     *  `SettingDefinitionPage` entry one click deeper (B-151/
+     *  ADR-0007). Idempotent — a no-op when the toolbar is already
+     *  visible, so callers can call this unconditionally after
+     *  `openSettings`/`resolveSettingsWindow` regardless of Obsidian
+     *  version.
+     *
+     *  The 1.13+ page entry is a `.setting-item.mod-navigable` row
+     *  with no ARIA `role` (verified against the real 1.13.7 DOM via
+     *  the obsidian-probe approach) — not a `<button>` — so it's
+     *  targeted by its row class + text rather than `getByRole`. */
+    async openSnippetsPage(sw: Page): Promise<void> {
+        const toolbar = sw.getByRole("button", { name: "Add snippet" }).first();
+        if (await toolbar.isVisible().catch(() => false)) return;
+        await sw
+            .locator(".setting-item.mod-navigable", { hasText: "Snippets" })
+            .first()
+            .click();
+        await toolbar.waitFor({ state: "visible", timeout: 10_000 });
     },
 
     /** Open the command palette via Cmd+P. Returns the palette input. */

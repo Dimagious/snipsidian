@@ -90,6 +90,48 @@ export function isPackageInstalled(
 }
 
 /**
+ * Counts community packages currently installed, for the declarative
+ * Packages page entry's `desc`/`displayValue` ("K installed packs",
+ * B-151/ADR-0007). Reuses `isPackageInstalled`'s heuristic — same
+ * definition of "installed" the catalog row's own Install/Reinstall
+ * button label already uses, so the count and the row labels never
+ * disagree.
+ *
+ * Only packages present in the cached catalog (`settings.
+ * communityPackages.cache.packages`, populated by `PackageBrowser`'s
+ * fetch) are counted — the catalog is what the count describes ("K
+ * installed" out of what's browsable there), not every snippet group
+ * that happens to exist (a hand-made or Espanso-imported group isn't
+ * a "pack"). Zero before the catalog has ever been fetched (e.g. the
+ * very first time Settings is opened) — an honest starting value, not
+ * an error.
+ */
+export function countInstalledPackages(settings: SnipSidianSettings): number {
+    const packages = settings.communityPackages?.cache?.packages ?? [];
+    let count = 0;
+    for (const pkg of packages) {
+        if (isPackageInstalled(pkg.snippets, pkg.label, settings.snippets)) count++;
+    }
+    return count;
+}
+
+/**
+ * Human-readable summary for the declarative Packages page entry's
+ * `desc`/`displayValue` (B-151/ADR-0007, finding #6). The page is
+ * named "Packages", so the wording says "packages", not "packs" —
+ * matches what a user searching or reading the row actually sees.
+ *
+ * Boundaries pinned by `install-plan.test.ts`:
+ *   0 installed → "No packages installed"
+ *   1 installed → "1 package installed"
+ *   N installed → "N packages installed"
+ */
+export function formatInstalledPackagesSummary(count: number): string {
+    if (count === 0) return "No packages installed";
+    return `${count} package${count === 1 ? "" : "s"} installed`;
+}
+
+/**
  * List the full snippet keys that belong to a given package group —
  * i.e. every key shaped `<packageGroup>/*` currently in the store.
  *

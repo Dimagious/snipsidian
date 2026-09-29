@@ -1,11 +1,9 @@
 import { App, Notice, Platform } from "obsidian";
 import type SnipSidianPlugin from "../../main";
-import { buildIssueUrl } from "../../services/github-issue-url";
-import { renderSettingGroup } from "../utils/setting-group";
-
-const WEBSITE_URL = "https://dimagious.github.io/snipsidian/";
-const DASHY_SITE_URL = "https://dimagious.github.io/dashsidian/";
-const DASHY_OBSIDIAN_URL = "obsidian://show-plugin?id=dashsidian";
+import type { IssueMeta } from "../../services/github-issue-url";
+import { renderDefinitionGroups } from "../utils/setting-definitions";
+import { createControlHost } from "../utils/settings-control-path";
+import { buildAboutDefinitions, type AboutDefinitionsHandlers } from "./about-definitions";
 
 /**
  * About tab. Renamed in spirit (the file keeps the legacy
@@ -20,6 +18,17 @@ const DASHY_OBSIDIAN_URL = "obsidian://show-plugin?id=dashsidian";
  * sentence-case scanner warning without lowercasing the product name.
  * A new "Website" row (B-048) links the live demo/docs site; version
  * footer is left-aligned with the content instead of centred.
+ *
+ * B-151/ADR-0007: the Feedback/Resources/More-from-the-author groups
+ * are now driven by `about-definitions.ts`'s `buildAboutDefinitions()`
+ * — the SAME `SettingDefinitionGroup[]` `SnipSidianSettingTab.
+ * getSettingDefinitions()` returns on Obsidian 1.13+ — rendered here
+ * through the `renderDefinitionGroups` adapter for < 1.13. The version
+ * footer (finding #9) is the last row of that same "More from the
+ * author" group (`buildVersionRow` in `about-definitions.ts`) — no
+ * separate hand-rendered `.snipsy-about-version` div here any more,
+ * so both render paths show it exactly once from one definition
+ * instead of this file drawing it a second time only on < 1.13.
  */
 export class FeedbackTab {
     constructor(
@@ -31,125 +40,22 @@ export class FeedbackTab {
         root.empty();
 
         const meta = this.collectMeta();
+        const definitions = buildAboutDefinitions(meta, this.definitionHandlers());
+        renderDefinitionGroups(root, definitions, createControlHost(this.plugin));
+    }
 
-        // ---- Feedback ----
-        const feedback = renderSettingGroup(root, "Feedback");
-        feedback.addSetting((s) => {
-            s.setName("Report a bug")
-                .setDesc("File a bug report on GitHub. Includes plugin and Obsidian versions.")
-                .addButton((b) =>
-                    b
-                        .setButtonText("Open issue")
-                        .onClick(() => this.openLink(buildIssueUrl({ kind: "bug", meta }), "Report a bug")),
-                );
-        });
-        feedback.addSetting((s) => {
-            s.setName("Suggest a feature")
-                .setDesc("Propose new functionality or improvements.")
-                .addButton((b) =>
-                    b
-                        .setButtonText("Open issue")
-                        .onClick(() =>
-                            this.openLink(buildIssueUrl({ kind: "feature", meta }), "Suggest a feature"),
-                        ),
-                );
-        });
-        feedback.addSetting((s) => {
-            s.setName("General feedback")
-                .setDesc("Share your overall experience or get in touch.")
-                .addButton((b) =>
-                    b
-                        .setButtonText("Open issue")
-                        .onClick(() =>
-                            this.openLink(buildIssueUrl({ kind: "feedback", meta }), "General feedback"),
-                        ),
-                );
-        });
+    /** Exposes this tab's link-opener for `SettingsTab`'s 1.13+
+     *  declarative tree (B-151/ADR-0007) — see `BasicTab.
+     *  definitionHandlers()` for the same rationale. */
+    definitionHandlers(): AboutDefinitionsHandlers {
+        return { openLink: (href, label) => this.openLink(href, label) };
+    }
 
-        // ---- Resources ----
-        const resources = renderSettingGroup(root, "Resources");
-        // B-048: "Website" is the first Resources row — links the live
-        // demo/screenshots/docs site. Nothing in the plugin pointed at
-        // the website before this.
-        resources.addSetting((s) => {
-            s.setName("Website")
-                .setDesc("Live demo, screenshots and docs.")
-                .addButton((b) =>
-                    b.setButtonText("Open").onClick(() => this.openLink(WEBSITE_URL, "Website")),
-                );
-        });
-        resources.addSetting((s) => {
-            s.setName("Documentation")
-                .setDesc("Read the docs and examples on GitHub.")
-                .addButton((b) =>
-                    b
-                        .setButtonText("Open")
-                        .onClick(() =>
-                            this.openLink(
-                                "https://github.com/Dimagious/snipsidian#readme",
-                                "Documentation",
-                            ),
-                        ),
-                );
-        });
-        resources.addSetting((s) => {
-            s.setName("GitHub issues")
-                .setDesc("Browse open and closed issues.")
-                .addButton((b) =>
-                    b
-                        .setButtonText("Open")
-                        .onClick(() =>
-                            this.openLink(
-                                "https://github.com/Dimagious/snipsidian/issues",
-                                "GitHub issues",
-                            ),
-                        ),
-                );
-        });
-        resources.addSetting((s) => {
-            s.setName("Obsidian community")
-                .setDesc("Get help from other Obsidian users in the forum.")
-                .addButton((b) =>
-                    b
-                        .setButtonText("Open")
-                        .onClick(() =>
-                            this.openLink("https://forum.obsidian.md/", "Obsidian community"),
-                        ),
-                );
-        });
-
-        // ---- More from the author ----
-        // Owner ask (not in the mockups): a tasteful, same-weight row
-        // promoting Dashy, the author's other plugin — one line of
-        // description, a primary action opening it in Obsidian's
-        // community plugin browser, and a link to its site. No accent
-        // banner — same row style as everything else in About.
-        const author = renderSettingGroup(root, "More from the author");
-        author.addSetting((s) => {
-            s.setName("Dashy")
-                .setDesc(
-                    "A dashboard inside a note, built from Markdown blocks. No code needed.",
-                )
-                .addButton((b) =>
-                    b
-                        .setButtonText("Open in Obsidian")
-                        .onClick(() => this.openLink(DASHY_OBSIDIAN_URL, "Dashy (community plugin browser)")),
-                )
-                .addButton((b) =>
-                    b.setButtonText("Website").onClick(() => this.openLink(DASHY_SITE_URL, "Dashy website")),
-                );
-        });
-
-        // ---- Version footer ----
-        root.createDiv({ cls: "snipsy-about-version" }, (el) => {
-            el.createSpan({ text: `Snipsy ${this.plugin.manifest.version}` });
-            if (meta.obsidianVersion) {
-                el.createSpan({ text: ` · Obsidian ${meta.obsidianVersion}` });
-            }
-            if (meta.platform) {
-                el.createSpan({ text: ` · ${meta.platform}` });
-            }
-        });
+    /** Exposes `collectMeta()` for `SettingsTab`'s 1.13+ declarative
+     *  tree — same GitHub-issue-prefill meta `render()` computes below,
+     *  just callable before this tab has rendered anything. */
+    collectMetaForDefinitions(): IssueMeta {
+        return this.collectMeta();
     }
 
     /** Shared link-opener for every button on this tab — opens a new

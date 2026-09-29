@@ -2,12 +2,15 @@ import { describe, it, expect } from "vitest";
 import {
     buildPackageDiff,
     countAppliedChanges,
+    countInstalledPackages,
+    formatInstalledPackagesSummary,
     isPackageInstalled,
     listPackageKeys,
     planGroupedInstall,
     removePackageSnippets,
 } from "./install-plan";
 import type { SnipSidianSettings } from "../types";
+import type { PackageItem } from "../services/community-packages";
 
 function settingsWith(snippets: Record<string, string>): SnipSidianSettings {
     return { snippets };
@@ -377,5 +380,75 @@ describe("install-plan.countAppliedChanges (ux#7: honest install/import Notice c
 
     it("empty diff (a pure no-op reinstall) counts 0", () => {
         expect(countAppliedChanges({ added: [], conflicts: [] }, {})).toBe(0);
+    });
+});
+
+// B-151/ADR-0007, finding #6/#8: the declarative Packages page
+// entry's `desc`/`displayValue` text. Boundaries: 0 / 1 / many
+// installed, and a package present in the catalog but not installed.
+describe("install-plan.formatInstalledPackagesSummary", () => {
+    it("0 installed: 'No packages installed'", () => {
+        expect(formatInstalledPackagesSummary(0)).toBe("No packages installed");
+    });
+
+    it("1 installed: singular", () => {
+        expect(formatInstalledPackagesSummary(1)).toBe("1 package installed");
+    });
+
+    it("many installed: plural", () => {
+        expect(formatInstalledPackagesSummary(3)).toBe("3 packages installed");
+    });
+});
+
+describe("install-plan.countInstalledPackages", () => {
+    function pkg(label: string, snippets: Record<string, string>): PackageItem {
+        return { label, snippets };
+    }
+
+    it("no cached catalog: 0, not an error", () => {
+        const settings = { snippets: {} } as unknown as SnipSidianSettings;
+        expect(countInstalledPackages(settings)).toBe(0);
+    });
+
+    it("catalog present, nothing installed: 0", () => {
+        const settings: SnipSidianSettings = {
+            snippets: {},
+            communityPackages: {
+                cache: { packages: [pkg("Markdown", { todo: "- [ ]" })], lastUpdated: 0 },
+            },
+        };
+        expect(countInstalledPackages(settings)).toBe(0);
+    });
+
+    it("one of several catalog packages installed: 1", () => {
+        const settings: SnipSidianSettings = {
+            snippets: { "Markdown/todo": "- [ ]" },
+            communityPackages: {
+                cache: {
+                    packages: [
+                        pkg("Markdown", { todo: "- [ ]" }),
+                        pkg("Arrows", { "->": "→" }),
+                    ],
+                    lastUpdated: 0,
+                },
+            },
+        };
+        expect(countInstalledPackages(settings)).toBe(1);
+    });
+
+    it("every catalog package installed: matches catalog size", () => {
+        const settings: SnipSidianSettings = {
+            snippets: { "Markdown/todo": "- [ ]", "Arrows/->": "→" },
+            communityPackages: {
+                cache: {
+                    packages: [
+                        pkg("Markdown", { todo: "- [ ]" }),
+                        pkg("Arrows", { "->": "→" }),
+                    ],
+                    lastUpdated: 0,
+                },
+            },
+        };
+        expect(countInstalledPackages(settings)).toBe(2);
     });
 });

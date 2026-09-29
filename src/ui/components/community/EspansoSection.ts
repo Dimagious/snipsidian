@@ -6,6 +6,7 @@ import { countAppliedChanges, planGroupedInstall } from "../../../core/install-p
 import { joinKey, slugifyGroup } from "../../../store/keys";
 import { GroupManager } from "../../utils/group-utils";
 import { renderSettingGroup } from "../../utils/setting-group";
+import { formatTriggerList, sanitizeForNotice } from "../../../shared/notice-text";
 
 /** Default group label for Espanso imports when the user doesn't
  *  type one. Slugified at write time via `slugifyGroup`. */
@@ -25,7 +26,10 @@ const DEFAULT_GROUP_LABEL = "Espanso import";
  * a plain sentence.
  */
 function formatSkipSummary(importedCount: number, skipped: EspansoSkip[]): string {
-  const shown = skipped.slice(0, 3).map((s) => s.trigger);
+  // B-034 (finding #7): `s.trigger` is a raw Espanso match trigger
+  // parsed straight out of pasted YAML — untrusted. Sanitize each
+  // shown name before it reaches the status line / Notice.
+  const shown = skipped.slice(0, 3).map((s) => sanitizeForNotice(s.trigger, 60));
   const names = skipped.length > 3 ? `${shown.join(", ")}, …` : shown.join(", ");
   if (importedCount === 0) {
     const plural = skipped.length === 1 ? "match uses" : "matches use";
@@ -181,7 +185,12 @@ export class EspansoSection {
       try {
         parsed = espansoYamlToSnippets(yamlText);
       } catch (err) {
-        new Notice(`Failed to parse Espanso package: ${err instanceof Error ? err.message : String(err)}`);
+        // B-034: the `yaml` package's parse errors embed a
+        // pretty-printed excerpt of the OFFENDING SOURCE TEXT (the
+        // pasted, untrusted YAML) — strip control characters and cap
+        // the length before it reaches the Notice.
+        const message = err instanceof Error ? err.message : String(err);
+        new Notice(`Failed to parse Espanso package: ${sanitizeForNotice(message)}`);
         return;
       }
 
@@ -218,14 +227,20 @@ export class EspansoSection {
           plan.validation.errors.length > 1
             ? ` (and ${plan.validation.errors.length - 1} more)`
             : "";
-        new Notice(`Cannot import Espanso package: ${first}${more}`);
+        // B-034: validation errors can echo back an (untrusted) trigger
+        // name from the pasted YAML — sanitize before the Notice.
+        new Notice(`Cannot import Espanso package: ${sanitizeForNotice(`${first}${more}`)}`);
         console.error("[snipsy] Espanso import validation failed", plan.validation.errors);
         return;
       }
 
       if (plan.collisions.length > 0) {
-        const collisions = plan.collisions.join(", ");
-        new Notice(`Skipped install: trigger name collision with existing snippets (${collisions})`);
+        // B-034 (finding #7): `plan.collisions` are bare trigger names
+        // parsed from the pasted YAML — untrusted, and previously
+        // joined with no per-item or list-length cap.
+        new Notice(
+          `Skipped install: trigger name collision with existing snippets (${formatTriggerList(plan.collisions)})`,
+        );
         return;
       }
 
@@ -346,7 +361,11 @@ export class EspansoSection {
       await this.plugin.saveSettings();
       this.reportInstalled(statusEl, changedCount, parsedCount, groupLabel, skipped);
     } catch (err) {
-      new Notice(`Failed to install from YAML: ${err instanceof Error ? err.message : String(err)}`);
+      // B-034 (finding #7): this is still on the untrusted-YAML
+      // import path — sanitize before the Notice, same as every other
+      // error surfaced from this flow.
+      const message = err instanceof Error ? err.message : String(err);
+      new Notice(`Failed to install from YAML: ${sanitizeForNotice(message)}`);
     }
   }
 }

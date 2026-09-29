@@ -63,8 +63,20 @@ export default [
       'obsidianmd/prefer-window-timers': 'error',
       // Presence-only check: flags PluginSettingTab subclasses missing a
       // getSettingDefinitions() method. See src/ui/components/SettingsTab.ts
-      // for why it returns `[]` rather than real per-field definitions.
+      // (B-151/ADR-0007): it returns the real declarative tree on 1.13+ and
+      // `[]` below that, where `SettingPage` isn't usable and `display()`
+      // must keep rendering the tab strip.
       'obsidianmd/settings-tab/prefer-setting-definitions': 'error',
+      // B-151/ADR-0007: was missing from this hand-picked rule list even
+      // though it's 'error' in the plugin's own `recommended` config (the
+      // public scorecard runs that, not our list) — flags any 1.13+-only
+      // API use (SettingPage, SettingTab#update/refreshDomState, ...) at
+      // minAppVersion 1.5.0 UNLESS wrapped in `if (requireApiVersion(...))
+      // { ... }` (spike report, Q6). `declarative-pages.ts` and
+      // `SettingsTab.ts#refreshDeclarative` are written around exactly
+      // this guard shape — enabling the rule here closes the gap where
+      // that guard could regress without `npm run lint` ever catching it.
+      'obsidianmd/no-unsupported-api': 'error',
 
       // UI sentence case with custom options
       // Disabled - too many false positives with validation messages, button texts, etc.
