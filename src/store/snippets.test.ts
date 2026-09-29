@@ -4,7 +4,9 @@ import {
     mergeDefaults,
     getAllSnippetsFlat,
     hasTriggerCollision,
-    hasReplacementCollision
+    hasReplacementCollision,
+    countSnippetsAndGroups,
+    formatSnippetsSummary,
 } from "./snippets";
 import type { SnipSidianSettings } from "../types";
 
@@ -313,6 +315,67 @@ describe("store/snippets", () => {
                 disabledGroups: ["other"],
             } as unknown as SnipSidianSettings;
             expect(getAllSnippetsFlat(settings)).toHaveLength(1);
+        });
+    });
+
+    // B-151/ADR-0007, finding #6/#8: the declarative Snippets page
+    // entry's `desc`/`displayValue` text. Boundaries: 0 / 1 / many
+    // snippets, ungrouped-only, mixed groups, and a muted group.
+    describe("countSnippetsAndGroups / formatSnippetsSummary", () => {
+        it("0 snippets: countSnippetsAndGroups is {0, 0}, summary is 'No snippets'", () => {
+            const settings = { snippets: {} } as unknown as SnipSidianSettings;
+            expect(countSnippetsAndGroups(settings)).toEqual({ snippets: 0, groups: 0 });
+            expect(formatSnippetsSummary(settings)).toBe("No snippets");
+        });
+
+        it("1 snippet, ungrouped only: 'Ungrouped' doesn't count as a group", () => {
+            const settings = { snippets: { hello: "world" } } as unknown as SnipSidianSettings;
+            expect(countSnippetsAndGroups(settings)).toEqual({ snippets: 1, groups: 0 });
+            expect(formatSnippetsSummary(settings)).toBe("1 snippet");
+        });
+
+        it("many snippets, ungrouped only: plural, no 'in M groups' clause", () => {
+            const settings = {
+                snippets: { a: "1", b: "2", c: "3" },
+            } as unknown as SnipSidianSettings;
+            expect(formatSnippetsSummary(settings)).toBe("3 snippets");
+        });
+
+        it("many snippets across multiple groups: 'N snippets in M groups'", () => {
+            const settings = {
+                snippets: { "a/x": "1", "a/y": "2", "b/z": "3", ungrouped: "4" },
+            } as unknown as SnipSidianSettings;
+            expect(countSnippetsAndGroups(settings)).toEqual({ snippets: 4, groups: 2 });
+            expect(formatSnippetsSummary(settings)).toBe("4 snippets in 2 groups");
+        });
+
+        it("exactly 1 snippet in exactly 1 group: every noun stays singular", () => {
+            const settings = { snippets: { "solo/only": "x" } } as unknown as SnipSidianSettings;
+            expect(formatSnippetsSummary(settings)).toBe("1 snippet in 1 group");
+        });
+
+        it("a muted group with entries appends '(1 muted)'", () => {
+            const settings = {
+                snippets: { "work/sig": "Best", "personal/todo": "- [ ] " },
+                disabledGroups: ["work"],
+            } as unknown as SnipSidianSettings;
+            expect(formatSnippetsSummary(settings)).toBe("2 snippets in 2 groups (1 muted)");
+        });
+
+        it("a stale disabledGroups entry with no matching snippets is not counted as muted", () => {
+            const settings = {
+                snippets: { "personal/todo": "- [ ] " },
+                disabledGroups: ["deleted-group"],
+            } as unknown as SnipSidianSettings;
+            expect(formatSnippetsSummary(settings)).toBe("1 snippet in 1 group");
+        });
+
+        it("multiple muted groups pluralize the count", () => {
+            const settings = {
+                snippets: { "a/x": "1", "b/y": "2" },
+                disabledGroups: ["a", "b"],
+            } as unknown as SnipSidianSettings;
+            expect(formatSnippetsSummary(settings)).toBe("2 snippets in 2 groups (2 muted)");
         });
     });
 });

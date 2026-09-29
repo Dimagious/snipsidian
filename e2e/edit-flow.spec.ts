@@ -25,6 +25,10 @@ import type { ElectronApplication, Page } from "@playwright/test";
 // singleton regardless of which window's global scope reaches them.
 async function openSnipsy(app: ElectronApplication, win: Page): Promise<Page> {
     const sw = await ui.openSettings(app, win);
+    // B-151/ADR-0007: "Snippets" is a page entry one click deep on
+    // Obsidian 1.13+ (a no-op below 1.13, where it is the default
+    // landing tab already).
+    await ui.openSnippetsPage(sw);
     await sw
         .getByRole("button", { name: "Add snippet" })
         .first()

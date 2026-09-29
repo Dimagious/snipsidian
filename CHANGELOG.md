@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Settings use Obsidian's native declarative pages on 1.13+** (B-151/ADR-0007): `getSettingDefinitions()` now returns a real tree instead of a deliberate `[]` stub — "Snippets" and "Packages" are navigable pages (mounting the existing list/catalog UI unchanged), and General/About render as native declarative groups from the same row definitions the pre-1.13 tab strip uses. **Global settings search now finds Snipsy** — searching "prefix", "hotstring", "snippet", "trigger", "export", or "import" surfaces a Snipsy result, which the previous `[]` stub made impossible. "Espanso" and "catalog" are not searchable yet: Obsidian does not index the contents of the Packages page. Obsidian below 1.13 is unaffected: `display()` keeps rendering the same pill-tab strip (Snippets / Packages / General / About) as before, and General/About are now driven by the identical row definitions as the 1.13+ path so both versions show the same content and wording — including the About tab's version footer, now the last row of "More from the author". Three action-row names changed so a row's name alone says what clicking it does, since a 1.13+ action row renders as accent link text with no button: "Insert snippet" → "Set hotkey for Insert snippet", "Open settings" → "Set hotkey for Open settings", "General feedback" → "Send general feedback"; both hotkey rows now share one description convention, saying what clicking them does ("Opens the Hotkeys tab filtered to this command."). The Snippets/Packages page entries now describe their contents in full sentences ("No snippets" / "1 snippet" / "N snippets in M groups", with a "(K muted)" suffix when relevant; "No packages installed" / "1 package installed" / "N packages installed"). The Prefix character row also dims as a whole on Obsidian 1.13+ — Obsidian's own framework marks a disabled row `is-disabled` but ships no dimming CSS for a `control`/`action` row carrying it.
+
+### Fixed
+
+- **Filled settings groups (General, About, Packages) drew a second divider between every row on Obsidian 1.13, not just a stray arc on the first row** (B-162): Obsidian's own `.setting-group .setting-items` CSS already draws a divider between rows inside a native `SettingGroup`; our own `border-top` rule drew a second one on every row. The native-`SettingGroup` branch now draws no border-top of its own on any row, relying entirely on Obsidian's native divider; the pre-1.11 fallback branch (which has no native divider to lean on) keeps its own, zeroed only on the first row.
+- **B-034: a YAML/JSON parse error could echo a slice of untrusted pasted text — including control characters, and without a length cap — straight into a `Notice`.** Espanso import (YAML parse errors, install-time validation errors, trigger-collision lists, and skip-summary trigger names), community-package install validation errors and trigger-collision lists, and the Import snippets (JSON) flow now sanitize error/name text (`src/shared/notice-text.ts`) before it reaches a `Notice`: control characters are stripped, newlines collapse to spaces, messages and individual names are length-capped, and a list of names caps at 5 with "(and N more)".
+
+### DX
+
+- **`e2e/fixtures.ts`'s `resolveSettingsWindow`** now returns a popout window only once it actually contains Settings content (checking `.vertical-tab-content-container` / `.vertical-tab-content` / `.setting-page`, not just a bare `about:blank` URL), and prefers any window other than the main one over a URL-based guess (B-160). New `ui.openSnippetsPage` fixture helper navigates into the "Snippets" declarative page on Obsidian 1.13+ (a no-op below 1.13, where it's already the landing tab) — used by the e2e specs that drive the snippet list.
+
 ## [1.4.0] - 2026-09-29
 
 ### Added

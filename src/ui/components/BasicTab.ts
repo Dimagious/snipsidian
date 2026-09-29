@@ -6,12 +6,10 @@ import { ImportPreviewModal } from "./Modals";
 import { DEFAULT_SNIPPETS_GROUP, planRestoreDefaults } from "../../store/presets";
 import { joinKey } from "../../store/keys";
 import { validatePackageForInstall } from "../../services/package-validator";
-import { renderSettingGroup } from "../utils/setting-group";
-
-/** B-137: default prefix char when the mode is on but the user
- *  hasn't picked one yet. Kept in sync with `plugin.ts`'s `getPrefix`
- *  fallback and `AddSnippetModal`'s hint computation. */
-const DEFAULT_PREFIX_CHAR = ":";
+import { sanitizeForNotice } from "../../shared/notice-text";
+import { renderDefinitionGroups } from "../utils/setting-definitions";
+import { createControlHost } from "../utils/settings-control-path";
+import { buildGeneralDefinitions, type GeneralDefinitionsHandlers } from "./general-definitions";
 
 /**
  * General tab. UI redesign (2026-09): sections render as native
@@ -23,84 +21,61 @@ const DEFAULT_PREFIX_CHAR = ":";
  * already says "General", and the tabpanel carries
  * `aria-labelledby` (SettingsTab.ts).
  *
- * Section order: Expansion first (it's the only real preference),
- * then Commands, Backup, Defaults — the old order put Commands first.
+ * B-151/ADR-0007: content is now driven by `general-definitions.ts`'s
+ * `buildGeneralDefinitions()` — the SAME `SettingDefinitionGroup[]`
+ * `SnipSidianSettingTab.getSettingDefinitions()` returns on Obsidian
+ * 1.13+ — rendered here through the `renderDefinitionGroups` adapter
+ * (`setting-definitions.ts`) for < 1.13. Section order (Expansion
+ * first — it's the only real preference — then Commands, Backup,
+ * Defaults) and every row's wording are unchanged from before this
+ * refactor; only the "one row, two buttons" shape doesn't exist here
+ * (General has none), so `BasicTab` itself now only owns the action
+ * handlers, not the row markup.
  *
  * All actions here are equally-weighted utilities, so no buttons
  * carry `.setCta()`. Import flow opens `ImportPreviewModal` so the
  * user can preview merge vs replace before the write (B-038).
+ *
+ * Finding #2: `onDeclarativeChange`, when given, is called after a
+ * write that changes the snippet/group counts the declarative
+ * Snippets page entry's `displayValue` shows (Restore defaults,
+ * Import confirm) — those are the only General-tab actions that
+ * mutate `settings.snippets` while the tab ROOT stays visible (a
+ * write made from inside the Snippets/Packages page itself doesn't
+ * need this: the spike found the tab root already re-renders, and
+ * re-evaluates `displayValue`, on navigating back out of a page).
+ * `SnipSidianSettingTab` wires this to its own `refreshDeclarative()`
+ * (`this.update()`, guarded to 1.13+) — a plain callback here, so
+ * `BasicTab` itself stays free of any `requireApiVersion` branching.
  */
 export class BasicTab {
     constructor(
         private app: App,
         private plugin: SnipSidianPlugin,
+        private onDeclarativeChange?: () => void,
     ) {}
 
     render(root: HTMLElement) {
         root.empty();
 
-        this.renderExpansionSettings(root);
-        this.renderCommands(root);
-        this.renderBackup(root);
-        this.renderDefaults(root);
+        const definitions = buildGeneralDefinitions(this.plugin, this.definitionHandlers());
+        renderDefinitionGroups(root, definitions, createControlHost(this.plugin));
     }
 
-    private renderCommands(root: HTMLElement) {
-        const group = renderSettingGroup(root, "Commands");
-        group.addSetting((s) => {
-            s.setName("Insert snippet")
-                .setDesc("Open the snippet picker.")
-                .addButton((b) =>
-                    b
-                        .setButtonText("Set hotkey")
-                        .onClick(() => this.openHotkeyTab("snipsidian:insert-snippet", "Insert snippet…")),
-                );
-        });
-        group.addSetting((s) => {
-            s.setName("Open settings")
-                .setDesc("Jump straight to this plugin's settings.")
-                .addButton((b) =>
-                    b
-                        .setButtonText("Set hotkey")
-                        .onClick(() => this.openHotkeyTab("snipsidian:open-settings", "Open settings")),
-                );
-        });
-    }
-
-    private renderBackup(root: HTMLElement) {
-        const group = renderSettingGroup(root, "Backup");
-        group.addSetting((s) => {
-            s.setName("Export snippets")
-                .setDesc("Download your library as JSON.")
-                .addButton((b) => b.setButtonText("Export JSON").onClick(() => void this.exportJson()));
-        });
-        group.addSetting((s) => {
-            s.setName("Import snippets")
-                .setDesc("Preview a JSON file before merge or replace.")
-                .addButton((b) => b.setButtonText("Import JSON").onClick(() => this.startImport()));
-        });
-
-        // B-047: on mobile this row is skipped entirely rather than
-        // rendered as a dead end that can only fail ("File manager
-        // access is only available on desktop").
-        if (Platform.isDesktop) {
-            group.addSetting((s) => {
-                s.setName("Reveal data file")
-                    .setDesc("Show the data file in your file manager.")
-                    .addButton((b) => b.setButtonText("Show in folder").onClick(() => this.revealDataFile()));
-            });
-        }
-    }
-
-    private renderDefaults(root: HTMLElement) {
-        const group = renderSettingGroup(root, "Defaults");
-        group.addSetting((s) => {
-            s.setName("Restore default snippets")
-                .setDesc(
-                    "Re-add missing built-in snippets. Existing snippets are not changed.",
-                )
-                .addButton((b) => b.setButtonText("Restore").onClick(() => void this.restoreDefaults()));
-        });
+    /** Exposes this tab's action-row callbacks for `SettingsTab`'s
+     *  1.13+ declarative tree (B-151/ADR-0007) — the SAME handlers
+     *  `render()` feeds into `buildGeneralDefinitions()` for the
+     *  pre-1.13 adapter path above, so each action's behaviour is
+     *  defined in exactly one place regardless of which render path
+     *  ends up calling it. */
+    definitionHandlers(): GeneralDefinitionsHandlers {
+        return {
+            setHotkey: (commandId, commandName) => this.openHotkeyTab(commandId, commandName),
+            exportJson: () => this.exportJson(),
+            startImport: () => this.startImport(),
+            revealDataFile: () => this.revealDataFile(),
+            restoreDefaults: () => this.restoreDefaults(),
+        };
     }
 
     /** B-131: bring back shipped defaults the user previously deleted.
@@ -128,72 +103,7 @@ export class BasicTab {
         }
         await this.plugin.saveSettings();
         new Notice(`Restored ${count} default snippet${count === 1 ? "" : "s"}`);
-    }
-
-    /**
-     * B-137: opt-in trigger-prefix mode. One global toggle + a
-     * prefix-char dropdown (":" or ";"), dropdown disabled while the
-     * toggle is off. Scope guard per the backlog item: ONE global
-     * mode, no per-snippet opt-out.
-     *
-     * Redesign: real `Setting` rows inside the "Expansion" group
-     * (previously hand-rolled card rows, B-150, to dodge Obsidian's
-     * `.setting-item` look — that's now the look we want). When the
-     * toggle is off, the whole Prefix-character row dims (not just
-     * the dropdown glyph), so the dependency between the two rows is
-     * visible at a glance (AUDIT: "disabled state is only a faint
-     * glyph").
-     */
-    private renderExpansionSettings(root: HTMLElement) {
-        const current = this.plugin.settings.expansion ?? {};
-        const requirePrefix = current.requirePrefix ?? false;
-        const prefixChar = current.prefixChar ?? DEFAULT_PREFIX_CHAR;
-
-        const group = renderSettingGroup(root, "Expansion");
-
-        let dropdownRowEl: HTMLElement | null = null;
-        let dropdownDisable: ((disabled: boolean) => void) | null = null;
-
-        group.addSetting((s) => {
-            s.setName("Require a prefix before triggers").setDesc(
-                "With this on, todo stays text; :todo expands.",
-            );
-            s.addToggle((t) =>
-                t.setValue(requirePrefix).onChange(async (value: boolean) => {
-                    this.plugin.settings.expansion = {
-                        ...this.plugin.settings.expansion,
-                        requirePrefix: value,
-                    };
-                    await this.plugin.saveSettings();
-                    dropdownDisable?.(!value);
-                    dropdownRowEl?.toggleClass("snipsy-row-disabled", !value);
-                }),
-            );
-        });
-
-        group.addSetting((s) => {
-            s.setName("Prefix character").setDesc(
-                "Which character must come right before a trigger when the toggle above is on.",
-            );
-            dropdownRowEl = s.settingEl;
-            dropdownRowEl.toggleClass("snipsy-row-disabled", !requirePrefix);
-            s.addDropdown((d) => {
-                d.addOption(":", ":")
-                    .addOption(";", ";")
-                    .setValue(prefixChar)
-                    .setDisabled(!requirePrefix)
-                    .onChange(async (value: string) => {
-                        this.plugin.settings.expansion = {
-                            ...this.plugin.settings.expansion,
-                            prefixChar: value,
-                        };
-                        await this.plugin.saveSettings();
-                    });
-                dropdownDisable = (disabled) => {
-                    d.setDisabled(disabled);
-                };
-            });
-        });
+        this.onDeclarativeChange?.();
     }
 
     /**
@@ -334,12 +244,16 @@ export class BasicTab {
                                 ? `Replaced library with ${count} snippet${count === 1 ? "" : "s"}`
                                 : `Merged ${count} snippet${count === 1 ? "" : "s"}`,
                         );
+                        this.onDeclarativeChange?.();
                     },
                 }).open();
             } catch (err) {
-                new Notice(
-                    `Import failed: ${err instanceof Error ? err.message : String(err)}`,
-                );
+                // B-034: `JSON.parse` can echo a slice of the pasted
+                // file's own (untrusted) text into its error message —
+                // strip control characters and cap the length before
+                // it reaches the Notice.
+                const message = err instanceof Error ? err.message : String(err);
+                new Notice(`Import failed: ${sanitizeForNotice(message)}`);
             }
         };
         input.click();

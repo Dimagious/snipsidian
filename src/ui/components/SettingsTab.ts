@@ -1,10 +1,14 @@
-import { App, PluginSettingTab, type SettingDefinitionItem } from "obsidian";
+import { App, PluginSettingTab, requireApiVersion, type SettingDefinitionItem } from "obsidian";
 import type SnipSidianPlugin from "../../main";
 import { BasicTab } from "./BasicTab";
 import { SnippetsTab } from "./SnippetsTab";
 import { FeedbackTab } from "./FeedbackTab";
 import { CommunityTab } from "./CommunityTab";
 import { UIStateManager, type TabId } from "../utils/ui-state";
+import { createDeclarativePages } from "./declarative-pages";
+import { buildGeneralDefinitions } from "./general-definitions";
+import { buildAboutDefinitions } from "./about-definitions";
+import { createControlHost, type ControlHost } from "../utils/settings-control-path";
 
 /** Tab strip metadata. Order = visual order. Position 1 (`snippets`) is
  *  the landing tab — that's where day-to-day work happens per the 1.1.0
@@ -25,48 +29,93 @@ export class SnipSidianSettingTab extends PluginSettingTab {
     private snippetsTab: SnippetsTab;
     private feedbackTab: FeedbackTab;
     private communityTab: CommunityTab;
+    private controlHost: ControlHost;
 
     constructor(app: App, plugin: SnipSidianPlugin) {
         super(app, plugin);
         this.plugin = plugin;
         this.uiState = new UIStateManager(this.plugin.settings, () => this.plugin.saveSettings());
-        this.basicTab = new BasicTab(app, plugin);
+        this.basicTab = new BasicTab(app, plugin, () => this.refreshDeclarative());
         this.snippetsTab = new SnippetsTab(app, plugin);
         this.feedbackTab = new FeedbackTab(app, plugin);
         this.communityTab = new CommunityTab(app, plugin);
+        this.controlHost = createControlHost(plugin);
     }
 
     /**
-     * Scanner-rule parity (0.4.1, `obsidianmd/settings-tab/prefer-setting-
-     * definitions`): the rule only checks that a `PluginSettingTab`
-     * subclass implements `getSettingDefinitions()` — it doesn't inspect
-     * the return value. We deliberately return `[]` rather than real
-     * per-field definitions.
+     * B-151/ADR-0007 (option A — see `.claude/brain/decisions/0007-
+     * declarative-settings-b151.md` and the spike report it links):
+     * on Obsidian 1.13+, returns the full declarative tree —
+     * `SettingDefinitionPage` entries for "Snippets" and "Packages"
+     * (imperative `page:` factories, see `declarative-pages.ts`, since
+     * that content is stateful/network-backed and doesn't fit a plain
+     * list of definitions) plus the General and About groups
+     * (`general-definitions.ts`/`about-definitions.ts` — real
+     * `control`/`action`/`render` rows, so those sections ALSO drive
+     * global settings search, which the previous `[]` stub could not).
      *
-     * Why: per `SettingTab#display()`'s own doc in obsidian.d.ts —
-     * "Not called when getSettingDefinitions returns a non-empty array;
-     * the tab is rendered declaratively from those definitions instead."
-     * — a non-empty return makes Obsidian 1.13+ take over rendering the
-     * *entire* tab declaratively and stop calling `display()` altogether.
-     * This tab's `display()` renders a custom tab-strip (Snippets /
-     * Packages / General / About) where only the General sub-tab's
-     * scalar fields would map to `SettingDefinition` controls — Snippets
-     * (table editor), Packages (network-backed browser), and About stay
-     * fully imperative. Returning definitions for General alone would
-     * silently delete the other three sub-tabs for any user on Obsidian
-     * 1.13+, since `display()` — which mounts the tab strip itself —
-     * would simply never run. `minAppVersion` stays at 1.5.0, so this
-     * doesn't regress anyone today, but it's an unacceptable trade for a
-     * settings-search nicety.
-     *
-     * A full move to `type: 'page'`-based declarative definitions
-     * (nesting the whole tab-strip under `SettingDefinitionPage`, so the
-     * declarative tree covers 100% of what `display()` renders today) is
-     * out of scope for this batch — tracked as a follow-up, not attempted
-     * here to avoid shipping a half-migrated settings UI.
+     * Below 1.13.0, `SettingPage` isn't usable (see
+     * `createDeclarativePages`'s doc comment) and `getSettingDefinitions`
+     * must return `[]` so `display()` — the tab-strip fallback below —
+     * keeps running (`SettingTab#display()`'s own doc: "Not called when
+     * getSettingDefinitions returns a non-empty array"). `display()`
+     * itself is retained unconditionally: `eslint-plugin-obsidianmd`'s
+     * `settings-tab/require-display` rule wants it present whenever
+     * `minAppVersion` (1.5.0) is below 1.13, and keeping it also means
+     * `1.13.0` (no `.9` before it) — matching the version string used
+     * by every guard in `declarative-pages.ts` — is the only thing gating
+     * the two behaviours apart.
      */
     getSettingDefinitions(): SettingDefinitionItem[] {
-        return [];
+        const pages = createDeclarativePages(this.plugin, this.snippetsTab, this.communityTab);
+        if (!pages) return [];
+
+        const meta = this.feedbackTab.collectMetaForDefinitions();
+        return [
+            pages.snippets,
+            pages.packages,
+            ...buildGeneralDefinitions(this.plugin, this.basicTab.definitionHandlers()),
+            ...buildAboutDefinitions(meta, this.feedbackTab.definitionHandlers()),
+        ];
+    }
+
+    /** Overrides `SettingTab`'s default `this.app.vault.getConfig`-based
+     *  lookup so `control` rows with a dotted key (`expansion.
+     *  requirePrefix`, `expansion.prefixChar`) read/write the plugin's
+     *  own nested settings object instead (spike report, Q3 — the
+     *  default flat lookup does not resolve a dotted key). Shared with
+     *  the pre-1.13 `renderDefinitionGroups` adapter via the same
+     *  `ControlHost`, so both render paths persist through one path. */
+    getControlValue(key: string): unknown {
+        return this.controlHost.getControlValue(key);
+    }
+
+    setControlValue(key: string, value: unknown): void | Promise<void> {
+        return this.controlHost.setControlValue(key, value);
+    }
+
+    /**
+     * Finding #2: refreshes the declarative tree's stale
+     * `displayValue`/`disabled` state after a root-level mutation
+     * (Restore defaults, Import confirm — see `BasicTab`'s
+     * `onDeclarativeChange` doc comment) while the tab root itself
+     * stays visible. `this.update()` re-evaluates
+     * `getSettingDefinitions()` and re-renders (spike report, Q4).
+     *
+     * `if (requireApiVersion("1.13.0")) { this.update(); }` is the
+     * EXACT guard shape `eslint-plugin-obsidianmd`'s `no-unsupported-
+     * api` rule (error, type-checked) recognises for a 1.13+-only API
+     * at `minAppVersion` 1.5.0 — confirmed in the spike (Q6): an
+     * early-return guard (`if (!requireApiVersion(...)) return;`) is
+     * NOT recognised and still errors. Below 1.13 this is a no-op:
+     * `update()` doesn't exist there, and nothing needs refreshing —
+     * the pre-1.13 tab strip re-renders its own tab content on every
+     * `SnippetsTab`/`BasicTab` mutation already.
+     */
+    refreshDeclarative(): void {
+        if (requireApiVersion("1.13.0")) {
+            this.update();
+        }
     }
 
     display(): void {

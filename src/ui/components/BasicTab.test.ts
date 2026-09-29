@@ -72,10 +72,10 @@ beforeEach(() => {
     app = plugin.app as unknown as App;
 });
 
-function mount(): { root: HTMLElement } {
+function mount(onDeclarativeChange?: () => void): { root: HTMLElement } {
     const root = document.createElement("div");
     document.body.appendChild(root);
-    new BasicTab(app, plugin as unknown as SnipSidianPlugin).render(root);
+    new BasicTab(app, plugin as unknown as SnipSidianPlugin, onDeclarativeChange).render(root);
     return { root };
 }
 
@@ -192,6 +192,81 @@ describe("BasicTab — Restore default snippets (B-131)", () => {
     });
 });
 
+// ---- Finding #2: onDeclarativeChange callback ----
+//
+// `SnipSidianSettingTab` wires this to its own `refreshDeclarative()`
+// (`this.update()`, guarded to 1.13+ — see `SettingsTab.test.ts`).
+// These tests pin BasicTab's half of the contract in isolation: the
+// callback fires after a write that changes the snippet count, and
+// does NOT fire when a "restore"/"import" action didn't actually
+// write anything (already-up-to-date library, validation rejection).
+describe("BasicTab — onDeclarativeChange callback (finding #2)", () => {
+    it("fires after Restore default snippets actually writes", async () => {
+        const onDeclarativeChange = vi.fn();
+        const { root } = mount(onDeclarativeChange);
+        await click(buttonInRow(rowByTitle(root, "Restore default snippets"), "Restore"));
+
+        expect(plugin._saveCalls.length).toBe(1);
+        expect(onDeclarativeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("does NOT fire when every default is already present (no write)", async () => {
+        const onDeclarativeChange = vi.fn();
+        plugin.settings.snippets = defaultSnippetsAsGroup();
+        const { root } = mount(onDeclarativeChange);
+        await click(buttonInRow(rowByTitle(root, "Restore default snippets"), "Restore"));
+
+        expect(plugin._saveCalls.length).toBe(0);
+        expect(onDeclarativeChange).not.toHaveBeenCalled();
+    });
+
+    it("does NOT fire when validatePackageForInstall rejects the restore", async () => {
+        validateSpy.mockReturnValueOnce({ isValid: false, errors: ["nope"], warnings: [] });
+        const onDeclarativeChange = vi.fn();
+        const { root } = mount(onDeclarativeChange);
+        await click(buttonInRow(rowByTitle(root, "Restore default snippets"), "Restore"));
+
+        expect(onDeclarativeChange).not.toHaveBeenCalled();
+    });
+
+    it("fires after an Import snippets confirm actually writes", async () => {
+        const onDeclarativeChange = vi.fn();
+        const { root } = mount(onDeclarativeChange);
+
+        // `startImport` builds a detached `<input type=file>` via the
+        // global `createEl` and wires its own `onchange` — simulate a
+        // file pick by spying on that global to capture the input,
+        // then invoking its handler directly with a minimal
+        // file-like object (jsdom's own `File` doesn't implement
+        // `.text()`; `startImport` only calls that one method),
+        // rather than trying to drive a real native file-picker
+        // dialog.
+        const createElSpy = vi.spyOn(globalThis as unknown as { createEl: typeof createEl }, "createEl");
+        buttonInRow(rowByTitle(root, "Import snippets"), "Import JSON").click();
+        const inputCall = createElSpy.mock.results.find(
+            (r) => (r.value as HTMLElement).tagName === "INPUT",
+        );
+        const input = inputCall!.value as HTMLInputElement;
+        const file = { text: async () => JSON.stringify({ hello: "world" }) };
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        await input.onchange!({ target: input } as unknown as Event);
+        await Promise.resolve();
+
+        // The import flow opens `ImportPreviewModal` and waits for the
+        // user to click Apply — click it (defaults to merge mode).
+        const apply = document.querySelector(
+            ".modal-button-container .mod-cta",
+        ) as HTMLButtonElement | null;
+        expect(apply).toBeTruthy();
+        apply!.click();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(plugin.settings.snippets.hello).toBe("world");
+        expect(onDeclarativeChange).toHaveBeenCalledTimes(1);
+    });
+});
+
 // ---- B-137/B-150: Expansion section (require-prefix mode) ----
 function toggleRowEl(root: HTMLElement): HTMLElement {
     return rowByTitle(root, "Require a prefix before triggers");
@@ -239,7 +314,7 @@ describe("BasicTab — Expansion section (B-137/B-150)", () => {
         expect(select.value).toBe(":");
         // The dependent row dims as a whole while the toggle is off
         // (not just the dropdown's own glyph).
-        expect(dropdownRowEl(root).classList.contains("snipsy-row-disabled")).toBe(true);
+        expect(dropdownRowEl(root).classList.contains("is-disabled")).toBe(true);
     });
 
     it("reflects an already-on setting: toggle checked, dropdown enabled with the stored char", () => {
@@ -253,7 +328,7 @@ describe("BasicTab — Expansion section (B-137/B-150)", () => {
         expect(toggle.checked).toBe(true);
         expect(select.disabled).toBe(false);
         expect(select.value).toBe(";");
-        expect(dropdownRowEl(root).classList.contains("snipsy-row-disabled")).toBe(false);
+        expect(dropdownRowEl(root).classList.contains("is-disabled")).toBe(false);
     });
 
     it("toggling on writes requirePrefix:true and persists, enables the dropdown, and undims the row", async () => {
@@ -270,7 +345,7 @@ describe("BasicTab — Expansion section (B-137/B-150)", () => {
         expect(plugin.settings.expansion?.requirePrefix).toBe(true);
         expect(plugin._saveCalls.length).toBe(1);
         expect(select.disabled).toBe(false);
-        expect(dropdownRowEl(root).classList.contains("snipsy-row-disabled")).toBe(false);
+        expect(dropdownRowEl(root).classList.contains("is-disabled")).toBe(false);
     });
 
     it("toggling off writes requirePrefix:false, disables the dropdown, and dims the row", async () => {
@@ -287,7 +362,7 @@ describe("BasicTab — Expansion section (B-137/B-150)", () => {
 
         expect(plugin.settings.expansion?.requirePrefix).toBe(false);
         expect(select.disabled).toBe(true);
-        expect(dropdownRowEl(root).classList.contains("snipsy-row-disabled")).toBe(true);
+        expect(dropdownRowEl(root).classList.contains("is-disabled")).toBe(true);
     });
 
     it("changing the dropdown writes prefixChar and persists", async () => {
@@ -465,7 +540,7 @@ describe("BasicTab — Set hotkey prefills the Hotkeys search box", () => {
         vi.spyOn(app.setting, "openTabById").mockReturnValue({ setQuery });
         const { root } = mount();
 
-        setHotkeyButton(root, "Insert snippet").click();
+        setHotkeyButton(root, "Set hotkey for Insert snippet").click();
 
         expect(setQuery).toHaveBeenCalledWith("Insert snippet…");
     });
@@ -478,7 +553,7 @@ describe("BasicTab — Set hotkey prefills the Hotkeys search box", () => {
         });
         const { root } = mount();
 
-        setHotkeyButton(root, "Open settings").click();
+        setHotkeyButton(root, "Set hotkey for Open settings").click();
 
         expect(setValue).toHaveBeenCalledWith("Open settings");
         expect(onChanged).toHaveBeenCalledOnce();
@@ -488,7 +563,7 @@ describe("BasicTab — Set hotkey prefills the Hotkeys search box", () => {
         vi.spyOn(app.setting, "openTabById").mockReturnValue(undefined);
         const { root } = mount();
 
-        expect(() => setHotkeyButton(root, "Insert snippet").click()).not.toThrow();
+        expect(() => setHotkeyButton(root, "Set hotkey for Insert snippet").click()).not.toThrow();
     });
 
     it("does not throw when the returned tab has neither setQuery nor searchComponent", () => {
@@ -496,7 +571,7 @@ describe("BasicTab — Set hotkey prefills the Hotkeys search box", () => {
         vi.spyOn(app.setting, "openTabById").mockReturnValue({} as any);
         const { root } = mount();
 
-        expect(() => setHotkeyButton(root, "Insert snippet").click()).not.toThrow();
+        expect(() => setHotkeyButton(root, "Set hotkey for Insert snippet").click()).not.toThrow();
     });
 });
 

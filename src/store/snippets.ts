@@ -93,6 +93,72 @@ export function mergeDefaults(
  * (dimmed) and editable there; only the two use-facing surfaces
  * (expansion + picker) hide them.
  */
+/**
+ * Counts for the declarative Snippets page entry's `desc`/`displayValue`
+ * ("N snippets in M groups", B-151/ADR-0007). `groups` counts only
+ * real (non-empty) group slugs — "Ungrouped" (`group === ""`) isn't a
+ * group from the user's perspective (`SnippetsTab` titles it
+ * specially and it has no rename/delete/mute affordances), so it's
+ * excluded here too.
+ */
+export function countSnippetsAndGroups(settings: SnipSidianSettings): { snippets: number; groups: number } {
+    const keys = Object.keys(settings.snippets || {});
+    const groupSlugs = new Set<string>();
+    for (const key of keys) {
+        const { group } = splitKey(key);
+        if (group) groupSlugs.add(group);
+    }
+    return { snippets: keys.length, groups: groupSlugs.size };
+}
+
+/** How many of the store's real (non-empty, non-"Ungrouped") groups
+ *  are currently muted (`settings.disabledGroups`). Only counts a
+ *  disabled group slug that actually has at least one snippet under
+ *  it right now — a stale `disabledGroups` entry left over from a
+ *  deleted/renamed group shouldn't inflate the "(k muted)" hint. */
+function countMutedGroups(settings: SnipSidianSettings): number {
+    const disabled = settings.disabledGroups ?? [];
+    if (disabled.length === 0) return 0;
+    const present = new Set<string>();
+    for (const key of Object.keys(settings.snippets || {})) {
+        const { group } = splitKey(key);
+        if (group) present.add(group);
+    }
+    let count = 0;
+    for (const group of disabled) {
+        if (present.has(group)) count++;
+    }
+    return count;
+}
+
+/**
+ * Human-readable summary for the declarative Snippets page entry's
+ * `desc`/`displayValue` (B-151/ADR-0007, finding #6): correct
+ * singular/plural at every boundary, and doesn't claim "in M groups"
+ * when there are none — this is the same "Ungrouped" exclusion
+ * `countSnippetsAndGroups` already applies (consistent with what the
+ * Snippets page itself shows: "Ungrouped" has no rename/mute/delete
+ * affordance and isn't a group from the user's perspective).
+ *
+ * Boundaries pinned by `snippets.test.ts`:
+ *   0 snippets            → "No snippets"
+ *   1 snippet, no groups  → "1 snippet"
+ *   N snippets, no groups → "N snippets"
+ *   N snippets, M groups  → "N snippets in M groups"
+ *   any muted groups      → "... (K muted)" appended
+ */
+export function formatSnippetsSummary(settings: SnipSidianSettings): string {
+    const { snippets, groups } = countSnippetsAndGroups(settings);
+    const base =
+        snippets === 0
+            ? "No snippets"
+            : groups === 0
+              ? `${snippets} snippet${snippets === 1 ? "" : "s"}`
+              : `${snippets} snippet${snippets === 1 ? "" : "s"} in ${groups} group${groups === 1 ? "" : "s"}`;
+    const muted = countMutedGroups(settings);
+    return muted > 0 ? `${base} (${muted} muted)` : base;
+}
+
 export function getAllSnippetsFlat(settings: SnipSidianSettings): SnippetItem[] {
     const snippets: SnippetItem[] = [];
     const disabled = new Set(settings.disabledGroups ?? []);

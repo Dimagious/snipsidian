@@ -149,6 +149,50 @@ describe("PackageBrowser — install (B-142)", () => {
     });
 });
 
+describe("PackageBrowser — install-time validation failure Notice (checker finding #2)", () => {
+    // Regression guard: `installPackage`'s "Cannot install" Notice used
+    // to interpolate `pkg.label` raw, only sanitizing the trailing
+    // validation-error text. A package's `label` is untrusted
+    // (GitHub-fetched community catalog data) — an oversized or
+    // control-char label reached the Notice DOM text node unmodified.
+    // These fail before the fix (raw label present verbatim / message
+    // unbounded) and pass after wrapping `pkg.label` in
+    // `sanitizeForNotice` too.
+
+    it("strips control characters out of an oversized package label before the Cannot install Notice", async () => {
+        // >50 chars fails `validatePackageForInstall`'s label-length
+        // check, so `installPackage` reaches the "Cannot install"
+        // Notice branch without needing an invalid snippet.
+        const badLabel = `Bad${"\x07\x00\x1B"}Label${"A".repeat(60)}`;
+        const { root } = await mount([
+            { ...SAMPLE_PACK, label: badLabel },
+        ]);
+        rowButton(packageRow(root, badLabel), "Install").click();
+
+        const notice = noticeCalls.find((m) => m.startsWith("Cannot install"));
+        expect(notice).toBeDefined();
+        // eslint-disable-next-line no-control-regex -- asserting control chars are ABSENT
+        expect(notice).not.toMatch(/[\x00-\x1F\x7F-\x9F]/);
+        expect(plugin.settings.snippets).toEqual({});
+        expect(plugin._saveCalls.length).toBe(0);
+    });
+
+    it("caps an oversized package label's contribution to the Cannot install Notice", async () => {
+        const hugeLabel = "L".repeat(400);
+        const { root } = await mount([
+            { ...SAMPLE_PACK, label: hugeLabel },
+        ]);
+        rowButton(packageRow(root, hugeLabel), "Install").click();
+
+        const notice = noticeCalls.find((m) => m.startsWith("Cannot install"));
+        expect(notice).toBeDefined();
+        // sanitizeForNotice's default cap (300) plus surrounding copy —
+        // nowhere near the raw 400-char label reaching the Notice whole.
+        expect(notice?.length ?? 0).toBeLessThan(400);
+        expect(notice).toContain("…");
+    });
+});
+
 describe("PackageBrowser — uninstall (B-142)", () => {
     async function mountInstalled() {
         plugin.settings.snippets["Markdown Essentials/todo"] = "- [ ]";

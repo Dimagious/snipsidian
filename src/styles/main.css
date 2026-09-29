@@ -154,15 +154,22 @@
 .snipsidian-settings .setting-group .setting-items {
   padding: 0 var(--setting-items-padding-x, var(--size-4-5, 20px));
 }
-/* Native branch's first row still picked up the divider `border-top`
-   from the generic `.setting-item:not(.setting-item-heading)` rule
-   below — that rule loads later in the file and matches every row
-   regardless of position, so the box's rounded top edge showed a
-   thin arc where the straight border met the radius (native
-   Obsidian pages like Editor/Hotkeys never draw a divider above a
-   group's first row). Mirrors the pre-1.11 fallback's own
-   `:first-child` rule two lines down. */
-.snipsidian-settings .setting-group .setting-items .setting-item:first-child {
+/* B-162: no border-top of our own on ANY row inside a native
+   SettingGroup — not just the first one. Obsidian's own
+   `.setting-group .setting-items` CSS already draws a divider between
+   rows there (verified against the real 1.13.7 app.css); our generic
+   `.setting-item:not(.setting-item-heading)` rule below (which every
+   OTHER row in this file still relies on, including the pre-1.11
+   `.snipsy-group-fallback` branch right after this) used to draw a
+   second, straight `border-top` on top of that, which either doubled
+   the divider on internal rows or — on the first row specifically —
+   showed as a thin arc where the straight border met the box's
+   rounded top corner (the original bug this rule started out only
+   fixing for `:first-child`; B-162 found it wasn't only a first-row
+   problem). Wins the cascade over the generic rule purely by having
+   more class-level selectors (`.setting-group .setting-items` adds
+   two), so there's no ordering dependency between the two blocks. */
+.snipsidian-settings .setting-group .setting-items .setting-item:not(.setting-item-heading) {
   border-top: 0;
 }
 .snipsidian-settings .snipsy-group-fallback {
@@ -193,8 +200,30 @@
 /* A row whose effect depends on a toggle above it (General tab's
    Prefix character depends on Require-a-prefix) dims as a whole when
    that toggle is off, not just its control glyph (AUDIT: "disabled
-   state is only a faint glyph... dependency is in prose"). */
-.snipsidian-settings .snipsy-row-disabled {
+   state is only a faint glyph... dependency is in prose").
+
+   Finding #3: Obsidian's own 1.13+ declarative framework sets
+   `is-disabled` on a row whose `disabled` predicate is true (verified
+   against the real 1.13.7 runtime), but ships no dimming CSS for a
+   `control`/`action` row carrying it (only its own List rows get
+   fill). The pre-1.13 adapter (`setting-definitions.ts`) now toggles
+   the SAME `is-disabled` class by hand, so this one rule dims the row
+   on both render paths. Scoped to `.snipsy-expansion` (the Expansion
+   group's `cls`, `general-definitions.ts`) rather than every disabled
+   row plugin-wide — `SettingDefinitionGroup.cls` only exists on
+   1.13+, so the adapter also has to apply it (`setting-group.ts`).
+
+   NOT prefixed with `.snipsidian-settings`: on 1.13+, the General
+   group renders straight off `getSettingDefinitions()` at the
+   declarative tree's root — unlike the Snippets/Packages
+   `SettingPage`s (`declarative-pages.ts`), whose `display()` adds
+   `.snipsidian-settings` to `this.containerEl` by hand, nothing adds
+   that class to the root container the framework builds itself. A
+   `.snipsidian-settings` prefix here would never match on 1.13+, so
+   the toggle-off Prefix-character row would render undimmed. Unprefixed
+   is safe: `snipsy-expansion` is a plugin-unique class name, same
+   precedent as the unprefixed `.snipsy-notice-row` rule below. */
+.snipsy-expansion .setting-item.is-disabled {
   opacity: 0.5;
 }
 
@@ -917,17 +946,6 @@
   color: var(--snipsy-text-faint);
   text-align: center;
   border-top: 1px solid var(--snipsy-divider);
-}
-
-/* ---- About tab ----
-   Sections render via `renderSettingGroup` (see the "Grouped setting
-   rows" block above) — this is just the version footer, left-aligned
-   with the group content above it instead of centred (AUDIT: "Version
-   footer is centred while everything else is left-aligned"). */
-.snipsidian-settings .snipsy-about-version {
-  margin: 14px 4px 0;
-  font-size: 13px;
-  color: var(--snipsy-text-faint);
 }
 
 /* ---- Package submission section (Share a package) ----

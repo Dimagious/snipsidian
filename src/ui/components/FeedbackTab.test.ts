@@ -84,7 +84,10 @@ describe("FeedbackTab — Feedback rows", () => {
     it.each([
         ["Report a bug", "File a bug report on GitHub. Includes plugin and Obsidian versions."],
         ["Suggest a feature", "Propose new functionality or improvements."],
-        ["General feedback", "Share your overall experience or get in touch."],
+        // Finding #4: "General feedback" read as a category label, not
+        // an action — an `action` row has no button on 1.13+, so the
+        // name alone has to say what clicking it does.
+        ["Send general feedback", "Share your overall experience or get in touch."],
     ])("renders '%s' with an Open issue button that opens a GitHub issue URL", (title, desc) => {
         const root = mount();
         const row = rowByTitle(root, title);
@@ -156,6 +159,15 @@ describe("FeedbackTab — Resources rows (B-048 Website)", () => {
             "noopener,noreferrer",
         );
     });
+
+    // Finding #5: a fake "Espanso hub" row (existing only to carry
+    // "espanso"/"import"/"package"/"catalog" search aliases) was
+    // considered and rejected as a decoy duplicate of the Packages
+    // page entry — see `about-definitions.ts`'s doc comment.
+    it("does not render a decoy 'Espanso hub' row", () => {
+        const root = mount();
+        expect(() => rowByTitle(root, "Espanso hub")).toThrow();
+    });
 });
 
 describe("FeedbackTab — More from the author (Dashy promotion)", () => {
@@ -194,13 +206,37 @@ describe("FeedbackTab — More from the author (Dashy promotion)", () => {
     });
 });
 
-describe("FeedbackTab — version footer", () => {
-    it("renders the plugin version, Obsidian version, and platform, left-aligned (not centred)", () => {
+// Finding #9: the version footer is now the last row of "More from
+// the author" — a plain `SettingDefinitionEmpty` row (name "Version"),
+// same definition on both render paths, instead of a separate
+// hand-drawn `.snipsy-about-version` div only shown pre-1.13 (which
+// would now double it on that path, since the shared definition also
+// renders it there).
+describe("FeedbackTab — version row (finding #9)", () => {
+    it("renders as the last row of 'More from the author', with plugin version, Obsidian version, and platform", () => {
         const root = mount();
-        const footer = root.querySelector(".snipsy-about-version") as HTMLElement;
-        expect(footer.textContent).toContain(`Snipsy ${plugin.manifest.version}`);
-        expect(footer.textContent).toContain("Obsidian");
-        expect(footer.textContent).toContain("Desktop");
+        const row = rowByTitle(root, "Version");
+        expect(row.querySelector(".setting-item-description")?.textContent).toContain(
+            `Snipsy ${plugin.manifest.version}`,
+        );
+        expect(row.querySelector(".setting-item-description")?.textContent).toContain("Obsidian");
+        expect(row.querySelector(".setting-item-description")?.textContent).toContain("Desktop");
+
+        const names = Array.from(
+            root.querySelectorAll(".setting-item-heading .setting-item-name"),
+        )
+            .find((el) => el.textContent === "More from the author")!
+            .closest(".setting-item-heading")!
+            .nextElementSibling!.querySelectorAll(".setting-item-name");
+        expect(Array.from(names).map((el) => el.textContent)).toEqual(["Dashy", "Version"]);
+    });
+
+    it("renders exactly once (not doubled) on the pre-1.13 render path", () => {
+        const root = mount();
+        const versionRows = Array.from(root.querySelectorAll(".setting-item-name")).filter(
+            (el) => el.textContent === "Version",
+        );
+        expect(versionRows).toHaveLength(1);
     });
 });
 

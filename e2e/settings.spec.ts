@@ -31,6 +31,10 @@ test.describe("settings: Add snippet flow", () => {
         // Avoids guessing at sidebar selectors / re-typing the
         // plugin name in the search input.
         const sw = await ui.openSettings(app, win);
+        // B-151/ADR-0007: "Snippets" is a page entry one click deep on
+        // Obsidian 1.13+ (a no-op below 1.13, where it is the default
+        // landing tab already).
+        await ui.openSnippetsPage(sw);
 
         // Toolbar "Add snippet" button. It's the first such button
         // on the page — the second is the modal's submit button.
@@ -91,6 +95,10 @@ test.describe("settings: Add snippet flow", () => {
         // (see data.json in e2e-vault.pristine). Typing "brb" into
         // the toolbar filter should leave one row.
         const sw = await ui.openSettings(app, win);
+        // B-151/ADR-0007: "Snippets" is a page entry one click deep on
+        // Obsidian 1.13+ (a no-op below 1.13, where it is the default
+        // landing tab already).
+        await ui.openSnippetsPage(sw);
 
         const filter = sw.getByRole("textbox", { name: "Filter snippets" });
         await filter.waitFor({ state: "visible" });
@@ -136,6 +144,10 @@ test.describe("settings: Add snippet validation (B-107)", () => {
         win: Page,
     ): Promise<Page> {
         const sw = await ui.openSettings(app, win);
+        // B-151/ADR-0007: "Snippets" is a page entry one click deep on
+        // Obsidian 1.13+ (a no-op below 1.13, where it is the default
+        // landing tab already).
+        await ui.openSnippetsPage(sw);
         await sw
             .getByRole("button", { name: "Add snippet" })
             .first()

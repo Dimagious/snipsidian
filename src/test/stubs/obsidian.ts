@@ -61,7 +61,70 @@ export type IconName = any;
 
 // ---------- Settings + UI primitives ----------
 
-export class PluginSettingTab { }
+/** `updateCalls` (finding #2): `SnipSidianSettingTab.refreshDeclarative()`
+ *  calls the real `update()` inside a `requireApiVersion("1.13.0")`
+ *  guard. The stub counts calls (rather than no-op-ing) so tests can
+ *  assert `update()` fired on the 1.13+ path and didn't below it —
+ *  same "collect calls" pattern as `Plugin`'s `addCommandCalls` above. */
+export class PluginSettingTab {
+    updateCalls = 0;
+    update(): void {
+        this.updateCalls++;
+    }
+}
+
+// ---------- Declarative settings (1.13+, B-151) ----------
+
+/** Mocks `requireApiVersion` for the version-gating tests (B-151):
+ *  `SnipSidianSettingTab.getSettingDefinitions()`/`display()` branch
+ *  on it to decide whether to render the 1.13+ declarative tree or
+ *  the pre-1.13 tab strip. Defaults to `true` (declarative path) —
+ *  tests that need the pre-1.13 fallback call
+ *  `__setRequireApiVersionResult(false)` and restore it in
+ *  `afterEach`. Every OTHER test file in the suite mounts
+ *  `BasicTab`/`FeedbackTab`/`SnippetsTab`/`CommunityTab` directly and
+ *  never touches `SnipSidianSettingTab`, so this flag is invisible to
+ *  them regardless of its value. */
+let __requireApiVersionResult = true;
+export function requireApiVersion(_version: string): boolean {
+    return __requireApiVersionResult;
+}
+export function __setRequireApiVersionResult(value: boolean): void {
+    __requireApiVersionResult = value;
+}
+
+/**
+ * `SettingPage` stub — mirrors the real abstract class's public shape
+ * (`obsidian.d.ts`: `rootEl`, `titlebarEl`, `containerEl`, `title`,
+ * abstract `display()`, `hide()`) closely enough for
+ * `SnippetsPage`/`PackagesPage` mount tests. `containerEl` is a real
+ * DOM node in jsdom so production code that calls `.addClass()` /
+ * mounts `SnippetsTab`/`CommunityTab` content into it behaves the
+ * same as against the real API.
+ */
+export abstract class SettingPage {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HTMLElement at runtime
+    rootEl: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HTMLElement at runtime
+    titlebarEl: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HTMLElement at runtime
+    containerEl: any;
+    title = "";
+    constructor() {
+        if (typeof document !== "undefined") {
+            this.rootEl = document.createElement("div");
+            this.titlebarEl = document.createElement("div");
+            this.containerEl = document.createElement("div");
+            this.rootEl.appendChild(this.titlebarEl);
+            this.rootEl.appendChild(this.containerEl);
+        }
+    }
+    abstract display(): void;
+    /** Real base implementation is a no-op; override to clean up. */
+    hide(): void {
+        // intentionally empty — mirrors the real base class
+    }
+}
 
 /**
  * `Setting` fluent builder. Mounts a `<div class="setting-item">` per

@@ -76,14 +76,22 @@ function readSettingGroupCtor(): RuntimeSettingGroupCtor | undefined {
  * unfilled, matching Obsidian's own Editor/Hotkeys pages); the
  * fallback has no such native CSS to lean on, so `main.css` fills
  * `.snipsy-group-fallback` directly instead.
+ *
+ * @param cls Extra CSS class(es) to scope group-specific styling —
+ *   e.g. `snipsy-expansion` (finding #3: the Prefix character row's
+ *   whole-row dimming needs a selector scoped to just that group, on
+ *   both render paths). Mirrors the real `SettingDefinitionGroup.cls`
+ *   field the 1.13+ framework applies itself; this adapter has to
+ *   apply it by hand since it never goes through that framework.
  */
-export function renderSettingGroup(container: HTMLElement, heading: string): SnipsyGroup {
+export function renderSettingGroup(container: HTMLElement, heading: string, cls?: string): SnipsyGroup {
     const SettingGroupCtor = readSettingGroupCtor();
+    const extraClasses = cls ? cls.split(/\s+/).filter(Boolean) : [];
 
     if (typeof SettingGroupCtor === "function") {
         const group = new SettingGroupCtor(container);
         group.setHeading(heading);
-        group.addClass("snipsy-group");
+        group.addClass("snipsy-group", ...extraClasses);
         const handle: SnipsyGroup = {
             bodyEl: group.listEl,
             addSetting(cb) {
@@ -106,7 +114,9 @@ export function renderSettingGroup(container: HTMLElement, heading: string): Sni
     // minAppVersion stays 1.5.0): a heading `Setting` row, then a
     // `.snipsy-group` wrapper of plain `Setting` rows.
     const headingSetting = new Setting(container).setName(heading).setHeading();
-    const bodyEl = container.createDiv({ cls: "snipsy-group snipsy-group-fallback" });
+    const bodyEl = container.createDiv({
+        cls: ["snipsy-group", "snipsy-group-fallback", ...extraClasses],
+    });
     const handle: SnipsyGroup = {
         bodyEl,
         addSetting(cb) {
