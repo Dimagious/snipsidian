@@ -108,7 +108,7 @@ eaten by the expansion. It is one switch for every snippet, off by default.
 
 ## Your own snippets
 
-**Settings → Snipsy → Snippets → Add new snippet.** Trigger `sig`, replacement:
+**Settings → Snipsy → Snippets → Add snippet.** Trigger `sig`, replacement:
 
 ```
 Best,
