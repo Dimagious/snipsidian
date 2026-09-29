@@ -120,6 +120,12 @@ export default [
       // .obsidian-unpacked/** is a local/untracked unpacked-vault
       // artifact, not source.
       '.obsidian-unpacked/**',
+      // .claude/** is the git-excluded local assistant workspace
+      // (probe scripts, notes); never shipped, never linted.
+      '.claude/**',
+      // Playwright output, gitignored; minified trace-viewer JS.
+      'test-results/**',
+      'playwright-report/**',
       'e2e-vault.pristine/**',
       'e2e/**',
       'playwright.config.ts',
