@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-29
+
 ### Added
 
 - **GitHub Pages website** (B-156), deployed on release tags via `.github/workflows/pages.yml`: `site/index.html` (single-file site) plus `robots.txt`, `sitemap.xml` and `llms.txt`. `scripts/site-check.cjs` gates broken images, dead anchors, stray `.claude` paths, typographic dashes and third-party requests, and now also runs in CI (`npm run site:check`); `scripts/assemble-site.cjs` copies `site/` to `_site/` and fills in `{{version}}`/`{{minAppVersion}}` from `manifest.json` at deploy time.
