@@ -810,7 +810,15 @@ footer.note-foot a { color: var(--muted); }
         </figure>
 
         <h3>A hotkey</h3>
-        <p class="prose">The second command, <b>Snipsy: Open settings</b>, opens the plugin's settings tab. To put a key on either one, go to <span class="path">Settings<i>›</i>Hotkeys</span> and search for "snipsy". The plugin's own <b>Set hotkey</b> button opens that screen with the search already filled in.</p>
+        <p class="prose">The second command, <b>Snipsy: Open settings</b>, opens the plugin's settings tab. To put a key on either one, go to <span class="path">Settings<i>›</i>Hotkeys</span> and search for "snipsy". Or use <b>Set hotkey for Insert snippet</b> in Snipsy's settings: it opens that screen with the search already filled in.</p>
+        <p class="prose">On Obsidian 1.13 and later the settings are native: <b>Snippets</b> and <b>Packages</b> open as pages, everything else sits on the Snipsy settings screen, and Obsidian's settings search finds them. Older Obsidian shows the same settings as Snippets, Packages, General and About tabs.</p>
+        <figure class="shot">
+          <picture>
+            <source data-dark srcset="img/settings-root-dark.png" media="(prefers-color-scheme: dark)">
+            <img src="img/settings-root-light.png" width="1464" height="794" loading="lazy" alt="Snipsy settings on Obsidian 1.13: Snippets and Packages entries with their counts, then the Expansion group">
+          </picture>
+          <figcaption>The Snipsy settings screen on Obsidian 1.13.</figcaption>
+        </figure>
       </section>
 
       <!-- ============ Defaults.md ============ -->
@@ -848,7 +856,7 @@ footer.note-foot a { color: var(--muted); }
 
         <div class="callout tip">
           <div class="callout-title"><svg><use href="#i-flame"/></svg>Not your words? Delete them</div>
-          <p>Delete the group and the defaults stay deleted, through restarts and updates. <span class="path">General<i>›</i>Restore default snippets</span> brings back the missing ones and leaves yours alone: a trigger that already exists in any group is skipped.</p>
+          <p>Delete the group and the defaults stay deleted, through restarts and updates. <span class="path">Settings<i>›</i>Snipsy<i>›</i>Restore default snippets</span> brings back the missing ones and leaves yours alone: a trigger that already exists in any group is skipped.</p>
         </div>
       </section>
 
@@ -932,7 +940,7 @@ replacement: |
         <figure class="shot">
           <picture>
             <source data-dark srcset="img/groups-dark.png" media="(prefers-color-scheme: dark)">
-            <img src="img/groups-light.png" width="1464" height="1160" loading="lazy" alt="The Snippets tab in selection mode: the Callouts group muted and dimmed with its toggle off, and three Meetings snippets selected with a bar offering Move to group, Delete and Clear">
+            <img src="img/groups-light.png" width="1464" height="1112" loading="lazy" alt="The Snippets page in selection mode: the Callouts group muted and dimmed with its toggle off, and three Meetings snippets selected with a bar offering Move to group, Delete and Clear">
           </picture>
           <figcaption>Callouts is muted: dimmed, its toggle off. Three meeting snippets are selected, ready to move or delete together.</figcaption>
         </figure>
@@ -988,7 +996,7 @@ replacement: |
       <section class="file" id="prefix" data-title="Prefix mode" data-path="Behaviour / Prefix mode">
         <div class="crumb">Behaviour/Prefix mode.md</div>
         <h2>Prefix mode</h2>
-        <p class="prose">For writers who kept getting <code>now</code> and <code>today</code> expanded in the middle of a sentence. In <span class="path">General<i>›</i>Expansion</span>, turn on <b>Require a prefix before triggers</b> and pick <code>:</code> or <code>;</code>.</p>
+        <p class="prose">For writers who kept getting <code>now</code> and <code>today</code> expanded in the middle of a sentence. In <span class="path">Settings<i>›</i>Snipsy<i>›</i>Expansion</span>, turn on <b>Require a prefix before triggers</b> and pick <code>:</code> or <code>;</code>.</p>
         <div class="chips" style="flex-direction:column;align-items:flex-start">
           <span class="chip"><code class="tr">todo␣</code><span class="ar">→</span><span class="rs">todo␣</span><span class="nl" style="font-family:Inter,sans-serif">stays a word</span></span>
           <span class="chip"><code class="tr">:todo␣</code><span class="ar">→</span><span class="rs">- [ ] <i class="cur"></i>␣</span></span>
@@ -997,7 +1005,7 @@ replacement: |
         <figure class="shot">
           <picture>
             <source data-dark srcset="img/prefix-dark.png" media="(prefers-color-scheme: dark)">
-            <img src="img/prefix-light.png" width="1464" height="394" loading="lazy" alt="The Expansion section of the General tab: Require a prefix before triggers switched on, and the prefix character set to a colon">
+            <img src="img/prefix-light.png" width="1464" height="440" loading="lazy" alt="The Expansion settings: Require a prefix before triggers switched on, and the prefix character set to a colon">
           </picture>
           <figcaption>General › Expansion with the prefix required and : as the prefix character.</figcaption>
         </figure>
@@ -1027,9 +1035,9 @@ replacement: |
         <figure class="shot">
           <picture>
             <source data-dark srcset="img/packages-dark.png" media="(prefers-color-scheme: dark)">
-            <img src="img/packages-light.png" width="1464" height="1468" loading="lazy" alt="The Packages tab: a filter box and a list of community packs, each with its description, author, version, snippet count and an Install button">
+            <img src="img/packages-light.png" width="1464" height="1528" loading="lazy" alt="The Packages page: a filter box and a list of community packs, each with its description, author, version, snippet count and an Install button">
           </picture>
-          <figcaption>The Packages tab, loaded from the catalog repository.</figcaption>
+          <figcaption>The Packages page, loaded from the catalog repository.</figcaption>
         </figure>
         <figure class="shot">
           <picture>
@@ -1080,7 +1088,7 @@ replacement: |
         <figure class="shot">
           <picture>
             <source data-dark srcset="img/espanso-dark.png" media="(prefers-color-scheme: dark)">
-            <img src="img/espanso-light.png" width="1456" height="1182" loading="lazy" alt="The Espanso import section with a pasted file of four matches and the result line 3 imported, 1 skipped: ask">
+            <img src="img/espanso-light.png" width="1456" height="1176" loading="lazy" alt="The Espanso import section with a pasted file of four matches and the result line 3 imported, 1 skipped: ask">
           </picture>
           <figcaption>The YAML above, pasted and imported: three snippets land in the Espanso base group, and the form-based ask is skipped by name.</figcaption>
         </figure>
@@ -1090,7 +1098,7 @@ replacement: |
       <section class="file" id="backup" data-title="Backup" data-path="Packages / Backup">
         <div class="crumb">Packages/Backup.md</div>
         <h2>Backup</h2>
-        <p class="prose">In <b>General</b>, <b>Export</b> and <b>Import</b> move your snippets as one JSON file. On mobile, export writes <code>snipsidian-snippets.json</code> to the root of the vault, and falls back to the clipboard when it cannot.</p>
+        <p class="prose"><b>Export snippets</b> and <b>Import snippets</b> in Snipsy's settings move your snippets as one JSON file. On mobile, export writes <code>snipsidian-snippets.json</code> to the root of the vault, and falls back to the clipboard when it cannot.</p>
       </section>
 
       <!-- ============ Privacy.md ============ -->
@@ -1100,7 +1108,7 @@ replacement: |
         <p class="prose">Snipsy works offline. Everything it keeps is in one file: <code>.obsidian/plugins/snipsidian/data.json</code>.</p>
         <div class="callout note">
           <div class="callout-title"><svg><use href="#i-lock"/></svg>The only network calls</div>
-          <p>Both happen in the Packages tab:<code>api.github.com</code> for the list of packs, <code>raw.githubusercontent.com</code> to download the one you install. No analytics, no telemetry, no account.</p>
+          <p>Both happen on the Packages page:<code>api.github.com</code> for the list of packs, <code>raw.githubusercontent.com</code> to download the one you install. No analytics, no telemetry, no account.</p>
         </div>
         <p class="prose"><code>$clipboard</code> reads the clipboard only when a snippet containing it expands. None of the defaults use it.</p>
       </section>
@@ -1139,7 +1147,7 @@ replacement: |
         </details>
         <details class="callout">
           <summary class="callout-title"><svg><use href="#i-help"/></svg>Does it send my text anywhere?<svg class="chev"><use href="#i-right"/></svg></summary>
-          <p>No. Your snippets stay in <code>data.json</code> in your vault. The only network traffic is the pack list and pack downloads in the Packages tab. <a href="#privacy">Privacy</a>.</p>
+          <p>No. Your snippets stay in <code>data.json</code> in your vault. The only network traffic is the pack list and pack downloads on the Packages page. <a href="#privacy">Privacy</a>.</p>
         </details>
         <details class="callout">
           <summary class="callout-title"><svg><use href="#i-help"/></svg>Can I bring my Espanso snippets?<svg class="chev"><use href="#i-right"/></svg></summary>
