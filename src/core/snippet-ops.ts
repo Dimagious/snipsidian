@@ -93,6 +93,24 @@ export function planAddSnippet(
 }
 
 /**
+ * Plan an add (see `planAddSnippet`) and, on success, write it into
+ * `settings.snippets`. The single mutation point shared by every
+ * "add one snippet" UI path (Settings modal, "Add snippet from
+ * selection" command) so none of them can skip validation. The caller
+ * still owns persistence (`saveSettings`) and any re-render.
+ */
+export function applyAddSnippet(
+    input: { trigger: string; replacement: string; group: string },
+    settings: SnipSidianSettings,
+): Plan<AddSnippetPlan> {
+    const plan = planAddSnippet(input, settings);
+    if (plan.ok) {
+        settings.snippets[plan.data.key] = plan.data.value;
+    }
+    return plan;
+}
+
+/**
  * Output of `planEditSnippet`: which key to write the new value to,
  * what value to write, and (if the trigger was renamed) the old key
  * the caller should delete from settings + update in selection state.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { planAddSnippet, planEditSnippet } from "./snippet-ops";
+import { applyAddSnippet, planAddSnippet, planEditSnippet } from "./snippet-ops";
 import { makeDefaultSettings } from "../test/factories/plugin";
 import type { SnipSidianSettings } from "../types";
 
@@ -248,5 +248,59 @@ describe("snippet-ops.planEditSnippet", () => {
         if (!plan.ok) throw new Error(`expected ok, got: ${plan.reason}`);
         expect(plan.data.newKey).toBe("emojis/heart");
         expect(plan.data.renamedFrom).toBe("emojis/smile");
+    });
+});
+
+// B-175: shared by the Settings modal and "Add snippet from selection".
+describe("snippet-ops.applyAddSnippet", () => {
+    it("happy path: writes the planned key/value into settings.snippets", () => {
+        const settings = withSnippets({});
+        const plan = applyAddSnippet({ trigger: "sig", replacement: "Best,\nDima", group: "" }, settings);
+        expect(plan.ok).toBe(true);
+        expect(settings.snippets).toEqual({ sig: "Best,\nDima" });
+    });
+
+    it("keeps a multi-line selection byte-for-byte (newlines, tabs, trailing newline)", () => {
+        const settings = withSnippets({});
+        const text = "line1\n\tline2\r\nline3\n";
+        applyAddSnippet({ trigger: "ml", replacement: text, group: "" }, settings);
+        expect(settings.snippets["ml"]).toBe(text);
+    });
+
+    it("keeps placeholder-looking text as is (no escaping)", () => {
+        const settings = withSnippets({});
+        const text = "$| $date $clipboard $1";
+        applyAddSnippet({ trigger: "ph", replacement: text, group: "" }, settings);
+        expect(settings.snippets["ph"]).toBe(text);
+    });
+
+    it("rejects an existing trigger and leaves settings untouched", () => {
+        const settings = withSnippets({ brb: "be right back" });
+        const plan = applyAddSnippet({ trigger: "brb", replacement: "x", group: "" }, settings);
+        expect(plan.ok).toBe(false);
+        expect(settings.snippets).toEqual({ brb: "be right back" });
+    });
+
+    it("rejects a trigger that exists in another group", () => {
+        const settings = withSnippets({ "a/brb": "x" });
+        const plan = applyAddSnippet({ trigger: "brb", replacement: "y", group: "b" }, settings);
+        expect(plan.ok).toBe(false);
+        expect(Object.keys(settings.snippets)).toEqual(["a/brb"]);
+    });
+
+    it("rejects a lone structural trigger (-) and an empty replacement without writing", () => {
+        const settings = withSnippets({});
+        expect(applyAddSnippet({ trigger: "-", replacement: "x", group: "" }, settings).ok).toBe(false);
+        expect(applyAddSnippet({ trigger: "ok", replacement: "", group: "" }, settings).ok).toBe(false);
+        expect(settings.snippets).toEqual({});
+    });
+
+    // B-179 will flip this: replacement-length cap for Settings add/edit
+    it("does not cap replacement length (parity with Settings add: no limit check there)", () => {
+        const settings = withSnippets({});
+        const big = "x".repeat(10001);
+        const plan = applyAddSnippet({ trigger: "big", replacement: big, group: "" }, settings);
+        expect(plan.ok).toBe(true);
+        expect(settings.snippets["big"]).toHaveLength(10001);
     });
 });

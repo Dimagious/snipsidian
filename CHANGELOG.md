@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Add snippet from selection** (B-175): new command that opens the Add snippet window with the replacement prefilled from the editor selection (newlines kept exactly; the command is hidden when nothing is selected). Saving uses the same validation and write path as Add snippet in Settings, then shows a "Snippet added" notice. The note is not modified.
 - **Symbol triggers** (B-171): triggers may now use `- < > = + ~ * ^ | &` besides letters, digits, `:` and `_`, so `->`, `<=`, `>=`, `+-`, `<->`, `--`, `<<`, `>>`, `~=`, `=>` work as snippets. Matching is unchanged and still word-bound (separators are the same, `--` does not fire inside `---`). `/`, `\`, `$`, whitespace and separators stay forbidden (store-key shape, S-006). A lone `-`, `+`, `*`, `>` or `|` is rejected too: it would rewrite Markdown lists, quotes and tables (`--`, `->`, `>=` are fine). One shared charset (`TRIGGER_CHARSET_RE` in `engine/triggers.ts`) now drives the community submission check, the install gate and their error messages.
 
 ### Fixed
