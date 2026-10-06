@@ -40,9 +40,16 @@ vi.mock("./community/EspansoSection", () => ({
     })),
 }));
 
+vi.mock("./community/TextSnippetsSection", () => ({
+    TextSnippetsSection: vi.fn().mockImplementation(() => ({
+        render: vi.fn(),
+    })),
+}));
+
 import { PackageBrowser } from "./community/PackageBrowser";
 import { PackageSubmissionSection } from "./community/PackageSubmissionSection";
 import { EspansoSection } from "./community/EspansoSection";
+import { TextSnippetsSection } from "./community/TextSnippetsSection";
 
 beforeAll(() => {
     installObsidianDomHelpers();
@@ -63,9 +70,10 @@ describe("CommunityTab smoke", () => {
         expect(PackageBrowser).toHaveBeenCalledWith(app, plugin);
         expect(PackageSubmissionSection).toHaveBeenCalledWith(app, plugin);
         expect(EspansoSection).toHaveBeenCalledWith(app, plugin);
+        expect(TextSnippetsSection).toHaveBeenCalledWith(app, plugin);
     });
 
-    it("render() empties root, applies snipsy-compact, and invokes all three sub-renders", async () => {
+    it("render() empties root, applies snipsy-compact, and invokes all four sub-renders", async () => {
         const tab = new CommunityTab(app, plugin as unknown as SnipSidianPlugin);
 
         const root = document.createElement("div");
@@ -84,9 +92,12 @@ describe("CommunityTab smoke", () => {
         expect(browserInstance?.render).toHaveBeenCalledTimes(1);
         expect(submissionInstance?.render).toHaveBeenCalledTimes(1);
         expect(espansoInstance?.render).toHaveBeenCalledTimes(1);
+        const textSnippetsInstance = vi.mocked(TextSnippetsSection).mock.results[0]?.value;
+        expect(textSnippetsInstance?.render).toHaveBeenCalledTimes(1);
         // Each sub-render gets the (now-emptied) root.
         expect(browserInstance?.render).toHaveBeenCalledWith(root);
         expect(submissionInstance?.render).toHaveBeenCalledWith(root);
         expect(espansoInstance?.render).toHaveBeenCalledWith(root);
+        expect(textSnippetsInstance?.render).toHaveBeenCalledWith(root);
     });
 });
