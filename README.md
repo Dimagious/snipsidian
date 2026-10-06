@@ -63,8 +63,11 @@ consequences of that, worth knowing before you install anything:
 
 - **Nothing to learn.** A snippet is a trigger and a replacement. The one bit of syntax is
   `$|`, the spot where the cursor lands.
-- **It reads markdown.** A trigger inside a fenced code block, inline code or YAML
+- **It reads markdown.** A trigger inside a fenced code block, inline code, math (`$…$`, `$$…$$`) or YAML
   frontmatter stays as you typed it. So does a trigger in the middle of a word.
+  A `$` directly followed by a letter or symbol opens math (prices like `$5` don't) until the closing `$` on that line, or to the end of the line
+  if there is none, so triggers don't expand there (`$HOME` in prose stops expansion for the rest of that
+  line); write `\$` for a literal dollar.
 - **Only your typing fires it.** Pasting text that ends in `todo `, undo, redo, drag and
   drop, another plugin's edit, IME composition for Chinese, Japanese or Korean: none of these
   expand anything.
@@ -141,6 +144,14 @@ Save, and `sig` followed by a space is your signature in every note.
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Dimagious/snipsidian/HEAD/site/img/add-snippet-dark.png">
   <img alt="The Add snippet dialog: trigger :sig with the hint Will expand when you type: sig, and a two-line replacement" src="site/img/add-snippet-light.png" width="520">
 </picture>
+
+### Trigger characters
+
+A trigger can hold letters, digits, `_`, a leading `:`, and the symbols `- < > = + ~ * ^ | &`, so
+`->`, `<=` or `--` work as triggers. Spaces, the separators listed above, `/`, `\` and `$` are not
+allowed. A trigger still has to stand on its own: `--` expands on `--·` but not inside `---`.
+A single `-`, `+`, `*`, `>` or `|` is not allowed either, since it would rewrite Markdown lists, quotes
+and tables.
 
 ### Placeholders
 

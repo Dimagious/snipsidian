@@ -456,7 +456,7 @@ describe("SnippetsTab — Add-snippet modal stays open on failure (B-133)", () =
         openAddModal();
         expect(document.body.querySelector(".modal-content")).not.toBeNull();
 
-        fillAndSubmit("e-mail", "test@example.com");
+        fillAndSubmit("e/mail", "test@example.com");
         await flush();
 
         // Modal still attached — did NOT close.

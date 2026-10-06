@@ -154,7 +154,7 @@ describe("package-validator", () => {
 
       const result = validatePackage(packageData);
       expect(result.isValid).toBe(false);
-      expect(result.errors).toContain("Snippet 1: trigger can only contain letters, numbers, colons, underscores, and hyphens");
+      expect(result.errors).toContain("Snippet 1: trigger can only contain letters, numbers, colons, underscores, and the symbols - < > = + ~ * ^ | &");
     });
 
     it("should warn about missing optional fields", () => {
@@ -487,7 +487,7 @@ describe("package-validator", () => {
       };
 
       const result = validatePackage(packageData, { strictMode: false });
-      expect(result.errors).toContain("Snippet 1: trigger can only contain letters, numbers, colons, underscores, and hyphens");
+      expect(result.errors).toContain("Snippet 1: trigger can only contain letters, numbers, colons, underscores, and the symbols - < > = + ~ * ^ | &");
     });
 
     it("should validate trigger as non-string", () => {
@@ -880,7 +880,7 @@ describe("package-validator", () => {
     it("rejects '/' in a trigger (S-006: would corrupt splitKey)", () => {
       const r = validatePackageForInstall({ label: "Pack", snippets: { "evil/trigger": "x" } });
       expect(r.isValid).toBe(false);
-      expect(r.errors.join(" ")).toMatch(/can only contain letters, numbers, colons, underscores, and hyphens/);
+      expect(r.errors.join(" ")).toMatch(/can only contain letters, numbers, colons, underscores, and the symbols/);
     });
 
     it("rejects whitespace in a trigger", () => {
@@ -969,6 +969,53 @@ describe("package-validator", () => {
         snippets: { [trigger]: "value" },
       });
       expect(r.isValid).toBe(true);
+    });
+
+    // B-171: symbol triggers
+    it("accepts symbol triggers (->, <=, >=, +-, --, <->, ~=, =>, <<, >>, &x, *x, ||, ^2)", () => {
+      const snippets: { [k: string]: string } = {};
+      for (const t of ["->", "<=", ">=", "+-", "--", "<->", "~=", "=>", "<<", ">>", "&x", "*x", "||", "^2"]) {
+        snippets[t] = "x";
+      }
+      const r = validatePackageForInstall({ label: "Typography", snippets });
+      expect(r.errors).toEqual([]);
+      expect(r.isValid).toBe(true);
+    });
+
+    it("rejects '\\', '$' and whitespace in triggers even next to symbols", () => {
+      for (const bad of ["a\\b", "$x", "a b", "->/", "<-\\", "-\t>"]) {
+        const r = validatePackageForInstall({ label: "Pack", snippets: { [bad]: "x" } });
+        expect(r.isValid, JSON.stringify(bad)).toBe(false);
+      }
+    });
+
+    it("rejects single structural triggers (- + * > |) at install and submission; `--` and `->` pass", () => {
+      for (const t of ["-", "+", "*", ">", "|"]) {
+        const inst = validatePackageForInstall({ label: "Pack", snippets: { [t]: "x" } });
+        expect(inst.isValid, t).toBe(false);
+        expect(inst.errors.join(" "), t).toMatch(/single -, \+, \*, > or \|/);
+        const sub = validatePackage({
+          name: "Test Package", version: "1.0.0", author: "test-author", description: "A test package",
+          snippets: [{ trigger: t, replace: "x" }],
+        }, { strictMode: false });
+        expect(sub.errors.join(" "), t).toMatch(/single -, \+, \*, > or \|/);
+      }
+      for (const t of ["--", "->"]) {
+        expect(validatePackageForInstall({ label: "Pack", snippets: { [t]: "x" } }).isValid, t).toBe(true);
+      }
+    });
+
+    it("symbol triggers pass the submission-time validator and bad ones fail it", () => {
+      const mk = (trigger: string) => validatePackage({
+        name: "Test Package", version: "1.0.0", author: "test-author", description: "A test package",
+        snippets: [{ trigger, replace: "x" }],
+      }, { strictMode: false });
+      expect(mk("->").errors.join(" ")).not.toMatch(/can only contain/);
+      expect(mk("<=").errors.join(" ")).not.toMatch(/can only contain/);
+      expect(mk("a/b").errors.join(" ")).toMatch(/can only contain/);
+      expect(mk("a\\b").errors.join(" ")).toMatch(/can only contain/);
+      expect(mk("$x").errors.join(" ")).toMatch(/can only contain/);
+      expect(mk("a b").errors.join(" ")).toMatch(/can only contain/);
     });
   });
 });
