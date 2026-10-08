@@ -6,6 +6,7 @@ import type { SnipSidianSettings } from "../types";
 import { getDict, getAllSnippetsFlat } from "../store/snippets";
 import { SnippetPickerService } from "../core/snippet-picker";
 import { openSnippetPickerModal } from "../ui/components/SnippetPickerModal";
+import { openAddSnippetFromSelection } from "../ui/components/AddFromSelection";
 
 export default class HotstringsPlugin extends Plugin {
     settings!: SnipSidianSettings;
@@ -46,6 +47,19 @@ export default class HotstringsPlugin extends Plugin {
                 const snippets = getAllSnippetsFlat(this.settings);
                 const api = new SnippetPickerService(snippets);
                 openSnippetPickerModal(this.app, api);
+            }
+        });
+
+        // B-175: turn the current selection into a snippet. Only offered
+        // while something is selected; the note is never modified.
+        this.addCommand({
+            id: "add-snippet-from-selection",
+            name: "Add snippet from selection",
+            editorCheckCallback: (checking, editor) => {
+                const selection = editor.getSelection();
+                if (selection.length === 0) return false;
+                if (!checking) openAddSnippetFromSelection(this, selection);
+                return true;
             }
         });
 

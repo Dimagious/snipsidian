@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { planAddSnippet, planEditSnippet } from "./snippet-ops";
+import { applyAddSnippet, planAddSnippet, planEditSnippet } from "./snippet-ops";
 import { makeDefaultSettings } from "../test/factories/plugin";
 import type { SnipSidianSettings } from "../types";
 
@@ -248,5 +248,101 @@ describe("snippet-ops.planEditSnippet", () => {
         if (!plan.ok) throw new Error(`expected ok, got: ${plan.reason}`);
         expect(plan.data.newKey).toBe("emojis/heart");
         expect(plan.data.renamedFrom).toBe("emojis/smile");
+    });
+});
+
+// B-175: shared by the Settings modal and "Add snippet from selection".
+describe("snippet-ops.applyAddSnippet", () => {
+    it("happy path: writes the planned key/value into settings.snippets", () => {
+        const settings = withSnippets({});
+        const plan = applyAddSnippet({ trigger: "sig", replacement: "Best,\nDima", group: "" }, settings);
+        expect(plan.ok).toBe(true);
+        expect(settings.snippets).toEqual({ sig: "Best,\nDima" });
+    });
+
+    it("keeps a multi-line selection byte-for-byte (newlines, tabs, trailing newline)", () => {
+        const settings = withSnippets({});
+        const text = "line1\n\tline2\r\nline3\n";
+        applyAddSnippet({ trigger: "ml", replacement: text, group: "" }, settings);
+        expect(settings.snippets["ml"]).toBe(text);
+    });
+
+    it("keeps placeholder-looking text as is (no escaping)", () => {
+        const settings = withSnippets({});
+        const text = "$| $date $clipboard $1";
+        applyAddSnippet({ trigger: "ph", replacement: text, group: "" }, settings);
+        expect(settings.snippets["ph"]).toBe(text);
+    });
+
+    it("rejects an existing trigger and leaves settings untouched", () => {
+        const settings = withSnippets({ brb: "be right back" });
+        const plan = applyAddSnippet({ trigger: "brb", replacement: "x", group: "" }, settings);
+        expect(plan.ok).toBe(false);
+        expect(settings.snippets).toEqual({ brb: "be right back" });
+    });
+
+    it("rejects a trigger that exists in another group", () => {
+        const settings = withSnippets({ "a/brb": "x" });
+        const plan = applyAddSnippet({ trigger: "brb", replacement: "y", group: "b" }, settings);
+        expect(plan.ok).toBe(false);
+        expect(Object.keys(settings.snippets)).toEqual(["a/brb"]);
+    });
+
+    it("rejects a lone structural trigger (-) and an empty replacement without writing", () => {
+        const settings = withSnippets({});
+        expect(applyAddSnippet({ trigger: "-", replacement: "x", group: "" }, settings).ok).toBe(false);
+        expect(applyAddSnippet({ trigger: "ok", replacement: "", group: "" }, settings).ok).toBe(false);
+        expect(settings.snippets).toEqual({});
+    });
+
+    // S-013 (B-179)
+    it("rejects a replacement over 10000 chars with a clear reason and writes nothing", () => {
+        const settings = withSnippets({});
+        const plan = applyAddSnippet({ trigger: "big", replacement: "x".repeat(12345), group: "" }, settings);
+        expect(plan).toEqual({
+            ok: false,
+            reason: "Replacement is 12,345 characters; the limit is 10,000",
+        });
+        expect(settings.snippets).toEqual({});
+    });
+
+    it("boundary: exactly 10000 chars is accepted, 10001 rejected (add)", () => {
+        const settings = withSnippets({});
+        expect(applyAddSnippet({ trigger: "ok", replacement: "x".repeat(10000), group: "" }, settings).ok).toBe(true);
+        expect(planAddSnippet({ trigger: "big", replacement: "x".repeat(10001), group: "" }, settings).ok).toBe(false);
+        expect(Object.keys(settings.snippets)).toEqual(["ok"]);
+    });
+});
+
+describe("snippet-ops.planEditSnippet replacement cap (S-013, B-179)", () => {
+    it("boundary: exactly 10000 accepted, 10001 rejected", () => {
+        const settings = withSnippets({ a: "short" });
+        expect(planEditSnippet("a", { triggerName: "a", replacement: "x".repeat(10000) }, settings).ok).toBe(true);
+        const plan = planEditSnippet("a", { triggerName: "a", replacement: "x".repeat(10001) }, settings);
+        expect(plan).toEqual({
+            ok: false,
+            reason: "Replacement is 10,001 characters; the limit is 10,000",
+        });
+        expect(settings.snippets).toEqual({ a: "short" });
+    });
+
+    it("allows renaming a pre-existing oversize snippet when the replacement is unchanged", () => {
+        const big = "x".repeat(20000);
+        const settings = withSnippets({ g: "keep", "grp/old": big });
+        const plan = planEditSnippet("grp/old", { triggerName: "new", replacement: big }, settings);
+        if (!plan.ok) throw new Error(`expected ok, got: ${plan.reason}`);
+        expect(plan.data.newKey).toBe("grp/new");
+        expect(plan.data.renamedFrom).toBe("grp/old");
+    });
+
+    it("rejects growing a pre-existing oversize snippet", () => {
+        const big = "x".repeat(20000);
+        const settings = withSnippets({ a: big });
+        expect(planEditSnippet("a", { triggerName: "a", replacement: big + "y" }, settings).ok).toBe(false);
+    });
+
+    it("rejects replacing an in-range snippet with an oversize one even on rename", () => {
+        const settings = withSnippets({ a: "short" });
+        expect(planEditSnippet("a", { triggerName: "b", replacement: "x".repeat(10001) }, settings).ok).toBe(false);
     });
 });

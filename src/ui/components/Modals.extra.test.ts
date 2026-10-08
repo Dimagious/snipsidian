@@ -323,6 +323,15 @@ describe("AddSnippetModal", () => {
         expect(buttons.map((b) => b.textContent)).toEqual(["Add snippet", "Cancel"]);
     });
 
+    it("prefills the replacement (multi-line preserved) and leaves the trigger empty (B-175)", () => {
+        const modal = new AddSnippetModal(app, undefined, undefined, "a\nb\n$date");
+        modal.open();
+        const replacementInput = getInputByPlaceholder(modal, "Example: hello, world!") as HTMLTextAreaElement;
+        const triggerInput = getInputByPlaceholder(modal, "Example: brb") as HTMLInputElement;
+        expect(replacementInput.value).toBe("a\nb\n$date");
+        expect(triggerInput.value).toBe("");
+    });
+
     it("Add forwards trimmed trigger + replacement + trimmed group", () => {
         const onConfirm = vi.fn();
         const modal = new AddSnippetModal(app, onConfirm);

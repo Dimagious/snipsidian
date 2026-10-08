@@ -4,7 +4,7 @@ import { splitKey, slugifyGroup } from "../../store/keys";
 import { GroupManager } from "../utils/group-utils";
 import { UIStateManager } from "../utils/ui-state";
 import { AddSnippetModal, ConfirmModal, GroupPickerModal, TextPromptModal, type SnippetOpResult } from "./Modals";
-import { planAddSnippet, planEditSnippet } from "../../core/snippet-ops";
+import { applyAddSnippet, planEditSnippet } from "../../core/snippet-ops";
 
 export class SnippetsTab {
     private groupManager: GroupManager;
@@ -843,12 +843,11 @@ export class SnippetsTab {
                 return { ok: false, error: "Trigger and replacement are required." };
             }
 
-            const plan = planAddSnippet(snippet, this.plugin.settings);
+            const plan = applyAddSnippet(snippet, this.plugin.settings);
             if (!plan.ok) {
                 return { ok: false, error: plan.reason };
             }
 
-            this.plugin.settings.snippets[plan.data.key] = plan.data.value;
             await this.plugin.saveSettings();
             this.renderList();
             return { ok: true };
