@@ -220,4 +220,35 @@ describe("markdown: math (B-167)", () => {
         expect(at(["$a then $5 $6 "], 0, 14)).toBe(true);
         expect(at(["$5 $6 $a b"], 0, 10)).toBe(true);
     });
+    it("a multi-backtick code span inside $…$ is skipped when looking for the closer", () => {
+        expect(at(["$a ``b$c`` d$ today "], 0, 18)).toBe(false); // `$` in ``…`` is not a closer; real closer at 12
+        expect(at(["$a ``b$c`` d$ today "], 0, 10)).toBe(true); // still inside the span, before the closer
+    });
+    it("an unclosed backtick run inside $…$ is literal and does not hide the closer", () => {
+        expect(at(["$a `b$ today "], 0, 13)).toBe(false); // lone ` is literal, `b$` closes
+        expect(at(["$a `b$ today "], 0, 5)).toBe(true);
+    });
+    it("a $$ pair inside an inline opener is skipped, not taken as a closer", () => {
+        expect(at(["$a $$ b$ today "], 0, 15)).toBe(false); // closer is the final lone $
+        expect(at(["$a $$ b today "], 0, 14)).toBe(true); // no lone closer: still being typed
+    });
+    it("an unclosed backtick run outside math is literal, so a later $ still opens math", () => {
+        expect(atEnd(["`a $x + "])).toBe(true);
+        expect(atEnd(["``a `b` $x$ plain "])).toBe(false); // ``a `b` is unclosed double run; $x$ closed
+    });
+    it("a line missing from the document (getLine yields undefined) is treated as empty", () => {
+        const getLine = (i: number): string => ["$$"][i] as string;
+        expect(isInMath(getLine, 3, 3, 0)).toBe(true); // opened `$$` on line 0 carries over blank lines
+        expect(isInMath((i) => [][i] as unknown as string, 2, 2, 0)).toBe(false);
+    });
+    it("frontmatter marker on a single-line document does not swallow the cursor line", () => {
+        expect(at(["---"], 0, 3)).toBe(false);
+        expect(at(["---", "$a "], 1, 3)).toBe(false); // unclosed frontmatter: the body is YAML
+    });
+    it("legacy helpers tolerate getLine yielding undefined (missing lines read as empty)", () => {
+        const none = (i: number): string => [][i] as unknown as string;
+        expect(isInYamlFrontmatter(none, 3, 2)).toBe(false);
+        expect(isInYamlFrontmatter((i) => ["---"][i] as string, 3, 2)).toBe(true); // unclosed, line 1+ missing
+        expect(isInFencedCode(none, 3, 2)).toBe(false);
+    });
 });
