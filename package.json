@@ -18,7 +18,7 @@
         "release:zip": "node scripts/make-zip.cjs",
         "release": "npm run release:check && npm run release:zip",
         "release:audit": "node scripts/release-audit.cjs",
-        "lint": "eslint .",
+        "lint": "eslint . --max-warnings=0",
         "lint:fix": "eslint . --fix",
         "tree": "tree -L 3 -I 'node_modules|coverage'",
         "e2e:setup": "./scripts/e2e-setup.sh",
