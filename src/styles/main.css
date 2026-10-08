@@ -705,19 +705,18 @@
    textarea). Any row containing a `<textarea>` stacks instead: label
    above, textarea spanning the full row width below — Add snippet's
    Replacement field, Share-a-package's YAML paste, Espanso's YAML
-   paste. `:has()` — supported by the Chromium build every Obsidian
-   desktop/mobile client ships. */
-.snipsidian-modal .setting-item:has(textarea),
-.snipsidian-settings .setting-item:has(textarea) {
+   paste. The row is tagged `snipsy-setting-textarea` from TS. */
+.snipsidian-modal .setting-item.snipsy-setting-textarea,
+.snipsidian-settings .setting-item.snipsy-setting-textarea {
   display: block;
 }
-.snipsidian-modal .setting-item:has(textarea) .setting-item-control,
-.snipsidian-settings .setting-item:has(textarea) .setting-item-control {
+.snipsidian-modal .setting-item.snipsy-setting-textarea .setting-item-control,
+.snipsidian-settings .setting-item.snipsy-setting-textarea .setting-item-control {
   width: 100%;
   margin-top: 8px;
 }
-.snipsidian-modal .setting-item:has(textarea) textarea,
-.snipsidian-settings .setting-item:has(textarea) textarea {
+.snipsidian-modal .setting-item.snipsy-setting-textarea textarea,
+.snipsidian-settings .setting-item.snipsy-setting-textarea textarea {
   width: 100%;
   font-family: var(--snipsy-mono);
   font-size: 13px;
@@ -953,7 +952,7 @@
    validate + a single "Open submission issue" button that opens a
    prefilled GitHub issue (Google Forms path retired — B-008). Renders
    as a `renderSettingGroup` group — the textarea gets its full-width
-   treatment from the shared `.setting-item:has(textarea)` rule above;
+   treatment from the shared `.snipsy-setting-textarea` rule above;
    `.snipsy-submit-textarea` here only adds the monospace/resize touch. */
 .snipsidian-settings .snipsy-submit-textarea {
   resize: vertical;
@@ -1072,12 +1071,21 @@
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
   background: var(--background-secondary-alt, var(--background-secondary));
-  /* Redesign #3 (package details): fade the bottom edge to hint there
-     is more to scroll. The mask operates on alpha only — "black" and
-     "transparent" here are opacity stops, not a themed colour, so this
-     stays theme-neutral in light, dark and any community theme. */
-  mask-image: linear-gradient(to bottom, black, black calc(100% - 24px), transparent);
-  -webkit-mask-image: linear-gradient(to bottom, black, black calc(100% - 24px), transparent);
+}
+
+/* Redesign #3 (package details): fade the bottom edge to hint there is
+   more to scroll. A sticky gradient strip pinned to the bottom of the
+   scroll container, pulled back by its own height so it adds no
+   scroll length; theme variables only, never intercepts clicks. */
+.snipsidian-modal .package-snippet-preview::after {
+  content: "";
+  position: sticky;
+  bottom: 0;
+  flex: none;
+  height: 24px;
+  margin-top: -24px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--background-secondary-alt, var(--background-secondary)));
 }
 
 .snipsidian-modal .package-snippet-preview .snippet-row {
@@ -1154,7 +1162,7 @@
 /* Looks like the Command palette / Quick switcher: modal title as a
    small caption, a large borderless input — no visible "Search
    snippet" label (it stays as the input's `aria-label`). */
-.modal:has(.snippet-picker-modal) .modal-title {
+.modal.snipsy-picker-host .modal-title {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);

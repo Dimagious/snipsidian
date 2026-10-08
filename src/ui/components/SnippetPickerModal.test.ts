@@ -54,6 +54,16 @@ function mount(opts: {
     return { modal, api, editor };
 }
 
+describe("SnippetPickerModal — host class (B-189)", () => {
+    // Replaces the scorecard-flagged `.modal:has(.snippet-picker-modal)`.
+    it("adds snipsy-picker-host to the modal element on open and removes it on close", () => {
+        const { modal } = mount({ snippets: [makeSnippet({ trigger: ":hi", replacement: "hello" })] });
+        expect(modal.modalEl.classList.contains("snipsy-picker-host")).toBe(true);
+        modal.close();
+        expect(modal.modalEl.classList.contains("snipsy-picker-host")).toBe(false);
+    });
+});
+
 describe("SnippetPickerModal — title differentiates Insert vs Wrap (U-002)", () => {
     it("renders 'Insert snippet' when there is no editor selection", () => {
         const { modal } = mount({

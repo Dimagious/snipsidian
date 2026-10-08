@@ -323,6 +323,16 @@ describe("AddSnippetModal", () => {
         expect(buttons.map((b) => b.textContent)).toEqual(["Add snippet", "Cancel"]);
     });
 
+    // B-189: replaces the scorecard-flagged `.setting-item:has(textarea)`
+    // rule — the stacked full-width layout now hangs on this class.
+    it("[B-189] tags the Replacement row (and only it) with snipsy-setting-textarea", () => {
+        const modal = new AddSnippetModal(app);
+        modal.open();
+        const tagged = modal.contentEl.querySelectorAll(".setting-item.snipsy-setting-textarea");
+        expect(tagged.length).toBe(1);
+        expect(tagged[0]?.querySelector("textarea")).toBeTruthy();
+    });
+
     it("prefills the replacement (multi-line preserved) and leaves the trigger empty (B-175)", () => {
         const modal = new AddSnippetModal(app, undefined, undefined, "a\nb\n$date");
         modal.open();

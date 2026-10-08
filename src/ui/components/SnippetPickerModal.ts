@@ -2,6 +2,7 @@ import { Modal, App, MarkdownView, Notice, setIcon } from "obsidian";
 import type { SnippetItem, SnippetSearchQuery } from "../../types";
 import type { SnippetPickerAPI } from "../../core/snippet-picker";
 import { insertSnippetAtCursor, wrapSelectionWithSnippet } from "../../adapters/obsidian-editor";
+import { PICKER_HOST_CLASS } from "../utils/style-hooks";
 
 /**
  * Snippet picker — command-palette-style modal that lets the user
@@ -43,9 +44,12 @@ export class SnippetPickerModal extends Modal {
     }
 
     onOpen(): void {
-        const { contentEl, titleEl } = this;
+        const { contentEl, titleEl, modalEl } = this;
         contentEl.empty();
         contentEl.addClass("snippet-picker-modal");
+        // Styling hook for the compact title (replaces a `:has()` rule
+        // the community scorecard flags). Removed again in onClose.
+        modalEl.addClass(PICKER_HOST_CLASS);
 
         // Title differentiates Insert vs Wrap-selection (B-040 / U-002).
         // Using Obsidian's `titleEl` instead of a manual <h2> closes the
@@ -117,7 +121,8 @@ export class SnippetPickerModal extends Modal {
     }
 
     onClose(): void {
-        const { contentEl } = this;
+        const { contentEl, modalEl } = this;
+        modalEl.removeClass(PICKER_HOST_CLASS);
         contentEl.empty();
         if (this.searchTimeout) window.clearTimeout(this.searchTimeout);
     }

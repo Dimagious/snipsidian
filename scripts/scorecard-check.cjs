@@ -308,6 +308,55 @@ function checkCssImportant() {
 }
 
 /**
+ * Scorecard CSS: the 1.5.0 scan (B-189) flagged `:has()` ("can cause
+ * significant performance issues due to broad selector invalidation",
+ * x14) and the CSS `mask` family ("browser feature 'css-masks' is only
+ * partially supported by Obsidian 1.4.5", x4). The scanner may match
+ * textually, so comments are included. Use an explicit class set in TS
+ * instead of `:has()`, and a gradient pseudo-element instead of masks.
+ */
+function checkCssUnsupportedFeatures() {
+    const hits = [];
+    const stylesRoot = path.join(repoRoot, "src", "styles");
+    if (!fs.existsSync(stylesRoot)) return hits;
+    const rules = [
+        {
+            rule: "no-css-has",
+            re: /:has\(/,
+            message:
+                "`:has()` is flagged by the scorecard (broad selector invalidation). " +
+                "Add an explicit class from TS and select on it.",
+        },
+        {
+            rule: "no-css-mask",
+            re: /\bmask(?:-[a-z-]+)?\b/i,
+            message:
+                "CSS masks (`mask`, `mask-image`, `-webkit-mask-*`) are flagged as partially supported " +
+                "('css-masks'). Use a gradient pseudo-element instead.",
+        },
+    ];
+    for (const file of walk(stylesRoot, [".css"])) {
+        const lines = fs.readFileSync(file, "utf8").split("\n");
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i] ?? "";
+            for (const r of rules) {
+                if (r.re.test(line)) {
+                    hits.push(hit({
+                        severity: "FAIL",
+                        rule: r.rule,
+                        message: r.message,
+                        file: path.relative(repoRoot, file),
+                        line: i + 1,
+                        snippet: line.trim(),
+                    }));
+                }
+            }
+        }
+    }
+    return hits;
+}
+
+/**
  * Manifest: description must NOT begin with the plugin name (the
  * scorecard considers "Snipsy is a …" redundant). 1.0.6 fixed this.
  */
@@ -375,6 +424,7 @@ const allChecks = [
     { name: "create-el-div-span", fn: checkCreateElDivSpan },
     { name: "ts-suppressions", fn: checkTsSuppressions },
     { name: "css-important", fn: checkCssImportant },
+    { name: "css-unsupported-features", fn: checkCssUnsupportedFeatures },
     { name: "manifest-description", fn: checkManifestDescription },
     { name: "settings-tab-get-setting-definitions", fn: checkSettingsTabHasGetSettingDefinitions },
 ];

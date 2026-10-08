@@ -12,6 +12,7 @@ import { joinKey, slugifyGroup } from "../../../store/keys";
 import { GroupManager } from "../../utils/group-utils";
 import { renderSettingGroup } from "../../utils/setting-group";
 import { sanitizeForNotice } from "../../../shared/notice-text";
+import { SETTING_TEXTAREA_CLASS } from "../../utils/style-hooks";
 
 /** Default group label for Espanso imports when the user doesn't
  *  type one. Slugified at write time via `slugifyGroup`. */
@@ -155,6 +156,7 @@ export class EspansoSection {
     let espansoInstallBtn!: HTMLButtonElement;
     group.addSetting((s) => {
       s.setName("Package YAML");
+      s.settingEl.addClass(SETTING_TEXTAREA_CLASS);
       s.addTextArea((t) => {
         espansoTextarea = t.inputEl;
         t.inputEl.addClass("yaml-textarea");

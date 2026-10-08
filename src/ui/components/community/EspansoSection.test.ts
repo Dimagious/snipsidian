@@ -91,6 +91,12 @@ matches:
 `.trim();
 
 describe("EspansoSection — render", () => {
+    // B-189: replaces the scorecard-flagged `.setting-item:has(textarea)`.
+    it("[B-189] tags the YAML row with snipsy-setting-textarea", () => {
+        const { yaml } = mount();
+        expect(yaml.closest(".setting-item")?.classList.contains("snipsy-setting-textarea")).toBe(true);
+    });
+
     // B-153/wording: "Import from Espanso YAML" becomes "Espanso
     // import" — rendered as the group's sentence-case heading
     // (renderSettingGroup), not a `.section-title` div.
