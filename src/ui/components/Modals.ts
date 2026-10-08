@@ -4,6 +4,7 @@ import { DiffResult } from "../../store/diff";
 import { displayGroupTitle, slugifyGroup, splitKey } from "../../store/keys";
 import { computeImportDiff } from "../../services/import-diff";
 import { normalizeTrigger } from "../../engine/triggers";
+import { SETTING_TEXTAREA_CLASS } from "../utils/style-hooks";
 
 /** Simple JSON copy/paste modal */
 export class JSONModal extends Modal {
@@ -576,7 +577,7 @@ export class AddSnippetModal extends Modal {
             }
         };
 
-        new Setting(contentEl)
+        const replacementSetting = new Setting(contentEl)
             .setName("Replacement")
             .setDesc("The text that will replace the trigger")
             .addTextArea((text) => {
@@ -588,6 +589,9 @@ export class AddSnippetModal extends Modal {
                         replacement = value;
                     });
             });
+        // Full-width stacked layout hook (replaces a `:has(textarea)` rule
+        // the community scorecard flags).
+        replacementSetting.settingEl.addClass(SETTING_TEXTAREA_CLASS);
 
         new Setting(contentEl)
             .setName("Group")

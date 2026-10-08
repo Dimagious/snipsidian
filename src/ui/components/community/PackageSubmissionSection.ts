@@ -5,6 +5,7 @@ import { buildPackageSubmissionUrl } from "../../../services/github-issue-url";
 import type { PackageData } from "../../../services/package-types";
 import * as YAML from "yaml";
 import { renderSettingGroup } from "../../utils/setting-group";
+import { SETTING_TEXTAREA_CLASS } from "../../utils/style-hooks";
 
 /**
  * Submit a community package. The legacy Google Form path is gone
@@ -50,6 +51,7 @@ export class PackageSubmissionSection {
 
         let yamlTextarea!: HTMLTextAreaElement;
         group.addSetting((s) => {
+            s.settingEl.addClass(SETTING_TEXTAREA_CLASS);
             s.addTextArea((t) => {
                 yamlTextarea = t.inputEl;
                 t.inputEl.addClass("snipsy-submit-textarea");

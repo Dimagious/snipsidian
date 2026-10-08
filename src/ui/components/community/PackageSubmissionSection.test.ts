@@ -76,6 +76,12 @@ snippets:
 `.trim();
 
 describe("PackageSubmissionSection — shape", () => {
+    // B-189: replaces the scorecard-flagged `.setting-item:has(textarea)`.
+    it("[B-189] tags the YAML row with snipsy-setting-textarea", () => {
+        const { yaml } = mount();
+        expect(yaml.closest(".setting-item")?.classList.contains("snipsy-setting-textarea")).toBe(true);
+    });
+
     it("renders the 'Share a package' heading over a filled group", () => {
         const { root } = mount();
         const heading = Array.from(

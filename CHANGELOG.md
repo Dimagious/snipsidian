@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Settings, modal and snippet-picker styles no longer use CSS features the community scorecard flags (`:has()` selectors and CSS masks). Settings and the snippet picker look the same. The one visible difference is the package-details list: its bottom fade now ends in the list's own background, so the border and corners stay visible instead of the whole box fading into the modal.
+
 ## [1.5.0] - 2026-09-29
 
 ### Changed
