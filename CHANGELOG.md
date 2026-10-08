@@ -7,11 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-08
+
 ### Added
 
 - **Import from the Text Snippets plugin** (B-174): Packages page → "Text Snippets import" reads the saved snippets of `text-snippets-obsidian` (from `<config folder>/plugins/text-snippets-obsidian/data.json`, read-only) and installs them into a `text-snippets` group through the same plan, an always-shown preview and `validatePackageForInstall` gate as the Espanso import. Supports its configurable marker symbols: `$end$` → `$|` (extra ones removed), `$pst$` → `$clipboard`, `$nl$` → line break, `$tb$` tab stops removed with a note (with no `$end$`, the first one becomes the cursor `$|`). A ` : ` inside a replacement is kept (the original truncates there), the later of two equal triggers wins, the plugin's default sample snippet is skipped, and records Snipsy cannot take (no ` : ` separator, spaces or unsupported characters in the trigger, empty or oversized replacement) are skipped and listed with the reason instead of failing the import. Deliberate deviations from the original: a second `$end$` is removed (it left it as text), every `$pst$` is replaced, triggers are trimmed and a leading or trailing `:` is stripped, text after a second ` : ` is kept, and a snippet with both `$end$` and `$tb$` puts the cursor at `$end$` (the original jumped to the first tab stop).
 - **Add snippet from selection** (B-175): new command that opens the Add snippet window with the replacement prefilled from the editor selection (newlines kept exactly; the command is hidden when nothing is selected). Saving uses the same validation and write path as Add snippet in Settings, then shows a "Snippet added" notice. The note is not modified.
 - **Symbol triggers** (B-171): triggers may now use `- < > = + ~ * ^ | &` besides letters, digits, `:` and `_`, so `->`, `<=`, `>=`, `+-`, `<->`, `--`, `<<`, `>>`, `~=`, `=>` work as snippets. Matching is unchanged and still word-bound (separators are the same, `--` does not fire inside `---`). `/`, `\`, `$`, whitespace and separators stay forbidden (store-key shape, S-006). A lone `-`, `+`, `*`, `>` or `|` is rejected too: it would rewrite Markdown lists, quotes and tables (`--`, `->`, `>=` are fine). One shared charset (`TRIGGER_CHARSET_RE` in `engine/triggers.ts`) now drives the community submission check, the install gate and their error messages.
+
+### Changed
+
+- **Triggers can no longer contain `$`** (B-171/B-167): `$` now opens inline math, so a trigger with `$` could never expand. Existing snippets with `$` in the trigger stay in your library but stop expanding; rename them in Settings. Nothing is migrated automatically.
 
 ### Security
 
