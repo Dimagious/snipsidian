@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Symbol triggers** (B-171): triggers may now use `- < > = + ~ * ^ | &` besides letters, digits, `:` and `_`, so `->`, `<=`, `>=`, `+-`, `<->`, `--`, `<<`, `>>`, `~=`, `=>` work as snippets. Matching is unchanged and still word-bound (separators are the same, `--` does not fire inside `---`). `/`, `\`, `$`, whitespace and separators stay forbidden (store-key shape, S-006). A lone `-`, `+`, `*`, `>` or `|` is rejected too: it would rewrite Markdown lists, quotes and tables (`--`, `->`, `>=` are fine). One shared charset (`TRIGGER_CHARSET_RE` in `engine/triggers.ts`) now drives the community submission check, the install gate and their error messages.
+
+### Fixed
+
+- **The cursor now stays after the separator you typed** (B-182): after an expansion without a `$|` marker the cursor landed right behind the expanded text, before the space or punctuation you had just typed, so the next word got glued on (`brb then` became `be right backthen `, `x brb, y` became `x be right back y,`). It now sits after the separator, as if only the trigger had been replaced. Snippets with `$|` still put the cursor at the marker. Present since 1.0.6.
+- **Snippets no longer expand inside math** (B-167): the `isInMath` guard was hard-coded to `false`, so triggers fired inside `$…$` and `$$…$$`. It now detects inline math (Obsidian/Pandoc rules: `\$` escaped, prices like `$5 and $10` are not math), multi-line and single-line `$$` blocks, and ignores `$` inside code.
+- **A snippet with a hyphen in its trigger (e.g. an installed `--`) could not be edited in Settings** (B-171): `isBadTrigger` rejected `-` although the catalog validator accepts it. Also, triggers containing `$` are no longer accepted when you add or edit a snippet, and existing ones stop expanding because a `$` now opens math. Rename them in Settings; there is no data migration.
+
 ## [1.5.0] - 2026-09-29
 
 ### Changed

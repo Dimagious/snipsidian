@@ -36,7 +36,7 @@ describe("snippet-ops.planAddSnippet", () => {
         );
         expect(plan).toEqual({
             ok: false,
-            reason: "Invalid trigger: contains separators or is empty",
+            reason: "Invalid trigger: empty, or contains spaces, separators, / \\ or $",
         });
     });
 
@@ -89,6 +89,46 @@ describe("snippet-ops.planAddSnippet", () => {
         // Leading + trailing colons stripped — the engine treats `:`
         // as a separator, so the stored key needs to be the bare word.
         expect(plan.data.key).toBe("emojis/smile");
+    });
+});
+
+describe("snippet-ops: symbol triggers (B-171)", () => {
+    it("add accepts `--`, `->`, `<->`", () => {
+        for (const t of ["--", "->", "<->"]) {
+            const plan = planAddSnippet({ trigger: t, replacement: "x", group: "Typo" }, withSnippets({}));
+            if (!plan.ok) throw new Error(`${t}: ${plan.reason}`);
+            expect(plan.data.key).toBe(`typo/${t}`);
+        }
+    });
+
+    it("an installed `--` snippet can be edited (hyphen no longer forbidden)", () => {
+        const plan = planEditSnippet(
+            "typo/--",
+            { triggerName: "--", replacement: "\u2014" },
+            withSnippets({ "typo/--": "-" }),
+        );
+        if (!plan.ok) throw new Error(plan.reason);
+        expect(plan.data.newKey).toBe("typo/--");
+    });
+
+    it("add and edit reject single structural chars (- + * > |) with a clear reason; `--` and `->` stay valid", () => {
+        for (const t of ["-", "+", "*", ">", "|"]) {
+            const add = planAddSnippet({ trigger: t, replacement: "x", group: "Typo" }, withSnippets({}));
+            expect(add.ok, t).toBe(false);
+            if (!add.ok) expect(add.reason).toMatch(/single -, \+, \*, > or \|/);
+            const edit = planEditSnippet(`typo/${t}`, { triggerName: t, replacement: "x" }, withSnippets({ [`typo/${t}`]: "y" }));
+            expect(edit.ok, t).toBe(false);
+            if (!edit.ok) expect(edit.reason).toMatch(/single -, \+, \*, > or \|/);
+        }
+        for (const t of ["--", "->"]) {
+            expect(planAddSnippet({ trigger: t, replacement: "x", group: "Typo" }, withSnippets({})).ok, t).toBe(true);
+        }
+    });
+
+    it("add still rejects `$x` and backslash", () => {
+        for (const t of ["$x", "a\\b"]) {
+            expect(planAddSnippet({ trigger: t, replacement: "x", group: "" }, withSnippets({})).ok).toBe(false);
+        }
     });
 });
 

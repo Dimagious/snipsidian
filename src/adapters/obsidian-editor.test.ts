@@ -157,7 +157,8 @@ describe("adapters/obsidian-editor: tryExpandAtSeparator", () => {
     // teleported their cursor back onto the (now off-screen) trigger
     // line mid-edit-elsewhere. This test pins both halves: the text
     // edit lands on the original line, and the user's cursor is left
-    // exactly where they put it.
+    // exactly where they put it. The `$|` marker gives the plan a
+    // `newCursor`, so without the guard the cursor WOULD be yanked back.
     it("[B-136/B-147] applies an async $clipboard expansion to the original trigger line, and does not teleport the cursor away from wherever the user moved it", async () => {
         const ed = new MockEditor("clip ");
         ed.setCursor({ line: 0, ch: 5 }); // cursor right after the separator
@@ -169,7 +170,7 @@ describe("adapters/obsidian-editor: tryExpandAtSeparator", () => {
 
         const expandPromise = tryExpandAtSeparator(
             ed as any,
-            { clip: "$clipboard" },
+            { clip: "$clipboard$|" },
             {
                 filename: "note.md",
                 now: new Date("2025-09-02T10:11:12Z"),

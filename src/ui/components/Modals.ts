@@ -541,7 +541,7 @@ export class AddSnippetModal extends Modal {
 
         const triggerSetting = new Setting(contentEl)
             .setName("Trigger")
-            .setDesc("The text that expands into your replacement")
+            .setDesc("The text that expands into your replacement. Use letters, numbers and symbols like -> or <=; no spaces, slashes or $")
             .addText((text) => {
                 refs.trigger = text.inputEl;
                 text

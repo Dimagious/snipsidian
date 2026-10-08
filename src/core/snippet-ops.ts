@@ -21,7 +21,12 @@
  */
 
 import { joinKey, splitKey, slugifyGroup } from "../store/keys";
-import { normalizeTrigger, isBadTrigger } from "../engine/triggers";
+import {
+    normalizeTrigger,
+    isBadTrigger,
+    SINGLE_STRUCTURAL_TRIGGER_MESSAGE,
+    SINGLE_STRUCTURAL_TRIGGER_RE,
+} from "../engine/triggers";
 import type { SnipSidianSettings } from "../types";
 import { hasTriggerCollision } from "../store/snippets";
 
@@ -36,6 +41,13 @@ export type Plan<T = void> =
 export interface AddSnippetPlan {
     key: string;
     value: string;
+}
+
+function invalidTriggerReason(trigger: string): string {
+    if (SINGLE_STRUCTURAL_TRIGGER_RE.test(trigger)) {
+        return `Invalid trigger: ${SINGLE_STRUCTURAL_TRIGGER_MESSAGE}`;
+    }
+    return "Invalid trigger: empty, or contains spaces, separators, / \\ or $";
 }
 
 /**
@@ -58,7 +70,7 @@ export function planAddSnippet(
 ): Plan<AddSnippetPlan> {
     const normalizedTrigger = normalizeTrigger(input.trigger);
     if (isBadTrigger(normalizedTrigger)) {
-        return { ok: false, reason: "Invalid trigger: contains separators or is empty" };
+        return { ok: false, reason: invalidTriggerReason(normalizedTrigger) };
     }
     if (input.replacement.length === 0) {
         return { ok: false, reason: "Replacement cannot be empty" };
@@ -121,7 +133,7 @@ export function planEditSnippet(
 ): Plan<EditSnippetPlan> {
     const normalized = normalizeTrigger(input.triggerName);
     if (isBadTrigger(normalized)) {
-        return { ok: false, reason: "Invalid trigger: contains separators or is empty" };
+        return { ok: false, reason: invalidTriggerReason(normalized) };
     }
     if (input.replacement.length === 0) {
         return { ok: false, reason: "Replacement cannot be empty" };
