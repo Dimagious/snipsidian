@@ -5,6 +5,7 @@ import { isRecordOfString } from "../../shared/guards";
 import { ImportPreviewModal } from "./Modals";
 import { DEFAULT_SNIPPETS_GROUP, planRestoreDefaults } from "../../store/presets";
 import { joinKey } from "../../store/keys";
+import { commitSnippets } from "../../core/commit-snippets";
 import { validatePackageForInstall } from "../../services/package-validator";
 import { sanitizeForNotice } from "../../shared/notice-text";
 import { renderDefinitionGroups } from "../utils/setting-definitions";
@@ -98,10 +99,18 @@ export class BasicTab {
             return;
         }
 
+        const next = { ...this.plugin.settings.snippets };
         for (const [trigger, replacement] of Object.entries(plan)) {
-            this.plugin.settings.snippets[joinKey(DEFAULT_SNIPPETS_GROUP, trigger)] = replacement;
+            next[joinKey(DEFAULT_SNIPPETS_GROUP, trigger)] = replacement;
         }
-        await this.plugin.saveSettings();
+        try {
+            // B-181: rolls the in-memory map back if the save rejects.
+            await commitSnippets(this.plugin.settings, next, () => this.plugin.saveSettings());
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            new Notice(`Restore failed: ${sanitizeForNotice(message)}`);
+            return;
+        }
         new Notice(`Restored ${count} default snippet${count === 1 ? "" : "s"}`);
         this.onDeclarativeChange?.();
     }
@@ -233,11 +242,21 @@ export class BasicTab {
                     current: this.plugin.settings.snippets,
                     incoming: parsed,
                     onConfirm: async (mode) => {
-                        this.plugin.settings.snippets =
+                        const next =
                             mode === "replace"
                                 ? parsed
                                 : { ...this.plugin.settings.snippets, ...parsed };
-                        await this.plugin.saveSettings();
+                        try {
+                            // B-181: rolls the in-memory map back if the save
+                            // rejects (the modal only console.errors a rejection).
+                            await commitSnippets(this.plugin.settings, next, () =>
+                                this.plugin.saveSettings(),
+                            );
+                        } catch (err) {
+                            const message = err instanceof Error ? err.message : String(err);
+                            new Notice(`Import failed: ${sanitizeForNotice(message)}`);
+                            return;
+                        }
                         const count = Object.keys(parsed).length;
                         new Notice(
                             mode === "replace"

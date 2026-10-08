@@ -226,6 +226,22 @@ landing in your notes as broken `{{text}}`.
   <img alt="Espanso import with a pasted YAML file and the result line: 3 imported, 1 skipped: ask" src="site/img/espanso-light.png" width="600">
 </picture>
 
+### Text Snippets import
+
+Coming from the Text Snippets plugin (`text-snippets-obsidian`)? Press **Import** under
+**Text Snippets import** on the Packages page. Snipsy reads that plugin's saved snippets, shows
+what it cannot take, shows a preview, and installs the rest into a `text-snippets` group once you
+press **Apply**. Nothing in the other plugin is changed. `$end$` becomes `$|`, `$pst$` becomes
+`$clipboard`, `$nl$` becomes a line break, and `$tb$` tab stops are dropped (Snipsy has none; with
+no `$end$`, the first one becomes the cursor). Your custom marker symbols are honored. If a trigger
+appears twice, the later one wins, like it does there, and the plugin's default sample snippet is
+skipped. A few small deviations are deliberate: a second `$end$` is removed (the original left it as
+text), every `$pst$` is replaced, triggers are trimmed and a leading or trailing `:` is stripped, text after
+a second ` : ` is kept, and a snippet with both `$end$` and `$tb$` puts the cursor at `$end$` (the
+original jumped to the first tab stop). Triggers with spaces or characters Snipsy does not allow are
+skipped and named. Snipsy expands these automatically as you type (Text Snippets waited for Tab),
+so disable the group or turn on prefix mode if a trigger fires too often.
+
 ### Backup
 
 **Settings → Snipsy → Export snippets** saves every snippet to a JSON file, **Import snippets**

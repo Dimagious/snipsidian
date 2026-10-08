@@ -23,7 +23,7 @@
  * move is deferred to 1.2.0).
  */
 
-import { joinKey } from "../store/keys";
+import { joinKey, splitKey } from "../store/keys";
 import { diffIncoming, type DiffResult } from "../store/diff";
 import { hasReplacementCollision } from "../store/snippets";
 import type { SnipSidianSettings } from "../types";
@@ -247,6 +247,100 @@ export function planGroupedInstall(
 
     const diff = buildPackageDiff(bareSnippets, groupSlug, settings.snippets);
     return { validation, collisions, diff };
+}
+
+/** One trigger an IMPORT left out because another group already owns it. */
+export interface CollisionSkip {
+    /** Bare trigger name (untrusted — sanitize before display). */
+    trigger: string;
+    /** Group that already holds the trigger with a different replacement
+     *  (`""` = an ungrouped snippet). Untrusted — sanitize before display. */
+    group: string;
+    /** Ready-made reason text, e.g. `already used in group "work"`. */
+    reason: string;
+}
+
+/** Result of {@link planGroupedImport}. */
+export interface GroupedImportPlan {
+    /** S-009 gate result — same contract as {@link GroupedInstallPlan}. */
+    validation: ValidationResult;
+    /** Triggers excluded because a different group already uses them. */
+    skippedCollisions: CollisionSkip[];
+    /** The bare snippets that remain after dropping `skippedCollisions`
+     *  (a subset of what `validation` approved). */
+    importable: Record<string, string>;
+    /** Added/conflict classification of `importable` only. */
+    diff: DiffResult;
+}
+
+/**
+ * B-184: planner for the two IMPORT paths (Text Snippets, Espanso).
+ * Unlike {@link planGroupedInstall} — which hard-refuses the whole
+ * install on any cross-group collision, still the right call for
+ * community packs — an import excludes just the colliding triggers
+ * (reported with the group that owns them) and lets the rest go
+ * through the normal preview. Same-group conflicts are untouched: they
+ * stay in `diff.conflicts` for the keep/overwrite UI.
+ *
+ * Validation (S-009) runs on the FULL parsed set via
+ * `planGroupedInstall`; `importable` is a strict subset, so what gets
+ * written is always covered by the gate.
+ */
+export function planGroupedImport(
+    bareSnippets: Record<string, string>,
+    groupSlug: string,
+    settings: SnipSidianSettings,
+): GroupedImportPlan {
+    const plan = planGroupedInstall(bareSnippets, groupSlug, settings);
+    if (!plan.validation.isValid) {
+        return {
+            validation: plan.validation,
+            skippedCollisions: [],
+            importable: {},
+            diff: { added: [], conflicts: [] },
+        };
+    }
+    if (plan.collisions.length === 0) {
+        return {
+            validation: plan.validation,
+            skippedCollisions: [],
+            importable: { ...bareSnippets },
+            diff: plan.diff,
+        };
+    }
+
+    const colliding = new Set(plan.collisions);
+    // S-008 (write side): build via fromEntries (defines own properties) --
+    // `importable[trigger] = ...` would hit the `__proto__` setter and drop
+    // the trigger silently.
+    const importable: Record<string, string> = Object.fromEntries(
+        Object.entries(bareSnippets).filter(([trigger]) => !colliding.has(trigger)),
+    );
+    const skippedCollisions: CollisionSkip[] = [];
+    for (const [trigger, replacement] of Object.entries(bareSnippets)) {
+        if (!colliding.has(trigger)) continue;
+        const groupedKey = joinKey(groupSlug, trigger);
+        let owner = "";
+        for (const [key, value] of Object.entries(settings.snippets)) {
+            if (key === groupedKey) continue;
+            const parts = splitKey(key);
+            if (parts.name === trigger && value !== replacement) {
+                owner = parts.group;
+                break;
+            }
+        }
+        skippedCollisions.push({
+            trigger,
+            group: owner,
+            reason: owner ? `already used in group "${owner}"` : "already used by an ungrouped snippet",
+        });
+    }
+    return {
+        validation: plan.validation,
+        skippedCollisions,
+        importable,
+        diff: buildPackageDiff(importable, groupSlug, settings.snippets),
+    };
 }
 
 /**
