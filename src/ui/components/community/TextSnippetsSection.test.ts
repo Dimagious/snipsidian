@@ -162,13 +162,78 @@ describe("TextSnippetsSection", () => {
         expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
     });
 
-    it("refuses on a cross-group trigger collision with no mutation", async () => {
+    it("[B-184] a cross-group collision does not abort: preview opens for the rest and lists the left-out trigger with its group", async () => {
+        plugin.settings.snippets["other/brb"] = "different";
+        files.set(SOURCE, JSON.stringify({ snippets_file: "brb : be right back\nomw : on my way" }));
+        const before = JSON.stringify(plugin.settings.snippets);
+        await clickAndSettle(mount());
+
+        expect(noticeCalls.some((m) => m.includes("trigger name collision"))).toBe(false);
+        const info = document.body.querySelector(".modal-content .snipsy-espanso-skip-status");
+        expect(info?.textContent).toContain('1 skipped: brb (already used in group "other")');
+        // Nothing written before Apply.
+        expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+
+        await apply();
+        expect(plugin.settings.snippets["text-snippets/omw"]).toBe("on my way");
+        expect(
+            Object.prototype.hasOwnProperty.call(plugin.settings.snippets, "text-snippets/brb"),
+        ).toBe(false);
+        expect(plugin.settings.snippets["other/brb"]).toBe("different");
+        expect(noticeCalls.some((m) => m.startsWith('Imported 1 snippet into "text-snippets"') && m.includes("already used in group"))).toBe(true);
+    });
+
+    it("[B-184] a trigger skipped for a collision is not also reported as changed", async () => {
+        plugin.settings.snippets["other/brb"] = "different";
+        files.set(SOURCE, JSON.stringify({ snippets_file: "brb : be $tb$right\nomw : on my way" }));
+        await clickAndSettle(mount());
+
+        const info = document.body.querySelector(".modal-content .snipsy-espanso-skip-status");
+        expect(info?.textContent).toContain('brb (already used in group "other")');
+        expect(info?.textContent).not.toContain("changed");
+        expect(info?.textContent).not.toContain("tab stops removed");
+
+        await apply();
+        const notice = noticeCalls.find((m) => m.startsWith('Imported 1 snippet into "text-snippets"'));
+        expect(notice).toBeDefined();
+        expect(notice).not.toContain("tab stops removed");
+    });
+
+    it("[B-184] when every trigger collides: nothing to import, no preview, no write", async () => {
         plugin.settings.snippets["other/brb"] = "different";
         files.set(SOURCE, JSON.stringify({ snippets_file: "brb : be right back" }));
         const before = JSON.stringify(plugin.settings.snippets);
         await clickAndSettle(mount());
-        expect(noticeCalls.some((m) => m.startsWith("Skipped import: trigger name collision"))).toBe(true);
+        expect(noticeCalls.some((m) => m.startsWith("Nothing to import:") && m.includes('brb (already used in group "other")'))).toBe(true);
+        expect(document.body.querySelector(".modal-button-container")).toBeNull();
         expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+        expect(plugin._saveCalls).toHaveLength(0);
+    });
+
+    it("[B-184] Cancel after a partial collision writes nothing", async () => {
+        plugin.settings.snippets["other/brb"] = "different";
+        files.set(SOURCE, JSON.stringify({ snippets_file: "brb : x\nomw : y" }));
+        const before = JSON.stringify(plugin.settings.snippets);
+        await clickAndSettle(mount());
+        modalButton("Cancel").click();
+        await Promise.resolve();
+        expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+        expect(plugin._saveCalls).toHaveLength(0);
+    });
+
+    it("[B-184] a same-group conflict still goes through keep/overwrite in the preview", async () => {
+        plugin.settings.snippets["text-snippets/brb"] = "USER EDIT";
+        plugin.settings.snippets["other/omw"] = "different";
+        files.set(SOURCE, JSON.stringify({ snippets_file: "brb : new\nomw : y" }));
+        await clickAndSettle(mount());
+        const overwrite = Array.from(document.body.querySelectorAll("button")).find(
+            (b) => b.textContent === "Overwrite all",
+        ) as HTMLButtonElement | undefined;
+        if (!overwrite) throw new Error("Overwrite all button not found");
+        overwrite.click();
+        await apply();
+        expect(plugin.settings.snippets["text-snippets/brb"]).toBe("new");
+        expect(plugin.settings.snippets["other/omw"]).toBe("different");
     });
 
     it("a `__proto__` trigger lands as a normal grouped key", async () => {
@@ -248,6 +313,16 @@ describe("TextSnippetsSection: preview and write path", () => {
         await apply();
         expect(noticeCalls).toContain("Failed to import Text Snippets: disk full");
         expect(noticeCalls.some((m) => m.startsWith("Imported"))).toBe(false);
+    });
+
+    it("[B-181] restores the previous snippets (same object) when saveSettings rejects", async () => {
+        files.set(SOURCE, JSON.stringify({ snippets_file: "brb : be right back" }));
+        const previous = plugin.settings.snippets;
+        plugin.saveSettings = vi.fn().mockRejectedValue(new Error("disk full"));
+        await clickAndSettle(mount());
+        await apply();
+        expect(plugin.settings.snippets).toBe(previous);
+        expect(plugin.settings.snippets).toEqual({});
     });
 });
 

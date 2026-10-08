@@ -5,9 +5,10 @@ import {
   type TextSnippetsImportResult,
 } from "../../../packages/text-snippets";
 import { PackagePreviewModal } from "../Modals";
-import { countAppliedChanges, planGroupedInstall } from "../../../core/install-plan";
+import { countAppliedChanges, planGroupedImport } from "../../../core/install-plan";
+import { commitSnippets } from "../../../core/commit-snippets";
 import { renderSettingGroup } from "../../utils/setting-group";
-import { formatTriggerList, sanitizeForNotice } from "../../../shared/notice-text";
+import { sanitizeForNotice } from "../../../shared/notice-text";
 
 /** Id of the abandoned "Text Snippets" community plugin (B-174). */
 const SOURCE_PLUGIN_ID = "text-snippets-obsidian";
@@ -53,7 +54,7 @@ export function formatTextSnippetsSummary(
 /**
  * B-174: import snippets from the Text Snippets plugin
  * (`text-snippets-obsidian`). Same pipeline as `EspansoSection`: pure
- * parser -> `planGroupedInstall` (which runs `validatePackageForInstall`,
+ * parser -> `planGroupedImport` (which runs `validatePackageForInstall`,
  * S-009) -> always-on preview -> write. The other plugin's files
  * are only ever read.
  */
@@ -123,12 +124,10 @@ export class TextSnippetsSection {
       return;
     }
 
-    const parsedCount = Object.keys(parsed.snippets).length;
-    const summary = formatTextSnippetsSummary(parsedCount, parsed);
-    if (parsedCount === 0) {
+    if (Object.keys(parsed.snippets).length === 0) {
       const msg =
         parsed.skipped.length > 0
-          ? `Nothing to import: ${summary}`
+          ? `Nothing to import: ${formatTextSnippetsSummary(0, parsed)}`
           : "Nothing to import: Text Snippets has no snippets";
       statusEl.setText(msg);
       statusEl.show();
@@ -137,8 +136,9 @@ export class TextSnippetsSection {
     }
 
     // S-009: validation (count/size/charset) runs inside the planner,
-    // before the diff and before any write.
-    const plan = planGroupedInstall(parsed.snippets, GROUP_SLUG, this.plugin.settings);
+    // before the diff and before any write. B-184: triggers owned by
+    // ANOTHER group are left out (listed as skipped), the rest proceeds.
+    const plan = planGroupedImport(parsed.snippets, GROUP_SLUG, this.plugin.settings);
 
     if (!plan.validation.isValid) {
       const first = plan.validation.errors[0] ?? "Import failed validation";
@@ -151,10 +151,24 @@ export class TextSnippetsSection {
       return;
     }
 
-    if (plan.collisions.length > 0) {
-      new Notice(
-        `Skipped import: trigger name collision with existing snippets (${formatTriggerList(plan.collisions)})`,
-      );
+    const skippedAll = [
+      ...parsed.skipped,
+      ...plan.skippedCollisions.map((c) => ({ trigger: c.trigger, reason: c.reason })),
+    ];
+    // A trigger left out because another group owns it must not also be
+    // reported as "changed" (its tab stops were never imported anyway).
+    const warningsKept = parsed.warnings.filter((w) =>
+      Object.prototype.hasOwnProperty.call(plan.importable, w.trigger),
+    );
+    parsed = { ...parsed, skipped: skippedAll, warnings: warningsKept };
+    const parsedCount = Object.keys(plan.importable).length;
+    const summary = formatTextSnippetsSummary(parsedCount, parsed);
+    if (parsedCount === 0) {
+      // Every parsed trigger belongs to another group: nothing to write.
+      const msg = `Nothing to import: ${summary}`;
+      statusEl.setText(msg);
+      statusEl.show();
+      new Notice(msg);
       return;
     }
 
@@ -169,8 +183,8 @@ export class TextSnippetsSection {
     modal.onConfirm = async (resolved) => {
       // The modal only logs a rejected onConfirm, so surface it here.
       try {
-        this.plugin.settings.snippets = resolved;
-        await this.plugin.saveSettings();
+        // B-181: rolls the in-memory map back if the save rejects.
+        await commitSnippets(this.plugin.settings, resolved, () => this.plugin.saveSettings());
         this.report(statusEl, countAppliedChanges(plan.diff, resolved), parsedCount, parsed);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

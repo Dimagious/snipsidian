@@ -674,3 +674,77 @@ describe("BasicTab — Reveal data file (B-047)", () => {
         }
     });
 });
+
+// ---- B-181: a rejected save must not leave a half-applied library ----
+describe("BasicTab — rollback when saveSettings rejects (B-181)", () => {
+    async function pickImportFile(root: HTMLElement, payload: unknown): Promise<void> {
+        const createElSpy = vi.spyOn(globalThis as unknown as { createEl: typeof createEl }, "createEl");
+        buttonInRow(rowByTitle(root, "Import snippets"), "Import JSON").click();
+        const inputCall = createElSpy.mock.results.find(
+            (r) => (r.value as HTMLElement).tagName === "INPUT",
+        );
+        const input = inputCall!.value as HTMLInputElement;
+        const file = { text: async () => JSON.stringify(payload) };
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        await input.onchange!({ target: input } as unknown as Event);
+        await Promise.resolve();
+    }
+
+    async function applyImport(mode: "merge" | "replace"): Promise<void> {
+        if (mode === "replace") {
+            const radio = document.querySelector(
+                'input[name="snipsy-import-mode"][value="replace"]',
+            ) as HTMLInputElement;
+            radio.checked = true;
+            radio.dispatchEvent(new Event("change"));
+        }
+        (document.querySelector(".modal-button-container .mod-cta") as HTMLButtonElement).click();
+        await vi.waitFor(() => {
+            expect(noticeCalls.length).toBeGreaterThan(0);
+        });
+    }
+
+    it.each(["replace", "merge"] as const)(
+        "JSON import (%s) restores the previous map and shows a Notice when the save rejects",
+        async (mode) => {
+            const previous = { keep: "me" };
+            plugin.settings.snippets = previous;
+            plugin.saveSettings = vi.fn().mockRejectedValue(new Error("disk full"));
+            const onChange = vi.fn();
+            const { root } = mount(onChange);
+
+            await pickImportFile(root, { hello: "world" });
+            await applyImport(mode);
+
+            expect(plugin.settings.snippets).toBe(previous);
+            expect(previous).toEqual({ keep: "me" });
+            expect(noticeCalls).toContain("Import failed: disk full");
+            expect(onChange).not.toHaveBeenCalled();
+        },
+    );
+
+    it("JSON import success path is unchanged (replace swaps the library)", async () => {
+        plugin.settings.snippets = { keep: "me" };
+        const { root } = mount();
+        await pickImportFile(root, { hello: "world" });
+        await applyImport("replace");
+
+        expect(plugin.settings.snippets).toEqual({ hello: "world" });
+        expect(noticeCalls).toContain("Replaced library with 1 snippet");
+    });
+
+    it("Restore default snippets restores the previous map and shows a Notice when the save rejects", async () => {
+        const previous = { keep: "me" };
+        plugin.settings.snippets = previous;
+        plugin.saveSettings = vi.fn().mockRejectedValue(new Error("disk full"));
+        const onChange = vi.fn();
+        const { root } = mount(onChange);
+        await click(buttonInRow(rowByTitle(root, "Restore default snippets"), "Restore"));
+        await flush();
+
+        expect(plugin.settings.snippets).toBe(previous);
+        expect(previous).toEqual({ keep: "me" });
+        expect(noticeCalls).toContain("Restore failed: disk full");
+        expect(onChange).not.toHaveBeenCalled();
+    });
+});

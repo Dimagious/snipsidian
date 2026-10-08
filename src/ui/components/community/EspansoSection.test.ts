@@ -78,6 +78,10 @@ function mount(): { root: HTMLElement; groupInput: HTMLInputElement; yaml: HTMLT
     return { root, groupInput, yaml, importBtn };
 }
 
+async function settle(): Promise<void> {
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+}
+
 const SIMPLE_YAML = `
 matches:
   - trigger: ":brb"
@@ -207,22 +211,92 @@ describe("EspansoSection — import flow (B-045)", () => {
         expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
     });
 
-    it("rejects when a trigger collides in another group with different value", () => {
-        // Pre-seed a cross-group collision.
+    it("[B-184] a cross-group collision no longer aborts: the rest imports, the colliding trigger is listed with its group", async () => {
         plugin.settings.snippets["other-group/brb"] = "totally different value";
 
-        const before = JSON.stringify(plugin.settings.snippets);
         const { yaml, importBtn } = mount();
         yaml.value = SIMPLE_YAML;
         importBtn.click();
+        await settle();
 
+        // No refusal Notice, nothing written yet (omw has no conflict ->
+        // direct install path writes immediately).
+        expect(noticeCalls.some((m) => m.includes("trigger name collision"))).toBe(false);
+        expect(plugin.settings.snippets["espanso-import/omw"]).toBe("on my way");
         expect(
-            noticeCalls.some((msg) =>
-                msg.startsWith("Skipped install: trigger name collision"),
-            ),
-        ).toBe(true);
-        // No mutation past the seed.
+            Object.prototype.hasOwnProperty.call(plugin.settings.snippets, "espanso-import/brb"),
+        ).toBe(false);
+        expect(plugin.settings.snippets["other-group/brb"]).toBe("totally different value");
+        const msg = noticeCalls.find((m) => m.startsWith("Installed 1 snippet"));
+        expect(msg).toContain('brb (already used in group "other-group")');
+    });
+
+    it("[B-184] when EVERY trigger collides: says nothing to import and writes nothing", async () => {
+        plugin.settings.snippets["g1/brb"] = "x";
+        plugin.settings.snippets["g2/omw"] = "y";
+        const before = JSON.stringify(plugin.settings.snippets);
+
+        const { yaml, importBtn } = mount();
+        yaml.value = SIMPLE_YAML;
+        importBtn.click();
+        await settle();
+
+        const msg = noticeCalls.find((m) => m.startsWith("Nothing to import"));
+        expect(msg).toContain('brb (already used in group "g1")');
+        expect(msg).toContain('omw (already used in group "g2")');
         expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+        expect(plugin._saveCalls.length).toBe(0);
+        expect(document.body.querySelector(".modal-content")).toBeNull();
+    });
+
+    it("[B-184] when every trigger collides AND some matches were unsupported: explains both halves", async () => {
+        plugin.settings.snippets["g1/brb"] = "x";
+        const { yaml, importBtn } = mount();
+        yaml.value = `
+matches:
+  - trigger: ":brb"
+    replace: "be right back"
+  - trigger: ":form"
+    form: "[[a]]"
+`.trim();
+        importBtn.click();
+        await settle();
+
+        const msg = noticeCalls.find((m) => m.startsWith("Nothing to import"));
+        expect(msg).toContain('brb (already used in group "g1")');
+        expect(msg).toContain("1 skipped as unsupported");
+        expect(msg).toContain("form");
+    });
+
+    it("[B-184] collision + same-group conflict: preview still opens for the conflict and lists the left-out trigger; Cancel writes nothing", async () => {
+        plugin.settings.snippets["other-group/brb"] = "different";
+        plugin.settings.snippets["espanso-import/omw"] = "USER EDIT";
+        const before = JSON.stringify(plugin.settings.snippets);
+
+        const { groupInput, yaml, importBtn } = mount();
+        groupInput.value = "Espanso import";
+        yaml.value = SIMPLE_YAML;
+        importBtn.click();
+        await settle();
+
+        const info = document.body.querySelector(".modal-content .snipsy-espanso-skip-status");
+        expect(info?.textContent).toContain('brb (already used in group "other-group")');
+        const cancel = Array.from(document.body.querySelectorAll(".modal-button-container button"))
+            .find((b) => b.textContent === "Cancel") as HTMLButtonElement;
+        cancel.click();
+        await settle();
+        expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+        expect(plugin._saveCalls.length).toBe(0);
+    });
+
+    it("[B-184] ungrouped owner is described without a group name", async () => {
+        plugin.settings.snippets["brb"] = "plain";
+        const { yaml, importBtn } = mount();
+        yaml.value = SIMPLE_YAML;
+        importBtn.click();
+        await settle();
+        const msg = noticeCalls.find((m) => m.startsWith("Installed 1 snippet"));
+        expect(msg).toContain("brb (already used by an ungrouped snippet)");
     });
 
     // S-009: Espanso YAML is pasted from an untrusted source and used to
@@ -539,5 +613,41 @@ describe("EspansoSection — reported install count reflects actual changes, not
         expect(plugin.settings.snippets["espanso-import/brb"]).toBe("USER EDIT");
         expect(plugin.settings.snippets["espanso-import/omw"]).toBe("on my way");
         expect(noticeCalls).toContain('Installed 1 snippet into "Espanso import"');
+    });
+});
+
+describe("EspansoSection: failed save rolls back (B-181)", () => {
+    it("direct-install path restores the previous snippets when saveSettings rejects", async () => {
+        const previous = plugin.settings.snippets;
+        plugin.saveSettings = vi.fn().mockRejectedValue(new Error("disk full"));
+        const { yaml, importBtn } = mount();
+        yaml.value = SIMPLE_YAML;
+        importBtn.click();
+        await settle();
+
+        expect(noticeCalls.some((m) => m.startsWith("Failed to install from YAML"))).toBe(true);
+        expect(plugin.settings.snippets).toBe(previous);
+        expect(plugin.settings.snippets).toEqual({});
+    });
+
+    it("conflict-preview path restores the previous snippets when saveSettings rejects", async () => {
+        plugin.settings.snippets["espanso-import/brb"] = "USER EDIT";
+        const previous = plugin.settings.snippets;
+        plugin.saveSettings = vi.fn().mockRejectedValue(new Error("disk full"));
+        const { groupInput, yaml, importBtn } = mount();
+        groupInput.value = "Espanso import";
+        yaml.value = SIMPLE_YAML;
+        importBtn.click();
+        await settle();
+
+        const apply = Array.from(document.body.querySelectorAll(".modal-button-container button"))
+            .find((b) => b.textContent === "Apply") as HTMLButtonElement;
+        apply.click();
+        await settle();
+
+        expect(plugin.settings.snippets).toBe(previous);
+        expect(plugin.settings.snippets).toEqual({ "espanso-import/brb": "USER EDIT" });
+        expect(plugin.settings.snippets["espanso-import/omw"]).toBeUndefined();
+        expect(noticeCalls).toContain("Failed to install from YAML: disk full");
     });
 });

@@ -2,11 +2,16 @@ import { App, Notice } from "obsidian";
 import type SnipSidianPlugin from "../../../main";
 import { espansoYamlToSnippets, type EspansoSkip } from "../../../packages/espanso";
 import { PackagePreviewModal } from "../Modals";
-import { countAppliedChanges, planGroupedInstall } from "../../../core/install-plan";
+import {
+  countAppliedChanges,
+  planGroupedImport,
+  type CollisionSkip,
+} from "../../../core/install-plan";
+import { commitSnippets } from "../../../core/commit-snippets";
 import { joinKey, slugifyGroup } from "../../../store/keys";
 import { GroupManager } from "../../utils/group-utils";
 import { renderSettingGroup } from "../../utils/setting-group";
-import { formatTriggerList, sanitizeForNotice } from "../../../shared/notice-text";
+import { sanitizeForNotice } from "../../../shared/notice-text";
 
 /** Default group label for Espanso imports when the user doesn't
  *  type one. Slugified at write time via `slugifyGroup`. */
@@ -25,7 +30,27 @@ const DEFAULT_GROUP_LABEL = "Espanso import";
  * B-153/wording: dropped the em dash ("… — use forms/scripts …") for
  * a plain sentence.
  */
-function formatSkipSummary(importedCount: number, skipped: EspansoSkip[]): string {
+function formatSkipSummary(
+  importedCount: number,
+  skipped: EspansoSkip[],
+  collided: CollisionSkip[] = [],
+): string {
+  // B-184: triggers left out because another group already owns them.
+  // Group names and triggers are untrusted -> sanitized.
+  const collidedPart =
+    collided.length === 0
+      ? ""
+      : ` ${collided.length} left out: ${collided
+          .slice(0, 3)
+          .map((c) => `${sanitizeForNotice(c.trigger, 40)} (${sanitizeForNotice(c.reason, 80)})`)
+          .join(", ")}${collided.length > 3 ? ", …" : ""}.`;
+  if (skipped.length === 0) {
+    return `${importedCount} imported.${collidedPart}`;
+  }
+  return formatUnsupportedSummary(importedCount, skipped) + collidedPart;
+}
+
+function formatUnsupportedSummary(importedCount: number, skipped: EspansoSkip[]): string {
   // B-034 (finding #7): `s.trigger` is a raw Espanso match trigger
   // parsed straight out of pasted YAML — untrusted. Sanitize each
   // shown name before it reaches the status line / Notice.
@@ -219,7 +244,10 @@ export class EspansoSection {
       // an edited snippet now goes through the shared conflict preview
       // instead of a hard refusal (user-visible change, matches
       // community-pack behavior).
-      const plan = planGroupedInstall(parsed.snippets, groupSlug, this.plugin.settings);
+      // B-184: unlike community packs, an import only leaves out the
+      // triggers another group already owns (listed as skipped) instead
+      // of refusing everything.
+      const plan = planGroupedImport(parsed.snippets, groupSlug, this.plugin.settings);
 
       if (!plan.validation.isValid) {
         const first = plan.validation.errors[0] ?? "Import failed validation";
@@ -234,13 +262,26 @@ export class EspansoSection {
         return;
       }
 
-      if (plan.collisions.length > 0) {
-        // B-034 (finding #7): `plan.collisions` are bare trigger names
-        // parsed from the pasted YAML — untrusted, and previously
-        // joined with no per-item or list-length cap.
-        new Notice(
-          `Skipped install: trigger name collision with existing snippets (${formatTriggerList(plan.collisions)})`,
-        );
+      if (Object.keys(plan.importable).length === 0) {
+        // Every parsed trigger belongs to another group: nothing to write.
+        const msg = `Nothing to import: ${plan.skippedCollisions.length} trigger${
+          plan.skippedCollisions.length === 1 ? "" : "s"
+        } already used in other groups (${plan.skippedCollisions
+          .slice(0, 3)
+          .map((c) => `${sanitizeForNotice(c.trigger, 40)} (${sanitizeForNotice(c.reason, 80)})`)
+          .join(", ")}${plan.skippedCollisions.length > 3 ? ", …" : ""})`;
+        // Also explain the other half: forms/scripts that were never parsed.
+        const unsupportedNote =
+          parsed.skipped.length === 0
+            ? ""
+            : `. ${parsed.skipped.length} skipped as unsupported (forms/scripts): ${parsed.skipped
+                .slice(0, 3)
+                .map((sk) => sanitizeForNotice(sk.trigger, 60))
+                .join(", ")}${parsed.skipped.length > 3 ? ", …" : ""}`;
+        const fullMsg = msg + unsupportedNote;
+        espansoStatusEl.setText(fullMsg);
+        espansoStatusEl.show();
+        new Notice(fullMsg);
         return;
       }
 
@@ -248,7 +289,7 @@ export class EspansoSection {
       // conflicts) path below. Triggers stay reachable via
       // `<groupSlug>/<trigger>` keys — same shape as community packs.
       const incoming: Record<string, string> = {};
-      for (const [trigger, replacement] of Object.entries(parsed.snippets)) {
+      for (const [trigger, replacement] of Object.entries(plan.importable)) {
         incoming[joinKey(groupSlug, trigger)] = replacement;
       }
 
@@ -256,7 +297,7 @@ export class EspansoSection {
       // parsed vs. got skipped" — and stays constant regardless of
       // what the user later chooses in the conflict modal. Keep it
       // decoupled from the ux#7 "what actually changed" count below.
-      const parsedCount = Object.keys(parsed.snippets).length;
+      const parsedCount = Object.keys(plan.importable).length;
 
       if (plan.diff.conflicts.length > 0) {
         // B-060: conflict modal title matches the section heading.
@@ -267,14 +308,28 @@ export class EspansoSection {
           plan.diff,
         );
         modal.onConfirm = async (resolved) => {
-          this.plugin.settings.snippets = resolved;
-          await this.plugin.saveSettings();
-          // Fold-in (ux#7): report what actually changed given the
-          // user's per-conflict choices, not the full pack size — a
-          // "keep everything" resolution used to still claim every
-          // entry as "imported".
-          const changedCount = countAppliedChanges(plan.diff, resolved);
-          this.reportInstalled(espansoStatusEl, changedCount, parsedCount, rawGroupLabel, parsed.skipped);
+          // The modal only logs a rejected onConfirm, so surface it here
+          // (mirrors `installFromIncoming`).
+          try {
+            // B-181: rolls the in-memory map back if the save rejects.
+            await commitSnippets(this.plugin.settings, resolved, () => this.plugin.saveSettings());
+            // Fold-in (ux#7): report what actually changed given the
+            // user's per-conflict choices, not the full pack size — a
+            // "keep everything" resolution used to still claim every
+            // entry as "imported".
+            const changedCount = countAppliedChanges(plan.diff, resolved);
+            this.reportInstalled(
+              espansoStatusEl,
+              changedCount,
+              parsedCount,
+              rawGroupLabel,
+              parsed.skipped,
+              plan.skippedCollisions,
+            );
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            new Notice(`Failed to install from YAML: ${sanitizeForNotice(message)}`);
+          }
         };
         modal.open();
         // B-139: the skip list must also be visible in the confirm
@@ -283,12 +338,12 @@ export class EspansoSection {
         // deciding how to resolve conflicts, without touching the
         // shared `PackagePreviewModal` class (also used by
         // `PackageBrowser`).
-        if (parsed.skipped.length > 0) {
+        if (parsed.skipped.length > 0 || plan.skippedCollisions.length > 0) {
           const skipEl = modal.contentEl.createDiv({
             cls: "snipsy-espanso-skip-status",
             attr: { "aria-live": "polite" },
           });
-          skipEl.setText(formatSkipSummary(parsedCount, parsed.skipped));
+          skipEl.setText(formatSkipSummary(parsedCount, parsed.skipped, plan.skippedCollisions));
           modal.contentEl.insertBefore(skipEl, modal.contentEl.firstChild);
         }
       } else {
@@ -304,6 +359,7 @@ export class EspansoSection {
           rawGroupLabel,
           espansoStatusEl,
           parsed.skipped,
+          plan.skippedCollisions,
         );
       }
     };
@@ -326,14 +382,15 @@ export class EspansoSection {
     parsedCount: number,
     groupLabel: string,
     skipped: EspansoSkip[],
+    collided: CollisionSkip[] = [],
   ) {
     const base =
       changedCount === 0
         ? `No changes — "${groupLabel}" already matches your library`
         : `Installed ${changedCount} snippet${changedCount === 1 ? "" : "s"} into "${groupLabel}"`;
 
-    if (skipped.length > 0) {
-      const msg = formatSkipSummary(parsedCount, skipped);
+    if (skipped.length > 0 || collided.length > 0) {
+      const msg = formatSkipSummary(parsedCount, skipped, collided);
       statusEl.setText(msg);
       statusEl.show();
       new Notice(`${base}. ${msg}`);
@@ -353,13 +410,17 @@ export class EspansoSection {
     groupLabel: string,
     statusEl: HTMLElement,
     skipped: EspansoSkip[],
+    collided: CollisionSkip[],
   ) {
     try {
-      for (const [groupedKey, replacement] of Object.entries(incoming)) {
-        this.plugin.settings.snippets[groupedKey] = replacement;
-      }
-      await this.plugin.saveSettings();
-      this.reportInstalled(statusEl, changedCount, parsedCount, groupLabel, skipped);
+      // B-181: build a new map and commit it, so a rejected save rolls
+      // the in-memory snippets back instead of leaving them half-applied.
+      await commitSnippets(
+        this.plugin.settings,
+        { ...this.plugin.settings.snippets, ...incoming },
+        () => this.plugin.saveSettings(),
+      );
+      this.reportInstalled(statusEl, changedCount, parsedCount, groupLabel, skipped, collided);
     } catch (err) {
       // B-034 (finding #7): this is still on the untrusted-YAML
       // import path — sanitize before the Notice, same as every other

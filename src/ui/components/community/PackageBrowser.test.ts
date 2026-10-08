@@ -149,6 +149,21 @@ describe("PackageBrowser — install (B-142)", () => {
     });
 });
 
+describe("PackageBrowser — failed save rolls back (B-181)", () => {
+    it("restores the previous snippets (same object) when saveSettings rejects after Apply", async () => {
+        const previous = plugin.settings.snippets;
+        plugin.saveSettings = vi.fn().mockRejectedValue(new Error("disk full"));
+        const { root } = await mount();
+        rowButton(packageRow(root, "Markdown Essentials"), "Install").click();
+        modalButton("Apply").click();
+        await flush();
+
+        expect(noticeCalls.some((m) => m.startsWith("Failed to install package"))).toBe(true);
+        expect(plugin.settings.snippets).toBe(previous);
+        expect(plugin.settings.snippets).toEqual({});
+    });
+});
+
 describe("PackageBrowser — install-time validation failure Notice (checker finding #2)", () => {
     // Regression guard: `installPackage`'s "Cannot install" Notice used
     // to interpolate `pkg.label` raw, only sanitizing the trailing
