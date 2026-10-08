@@ -88,6 +88,10 @@ palette. It searches triggers and replacements, previews the result, and inserts
 Select some text first and `$1` in the snippet receives it. **Settings → Snipsy → Set hotkey
 for Insert snippet** opens the Hotkeys tab already filtered to that command.
 
+To turn text you already wrote into a snippet, select it and run **Snipsy: Add snippet from
+selection**. The Add snippet window opens with the replacement filled in from your selection;
+type a trigger and save. The note is not changed.
+
 On Obsidian 1.13 and later, Snipsy's settings are native: **Snippets** and **Packages** open as
 pages, everything else sits right on the Snipsy settings screen, and Obsidian's settings search
 finds them ("prefix", "hotstring", "export"). On older Obsidian the same settings are grouped

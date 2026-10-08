@@ -38,6 +38,11 @@ vi.mock("../ui/settings", () => ({
     SnipSidianSettingTab: class { },
 }));
 
+const openAddFromSelection = vi.fn();
+vi.mock("../ui/components/AddFromSelection", () => ({
+    openAddSnippetFromSelection: (...args: unknown[]) => openAddFromSelection(...args),
+}));
+
 // Dynamic imports AFTER mocks to ensure they take effect
 const { default: PluginClass } = await import("./plugin");
 const { buildExpansionExtension } = await import("./cm6-bridge");
@@ -67,6 +72,49 @@ describe("app/plugin", () => {
         expect((plugin as any).addSettingTabCalls.length).toBeGreaterThan(0);
         expect(plugin.settings).toBeDefined();
         expect(plugin.settings.snippets).toBeDefined();
+    });
+
+    describe("add-snippet-from-selection command (B-175)", () => {
+        async function getCommand(): Promise<{ plugin: any; cmd: any }> {
+            const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
+            // @ts-ignore
+            const plugin = new PluginClass(app);
+            await plugin.onload();
+            const cmd = plugin.addCommandCalls
+                .map((c: any[]) => c[0])
+                .find((c: any) => c.id === "add-snippet-from-selection");
+            return { plugin, cmd };
+        }
+
+        it("is registered with a sentence-case name without the plugin name", async () => {
+            const { cmd } = await getCommand();
+            expect(cmd.name).toBe("Add snippet from selection");
+        });
+
+        it("is unavailable with an empty selection (check and run)", async () => {
+            const { cmd } = await getCommand();
+            const editor = { getSelection: () => "" };
+            expect(cmd.editorCheckCallback(true, editor)).toBe(false);
+            expect(cmd.editorCheckCallback(false, editor)).toBe(false);
+            expect(openAddFromSelection).not.toHaveBeenCalled();
+        });
+
+        it("is available but does not open the modal while only checking", async () => {
+            const { cmd } = await getCommand();
+            expect(cmd.editorCheckCallback(true, { getSelection: () => "abc" })).toBe(true);
+            expect(openAddFromSelection).not.toHaveBeenCalled();
+        });
+
+        it("opens the modal with the exact selection (whitespace and newlines intact)", async () => {
+            const { plugin, cmd } = await getCommand();
+            expect(cmd.editorCheckCallback(false, { getSelection: () => "  a\nb  " })).toBe(true);
+            expect(openAddFromSelection).toHaveBeenCalledWith(plugin, "  a\nb  ");
+        });
+
+        it("treats a whitespace-only selection as a selection", async () => {
+            const { cmd } = await getCommand();
+            expect(cmd.editorCheckCallback(true, { getSelection: () => " " })).toBe(true);
+        });
     });
 
     // B-137: the third arg to `buildExpansionExtension` is a

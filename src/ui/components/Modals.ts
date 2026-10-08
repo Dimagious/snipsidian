@@ -510,6 +510,8 @@ export class AddSnippetModal extends Modal {
         snippet: { trigger: string; replacement: string; group: string }
     ) => void | SnippetOpResult | Promise<void | SnippetOpResult>;
     private expansion?: ExpansionHintSettings;
+    /** B-175: replacement prefilled when opened from a selection. */
+    private initialReplacement: string;
 
     constructor(
         app: App,
@@ -517,10 +519,12 @@ export class AddSnippetModal extends Modal {
             snippet: { trigger: string; replacement: string; group: string }
         ) => void | SnippetOpResult | Promise<void | SnippetOpResult>,
         expansion?: ExpansionHintSettings,
+        initialReplacement = "",
     ) {
         super(app);
         this.onConfirm = onConfirm;
         this.expansion = expansion;
+        this.initialReplacement = initialReplacement;
     }
 
     onOpen(): void {
@@ -532,7 +536,7 @@ export class AddSnippetModal extends Modal {
         contentEl.addClass("snipsidian-modal");
 
         let trigger = "";
-        let replacement = "";
+        let replacement = this.initialReplacement;
         let group = "";
         // Ref-object so TS doesn't narrow the field to `never` after
         // the synchronously-invoked `addText` callback (control flow
