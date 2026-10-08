@@ -29,6 +29,7 @@ import {
 } from "../engine/triggers";
 import type { SnipSidianSettings } from "../types";
 import { hasTriggerCollision } from "../store/snippets";
+import { INSTALL_MAX_REPLACEMENT_LEN } from "../services/package-validator";
 
 /** Plan result: success carries the data the caller needs to apply;
  *  failure carries a user-readable reason string. */
@@ -51,11 +52,22 @@ function invalidTriggerReason(trigger: string): string {
 }
 
 /**
+ * S-013 (B-179): Settings add/edit and "Add snippet from selection" were the
+ * only write paths into `settings.snippets` without a replacement-length cap
+ * (install and Espanso import already enforce INSTALL_MAX_REPLACEMENT_LEN).
+ * Returns a user-readable reason when the replacement is over the cap.
+ */
+function replacementTooLongReason(replacement: string): string | null {
+    if (replacement.length <= INSTALL_MAX_REPLACEMENT_LEN) return null;
+    return `Replacement is ${replacement.length.toLocaleString("en-US")} characters; the limit is ${INSTALL_MAX_REPLACEMENT_LEN.toLocaleString("en-US")}`;
+}
+
+/**
  * Validate and plan adding a new snippet.
  *
  * Checks (in order):
  *   1. Trigger normalises to a non-empty, well-formed key.
- *   2. Replacement is non-empty.
+ *   2. Replacement is non-empty and within the length cap (S-013).
  *   3. The composed `<group>/<trigger>` key isn't already present.
  *   4. The trigger name doesn't already exist in another group with
  *      the same trigger word (`hasTriggerCollision`).
@@ -75,6 +87,8 @@ export function planAddSnippet(
     if (input.replacement.length === 0) {
         return { ok: false, reason: "Replacement cannot be empty" };
     }
+    const tooLong = replacementTooLongReason(input.replacement);
+    if (tooLong !== null) return { ok: false, reason: tooLong };
 
     const normalizedGroup = slugifyGroup(input.group);
     const key = joinKey(normalizedGroup, normalizedTrigger);
@@ -135,7 +149,8 @@ export interface EditSnippetPlan {
  *
  * Checks:
  *   1. Trigger normalises to a non-empty, well-formed key.
- *   2. Replacement is non-empty.
+ *   2. Replacement is non-empty, and within the length cap unless it is
+ *      unchanged from the stored value (S-013).
  *   3. If the trigger changed, the new key isn't already occupied
  *      in the same group (with prototype-chain defence — uses
  *      `hasOwnProperty.call` not `in`).
@@ -175,8 +190,16 @@ export function planEditSnippet(
         };
     }
 
-    if (settings.snippets[originalKey] === undefined) {
+    const existing = settings.snippets[originalKey];
+    if (existing === undefined) {
         return { ok: false, reason: "Original snippet missing" };
+    }
+
+    // S-013: an already-oversize snippet (pre-cap, JSON import) stays editable
+    // by trigger/group as long as its replacement is unchanged.
+    if (input.replacement !== existing) {
+        const tooLong = replacementTooLongReason(input.replacement);
+        if (tooLong !== null) return { ok: false, reason: tooLong };
     }
 
     return {

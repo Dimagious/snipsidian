@@ -71,11 +71,20 @@ describe("openAddSnippetFromSelection (B-175)", () => {
         expect(plugin.saveSettings).not.toHaveBeenCalled();
     });
 
-    // B-179 will flip this: replacement-length cap for Settings add/edit
-    it("accepts a selection longer than 10000 chars, same as the Settings add path", async () => {
+    // S-013 (B-179)
+    it("rejects a selection longer than 10000 chars: message returned, nothing written", async () => {
         const { plugin, onConfirm } = setup();
         const res = await onConfirm({ trigger: "big", replacement: "y".repeat(10001), group: "" });
+        expect(res).toEqual({ ok: false, error: "Replacement is 10,001 characters; the limit is 10,000" });
+        expect(plugin.settings.snippets).toEqual({});
+        expect(plugin.saveSettings).not.toHaveBeenCalled();
+        expect(notices).toEqual([]);
+    });
+
+    it("accepts a selection of exactly 10000 chars", async () => {
+        const { plugin, onConfirm } = setup();
+        const res = await onConfirm({ trigger: "edge", replacement: "y".repeat(10000), group: "" });
         expect(res).toEqual({ ok: true });
-        expect(plugin.settings.snippets["big"]).toHaveLength(10001);
+        expect(plugin.settings.snippets["edge"]).toHaveLength(10000);
     });
 });
