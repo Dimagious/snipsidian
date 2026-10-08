@@ -9,8 +9,12 @@ export function buildEdit(
     const insert = applied.text;
     const fromCh = m.fromCh;
     const toCh = m.toCh;
-    const offset = applied.cursorDelta !== undefined ? applied.cursorDelta : insert.length;
-    return { fromCh, toCh, insert, newCursor: offsetToLineCol(insert, offset, fromCh) };
+    // B-182: no explicit `$|` -> no `newCursor`. The user's live cursor sits
+    // AFTER the typed separator, outside the replaced range, so the editor
+    // maps it through `replaceRange` onto the right spot on its own. The old
+    // "end of insert" position landed BEFORE the separator.
+    if (applied.cursorDelta === undefined) return { fromCh, toCh, insert };
+    return { fromCh, toCh, insert, newCursor: offsetToLineCol(insert, applied.cursorDelta, fromCh) };
 }
 
 /** Convert a character offset inside `insert` to a (lineDelta, ch) position

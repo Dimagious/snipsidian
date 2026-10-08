@@ -2,6 +2,32 @@ import obsidianmd from 'eslint-plugin-obsidianmd';
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
+/**
+ * B-180: the public scorecard runs the plugin's own `recommended` set, which
+ * is wider than the hand-picked list below (`ui/sentence-case`, `no-unsafe-*`,
+ * restricted globals, ...) and counts warnings as issues.
+ * Spread it first for shipped code only, with every warning promoted to an
+ * error; our own, stricter rules further down still win where both define one.
+ */
+const escalate = (entry) => {
+  if (Array.isArray(entry)) {
+    const [level, ...opts] = entry;
+    return [level === 'warn' || level === 1 ? 'error' : level, ...opts];
+  }
+  return entry === 'warn' || entry === 1 ? 'error' : entry;
+};
+const scannerParity = obsidianmd.configs.recommended
+  // package.json / non-source blocks do not apply to src/**
+  .filter((cfg) => !(Array.isArray(cfg.files) && cfg.files.includes('package.json')))
+  .map((cfg) => ({
+    ...cfg,
+    files: ['src/**/*.ts'],
+    ignores: ['src/**/*.test.ts', 'src/test/**'],
+    ...(cfg.rules
+      ? { rules: Object.fromEntries(Object.entries(cfg.rules).map(([k, v]) => [k, escalate(v)])) }
+      : {}),
+  }));
+
 export default [
   // Base JavaScript recommended
   js.configs.recommended,
@@ -9,6 +35,8 @@ export default [
   // TypeScript recommended (without type checking for faster linting)
   ...tseslint.configs.recommended,
   
+  ...scannerParity,
+
   // Obsidian plugin rules
   {
     plugins: {
@@ -45,7 +73,6 @@ export default [
       'obsidianmd/no-static-styles-assignment': 'error',
       'obsidianmd/object-assign': 'error',
       'obsidianmd/platform': 'error',
-      'obsidianmd/prefer-file-manager-trash-file': 'warn',
       'obsidianmd/prefer-abstract-input-suggest': 'error',
       'obsidianmd/regex-lookbehind': 'error',
       'obsidianmd/sample-names': 'error',
@@ -78,9 +105,9 @@ export default [
       // that guard could regress without `npm run lint` ever catching it.
       'obsidianmd/no-unsupported-api': 'error',
 
-      // UI sentence case with custom options
-      // Disabled - too many false positives with validation messages, button texts, etc.
-      'obsidianmd/ui/sentence-case': 'off',
+      // `obsidianmd/ui/sentence-case` comes from the `scannerParity` block
+      // above (B-180); it used to be switched off here, which hid exactly
+      // what the public scorecard flags.
 
       // Match the Obsidian scorecard scanner's strict no-unused-vars policy:
       // every declared argument must be used (or prefixed with `_`).

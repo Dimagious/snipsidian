@@ -4,16 +4,19 @@ import type SnipSidianPlugin from "../../main";
 import { PackageBrowser } from "./community/PackageBrowser";
 import { PackageSubmissionSection } from "./community/PackageSubmissionSection";
 import { EspansoSection } from "./community/EspansoSection";
+import { TextSnippetsSection } from "./community/TextSnippetsSection";
 
 export class CommunityTab {
   private packageBrowser: PackageBrowser;
   private packageSubmission: PackageSubmissionSection;
   private espansoSection: EspansoSection;
+  private textSnippetsSection: TextSnippetsSection;
 
   constructor(private app: App, private plugin: SnipSidianPlugin) {
     this.packageBrowser = new PackageBrowser(app, plugin);
     this.packageSubmission = new PackageSubmissionSection(app, plugin);
     this.espansoSection = new EspansoSection(app, plugin);
+    this.textSnippetsSection = new TextSnippetsSection(app, plugin);
   }
 
   async render(root: HTMLElement) {
@@ -23,6 +26,7 @@ export class CommunityTab {
     await this.packageBrowser.render(root);
     this.packageSubmission.render(root);
     this.espansoSection.render(root);
+    this.textSnippetsSection.render(root);
   }
 
 }

@@ -1,3 +1,9 @@
+import {
+  SINGLE_STRUCTURAL_TRIGGER_MESSAGE,
+  SINGLE_STRUCTURAL_TRIGGER_RE,
+  TRIGGER_CHARSET_DESCRIPTION,
+  TRIGGER_CHARSET_RE,
+} from "../engine/triggers";
 import type { PackageData } from "./package-types";
 
 export interface ValidationResult {
@@ -237,8 +243,10 @@ function validateSnippets(packageData: PackageData, errors: string[], warnings: 
       snippetErrors.push(`Snippet ${i + 1}: trigger must be a string`);
     } else if (snippet.trigger.length < 1 || snippet.trigger.length > 50) {
       snippetErrors.push(`Snippet ${i + 1}: trigger must be between 1 and 50 characters`);
-    } else if (!/^[a-zA-Z0-9:_-]+$/.test(snippet.trigger)) {
-      snippetErrors.push(`Snippet ${i + 1}: trigger can only contain letters, numbers, colons, underscores, and hyphens`);
+    } else if (!TRIGGER_CHARSET_RE.test(snippet.trigger)) {
+      snippetErrors.push(`Snippet ${i + 1}: trigger can only contain ${TRIGGER_CHARSET_DESCRIPTION}`);
+    } else if (SINGLE_STRUCTURAL_TRIGGER_RE.test(snippet.trigger)) {
+      snippetErrors.push(`Snippet ${i + 1}: trigger "${snippet.trigger}" is not allowed: ${SINGLE_STRUCTURAL_TRIGGER_MESSAGE}`);
     } else {
       // Check for duplicate triggers
       if (triggers.has(snippet.trigger)) {
@@ -379,12 +387,6 @@ export const INSTALL_MAX_REPLACEMENT_LEN = 10000;
  *  Defence against a small `snippets` count with megabyte-sized replacements. */
 export const INSTALL_MAX_TOTAL_BYTES = 2 * 1024 * 1024; // 2 MiB
 
-/** Trigger shape allowed at install time. Same as the submission-time regex
- *  in `validateSnippets`, plus an explicit ban on `/` because the runtime
- *  uses `joinKey(label, trigger)` to build store keys with `/` as the
- *  separator — a slash in the trigger would shift the parsed group. */
-const INSTALL_TRIGGER_REGEX = /^[a-zA-Z0-9:_-]+$/;
-
 /** Validates a community-package payload at install time. Runs on the
  *  runtime `PackageItem` shape (NOT the YAML submission shape). Catches
  *  attacker-controlled keys/values that bypassed the submission-time
@@ -394,6 +396,8 @@ const INSTALL_TRIGGER_REGEX = /^[a-zA-Z0-9:_-]+$/;
  *  Cross-references:
  *   - security S-002 (B-033): close the install-time bypass of validatePackage
  *   - security S-006: reject `/` in label + trigger to keep `splitKey` honest
+ *     (trigger charset = `TRIGGER_CHARSET_RE`, shared with `validateSnippets`;
+ *     excludes `/` `\\` `$` and separators, allows `- < > = + ~ * ^ | &`, B-171)
  */
 export function validatePackageForInstall(
   pkg: { label: string; snippets?: { [trigger: string]: string } }
@@ -438,9 +442,13 @@ export function validatePackageForInstall(
       errors.push(`Trigger "${truncate(trigger)}" exceeds 50 characters`);
       continue;
     }
-    if (!INSTALL_TRIGGER_REGEX.test(trigger)) {
+    if (SINGLE_STRUCTURAL_TRIGGER_RE.test(trigger)) {
+      errors.push(`Trigger "${trigger}" is not allowed: ${SINGLE_STRUCTURAL_TRIGGER_MESSAGE}`);
+      continue;
+    }
+    if (!TRIGGER_CHARSET_RE.test(trigger)) {
       errors.push(
-        `Trigger "${truncate(trigger)}" can only contain letters, numbers, colons, underscores, and hyphens`
+        `Trigger "${truncate(trigger)}" can only contain ${TRIGGER_CHARSET_DESCRIPTION}`
       );
       continue;
     }

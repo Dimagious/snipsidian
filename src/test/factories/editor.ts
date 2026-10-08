@@ -133,6 +133,29 @@ export class MockEditor {
         // engine's edit plans set the cursor explicitly otherwise.
         if (from.line === to.line && insertLines.length === 1 && from.ch === to.ch) {
             this.cursor.ch = from.ch + text.length;
+        } else if (
+            this.cursor.line > to.line ||
+            (this.cursor.line === to.line && this.cursor.ch > to.ch)
+        ) {
+            // B-182: like CM6, map a cursor sitting strictly AFTER the
+            // replaced range (e.g. past a typed separator) through the
+            // change, so it keeps pointing at the same text. Only a cursor
+            // strictly after `to` is mapped here; CM6 maps one exactly at
+            // `to` to the end of the insert and one inside the range to its
+            // start, so don't rely on this mock for those cases.
+            const endLine = from.line + insertLines.length - 1;
+            const endCh =
+                insertLines.length === 1
+                    ? from.ch + text.length
+                    : (insertLines[insertLines.length - 1]?.length ?? 0);
+            if (this.cursor.line === to.line) {
+                this.cursor = { line: endLine, ch: endCh + (this.cursor.ch - to.ch) };
+            } else {
+                this.cursor = {
+                    line: this.cursor.line + (endLine - to.line),
+                    ch: this.cursor.ch,
+                };
+            }
         }
     }
 

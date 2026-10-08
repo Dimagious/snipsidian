@@ -6,6 +6,7 @@ import {
     formatInstalledPackagesSummary,
     isPackageInstalled,
     listPackageKeys,
+    planGroupedImport,
     planGroupedInstall,
     removePackageSnippets,
 } from "./install-plan";
@@ -450,5 +451,76 @@ describe("install-plan.countInstalledPackages", () => {
             },
         };
         expect(countInstalledPackages(settings)).toBe(2);
+    });
+});
+
+describe("install-plan.planGroupedImport (B-184: collisions skip, not abort)", () => {
+    it("excludes only the colliding triggers, names the owning group, diffs the rest", () => {
+        const plan = planGroupedImport(
+            { brb: "be right back", omw: "on my way" },
+            "imp",
+            settingsWith({ "work/brb": "other" }),
+        );
+        expect(plan.validation.isValid).toBe(true);
+        expect(plan.skippedCollisions).toEqual([
+            { trigger: "brb", group: "work", reason: 'already used in group "work"' },
+        ]);
+        expect(plan.importable).toEqual({ omw: "on my way" });
+        expect(plan.diff.added).toEqual([{ key: "imp/omw", value: "on my way" }]);
+        expect(plan.diff.conflicts).toEqual([]);
+    });
+
+    it("all triggers colliding leaves importable and diff empty", () => {
+        const plan = planGroupedImport({ a: "1" }, "imp", settingsWith({ "g/a": "2" }));
+        expect(plan.importable).toEqual({});
+        expect(plan.diff).toEqual({ added: [], conflicts: [] });
+        expect(plan.skippedCollisions).toHaveLength(1);
+    });
+
+    it("same-group conflict stays a conflict, not a skip", () => {
+        const plan = planGroupedImport({ a: "new" }, "imp", settingsWith({ "imp/a": "old" }));
+        expect(plan.skippedCollisions).toEqual([]);
+        expect(plan.diff.conflicts).toEqual([{ key: "imp/a", incoming: "new", current: "old" }]);
+    });
+
+    it("an ungrouped owner is reported with an empty group", () => {
+        const plan = planGroupedImport({ a: "1" }, "imp", settingsWith({ a: "2" }));
+        expect(plan.skippedCollisions[0]).toEqual({
+            trigger: "a",
+            group: "",
+            reason: "already used by an ungrouped snippet",
+        });
+    });
+
+    it("[S-009] validation failure returns nothing importable", () => {
+        const plan = planGroupedImport({}, "imp", settingsWith({}));
+        expect(plan.validation.isValid).toBe(false);
+        expect(plan.importable).toEqual({});
+        expect(plan.skippedCollisions).toEqual([]);
+    });
+
+    it("[S-008] inherited-name triggers are not mistaken for collisions (loop runs with a real collision)", () => {
+        const incoming = JSON.parse('{"constructor":"c","__proto__":"p","brb":"b"}') as Record<string, string>;
+        const plan = planGroupedImport(incoming, "imp", settingsWith({ "other/brb": "different" }));
+        expect(plan.skippedCollisions.map((c) => c.trigger)).toEqual(["brb"]);
+        expect(Object.prototype.hasOwnProperty.call(plan.importable, "__proto__")).toBe(true);
+        expect(Object.prototype.hasOwnProperty.call(plan.importable, "constructor")).toBe(true);
+        expect(plan.diff.added.map((a) => a.key).sort()).toEqual(["imp/__proto__", "imp/constructor"]);
+    });
+
+    it("[S-008] a __proto__ trigger survives alongside a colliding sibling", () => {
+        const incoming = JSON.parse('{"__proto__":"x","brb":"b"}') as Record<string, string>;
+        const plan = planGroupedImport(incoming, "imp", settingsWith({ "other/brb": "different" }));
+        expect(Object.keys(plan.importable)).toEqual(["__proto__"]);
+        expect(plan.diff.added).toEqual([{ key: "imp/__proto__", value: "x" }]);
+    });
+
+    it("[S-008] a __proto__ trigger that itself collides is reported with its owner group", () => {
+        const incoming = JSON.parse('{"__proto__":"x"}') as Record<string, string>;
+        const plan = planGroupedImport(incoming, "imp", settingsWith({ "other/__proto__": "different" }));
+        expect(plan.skippedCollisions).toEqual([
+            { trigger: "__proto__", group: "other", reason: 'already used in group "other"' },
+        ]);
+        expect(Object.keys(plan.importable)).toEqual([]);
     });
 });

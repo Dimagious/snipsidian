@@ -31,13 +31,36 @@ export function normalizeTrigger(raw: string): string {
 }
 
 /**
- * Characters that disqualify a string from being a trigger key.
- * Whitespace, punctuation, brackets, quotes, slashes, backslash, hyphen
- * — anything that would break the separator-walking expander or the
- * `<group>/<trigger>` key shape downstream.
+ * Characters that disqualify a string from being a trigger key:
+ * whitespace and every separator (`src/shared/delimiters.ts` — they
+ * would split the trigger before the expander sees it), `/` and `\`
+ * (the store key is `<group>/<trigger>`, S-006), and `$` (placeholder
+ * syntax). Hyphen is NOT forbidden: word-bound matching handles `--`
+ * and `a-b` fine (B-171). Symbols `- < > = + ~ * ^ | &` are allowed.
  */
 // eslint-disable-next-line no-useless-escape -- \[ and \] are REQUIRED inside [] to match literal brackets
-const FORBIDDEN_CHARS_RE = /[\s.,!?;()\[\]{}"'/\\-]/;
+const FORBIDDEN_CHARS_RE = /[\s.,!?;()\[\]{}"'/\\$]/;
+
+/**
+ * Strict ASCII allowlist for triggers arriving from untrusted sources
+ * (community submission + install gate): letters, digits, `:` `_` and the
+ * symbols `- < > = + ~ * ^ | &`. Excludes `/` `\` `$` and all separators.
+ * Shared by `package-validator.ts` so both gates stay in sync (B-171).
+ */
+export const TRIGGER_CHARSET_RE = /^[a-zA-Z0-9:_<>=+~*^|&-]+$/;
+
+/**
+ * A lone `-`, `+`, `*`, `>` or `|` would fire on every Markdown list bullet,
+ * blockquote marker or table pipe. Multi-char forms (`--`, `->`, `>=`) are fine.
+ */
+export const SINGLE_STRUCTURAL_TRIGGER_RE = /^[-+*>|]$/;
+
+export const SINGLE_STRUCTURAL_TRIGGER_MESSAGE =
+    "a single -, +, *, > or | would rewrite Markdown lists, quotes and tables";
+
+/** Human-readable form of `TRIGGER_CHARSET_RE` for error messages / hints. */
+export const TRIGGER_CHARSET_DESCRIPTION =
+    "letters, numbers, colons, underscores, and the symbols - < > = + ~ * ^ | &";
 
 /** Matches keys with a colon NOT at index 0, i.e. one in the middle. */
 const COLON_IN_MIDDLE_RE = /^[^:]*:.*:/;
@@ -48,6 +71,8 @@ export function isBadTrigger(key: string): boolean {
     if (key.length === 0) return true;
 
     if (FORBIDDEN_CHARS_RE.test(key)) return true;
+
+    if (SINGLE_STRUCTURAL_TRIGGER_RE.test(key)) return true;
 
     // Reject `a:b:c`-style middle-colon keys (allowed: leading colon only).
     if (COLON_IN_MIDDLE_RE.test(key)) return true;

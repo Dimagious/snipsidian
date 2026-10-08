@@ -63,8 +63,11 @@ consequences of that, worth knowing before you install anything:
 
 - **Nothing to learn.** A snippet is a trigger and a replacement. The one bit of syntax is
   `$|`, the spot where the cursor lands.
-- **It reads markdown.** A trigger inside a fenced code block, inline code or YAML
+- **It reads markdown.** A trigger inside a fenced code block, inline code, math (`$…$`, `$$…$$`) or YAML
   frontmatter stays as you typed it. So does a trigger in the middle of a word.
+  A `$` directly followed by a letter or symbol opens math (prices like `$5` don't) until the closing `$` on that line, or to the end of the line
+  if there is none, so triggers don't expand there (`$HOME` in prose stops expansion for the rest of that
+  line); write `\$` for a literal dollar.
 - **Only your typing fires it.** Pasting text that ends in `todo `, undo, redo, drag and
   drop, another plugin's edit, IME composition for Chinese, Japanese or Korean: none of these
   expand anything.
@@ -84,6 +87,10 @@ For the snippets you do not remember by name, run **Snipsy: Insert snippet…** 
 palette. It searches triggers and replacements, previews the result, and inserts at the cursor.
 Select some text first and `$1` in the snippet receives it. **Settings → Snipsy → Set hotkey
 for Insert snippet** opens the Hotkeys tab already filtered to that command.
+
+To turn text you already wrote into a snippet, select it and run **Snipsy: Add snippet from
+selection**. The Add snippet window opens with the replacement filled in from your selection;
+type a trigger and save. The note is not changed.
 
 On Obsidian 1.13 and later, Snipsy's settings are native: **Snippets** and **Packages** open as
 pages, everything else sits right on the Snipsy settings screen, and Obsidian's settings search
@@ -141,6 +148,14 @@ Save, and `sig` followed by a space is your signature in every note.
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Dimagious/snipsidian/HEAD/site/img/add-snippet-dark.png">
   <img alt="The Add snippet dialog: trigger :sig with the hint Will expand when you type: sig, and a two-line replacement" src="site/img/add-snippet-light.png" width="520">
 </picture>
+
+### Trigger characters
+
+A trigger can hold letters, digits, `_`, a leading `:`, and the symbols `- < > = + ~ * ^ | &`, so
+`->`, `<=` or `--` work as triggers. Spaces, the separators listed above, `/`, `\` and `$` are not
+allowed. A trigger still has to stand on its own: `--` expands on `--·` but not inside `---`.
+A single `-`, `+`, `*`, `>` or `|` is not allowed either, since it would rewrite Markdown lists, quotes
+and tables.
 
 ### Placeholders
 
@@ -210,6 +225,22 @@ landing in your notes as broken `{{text}}`.
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Dimagious/snipsidian/HEAD/site/img/espanso-dark.png">
   <img alt="Espanso import with a pasted YAML file and the result line: 3 imported, 1 skipped: ask" src="site/img/espanso-light.png" width="600">
 </picture>
+
+### Text Snippets import
+
+Coming from the Text Snippets plugin (`text-snippets-obsidian`)? Press **Import** under
+**Text Snippets import** on the Packages page. Snipsy reads that plugin's saved snippets, shows
+what it cannot take, shows a preview, and installs the rest into a `text-snippets` group once you
+press **Apply**. Nothing in the other plugin is changed. `$end$` becomes `$|`, `$pst$` becomes
+`$clipboard`, `$nl$` becomes a line break, and `$tb$` tab stops are dropped (Snipsy has none; with
+no `$end$`, the first one becomes the cursor). Your custom marker symbols are honored. If a trigger
+appears twice, the later one wins, like it does there, and the plugin's default sample snippet is
+skipped. A few small deviations are deliberate: a second `$end$` is removed (the original left it as
+text), every `$pst$` is replaced, triggers are trimmed and a leading or trailing `:` is stripped, text after
+a second ` : ` is kept, and a snippet with both `$end$` and `$tb$` puts the cursor at `$end$` (the
+original jumped to the first tab stop). Triggers with spaces or characters Snipsy does not allow are
+skipped and named. Snipsy expands these automatically as you type (Text Snippets waited for Tab),
+so disable the group or turn on prefix mode if a trigger fires too often.
 
 ### Backup
 

@@ -2,7 +2,7 @@ import type { Editor, EditorPosition } from "obsidian";
 import { expand } from "../engine";
 import type { Dict, EditPlan, ExpandContext, ExpandInput } from "../engine/types";
 import { isSeparator } from "../shared/delimiters";
-import { isInFencedCode, isInInlineCode, isInYamlFrontmatter } from "../shared/markdown";
+import { isInFencedCode, isInInlineCode, isInMath, isInYamlFrontmatter } from "../shared/markdown";
 
 export function makeExpandInput(
     editor: Editor,
@@ -44,10 +44,12 @@ export function makeContext(
     const isFront = isInYamlFrontmatter(getLine, last, targetLine);
     const isFence = isInFencedCode(getLine, last, targetLine);
     const isInline = isInInlineCode(getLine(targetLine), targetCh);
+    // B-167: `$…$` / `$$…$$` — one more top-down pass, skipped cheaply on `$`-free lines.
+    const isMath = isInMath(getLine, last, targetLine, targetCh);
 
     return {
         isInCode: isFence || isInline,
-        isInMath: false,
+        isInMath: isMath,
         isInFrontmatter: isFront,
         filename,
         now,

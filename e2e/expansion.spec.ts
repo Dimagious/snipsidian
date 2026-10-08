@@ -36,6 +36,25 @@ test.describe("expansion fires in the real editor", () => {
         expect(text).not.toContain("brb");
     });
 
+    test("[B-182] typing on after `brb<space>` continues AFTER the space", async ({
+        win,
+    }) => {
+        // Pre-fix the cursor landed before the typed separator, so the
+        // next word was glued to the expansion: `be right backthen  `.
+        await ui.typeInEditor(win, "brb then ");
+        const text = await ui.editorText(win);
+        expect(text).toBe("be right back then ");
+    });
+
+    test("[B-182] punctuation separator keeps the cursor after it", async ({
+        win,
+    }) => {
+        // Pre-fix: `x brb, y` ended up as `x be right back y,`.
+        await ui.typeInEditor(win, "x brb, y");
+        const text = await ui.editorText(win);
+        expect(text).toBe("x be right back, y");
+    });
+
     test("unknown triggers stay untouched", async ({ win }) => {
         await ui.typeInEditor(win, "nonexistent ");
         const text = await ui.editorText(win);

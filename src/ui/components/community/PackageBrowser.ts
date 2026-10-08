@@ -12,6 +12,7 @@ import {
     planGroupedInstall,
     removePackageSnippets,
 } from "../../../core/install-plan";
+import { commitSnippets } from "../../../core/commit-snippets";
 import { renderSettingGroup } from "../../utils/setting-group";
 import { formatTriggerList, sanitizeForNotice } from "../../../shared/notice-text";
 
@@ -445,8 +446,8 @@ export class PackageBrowser {
         resolved: Record<string, string>,
     ) {
         try {
-            this.plugin.settings.snippets = resolved;
-            await this.plugin.saveSettings();
+            // B-181: rolls the in-memory map back if the save rejects.
+            await commitSnippets(this.plugin.settings, resolved, () => this.plugin.saveSettings());
             // Fold-in (ux#7): report what actually changed given the
             // user's per-conflict choices, not the full pack size — a
             // "Reinstall, keep everything" run used to claim

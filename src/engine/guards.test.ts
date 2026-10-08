@@ -12,6 +12,10 @@ describe("shouldExpandHere", () => {
         expect(shouldExpandHere({ ...base, isInFrontmatter: false, isInCode: true, isInMath: false } as any)).toBe(false);
     });
 
+    it("returns false in math (B-167)", () => {
+        expect(shouldExpandHere({ ...base, isInFrontmatter: false, isInCode: false, isInMath: true } as any)).toBe(false);
+    });
+
     it("returns true in normal text", () => {
         expect(shouldExpandHere({ ...base, isInFrontmatter: false, isInCode: false, isInMath: false } as any)).toBe(true);
     });
