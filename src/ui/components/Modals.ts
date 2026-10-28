@@ -869,3 +869,68 @@ export class ImportPreviewModal extends Modal {
         }
     }
 }
+
+/**
+ * B-183: preview for "Fix triggers". Lists the planned `old -> new`
+ * renames and the skipped keys with the reason. Nothing is written
+ * here; Apply hands control to `onApply`, Cancel/close does nothing.
+ */
+export class FixTriggersModal extends Modal {
+    constructor(
+        app: App,
+        private readonly opts: {
+            renames: readonly { from: string; to: string }[];
+            skipped: readonly { key: string; reason: string }[];
+            onApply: () => void | Promise<void>;
+        },
+    ) {
+        super(app);
+    }
+
+    onOpen(): void {
+        const { contentEl, titleEl } = this;
+        titleEl.setText("Fix triggers");
+        contentEl.addClass("snipsidian-modal");
+        contentEl.addClass("snipsidian-fix-triggers-modal");
+
+        const { renames, skipped } = this.opts;
+        contentEl.createEl("p", {
+            text: `${renames.length} trigger${renames.length === 1 ? "" : "s"} will be renamed. Replacements and groups stay the same.`,
+        });
+
+        const list = contentEl.createDiv({ cls: "snipsy-fix-list" });
+        for (const r of renames) {
+            const row = list.createDiv({ cls: "snipsy-fix-row" });
+            row.createSpan({ cls: "snipsy-fix-from", text: r.from });
+            row.createSpan({ cls: "snipsy-fix-arrow", text: "->" });
+            row.createSpan({ cls: "snipsy-fix-to", text: r.to });
+        }
+
+        if (skipped.length > 0) {
+            contentEl.createEl("p", {
+                text: `${skipped.length} will be skipped and stay as they are:`,
+            });
+            const skippedList = contentEl.createDiv({ cls: "snipsy-fix-list" });
+            for (const s of skipped) {
+                const row = skippedList.createDiv({ cls: "snipsy-fix-row" });
+                row.createSpan({ cls: "snipsy-fix-from", text: s.key });
+                row.createSpan({ cls: "snipsy-fix-reason", text: s.reason });
+            }
+        }
+
+        const footer = contentEl.createDiv({ cls: "modal-button-container" });
+        const cancel = footer.createEl("button", { text: "Cancel" });
+        cancel.onclick = () => this.close();
+        const apply = footer.createEl("button", { text: "Fix triggers", cls: "mod-cta" });
+        apply.onclick = () => {
+            const result = this.opts.onApply();
+            if (result instanceof Promise) {
+                void result.catch((error) => {
+                    console.error("Error in fix triggers callback:", error);
+                });
+            }
+            this.close();
+        };
+        cancel.focus();
+    }
+}

@@ -1059,3 +1059,126 @@ describe("SnippetsTab — group header layout (F5a/F5b)", () => {
         expect(groupHeaderFor("Work").closest(".snippet-group")?.querySelector(".group-content")).toBeTruthy();
     });
 });
+
+// B-183: dead (colon) triggers warning + Fix triggers.
+describe("SnippetsTab — dead trigger warning (B-183)", () => {
+    async function flushAll(): Promise<void> {
+        for (let i = 0; i < 5; i++) await Promise.resolve();
+    }
+    const warning = () => root.querySelector(".snipsy-fix-warning");
+    const fixButton = () =>
+        Array.from(root.querySelectorAll(".snipsy-fix-warning button")).find(
+            (b) => b.textContent === "Fix triggers",
+        ) as HTMLButtonElement | undefined;
+    const modalButton = (label: string) =>
+        Array.from(document.body.querySelectorAll(".snipsidian-fix-triggers-modal button")).find(
+            (b) => b.textContent === label,
+        ) as HTMLButtonElement;
+
+    it("shows the count and hides with no dead keys", () => {
+        mount({ "emoji/:smile:": "😀", ":wave:": "👋", ok: "1" });
+        expect(warning()?.textContent).toContain("2 snippets can't be typed");
+        expect(warning()?.textContent).toContain("their triggers contain colons");
+        expect(warning()?.textContent).not.toContain("`");
+        expect(fixButton()).toBeTruthy();
+    });
+
+    it("renders no warning when every trigger is typeable", () => {
+        mount({ smile: "😀", "g/ok": "1" });
+        expect(warning()).toBeNull();
+    });
+
+    it("lists the first 5 and 'and N more'", () => {
+        const many: Record<string, string> = {};
+        for (let i = 0; i < 8; i++) many[`:k${i}:`] = "v";
+        mount(many);
+        expect(warning()?.textContent).toContain("8 snippets can't be typed");
+        expect(warning()?.textContent).toContain("and 3 more");
+    });
+
+    it("shows no button when none of the dead keys can be fixed", () => {
+        mount({ "::": "x" });
+        expect(warning()).not.toBeNull();
+        expect(fixButton()).toBeUndefined();
+    });
+
+    it("cancel writes nothing", async () => {
+        mount({ "emoji/:smile:": "😀" });
+        fixButton()!.click();
+        expect(document.body.textContent).toContain("emoji/:smile:");
+        modalButton("Cancel").click();
+        await flushAll();
+        expect(plugin.settings.snippets).toEqual({ "emoji/:smile:": "😀" });
+        expect((plugin as unknown as { _saveCalls: unknown[] })._saveCalls).toHaveLength(0);
+        expect(warning()).not.toBeNull();
+    });
+
+    it("apply renames, saves once, preserves values and hides the warning", async () => {
+        mount({ "emoji/:smile:": "😀", "emoji/smile2": "x" });
+        fixButton()!.click();
+        modalButton("Fix triggers").click();
+        await flushAll();
+        expect(plugin.settings.snippets).toEqual({ "emoji/smile": "😀", "emoji/smile2": "x" });
+        expect((plugin as unknown as { _saveCalls: unknown[] })._saveCalls).toHaveLength(1);
+        expect(warning()).toBeNull();
+    });
+
+    it("apply leaves skipped (colliding) keys alone", async () => {
+        mount({ "g/smile": "keep", "g/:smile:": "dead", ":ok:": "v" });
+        fixButton()!.click();
+        modalButton("Fix triggers").click();
+        await flushAll();
+        expect(plugin.settings.snippets).toEqual({ "g/smile": "keep", "g/:smile:": "dead", ok: "v" });
+        expect(warning()?.textContent).toContain("1 snippet can't be typed");
+    });
+
+    it("a failed save rolls the library back (B-181)", async () => {
+        mount({ ":smile:": "😀" });
+        const before = plugin.settings.snippets;
+        plugin.saveSettings = () => Promise.reject(new Error("disk full"));
+        fixButton()!.click();
+        modalButton("Fix triggers").click();
+        await flushAll();
+        expect(plugin.settings.snippets).toBe(before);
+        expect(plugin.settings.snippets).toEqual({ ":smile:": "😀" });
+        expect(warning()).not.toBeNull();
+    });
+
+    it("remaps the selection to the new keys and drops an edit on a renamed key", async () => {
+        mount({ "g/:smile:": "😀", "g/other": "o" });
+        expandGroup("G");
+        (root.querySelector('[aria-label="Select snippets"]') as HTMLButtonElement).click();
+        const cb = findRow(":smile:")?.querySelector("input[type='checkbox']") as HTMLInputElement | null;
+        expect(cb).not.toBeNull();
+        cb!.checked = true;
+        cb!.dispatchEvent(new Event("change"));
+        expect(root.querySelector(".snipsy-bulk-bar")?.textContent).toContain("1 selected");
+        fixButton()!.click();
+        modalButton("Fix triggers").click();
+        await flushAll();
+        expect(plugin.settings.snippets).toEqual({ "g/smile": "😀", "g/other": "o" });
+        // the selection now points at "smile", not a vanished key
+        expect(root.querySelector(".snipsy-bulk-bar")?.textContent).toContain("1 selected");
+        const renamedCb = findRow("smile")?.querySelector("input[type='checkbox']") as HTMLInputElement;
+        expect(renamedCb.checked).toBe(true);
+        expect((findRow("other")?.querySelector("input[type='checkbox']") as HTMLInputElement).checked).toBe(false);
+    });
+
+    it("the warning follows other edits: no stale Fix button after the library changes", async () => {
+        mount({ ":smile:": "😀" });
+        expect(fixButton()).toBeTruthy();
+        // library changes outside the Fix flow (e.g. inline edit/delete), then any re-render
+        plugin.settings.snippets = { smile: "😀" };
+        (root.querySelector('[aria-label="Select snippets"]') as HTMLButtonElement).click();
+        expect(warning()).toBeNull();
+    });
+
+    it("a stale Fix click does not fail silently", async () => {
+        mount({ ":smile:": "😀" });
+        const btn = fixButton()!;
+        plugin.settings.snippets = { smile: "😀" };
+        btn.click();
+        expect(document.body.querySelector(".snipsidian-fix-triggers-modal")).toBeNull();
+        expect(warning()).toBeNull();
+    });
+});

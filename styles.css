@@ -613,6 +613,45 @@
   gap: 8px;
 }
 
+/* ---- Dead-trigger warning (B-183) ---- */
+.snipsidian-settings .snipsy-fix-warning {
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--snipsy-divider);
+  border-radius: var(--snipsy-radius);
+  background: var(--snipsy-hover);
+  font-size: 13px;
+  color: var(--snipsy-text-muted);
+}
+.snipsidian-settings .snipsy-fix-warning-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.snipsidian-settings .snipsy-fix-warning-list {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--snipsy-text-faint);
+  overflow-wrap: anywhere;
+}
+.snipsidian-fix-triggers-modal .snipsy-fix-list {
+  max-height: 240px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+.snipsidian-fix-triggers-modal .snipsy-fix-row {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.snipsidian-fix-triggers-modal .snipsy-fix-arrow,
+.snipsidian-fix-triggers-modal .snipsy-fix-reason {
+  color: var(--text-muted);
+}
+
 /* ---- Bulk action bar ---- */
 /* Sticky-to-viewport per designer Q3 — designer flagged the missing
    `position: sticky` in their own handoff; we add it here. */

@@ -279,6 +279,16 @@ expands. See [Prefix mode](#prefix-mode).
 </details>
 
 <details>
+<summary>My emoji snippets with colons (<code>:smile:</code>) don't expand</summary>
+
+`:` is a separator, so a stored trigger like `:smile:` can never be typed as one word. Settings →
+Snipsy → Snippets shows a warning with a **Fix triggers** button that renames them to `smile` (same group,
+same replacement) after a preview. Triggers that would clash with an existing one are skipped and
+listed. With [prefix mode](#prefix-mode) set to `:`, you then type `:smile `.
+
+</details>
+
+<details>
 <summary>Triggers don't expand on Linux (Wayland)</summary>
 
 Start Obsidian with `--ozone-platform=x11`. If that fixes it, please report it in an issue

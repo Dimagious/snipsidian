@@ -4,8 +4,15 @@ import { splitKey, slugifyGroup } from "../../store/keys";
 import { GroupManager } from "../utils/group-utils";
 import { UIStateManager } from "../utils/ui-state";
 import { renderPlaceholderHint } from "../utils/placeholder-hint";
-import { AddSnippetModal, ConfirmModal, GroupPickerModal, TextPromptModal, type SnippetOpResult } from "./Modals";
+import { AddSnippetModal, ConfirmModal, FixTriggersModal, GroupPickerModal, TextPromptModal, type SnippetOpResult } from "./Modals";
 import { applyAddSnippet, planEditSnippet } from "../../core/snippet-ops";
+import { commitSnippets } from "../../core/commit-snippets";
+import {
+    applyDeadTriggerRenames,
+    planDeadTriggerFix,
+    validateDeadTriggerRenames,
+} from "../../core/fix-dead-triggers";
+import { sanitizeForNotice } from "../../shared/notice-text";
 
 export class SnippetsTab {
     private groupManager: GroupManager;
@@ -25,6 +32,8 @@ export class SnippetsTab {
     /** B-052: persist the count span so we update its text in place
      *  rather than empty()+recreate on every checkbox toggle. */
     private bulkBarCountEl: HTMLSpanElement | null = null;
+    /** B-183: host for the "can't be typed" warning; refreshed in place. */
+    private fixWarningEl: HTMLElement | null = null;
 
     constructor(
         private app: App,
@@ -45,11 +54,108 @@ export class SnippetsTab {
         // this region without a duplicate heading.
         const wrap = root.createDiv({ cls: "snipsy-snippet-list" });
 
+        this.fixWarningEl = wrap.createDiv({ cls: "snipsy-fix-warning-host" });
+        this.renderFixWarning();
         this.renderToolbar(wrap);
         this.renderBulkBar(wrap);
 
         this.listEl = wrap.createDiv({ cls: "snippet-list" });
         this.renderList();
+    }
+
+    /**
+     * B-183: muted callout when stored triggers contain `:` (unreachable,
+     * `:` is a separator). Hidden when there are none. The Fix button
+     * opens a preview; nothing is written until Apply.
+     */
+    private renderFixWarning(): void {
+        const host = this.fixWarningEl;
+        if (!host) return;
+        host.empty();
+        const plan = planDeadTriggerFix(this.plugin.settings.snippets);
+        if (plan.dead.length === 0) return;
+
+        const box = host.createDiv({
+            cls: "snipsy-fix-warning",
+            attr: { role: "status" },
+        });
+        const n = plan.dead.length;
+        const head = box.createDiv({ cls: "snipsy-fix-warning-head" });
+        head.createSpan({
+            text: `${n} snippet${n === 1 ? "" : "s"} can't be typed: ${n === 1 ? "its trigger contains a colon" : "their triggers contain colons"}`,
+        });
+        if (plan.renames.length > 0) {
+            const btn = head.createEl("button", {
+                cls: "snippet-action",
+                text: "Fix triggers",
+                attr: { type: "button" },
+            });
+            btn.addEventListener("click", () => this.openFixTriggers());
+        }
+        const shown = plan.dead.slice(0, 5);
+        const list = box.createDiv({ cls: "snipsy-fix-warning-list" });
+        list.setText(
+            shown.join(", ") + (plan.dead.length > shown.length ? ` and ${plan.dead.length - shown.length} more` : ""),
+        );
+    }
+
+    private openFixTriggers(): void {
+        const plan = planDeadTriggerFix(this.plugin.settings.snippets);
+        if (plan.renames.length === 0) {
+            this.renderFixWarning();
+            new Notice("No triggers to fix");
+            return;
+        }
+        new FixTriggersModal(this.app, {
+            renames: plan.renames,
+            skipped: plan.skipped,
+            onApply: () => this.applyFixTriggers(),
+        }).open();
+    }
+
+    private async applyFixTriggers(): Promise<void> {
+        const current = this.plugin.settings.snippets;
+        // Re-plan at apply time: the library may have changed since the preview.
+        const plan = planDeadTriggerFix(current);
+        if (plan.renames.length === 0) {
+            this.renderFixWarning();
+            new Notice("No triggers to fix");
+            return;
+        }
+
+        const gate = validateDeadTriggerRenames(current, plan.renames);
+        if (!gate.ok) {
+            new Notice(`Cannot fix triggers: ${sanitizeForNotice(gate.error)}`);
+            return;
+        }
+        try {
+            // B-181: rolls the in-memory map back if the save rejects.
+            await commitSnippets(
+                this.plugin.settings,
+                applyDeadTriggerRenames(current, plan.renames),
+                () => this.plugin.saveSettings(),
+            );
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            new Notice(`Fix failed: ${sanitizeForNotice(message)}`);
+            return;
+        }
+        // Selection and the inline-edit pointer hold old keys: remap the
+        // selection through the rename map, drop an edit on a vanished key.
+        const renamed = new Map(plan.renames.map((r) => [r.from, r.to]));
+        const selected = this.uiState.getSelected();
+        for (const key of Array.from(selected)) {
+            const to = renamed.get(key);
+            if (to !== undefined) {
+                selected.delete(key);
+                selected.add(to);
+            }
+        }
+        this.discardEditIfMissing();
+        const skipped = plan.skipped.length > 0 ? `, skipped ${plan.skipped.length}` : "";
+        new Notice(`Fixed ${plan.renames.length} trigger${plan.renames.length === 1 ? "" : "s"}${skipped}`);
+        this.renderList();
+        this.updateBulkBar();
     }
 
     private renderToolbar(root: HTMLElement) {
@@ -71,7 +177,7 @@ export class SnippetsTab {
         input.value = this.uiState.getSearchQuery();
         input.addEventListener("input", () => {
             this.uiState.setSearchQuery(input.value);
-            this.renderList();
+            this.renderList(false);
         });
         this.searchInput = input;
 
@@ -241,8 +347,13 @@ export class SnippetsTab {
         });
     }
 
-    private renderList() {
+    /** `refreshWarning` is false only for the per-keystroke search filter:
+     *  the dead-trigger plan does not depend on the filter, and replanning
+     *  (sort + validate) on every keystroke is wasted work. Every other
+     *  caller is a mutation or toggle, so the warning stays in sync. */
+    private renderList(refreshWarning = true) {
         if (!this.listEl) return;
+        if (refreshWarning) this.renderFixWarning();
         this.listEl.empty();
 
         const rawQuery = this.uiState.getSearchQuery();
