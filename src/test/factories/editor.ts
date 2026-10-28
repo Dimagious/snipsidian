@@ -55,6 +55,13 @@ export class MockEditor {
         return parts.join("\n");
     }
 
+    /** B-176: document offset of a position (lines joined by `\n`). */
+    posToOffset(pos: CursorPos): number {
+        let offset = 0;
+        for (let l = 0; l < pos.line; l++) offset += this.getLine(l).length + 1;
+        return offset + pos.ch;
+    }
+
     getLine(i: number): string {
         return this.lines[i] ?? "";
     }

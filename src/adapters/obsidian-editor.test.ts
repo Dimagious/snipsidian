@@ -105,6 +105,48 @@ describe("adapters/obsidian-editor: tryExpandAtSeparator", () => {
         expect(ed.getCursor()).toEqual({ line: 0, ch: "function ".length });
     });
 
+    describe("[B-176] reports where the expansion landed", () => {
+        const deps = { now: new Date() };
+
+        it("returns offsets, the replaced text and the separator", async () => {
+            const ed = new MockEditor("fn ");
+            ed.setCursor({ line: 0, ch: 3 });
+            const result = await tryExpandAtSeparator(ed as any, { fn: "function" }, deps);
+            expect(result).toEqual({ from: 0, insert: "function", original: "fn", separator: " " });
+            expect(ed.getLine(0)).toBe("function ");
+        });
+
+        it("offsets count the newlines of earlier lines", async () => {
+            const ed = new MockEditor("first\nsecond fn,");
+            ed.setCursor({ line: 1, ch: 10 });
+            const result = await tryExpandAtSeparator(ed as any, { fn: "A\nB" }, deps);
+            expect(result).toEqual({ from: 13, insert: "A\nB", original: "fn", separator: "," });
+        });
+
+        it("covers a multi-line insert and an Enter separator", async () => {
+            const ed = new MockEditor("fn\n");
+            ed.setCursor({ line: 1, ch: 0 });
+            const result = await tryExpandAtSeparator(ed as any, { fn: "> a\n> b" }, deps);
+            expect(result).toEqual({ from: 0, insert: "> a\n> b", original: "fn", separator: "\n" });
+        });
+
+        it("includes the consumed prefix char in `original` (B-137)", async () => {
+            const ed = new MockEditor("x :fn ");
+            ed.setCursor({ line: 0, ch: 6 });
+            const result = await tryExpandAtSeparator(ed as any, { fn: "function" }, { ...deps, prefix: ":" });
+            expect(result).toEqual({ from: 2, insert: "function", original: ":fn", separator: " " });
+        });
+
+        it("returns undefined when nothing expanded", async () => {
+            const ed = new MockEditor("zz ");
+            ed.setCursor({ line: 0, ch: 3 });
+            expect(await tryExpandAtSeparator(ed as any, { fn: "function" }, deps)).toBeUndefined();
+            const ed2 = new MockEditor("fn");
+            ed2.setCursor({ line: 0, ch: 2 });
+            expect(await tryExpandAtSeparator(ed2 as any, { fn: "function" }, deps)).toBeUndefined();
+        });
+    });
+
     it("does nothing if the last typed char is not a separator", async () => {
         const ed = new MockEditor("fn"); // no trailing separator
         ed.setCursor({ line: 0, ch: 2 });

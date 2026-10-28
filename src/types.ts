@@ -41,6 +41,10 @@ export interface SnipSidianSettings {
     expansion?: {
         requirePrefix?: boolean;
         prefixChar?: string;
+        /** B-176: opt-in. Mark the expanded text and let Backspace
+         *  right after an expansion restore `trigger + separator`.
+         *  Unset/`false` = off (default). */
+        highlight?: boolean;
     };
     /**
      * B-138: per-group enable/disable. Top-level (not under `ui`) —

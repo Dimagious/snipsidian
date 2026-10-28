@@ -35,7 +35,7 @@ export interface ControlHost {
  *  stale/unexpected key" contract the module doc already promises,
  *  now enforced by an explicit list instead of "any field under
  *  `expansion` passes through". */
-const EXPANSION_FIELDS = new Set(["requirePrefix", "prefixChar"]);
+const EXPANSION_FIELDS = new Set(["requirePrefix", "prefixChar", "highlight"]);
 
 /**
  * Maps a dotted settings key onto the nested settings object and

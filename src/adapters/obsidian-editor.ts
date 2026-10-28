@@ -115,6 +115,23 @@ function advancePosition(from: EditorPosition, text: string): EditorPosition {
     };
 }
 
+/**
+ * B-176: where a trigger expansion landed, as document offsets, plus what
+ * the user had typed. The CM6 bridge turns this into the highlight / the
+ * Backspace-undo mark. Offsets are taken BEFORE the edit and are valid
+ * right after it (nothing else runs in between).
+ */
+export type ExpansionResult = {
+    /** Start of the inserted text. */
+    from: number;
+    /** The inserted text; the separator follows it. */
+    insert: string;
+    /** The replaced text: prefix (B-137) + trigger, as typed. */
+    original: string;
+    /** The separator typed after the trigger (`"\n"` for Enter). */
+    separator: string;
+};
+
 export async function tryExpandAtSeparator(
     editor: Editor,
     dict: Dict,
@@ -125,7 +142,7 @@ export async function tryExpandAtSeparator(
         /** B-137: see `ExpandInput.prefix`. `undefined` = mode off. */
         prefix?: string;
     }
-) {
+): Promise<ExpansionResult | undefined> {
     const cursor = editor.getCursor();
 
     // B-148: on the Obsidian/CM6 versions this now actually runs
@@ -150,9 +167,9 @@ export async function tryExpandAtSeparator(
         lastTyped = "\n";
         ctxCh = sepCh;
     } else {
-        if (cursor.ch === 0) return; // column 0 of the first line: nothing precedes it
+        if (cursor.ch === 0) return undefined; // column 0 of the first line: nothing precedes it
         lastTyped = lineText[cursor.ch - 1] ?? "";
-        if (!isSeparator(lastTyped)) return;
+        if (!isSeparator(lastTyped)) return undefined;
         sepCh = cursor.ch - 1;
         ctxCh = cursor.ch;
     }
@@ -166,7 +183,7 @@ export async function tryExpandAtSeparator(
     const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, targetLine, ctxCh);
 
     const plan = await expand(input, dict, ctx);
-    if (!plan) return;
+    if (!plan) return undefined;
 
     // Cheap staleness guard: if the text the plan expects to replace
     // (the trigger + separator, as it read before the await) no
@@ -176,9 +193,16 @@ export async function tryExpandAtSeparator(
     const currentLineText = editor.getLine(targetLine) ?? "";
     const expectedSlice = lineText.slice(plan.fromCh, plan.toCh);
     const actualSlice = currentLineText.slice(plan.fromCh, plan.toCh);
-    if (actualSlice !== expectedSlice) return;
+    if (actualSlice !== expectedSlice) return undefined;
 
+    const from = editor.posToOffset({ line: targetLine, ch: plan.fromCh });
     applyEditPlan(editor, plan, targetLine);
+    return {
+        from,
+        insert: plan.insert,
+        original: expectedSlice,
+        separator: lastTyped,
+    };
 }
 
 /** B-197: what the picker paths need to run the full placeholder pipeline. */

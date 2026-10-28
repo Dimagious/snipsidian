@@ -133,6 +133,15 @@ eaten by the expansion. It is one switch for every snippet, off by default.
   <img alt="Expansion settings: Require a prefix before triggers is on, prefix character colon" src="site/img/prefix-light.png">
 </picture>
 
+### Highlight expansions
+
+Turn on **Highlight expansions** under **Settings → Snipsy → Expansion** (off by default) and every
+expansion gets a dotted underline (the background flash is brief; the underline stays until you move the caret or type). While the mark is there, **Backspace** takes the
+expansion back: `be right back·` turns into `brb·` exactly as you typed it (the space or punctuation
+included), and the restored trigger does not expand again. Backspace is a normal Backspace as soon as
+you move the caret, click, type or paste anything, so it never eats a character you meant to delete. Undo is not offered when Enter ends the trigger and
+Obsidian continues a list or indentation on the new line.
+
 ## Your own snippets
 
 **Settings → Snipsy → Snippets → Add snippet.** Trigger `sig`, replacement:

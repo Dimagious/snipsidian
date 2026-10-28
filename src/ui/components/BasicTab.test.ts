@@ -365,6 +365,38 @@ describe("BasicTab — Expansion section (B-137/B-150)", () => {
         expect(dropdownRowEl(root).classList.contains("is-disabled")).toBe(true);
     });
 
+    describe("Highlight expansions row (B-176)", () => {
+        const highlightRow = (root: HTMLElement): HTMLElement => rowByTitle(root, "Highlight expansions");
+
+        it("renders inside the Expansion group with its description, off by default", () => {
+            const { root } = mount();
+            const row = highlightRow(root);
+            expect(groupBody(root, "Expansion").contains(row)).toBe(true);
+            expect(row.querySelector(".setting-item-description")?.textContent).toContain("Backspace");
+            expect((row.querySelector("input[type=checkbox]") as HTMLInputElement).checked).toBe(false);
+        });
+
+        it("is never dimmed by the prefix toggle", () => {
+            const { root } = mount();
+            expect(dropdownRowEl(root).classList.contains("is-disabled")).toBe(true);
+            expect(highlightRow(root).classList.contains("is-disabled")).toBe(false);
+        });
+
+        it("reflects a stored true and writes expansion.highlight on toggle, keeping the prefix settings", async () => {
+            plugin.settings.expansion = { requirePrefix: true, prefixChar: ";" };
+            const { root } = mount();
+            const box = highlightRow(root).querySelector("input[type=checkbox]") as HTMLInputElement;
+            box.checked = true;
+            box.dispatchEvent(new Event("change"));
+            await flush();
+            expect(plugin.settings.expansion).toEqual({ requirePrefix: true, prefixChar: ";", highlight: true });
+            expect(plugin._saveCalls.length).toBe(1);
+
+            const again = mount();
+            expect((highlightRow(again.root).querySelector("input[type=checkbox]") as HTMLInputElement).checked).toBe(true);
+        });
+    });
+
     it("changing the dropdown writes prefixChar and persists", async () => {
         plugin.settings.expansion = { requirePrefix: true, prefixChar: ":" };
         const { root } = mount();

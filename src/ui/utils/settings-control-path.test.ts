@@ -35,6 +35,15 @@ describe("createControlHost — expansion.* allowlist (finding #10)", () => {
         expect(plugin.settings.expansion?.prefixChar).toBe(":");
     });
 
+    it("reads and writes the allowed highlight field (B-176)", async () => {
+        const { plugin, host: h } = host({ settings: { snippets: {} } });
+        expect(h.getControlValue("expansion.highlight")).toBeUndefined();
+
+        await h.setControlValue("expansion.highlight", true);
+        expect(plugin.settings.expansion?.highlight).toBe(true);
+        expect(h.getControlValue("expansion.highlight")).toBe(true);
+    });
+
     it("an unrecognised field under expansion.* reads undefined and writes as a no-op", async () => {
         const { plugin, host: h } = host({
             settings: { snippets: {}, expansion: { requirePrefix: true } },

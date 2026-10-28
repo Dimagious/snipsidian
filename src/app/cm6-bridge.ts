@@ -3,6 +3,7 @@ import { EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import { Transaction, type Extension, type Text } from "@codemirror/state";
 import type { App } from "obsidian";
 import { tryExpandAtSeparator } from "../adapters/obsidian-editor";
+import { buildExpansionMarkExtension, markExpansion } from "./expansion-mark";
 import { readClipboardSafe } from "../adapters/clipboard";
 import { clock } from "../adapters/clock";
 import type { Dict } from "../engine/types";
@@ -44,6 +45,9 @@ export function handleViewUpdate(
      *  callers/tests that don't care about prefix mode don't need to
      *  pass one — defaults to "off". */
     getPrefix: () => string | undefined = () => undefined,
+    /** B-176: resolves the "Highlight expansions" setting at call time
+     *  (default off: nothing extra happens on the hot path). */
+    getHighlight: () => boolean = () => false,
 ): UpdateOutcome {
     // Cheap short-circuit: no point building the userEvent list (or
     // resolving the active editor) for selection-only updates —
@@ -71,7 +75,7 @@ export function handleViewUpdate(
             : "ignored";
     }
 
-    runExpansion(app, getSnippets, getPrefix);
+    runExpansion(update.view, app, getSnippets, getPrefix, getHighlight);
     return "expanded";
 }
 
@@ -80,9 +84,11 @@ export function handleViewUpdate(
  * live-update path and the B-191 post-composition retry.
  */
 function runExpansion(
+    view: EditorView,
     app: App,
     getSnippets: () => Dict,
     getPrefix: () => string | undefined,
+    getHighlight: () => boolean,
 ): void {
     const fileInfo = app.workspace.activeEditor;
     const editor = fileInfo?.editor;
@@ -102,6 +108,10 @@ function runExpansion(
         now: clock.now(),
         readClipboard: readClipboardSafe,
         prefix: getPrefix(),
+    }).then((result) => {
+        // B-176: mark the landed expansion (opt-in). The field validates
+        // the range against the live document, so a stale result is dropped.
+        if (result && getHighlight()) markExpansion(view, result);
     }).catch((err) => {
         console.error(
             "[snipsy] expansion error",
@@ -144,6 +154,7 @@ export class CompositionRetry {
         private readonly app: App,
         private readonly getSnippets: () => Dict,
         private readonly getPrefix: () => string | undefined,
+        private readonly getHighlight: () => boolean = () => false,
     ) {}
 
     /** Fed from the update listener (not a plugin `update()`, which
@@ -157,6 +168,7 @@ export class CompositionRetry {
             this.getSnippets,
             update,
             this.getPrefix,
+            this.getHighlight,
         );
         this.pending = outcome === "deferred" && insertsText(update);
         if (this.pending) {
@@ -209,7 +221,7 @@ export class CompositionRetry {
             state.doc === this.doc && state.selection.main.head === this.head;
         this.pending = false;
         if (!unchanged) return;
-        runExpansion(this.app, this.getSnippets, this.getPrefix);
+        runExpansion(this.view, this.app, this.getSnippets, this.getPrefix, this.getHighlight);
     }
 
     private cancel(): void {
@@ -236,9 +248,10 @@ export function buildExpansionExtension(
     app: App,
     getSnippets: () => Dict,
     getPrefix: () => string | undefined = () => undefined,
+    getHighlight: () => boolean = () => false,
 ): Extension {
     const retry = ViewPlugin.define(
-        (view) => new CompositionRetry(view, app, getSnippets, getPrefix),
+        (view) => new CompositionRetry(view, app, getSnippets, getPrefix, getHighlight),
         {
             eventHandlers: {
                 compositionend(this: CompositionRetry) {
@@ -252,7 +265,8 @@ export function buildExpansionExtension(
         EditorView.updateListener.of((update) => {
             const state = update.view.plugin(retry);
             if (state) state.record(update);
-            else handleViewUpdate(app, getSnippets, update, getPrefix);
+            else handleViewUpdate(app, getSnippets, update, getPrefix, getHighlight);
         }),
+        buildExpansionMarkExtension(getHighlight),
     ];
 }

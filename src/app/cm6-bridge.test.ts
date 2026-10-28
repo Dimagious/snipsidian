@@ -440,3 +440,57 @@ describe("cm6-bridge/CompositionRetry [B-191]", () => {
         expect(frames).toHaveLength(0);
     });
 });
+
+describe("cm6-bridge: expansion mark wiring (B-176)", () => {
+    const RESULT = { from: 0, insert: "be right back", original: "brb", separator: " " };
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    function updateWithView() {
+        const update = makeUpdate({});
+        update.view.dispatch = vi.fn();
+        return update;
+    }
+
+    it("dispatches the mark effect on the update's view when the setting is on", async () => {
+        vi.mocked(tryExpandAtSeparator).mockResolvedValueOnce(RESULT);
+        const update = updateWithView();
+        handleViewUpdate(makeApp(), () => ({}), update, () => undefined, () => true);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(update.view.dispatch).toHaveBeenCalledTimes(1);
+        const spec = update.view.dispatch.mock.calls[0][0];
+        expect(spec.effects.value).toEqual(RESULT);
+    });
+
+    it("dispatches nothing when the setting is off (default)", async () => {
+        vi.mocked(tryExpandAtSeparator).mockResolvedValueOnce(RESULT);
+        const update = updateWithView();
+        handleViewUpdate(makeApp(), () => ({}), update);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(update.view.dispatch).not.toHaveBeenCalled();
+    });
+
+    it("dispatches nothing when no expansion happened", async () => {
+        const update = updateWithView();
+        handleViewUpdate(makeApp(), () => ({}), update, () => undefined, () => true);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(update.view.dispatch).not.toHaveBeenCalled();
+    });
+
+    it("the B-191 composition retry marks the expansion too", async () => {
+        vi.mocked(tryExpandAtSeparator).mockResolvedValueOnce(RESULT);
+        const view = { composing: false, hasFocus: true, state: { doc: DOC, selection: { main: { head: 3 } } }, dispatch: vi.fn() } as any;
+        const retry = new CompositionRetry(view, makeApp(), () => ({}), () => undefined, () => true);
+        const update = makeUpdate({ composing: true });
+        update.view = view;
+        view.composing = true;
+        retry.record(update);
+        expect(retry.pending).toBe(true);
+        view.composing = false;
+        retry.runPending();
+        await new Promise((r) => setTimeout(r, 0));
+        expect(view.dispatch).toHaveBeenCalledTimes(1);
+    });
+});

@@ -1493,6 +1493,28 @@
   font-weight: 600;
 }
 
+/* B-176: expansion highlight. Decoration.mark class on the text a trigger
+   just expanded into, live while the Backspace-undo window is open. A
+   subtle accent underline stays; the background flash fades out. Theme
+   variables only. Not scoped under `.snipsidian-settings`: it lives in
+   the note editor. */
+.snipsy-expanded {
+  text-decoration: underline dotted var(--interactive-accent);
+  text-underline-offset: 3px;
+  border-radius: var(--radius-s);
+  animation: snipsy-expanded-flash 1.2s ease-out;
+}
+
+@keyframes snipsy-expanded-flash {
+  from {
+    background-color: var(--text-highlight-bg);
+  }
+
+  to {
+    background-color: transparent;
+  }
+}
+
 /* ---- Reduced motion ---- */
 /* Honour the user's OS preference (B-089 / a11y A-011). Transitions
    and animations are subtle in Snipsy, but vestibular-disorder users
@@ -1510,6 +1532,11 @@
   .modal.snipsy-install.snipsy-install * {
     animation: none;
     transition: none;
+  }
+
+  /* B-176: no flash, the static underline still marks the range. */
+  .snipsy-expanded {
+    animation: none;
   }
 }
 
