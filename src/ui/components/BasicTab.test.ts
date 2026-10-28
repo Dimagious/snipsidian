@@ -365,6 +365,38 @@ describe("BasicTab — Expansion section (B-137/B-150)", () => {
         expect(dropdownRowEl(root).classList.contains("is-disabled")).toBe(true);
     });
 
+    describe("Highlight expansions row (B-176)", () => {
+        const highlightRow = (root: HTMLElement): HTMLElement => rowByTitle(root, "Highlight expansions");
+
+        it("renders inside the Expansion group with its description, off by default", () => {
+            const { root } = mount();
+            const row = highlightRow(root);
+            expect(groupBody(root, "Expansion").contains(row)).toBe(true);
+            expect(row.querySelector(".setting-item-description")?.textContent).toContain("Backspace");
+            expect((row.querySelector("input[type=checkbox]") as HTMLInputElement).checked).toBe(false);
+        });
+
+        it("is never dimmed by the prefix toggle", () => {
+            const { root } = mount();
+            expect(dropdownRowEl(root).classList.contains("is-disabled")).toBe(true);
+            expect(highlightRow(root).classList.contains("is-disabled")).toBe(false);
+        });
+
+        it("reflects a stored true and writes expansion.highlight on toggle, keeping the prefix settings", async () => {
+            plugin.settings.expansion = { requirePrefix: true, prefixChar: ";" };
+            const { root } = mount();
+            const box = highlightRow(root).querySelector("input[type=checkbox]") as HTMLInputElement;
+            box.checked = true;
+            box.dispatchEvent(new Event("change"));
+            await flush();
+            expect(plugin.settings.expansion).toEqual({ requirePrefix: true, prefixChar: ";", highlight: true });
+            expect(plugin._saveCalls.length).toBe(1);
+
+            const again = mount();
+            expect((highlightRow(again.root).querySelector("input[type=checkbox]") as HTMLInputElement).checked).toBe(true);
+        });
+    });
+
     it("changing the dropdown writes prefixChar and persists", async () => {
         plugin.settings.expansion = { requirePrefix: true, prefixChar: ":" };
         const { root } = mount();
@@ -731,6 +763,37 @@ describe("BasicTab — rollback when saveSettings rejects (B-181)", () => {
 
         expect(plugin.settings.snippets).toEqual({ hello: "world" });
         expect(noticeCalls).toContain("Replaced library with 1 snippet");
+    });
+
+    // ---- B-177: trigger checks on JSON import ----
+    it("B-177: merge writes only valid keys; bare `-` and oversize replacements are left out", async () => {
+        plugin.settings.snippets = { keep: "me" };
+        const { root } = mount();
+        await pickImportFile(root, { "-": "x", "->": "arrow", big: "a".repeat(10001) });
+        await applyImport("merge");
+
+        expect(plugin.settings.snippets).toEqual({ keep: "me", "->": "arrow" });
+        expect(Object.prototype.hasOwnProperty.call(plugin.settings.snippets, "-")).toBe(false);
+        expect(noticeCalls).toContain("Merged 1 snippet (2 skipped)");
+    });
+
+    it("B-177: replace keeps valid existing keys that the file also holds and drops rejected ones", async () => {
+        plugin.settings.snippets = { keep: "me", gone: "x" };
+        const { root } = mount();
+        await pickImportFile(root, { keep: "me", "+": "plus" });
+        await applyImport("replace");
+
+        expect(plugin.settings.snippets).toEqual({ keep: "me" });
+        expect(noticeCalls).toContain("Replaced library with 1 snippet (1 skipped)");
+    });
+
+    it("B-177: replace keeps the CURRENT value of an existing key the file holds but the import rejects", async () => {
+        plugin.settings.snippets = { "+": "old", keep: "me" };
+        const { root } = mount();
+        await pickImportFile(root, { "+": "new", fresh: "f" });
+        await applyImport("replace");
+
+        expect(plugin.settings.snippets).toEqual({ "+": "old", fresh: "f" });
     });
 
     it("Restore default snippets restores the previous map and shows a Notice when the save rejects", async () => {

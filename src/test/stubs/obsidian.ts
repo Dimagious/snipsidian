@@ -3,6 +3,11 @@
 // these types. The stub deliberately keeps each export minimal — just
 // what the production code imports at type / runtime level.
 
+// Obsidian re-exports the real `moment`; `moment` is a dependency of the
+// `obsidian` package, so it is always installed next to it.
+import momentLib from "moment";
+export const moment = momentLib;
+
 // ---------- Common shape types ----------
 
 // Minimal types for test stubs

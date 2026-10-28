@@ -133,6 +133,15 @@ eaten by the expansion. It is one switch for every snippet, off by default.
   <img alt="Expansion settings: Require a prefix before triggers is on, prefix character colon" src="site/img/prefix-light.png">
 </picture>
 
+### Highlight expansions
+
+Turn on **Highlight expansions** under **Settings → Snipsy → Expansion** (off by default) and every
+expansion gets a dotted underline (the background flash is brief; the underline stays until you move the caret or type). While the mark is there, **Backspace** takes the
+expansion back: `be right back·` turns into `brb·` exactly as you typed it (the space or punctuation
+included), and the restored trigger does not expand again. Backspace is a normal Backspace as soon as
+you move the caret, click, type or paste anything, so it never eats a character you meant to delete. Undo is not offered when Enter ends the trigger and
+Obsidian continues a list or indentation on the new line.
+
 ## Your own snippets
 
 **Settings → Snipsy → Snippets → Add snippet.** Trigger `sig`, replacement:
@@ -162,11 +171,13 @@ and tables.
 | Placeholder | Becomes |
 |---|---|
 | `$\|` | where the cursor lands after expanding |
+| `$1` | the selected text, when you insert the snippet from the picker over a selection. Otherwise it is the cursor when the snippet has no `$\|`: `[$1](url)` puts the caret between the brackets. Further `$1`..`$9` are dropped. Not a tabstop: `$1` followed by a letter, digit or `_` (`$10`, `$1x`, `$1é`), by `.` or `,` and a digit (`$1.50`, `$1,000`), or inside a code block or `inline code`. `$5 each` is still a tabstop, so write `\$5` for a literal dollar amount |
 | `$date` | today, `YYYY-MM-DD` |
-| `$time` | now, `HH:MM` |
+| `$time` | now, `HH:mm` |
+| `{{date}}`, `{{time}}` | today / now in `YYYY-MM-DD` / `HH:mm`, the same tokens as core Templates |
+| `{{date:FORMAT}}`, `{{time:FORMAT}}` | your own [Moment.js format](https://momentjs.com/docs/#/displaying/format/), e.g. `{{date:dddd, D MMMM}}` gives `Tuesday, 2 September`; wrap literal text in `[ ]`. An empty format (`{{date:}}`) uses the default |
 | `$filename` | the current note's name |
 | `$clipboard` | what is on your clipboard at that moment |
-| `$1` | the selected text, when you insert the snippet from the picker over a selection |
 
 ### Groups
 
@@ -273,6 +284,24 @@ is part of a longer word.
 
 Delete that snippet, switch off the Defaults group, or turn on prefix mode so only `:now`
 expands. See [Prefix mode](#prefix-mode).
+
+</details>
+
+<details>
+<summary>My emoji snippets with colons (<code>:smile:</code>) don't expand</summary>
+
+`:` is a separator, so a stored trigger like `:smile:` can never be typed as one word. Settings →
+Snipsy → Snippets shows a warning with a **Fix triggers** button that renames them to `smile` (same group,
+same replacement) after a preview. Triggers that would clash with an existing one are skipped and
+listed. With [prefix mode](#prefix-mode) set to `:`, you then type `:smile `.
+
+</details>
+
+<details>
+<summary>Triggers don't expand on Linux (Wayland)</summary>
+
+Start Obsidian with `--ozone-platform=x11`. If that fixes it, please report it in an issue
+with your desktop and input method.
 
 </details>
 

@@ -12,6 +12,38 @@ import { test, expect, ui } from "./fixtures";
  */
 
 test.describe("snippet picker via command palette", () => {
+    test("[B-197] picker insert substitutes $date and {{date:YYYY}}", async ({ win }) => {
+        await win.evaluate(async () => {
+            const plugin = (globalThis as unknown as {
+                app?: { plugins?: { plugins?: { snipsidian?: {
+                    settings: { snippets: Record<string, string> };
+                    saveSettings: () => Promise<void>;
+                } } } };
+            }).app?.plugins?.plugins?.snipsidian;
+            if (!plugin) throw new Error("snipsidian plugin not loaded");
+            plugin.settings.snippets["zzdate"] = "## $date / {{date:YYYY}}";
+            await plugin.saveSettings();
+        });
+        const editor = ui.activeEditor(win);
+        await editor.click();
+        await win.keyboard.press("Meta+A");
+        await win.keyboard.press("Delete");
+        await win.evaluate(() => {
+            const a = (globalThis as unknown as {
+                app?: { commands?: { executeCommandById?: (id: string) => void } };
+            }).app;
+            a?.commands?.executeCommandById?.("snipsidian:insert-snippet");
+        });
+        const filter = win.locator(".snippet-picker-modal input[role='combobox']");
+        await filter.waitFor({ state: "visible" });
+        await filter.fill("zzdate");
+        await win.waitForTimeout(300);
+        await win.keyboard.press("Enter");
+        await expect
+            .poll(() => ui.editorText(win))
+            .toMatch(/^## \d{4}-\d{2}-\d{2} \/ \d{4}$/);
+    });
+
     test("inserts a selected snippet into the active editor", async ({
         win,
     }) => {

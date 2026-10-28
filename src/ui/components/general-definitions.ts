@@ -75,6 +75,13 @@ export function buildGeneralDefinitions(
                 disabled: () => !requirePrefix(),
             },
         } satisfies SettingDefinitionControl,
+        {
+            // B-176: independent of the prefix toggle (never dimmed by it).
+            name: "Highlight expansions",
+            desc: "Underline the text an expansion just inserted. Backspace right after an expansion restores the trigger.",
+            aliases: ["undo", "backspace", "trigger", "hotstring"],
+            control: { type: "toggle", key: "expansion.highlight", defaultValue: false },
+        } satisfies SettingDefinitionControl,
     ];
 
     const commandsItems = [

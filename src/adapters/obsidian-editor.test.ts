@@ -1,4 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+
+// Capture `new Notice(msg)` so B-199 tests can assert the stale-target notice.
+const noticeCalls = vi.hoisted(() => [] as string[]);
+vi.mock("obsidian", async () => {
+    const actual = await vi.importActual("../test/stubs/obsidian");
+    return {
+        ...actual,
+        Notice: vi.fn().mockImplementation((msg: string) => {
+            noticeCalls.push(msg);
+        }),
+    };
+});
+
 import { makeExpandInput, makeContext, applyEditPlan, tryExpandAtSeparator, insertSnippetAtCursor, wrapSelectionWithSnippet } from "./obsidian-editor";
 import type { Dict } from "../engine/types";
 import { MockEditor } from "../test/factories/editor";
@@ -90,6 +103,48 @@ describe("adapters/obsidian-editor: tryExpandAtSeparator", () => {
         });
         expect(ed.getLine(0)).toBe("function () {} ");
         expect(ed.getCursor()).toEqual({ line: 0, ch: "function ".length });
+    });
+
+    describe("[B-176] reports where the expansion landed", () => {
+        const deps = { now: new Date() };
+
+        it("returns offsets, the replaced text and the separator", async () => {
+            const ed = new MockEditor("fn ");
+            ed.setCursor({ line: 0, ch: 3 });
+            const result = await tryExpandAtSeparator(ed as any, { fn: "function" }, deps);
+            expect(result).toEqual({ from: 0, insert: "function", original: "fn", separator: " " });
+            expect(ed.getLine(0)).toBe("function ");
+        });
+
+        it("offsets count the newlines of earlier lines", async () => {
+            const ed = new MockEditor("first\nsecond fn,");
+            ed.setCursor({ line: 1, ch: 10 });
+            const result = await tryExpandAtSeparator(ed as any, { fn: "A\nB" }, deps);
+            expect(result).toEqual({ from: 13, insert: "A\nB", original: "fn", separator: "," });
+        });
+
+        it("covers a multi-line insert and an Enter separator", async () => {
+            const ed = new MockEditor("fn\n");
+            ed.setCursor({ line: 1, ch: 0 });
+            const result = await tryExpandAtSeparator(ed as any, { fn: "> a\n> b" }, deps);
+            expect(result).toEqual({ from: 0, insert: "> a\n> b", original: "fn", separator: "\n" });
+        });
+
+        it("includes the consumed prefix char in `original` (B-137)", async () => {
+            const ed = new MockEditor("x :fn ");
+            ed.setCursor({ line: 0, ch: 6 });
+            const result = await tryExpandAtSeparator(ed as any, { fn: "function" }, { ...deps, prefix: ":" });
+            expect(result).toEqual({ from: 2, insert: "function", original: ":fn", separator: " " });
+        });
+
+        it("returns undefined when nothing expanded", async () => {
+            const ed = new MockEditor("zz ");
+            ed.setCursor({ line: 0, ch: 3 });
+            expect(await tryExpandAtSeparator(ed as any, { fn: "function" }, deps)).toBeUndefined();
+            const ed2 = new MockEditor("fn");
+            ed2.setCursor({ line: 0, ch: 2 });
+            expect(await tryExpandAtSeparator(ed2 as any, { fn: "function" }, deps)).toBeUndefined();
+        });
     });
 
     it("does nothing if the last typed char is not a separator", async () => {
@@ -234,54 +289,71 @@ describe("adapters/obsidian-editor: tryExpandAtSeparator", () => {
     });
 });
 
+describe("adapters/obsidian-editor: makeContext formatDate (B-166)", () => {
+    it("formats via Obsidian's moment, including [literal] escapes", () => {
+        const ed = new MockEditor("x");
+        const ctx = makeContext(ed as any, undefined, new Date("2025-09-02T10:11:12"));
+        expect(ctx.formatDate?.(ctx.now, "YYYY-MM-DD HH:mm")).toBe("2025-09-02 10:11");
+        expect(ctx.formatDate?.(ctx.now, "[Week] W, [YYYY]")).toBe("Week 36, YYYY");
+    });
+});
+
 describe("adapters/obsidian-editor: insertSnippetAtCursor", () => {
-    it("should insert snippet at cursor position", () => {
+    it("[B-192] $1 becomes the cursor and never leaks as text", async () => {
+        const ed = new MockEditor("Hello world");
+        ed.setCursor({ line: 0, ch: 6 });
+        await insertSnippetAtCursor(ed as any, "[$1](url)");
+        expect(ed.getLine(0)).toBe("Hello [](url)world");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 7 });
+    });
+
+    it("should insert snippet at cursor position", async () => {
         const ed = new MockEditor("Hello world");
         ed.setCursor({ line: 0, ch: 6 }); // after "Hello "
         
-        insertSnippetAtCursor(ed as any, "beautiful ");
+        await insertSnippetAtCursor(ed as any, "beautiful ");
         
         expect(ed.getLine(0)).toBe("Hello beautiful world");
         expect(ed.getCursor()).toEqual({ line: 0, ch: 16 }); // after inserted text
     });
 
-    it("should handle cursor placeholder", () => {
+    it("should handle cursor placeholder", async () => {
         const ed = new MockEditor("Hello world");
         ed.setCursor({ line: 0, ch: 6 }); // after "Hello "
         
-        insertSnippetAtCursor(ed as any, "beautiful $| day");
+        await insertSnippetAtCursor(ed as any, "beautiful $| day");
         
         expect(ed.getLine(0)).toBe("Hello beautiful  dayworld"); // $| removed, cursor at position
         expect(ed.getCursor()).toEqual({ line: 0, ch: 16 }); // cursor at $| position
     });
 
-    it("should handle cursor placeholder at start of replacement", () => {
+    it("should handle cursor placeholder at start of replacement", async () => {
         const ed = new MockEditor("Hello world");
         ed.setCursor({ line: 0, ch: 6 });
 
-        insertSnippetAtCursor(ed as any, "$|beautiful ");
+        await insertSnippetAtCursor(ed as any, "$|beautiful ");
 
         expect(ed.getLine(0)).toBe("Hello beautiful world");
         expect(ed.getCursor()).toEqual({ line: 0, ch: 6 });
     });
 
-    it("should place cursor correctly for multiline replacement", () => {
+    it("should place cursor correctly for multiline replacement", async () => {
         const ed = new MockEditor("Hello world");
         ed.setCursor({ line: 0, ch: 6 });
 
-        insertSnippetAtCursor(ed as any, "one\n$|two");
+        await insertSnippetAtCursor(ed as any, "one\n$|two");
 
         expect(ed.getLine(0)).toBe("Hello one");
         expect(ed.getLine(1)).toBe("twoworld");
         expect(ed.getCursor()).toEqual({ line: 1, ch: 0 });
     });
 
-    it("should replace selection if present", () => {
+    it("should replace selection if present", async () => {
         const ed = new MockEditor("Hello world");
         ed.setCursor({ line: 0, ch: 11 }); // end of line
         ed.selection = "world"; // simulate selection
         
-        insertSnippetAtCursor(ed as any, "universe");
+        await insertSnippetAtCursor(ed as any, "universe");
         
         expect(ed.getLine(0)).toBe("Hello universe");
         expect(ed.getCursor()).toEqual({ line: 0, ch: 14 });
@@ -289,32 +361,65 @@ describe("adapters/obsidian-editor: insertSnippetAtCursor", () => {
 });
 
 describe("adapters/obsidian-editor: wrapSelectionWithSnippet", () => {
-    it("should wrap selection with ${SEL} placeholder", () => {
+    it("should wrap selection with ${SEL} placeholder", async () => {
         const ed = new MockEditor("Hello world");
         ed.setCursor({ line: 0, ch: 11 });
         ed.selection = "world";
         
-        wrapSelectionWithSnippet(ed as any, "**${SEL}**");
+        await wrapSelectionWithSnippet(ed as any, "**${SEL}**");
         
         expect(ed.getLine(0)).toBe("Hello **world**");
     });
 
-    it("should wrap selection with $1 placeholder", () => {
+    it("should wrap selection with $1 placeholder", async () => {
         const ed = new MockEditor("Hello world");
         ed.setCursor({ line: 0, ch: 11 });
         ed.selection = "world";
         
-        wrapSelectionWithSnippet(ed as any, "**$1**");
+        await wrapSelectionWithSnippet(ed as any, "**$1**");
         
         expect(ed.getLine(0)).toBe("Hello **world**");
     });
 
-    it("should place cursor correctly for multiline wrapping template", () => {
+    it("[F3] strips $2..$9 in the wrap path: function $1($2) { $| }", async () => {
+        const ed = new MockEditor("foo");
+        ed.setCursor({ line: 0, ch: 3 });
+        ed.selection = "foo";
+        await wrapSelectionWithSnippet(ed as any, "function $1($2) { $| }");
+        expect(ed.getLine(0)).toBe("function foo() {  }");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: "function foo() { ".length });
+    });
+
+    it("[F3] a selection containing $2 or $& is inserted verbatim", async () => {
+        const ed = new MockEditor("x");
+        ed.setCursor({ line: 0, ch: 1 });
+        ed.selection = "a $2 $& $1";
+        await wrapSelectionWithSnippet(ed as any, "[$1] $2");
+        expect(ed.getLine(0)).toBe("[a $2 $& $1] ");
+    });
+
+    it("[F3] escapes and code are honoured, only the first $1 is the slot", async () => {
+        const ed = new MockEditor("w");
+        ed.setCursor({ line: 0, ch: 1 });
+        ed.selection = "w";
+        await wrapSelectionWithSnippet(ed as any, "\\$1 `$1` $1 $1");
+        expect(ed.getLine(0)).toBe("$1 `$1` w ");
+    });
+
+    it("[F3] ${SEL} wins and every tabstop is stripped", async () => {
+        const ed = new MockEditor("w");
+        ed.setCursor({ line: 0, ch: 1 });
+        ed.selection = "w";
+        await wrapSelectionWithSnippet(ed as any, "<${SEL}|$1|$2>");
+        expect(ed.getLine(0)).toBe("<w||>");
+    });
+
+    it("should place cursor correctly for multiline wrapping template", async () => {
         const ed = new MockEditor("Hello world");
         ed.setCursor({ line: 0, ch: 11 });
         ed.selection = "world";
 
-        wrapSelectionWithSnippet(ed as any, "A\n$|${SEL}\nB");
+        await wrapSelectionWithSnippet(ed as any, "A\n$|${SEL}\nB");
 
         // Fold-in (tests#6): the multiline template must actually
         // split the document into three real lines — a single "line"
@@ -328,26 +433,26 @@ describe("adapters/obsidian-editor: wrapSelectionWithSnippet", () => {
         expect(ed.getCursor()).toEqual({ line: 1, ch: 0 });
     });
 
-    it("should replace selection if no wrapping placeholders", () => {
+    it("should replace selection if no wrapping placeholders", async () => {
         const ed = new MockEditor("Hello world");
         ed.setCursor({ line: 0, ch: 11 });
         ed.selection = "world";
         
-        wrapSelectionWithSnippet(ed as any, "universe");
+        await wrapSelectionWithSnippet(ed as any, "universe");
         
         expect(ed.getLine(0)).toBe("Hello universe");
     });
 
-    it("should insert at cursor if no selection", () => {
+    it("should insert at cursor if no selection", async () => {
         const ed = new MockEditor("Hello world");
         ed.setCursor({ line: 0, ch: 6 }); // after "Hello "
         
-        wrapSelectionWithSnippet(ed as any, "beautiful ");
+        await wrapSelectionWithSnippet(ed as any, "beautiful ");
         
         expect(ed.getLine(0)).toBe("Hello beautiful world");
     });
 
-    it("should handle setCursor errors gracefully in insertSnippetAtCursor", () => {
+    it("should handle setCursor errors gracefully in insertSnippetAtCursor", async () => {
         const ed = new MockEditor("Hello world");
         ed.setCursor({ line: 0, ch: 6 });
         
@@ -360,7 +465,7 @@ describe("adapters/obsidian-editor: wrapSelectionWithSnippet", () => {
         // Mock console.warn to avoid noise in tests
         const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
         
-        insertSnippetAtCursor(ed as any, "beautiful $| universe");
+        await insertSnippetAtCursor(ed as any, "beautiful $| universe");
         
         expect(consoleSpy).toHaveBeenCalledWith("Failed to set cursor position:", expect.any(Error));
         
@@ -369,7 +474,7 @@ describe("adapters/obsidian-editor: wrapSelectionWithSnippet", () => {
         consoleSpy.mockRestore();
     });
 
-    it("should handle setCursor errors gracefully in insertSnippetAtCursor with selection", () => {
+    it("should handle setCursor errors gracefully in insertSnippetAtCursor with selection", async () => {
         const ed = new MockEditor("Hello world");
         ed.setCursor({ line: 0, ch: 6 });
         ed.selection = "world";
@@ -383,7 +488,7 @@ describe("adapters/obsidian-editor: wrapSelectionWithSnippet", () => {
         // Mock console.warn to avoid noise in tests
         const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
         
-        insertSnippetAtCursor(ed as any, "beautiful $| universe");
+        await insertSnippetAtCursor(ed as any, "beautiful $| universe");
         
         expect(consoleSpy).toHaveBeenCalledWith("Failed to set cursor position:", expect.any(Error));
         
@@ -392,7 +497,7 @@ describe("adapters/obsidian-editor: wrapSelectionWithSnippet", () => {
         consoleSpy.mockRestore();
     });
 
-    it("should handle setCursor errors gracefully in wrapSelectionWithSnippet", () => {
+    it("should handle setCursor errors gracefully in wrapSelectionWithSnippet", async () => {
         const ed = new MockEditor("Hello world");
         ed.setCursor({ line: 0, ch: 6 });
         ed.selection = "world";
@@ -406,12 +511,203 @@ describe("adapters/obsidian-editor: wrapSelectionWithSnippet", () => {
         // Mock console.warn to avoid noise in tests
         const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
         
-        wrapSelectionWithSnippet(ed as any, "beautiful $| universe");
+        await wrapSelectionWithSnippet(ed as any, "beautiful $| universe");
         
         expect(consoleSpy).toHaveBeenCalledWith("Failed to set cursor position:", expect.any(Error));
         
         // Restore
         ed.setCursor = originalSetCursor;
         consoleSpy.mockRestore();
+    });
+});
+
+describe("adapters/obsidian-editor: B-197 picker paths run the placeholder pipeline", () => {
+    const now = new Date("2025-09-02T10:11:12");
+
+    it("insert: $date, {{time}} and $filename are substituted, $| places the caret after them", async () => {
+        const ed = new MockEditor("");
+        await insertSnippetAtCursor(ed as any, "## $date $|", { now, filename: "n.md" });
+        expect(ed.getLine(0)).toBe("## 2025-09-02 ");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: "## 2025-09-02 ".length });
+        const ed2 = new MockEditor("");
+        await insertSnippetAtCursor(ed2 as any, "{{time}} $filename", { now, filename: "n.md" });
+        expect(ed2.getLine(0)).toBe("10:11 n.md");
+    });
+
+    it("insert: $filename with no active file becomes an empty string", async () => {
+        const ed = new MockEditor("");
+        await insertSnippetAtCursor(ed as any, "[$filename]", { now });
+        expect(ed.getLine(0)).toBe("[]");
+    });
+
+    it("insert: $clipboard uses the injected reader", async () => {
+        const ed = new MockEditor("");
+        await insertSnippetAtCursor(ed as any, "<$clipboard>", { now, readClipboard: async () => "CLIP" });
+        expect(ed.getLine(0)).toBe("<CLIP>");
+    });
+
+    it("insert: a failing clipboard read inserts without crashing ($clipboard becomes empty)", async () => {
+        const ed = new MockEditor("");
+        await insertSnippetAtCursor(ed as any, "<$clipboard>", {
+            now,
+            readClipboard: async () => { throw new Error("denied"); },
+        });
+        expect(ed.getLine(0)).toBe("<>");
+    });
+
+    it("insert: if the user moved during the clipboard await, text lands at the captured position and the cursor is not teleported", async () => {
+        const ed = new MockEditor("ab\ncd");
+        ed.setCursor({ line: 0, ch: 1 });
+        const setCursor = vi.spyOn(ed, "setCursor");
+        await insertSnippetAtCursor(ed as any, "X$|Y$clipboard", {
+            now,
+            readClipboard: async () => {
+                ed.setCursor({ line: 1, ch: 2 });
+                setCursor.mockClear();
+                return "C";
+            },
+        });
+        expect(ed.getLine(0)).toBe("aXYCb");
+        expect(ed.getLine(1)).toBe("cd");
+        expect(setCursor).not.toHaveBeenCalled();
+    });
+
+    it("wrap: {{date:YYYY}} is formatted through moment", async () => {
+        const ed2 = new MockEditor("w");
+        ed2.setCursor({ line: 0, ch: 1 });
+        ed2.selection = "w";
+        await wrapSelectionWithSnippet(ed2 as any, "{{date:YYYY}}: $1", { now });
+        expect(ed2.getLine(0)).toBe("2025: w");
+    });
+
+    it("wrap: a selection containing $date, {{date}}, $1 or $| stays literal and does not move the caret", async () => {
+        const ed2 = new MockEditor("");
+        ed2.setCursor({ line: 0, ch: 0 });
+        ed2.selection = "$date {{date}} $1 $|";
+        await wrapSelectionWithSnippet(ed2 as any, "<$1> $date $|!", { now });
+        expect(ed2.getLine(0)).toBe("<$date {{date}} $1 $|> 2025-09-02 !");
+    });
+
+    it("wrap: the caret lands at $| after substituted variables", async () => {
+        const ed = new MockEditor("sel");
+        ed.setCursor({ line: 0, ch: 3 });
+        ed.selection = "sel";
+        await wrapSelectionWithSnippet(ed as any, "$date $|-$1", { now });
+        expect(ed.getLine(0)).toBe("2025-09-02 -sel");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: "2025-09-02 ".length });
+    });
+
+    it("wrap: $clipboard failure does not crash", async () => {
+        const ed = new MockEditor("");
+        ed.selection = "s";
+        await wrapSelectionWithSnippet(ed as any, "[$clipboard$1]", {
+            now,
+            readClipboard: async () => { throw new Error("x"); },
+        });
+        expect(ed.getLine(0)).toBe("[s]");
+    });
+});
+
+// ---- B-199: validate the captured target after the async await ----
+describe("adapters/obsidian-editor: B-199 target validated after the $clipboard await", () => {
+    beforeEach(() => {
+        noticeCalls.length = 0;
+    });
+
+    /** Doc "Hello world" with "world" selected (cursor at its end). */
+    function selectedWorld(): MockEditor {
+        const ed = new MockEditor("above\nHello world");
+        ed.setCursor({ line: 1, ch: 11 });
+        ed.selection = "world";
+        return ed;
+    }
+
+    it("wrap: an unchanged document still wraps the selection and shows no Notice", async () => {
+        const ed = selectedWorld();
+        await wrapSelectionWithSnippet(ed as any, "**$1**$clipboard", { readClipboard: async () => "C" });
+        expect(ed.getLine(1)).toBe("Hello **world**C");
+        expect(noticeCalls).toEqual([]);
+    });
+
+    it("wrap: text inserted ABOVE during the await shifts the range, so nothing is overwritten and a Notice shows", async () => {
+        const ed = selectedWorld();
+        await wrapSelectionWithSnippet(ed as any, "**$1**$clipboard", {
+            readClipboard: async () => {
+                // Another plugin / sync edits the target line's start; the
+                // user's cursor/selection drifts with it.
+                ed.lines[1] = "XX" + ed.lines[1];
+                ed.cursor = { line: 1, ch: 13 };
+                return "C";
+            },
+        });
+        expect(ed.getLine(1)).toBe("XXHello world");
+        expect(noticeCalls).toEqual(["Snippet not inserted: the note changed"]);
+    });
+
+    it("wrap: the user moved but the captured range still holds the selection, so it is replaced there", async () => {
+        const ed = selectedWorld();
+        await wrapSelectionWithSnippet(ed as any, "**$1**$clipboard", {
+            readClipboard: async () => {
+                ed.selection = "";
+                ed.setCursor({ line: 0, ch: 2 });
+                return "C";
+            },
+        });
+        expect(ed.getLine(1)).toBe("Hello **world**C");
+        expect(noticeCalls).toEqual([]);
+    });
+
+    it("insert: the user moved but the captured line is unchanged, so it lands at the captured position (B-136 kept)", async () => {
+        const ed = new MockEditor("ab\ncd");
+        ed.setCursor({ line: 0, ch: 1 });
+        await insertSnippetAtCursor(ed as any, "X$clipboard", {
+            readClipboard: async () => {
+                ed.setCursor({ line: 1, ch: 2 });
+                return "C";
+            },
+        });
+        expect(ed.getLine(0)).toBe("aXCb");
+        expect(noticeCalls).toEqual([]);
+    });
+
+    it("insert: the captured line changed during the await, so it falls back to the live cursor", async () => {
+        const ed = new MockEditor("ab\ncd");
+        ed.setCursor({ line: 0, ch: 1 });
+        await insertSnippetAtCursor(ed as any, "X$clipboard", {
+            readClipboard: async () => {
+                // A line is inserted above; the captured line index now holds other text.
+                ed.lines.unshift("new first line");
+                ed.setCursor({ line: 2, ch: 2 }); // user is on "cd", now line 2
+                return "C";
+            },
+        });
+        expect(ed.lines).toEqual(["new first line", "ab", "cdXC"]);
+        expect(noticeCalls).toEqual([]);
+    });
+
+    it("insert with a selection: a stale captured range writes nothing and shows the Notice", async () => {
+        const ed = selectedWorld();
+        await insertSnippetAtCursor(ed as any, "U$clipboard", {
+            readClipboard: async () => {
+                ed.lines[1] = "XX" + ed.lines[1];
+                ed.cursor = { line: 1, ch: 13 };
+                return "C";
+            },
+        });
+        expect(ed.getLine(1)).toBe("XXHello world");
+        expect(noticeCalls).toEqual(["Snippet not inserted: the note changed"]);
+    });
+
+    it("insert: the note shrank so the captured line no longer exists, falls back to the live cursor", async () => {
+        const ed = new MockEditor("a\nb\nc");
+        ed.setCursor({ line: 2, ch: 1 });
+        await insertSnippetAtCursor(ed as any, "X$clipboard", {
+            readClipboard: async () => {
+                ed.lines = ["a"];
+                ed.setCursor({ line: 0, ch: 1 });
+                return "C";
+            },
+        });
+        expect(ed.lines).toEqual(["aXC"]);
     });
 });

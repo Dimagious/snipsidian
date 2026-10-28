@@ -5,6 +5,7 @@ import { displayGroupTitle, slugifyGroup, splitKey } from "../../store/keys";
 import { computeImportDiff } from "../../services/import-diff";
 import { normalizeTrigger } from "../../engine/triggers";
 import { SETTING_TEXTAREA_CLASS } from "../utils/style-hooks";
+import { renderPlaceholderHint } from "../utils/placeholder-hint";
 
 /** Simple JSON copy/paste modal */
 export class JSONModal extends Modal {
@@ -596,6 +597,8 @@ export class AddSnippetModal extends Modal {
         // Full-width stacked layout hook (replaces a `:has(textarea)` rule
         // the community scorecard flags).
         replacementSetting.settingEl.addClass(SETTING_TEXTAREA_CLASS);
+        // B-195: placeholder cheat-line as a second line of the row description.
+        renderPlaceholderHint(replacementSetting.descEl);
 
         new Setting(contentEl)
             .setName("Group")
@@ -771,6 +774,27 @@ export class ImportPreviewModal extends Modal {
         const listEl = contentEl.createDiv({ cls: "snipsy-import-list" });
         this.refreshDiffList(listEl, diff);
 
+        // B-177: keys the import refuses to write, shown in both modes.
+        if (diff.rejected.length > 0) {
+            const MAX_REJECTED_ROWS = 50;
+            contentEl.createEl("p", {
+                cls: "snipsy-import-rejected-head",
+                text: `${diff.rejected.length} snippet${diff.rejected.length === 1 ? "" : "s"} will be skipped:`,
+            });
+            const rejectedEl = contentEl.createDiv({ cls: "snipsy-import-list snipsy-import-rejected" });
+            for (const r of diff.rejected.slice(0, MAX_REJECTED_ROWS)) {
+                const row = rejectedEl.createDiv({ cls: "snipsy-import-row" });
+                row.createSpan({ cls: "snipsy-import-key", text: r.key });
+                row.createSpan({ cls: "snipsy-import-value", text: r.reason });
+            }
+            if (diff.rejected.length > MAX_REJECTED_ROWS) {
+                rejectedEl.createDiv({
+                    cls: "snipsy-import-more",
+                    text: `…and ${diff.rejected.length - MAX_REJECTED_ROWS} more`,
+                });
+            }
+        }
+
         const footer = contentEl.createDiv({ cls: "modal-button-container" });
         const cancel = footer.createEl("button", { text: "Cancel" });
         cancel.onclick = () => this.close();
@@ -854,7 +878,9 @@ export class ImportPreviewModal extends Modal {
         diff: ReturnType<typeof computeImportDiff>,
     ) {
         if (this.mode === "replace") {
-            btn.textContent = `Replace all (${Object.keys(this.opts.incoming).length})`;
+            // Count what will actually be written (rejected keys are not).
+            const importCount = diff.added.length + diff.conflicts.length + diff.unchangedCount;
+            btn.textContent = `Replace all (${importCount})`;
             // Danger affordance: red CTA. Designer Q5 explicitly does NOT
             // want a second-confirm dialog — the visual + the `removed`
             // list in the diff is the affordance.
@@ -864,5 +890,70 @@ export class ImportPreviewModal extends Modal {
             btn.textContent = willChange === 0 ? "Apply" : `Apply merge (${willChange})`;
             btn.removeClass("mod-warning");
         }
+    }
+}
+
+/**
+ * B-183: preview for "Fix triggers". Lists the planned `old -> new`
+ * renames and the skipped keys with the reason. Nothing is written
+ * here; Apply hands control to `onApply`, Cancel/close does nothing.
+ */
+export class FixTriggersModal extends Modal {
+    constructor(
+        app: App,
+        private readonly opts: {
+            renames: readonly { from: string; to: string }[];
+            skipped: readonly { key: string; reason: string }[];
+            onApply: () => void | Promise<void>;
+        },
+    ) {
+        super(app);
+    }
+
+    onOpen(): void {
+        const { contentEl, titleEl } = this;
+        titleEl.setText("Fix triggers");
+        contentEl.addClass("snipsidian-modal");
+        contentEl.addClass("snipsidian-fix-triggers-modal");
+
+        const { renames, skipped } = this.opts;
+        contentEl.createEl("p", {
+            text: `${renames.length} trigger${renames.length === 1 ? "" : "s"} will be renamed. Replacements and groups stay the same.`,
+        });
+
+        const list = contentEl.createDiv({ cls: "snipsy-fix-list" });
+        for (const r of renames) {
+            const row = list.createDiv({ cls: "snipsy-fix-row" });
+            row.createSpan({ cls: "snipsy-fix-from", text: r.from });
+            row.createSpan({ cls: "snipsy-fix-arrow", text: "->" });
+            row.createSpan({ cls: "snipsy-fix-to", text: r.to });
+        }
+
+        if (skipped.length > 0) {
+            contentEl.createEl("p", {
+                text: `${skipped.length} will be skipped and stay as they are:`,
+            });
+            const skippedList = contentEl.createDiv({ cls: "snipsy-fix-list" });
+            for (const s of skipped) {
+                const row = skippedList.createDiv({ cls: "snipsy-fix-row" });
+                row.createSpan({ cls: "snipsy-fix-from", text: s.key });
+                row.createSpan({ cls: "snipsy-fix-reason", text: s.reason });
+            }
+        }
+
+        const footer = contentEl.createDiv({ cls: "modal-button-container" });
+        const cancel = footer.createEl("button", { text: "Cancel" });
+        cancel.onclick = () => this.close();
+        const apply = footer.createEl("button", { text: "Fix triggers", cls: "mod-cta" });
+        apply.onclick = () => {
+            const result = this.opts.onApply();
+            if (result instanceof Promise) {
+                void result.catch((error) => {
+                    console.error("Error in fix triggers callback:", error);
+                });
+            }
+            this.close();
+        };
+        cancel.focus();
     }
 }

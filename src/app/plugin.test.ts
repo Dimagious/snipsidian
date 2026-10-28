@@ -65,6 +65,7 @@ describe("app/plugin", () => {
             app,
             expect.any(Function),
             expect.any(Function),
+            expect.any(Function),
         );
         expect((plugin as any).registerEditorExtensionCalls).toEqual([[fakeExtension]]);
         // collected by our stubbed Plugin
@@ -187,6 +188,40 @@ describe("app/plugin", () => {
             });
             await plugin.onload();
             expect(getPrefixArg()()).toBe(":");
+        });
+    });
+
+    describe("getHighlight wiring (B-176)", () => {
+        async function getHighlightArg(saved: object | undefined): Promise<() => boolean> {
+            const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
+            // @ts-ignore
+            const plugin = new PluginClass(app);
+            // @ts-ignore
+            plugin.loadData = vi.fn().mockResolvedValue(saved);
+            await plugin.onload();
+            const call = (buildExpansionExtension as any).mock.calls.at(-1);
+            return call[3];
+        }
+
+        it("is off by default", async () => {
+            expect((await getHighlightArg(undefined))()).toBe(false);
+        });
+
+        it("is on only for an explicit true", async () => {
+            expect((await getHighlightArg({ snippets: { a: "b" }, expansion: { highlight: true } }))()).toBe(true);
+            expect((await getHighlightArg({ snippets: { a: "b" }, expansion: { highlight: false } }))()).toBe(false);
+            expect((await getHighlightArg({ snippets: { a: "b" }, expansion: { highlight: "yes" } }))()).toBe(false);
+        });
+
+        it("reads the live setting, so a toggle needs no reload", async () => {
+            const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
+            // @ts-ignore
+            const plugin = new PluginClass(app);
+            await plugin.onload();
+            const call = (buildExpansionExtension as any).mock.calls.at(-1);
+            expect(call[3]()).toBe(false);
+            plugin.settings.expansion = { highlight: true };
+            expect(call[3]()).toBe(true);
         });
     });
 

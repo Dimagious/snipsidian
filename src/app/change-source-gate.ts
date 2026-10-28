@@ -86,3 +86,34 @@ export function shouldAttemptExpansion(
     if (composing) return false;
     return transactionUserEvents.some(isTypingUserEvent);
 }
+
+/**
+ * B-191: true when an update's only obstacle to expansion was IME
+ * composition — i.e. it carried a genuine typing event but the view
+ * was still composing. Some input methods (e.g. Linux Wayland
+ * text-input-v3) deliver every character, including the separator,
+ * as its own composition whose commit adds no further document
+ * change. The gate above correctly blocks that update (B-141), but
+ * nothing would ever re-run it, so the expansion would be lost. The
+ * caller remembers this as "pending" and retries once composition has
+ * ended. Non-typing events (paste/undo/drop) never qualify.
+ */
+export function isDeferredByComposition(
+    transactionUserEvents: ReadonlyArray<string | undefined>,
+    composing: boolean,
+): boolean {
+    return composing && transactionUserEvents.some(isTypingUserEvent);
+}
+
+/**
+ * B-191: gate for the retry that runs after `compositionend`. Runs
+ * only when an attempt is pending, the view is no longer composing
+ * (never dispatch mid-composition, B-141) and it still has focus.
+ */
+export function shouldRunDeferredExpansion(
+    pending: boolean,
+    composing: boolean,
+    hasFocus: boolean,
+): boolean {
+    return pending && !composing && hasFocus;
+}

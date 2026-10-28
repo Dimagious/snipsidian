@@ -613,6 +613,45 @@
   gap: 8px;
 }
 
+/* ---- Dead-trigger warning (B-183) ---- */
+.snipsidian-settings .snipsy-fix-warning {
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--snipsy-divider);
+  border-radius: var(--snipsy-radius);
+  background: var(--snipsy-hover);
+  font-size: 13px;
+  color: var(--snipsy-text-muted);
+}
+.snipsidian-settings .snipsy-fix-warning-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.snipsidian-settings .snipsy-fix-warning-list {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--snipsy-text-faint);
+  overflow-wrap: anywhere;
+}
+.snipsidian-fix-triggers-modal .snipsy-fix-list {
+  max-height: 240px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+.snipsidian-fix-triggers-modal .snipsy-fix-row {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.snipsidian-fix-triggers-modal .snipsy-fix-arrow,
+.snipsidian-fix-triggers-modal .snipsy-fix-reason {
+  color: var(--text-muted);
+}
+
 /* ---- Bulk action bar ---- */
 /* Sticky-to-viewport per designer Q3 — designer flagged the missing
    `position: sticky` in their own handoff; we add it here. */
@@ -803,10 +842,18 @@
    "renders as a full-size line with a divider under it, so it looks
    like a fourth setting"). */
 .snipsidian-modal .snipsidian-addsnippet-hint,
-.snipsidian-modal .snipsidian-prompt-hint {
+.snipsidian-modal .snipsidian-prompt-hint,
+.snipsidian-modal .snipsidian-placeholder-hint {
   display: block;
   margin-top: 4px;
 }
+
+/* B-195: same muted line under the inline edit form's Replacement textarea. */
+.snipsidian-settings .snipsidian-placeholder-hint {
+  display: block;
+  margin-top: 4px;
+}
+
 .snipsidian-modal .snipsidian-addsnippet-hint {
   color: var(--text-accent);
 }
@@ -1446,6 +1493,28 @@
   font-weight: 600;
 }
 
+/* B-176: expansion highlight. Decoration.mark class on the text a trigger
+   just expanded into, live while the Backspace-undo window is open. A
+   subtle accent underline stays; the background flash fades out. Theme
+   variables only. Not scoped under `.snipsidian-settings`: it lives in
+   the note editor. */
+.snipsy-expanded {
+  text-decoration: underline dotted var(--interactive-accent);
+  text-underline-offset: 3px;
+  border-radius: var(--radius-s);
+  animation: snipsy-expanded-flash 1.2s ease-out;
+}
+
+@keyframes snipsy-expanded-flash {
+  from {
+    background-color: var(--text-highlight-bg);
+  }
+
+  to {
+    background-color: transparent;
+  }
+}
+
 /* ---- Reduced motion ---- */
 /* Honour the user's OS preference (B-089 / a11y A-011). Transitions
    and animations are subtle in Snipsy, but vestibular-disorder users
@@ -1463,6 +1532,11 @@
   .modal.snipsy-install.snipsy-install * {
     animation: none;
     transition: none;
+  }
+
+  /* B-176: no flash, the static underline still marks the range. */
+  .snipsy-expanded {
+    animation: none;
   }
 }
 

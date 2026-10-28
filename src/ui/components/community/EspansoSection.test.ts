@@ -82,6 +82,23 @@ async function settle(): Promise<void> {
     for (let i = 0; i < 6; i++) await Promise.resolve();
 }
 
+/** B-186: every import opens the preview first; this clicks its Apply. */
+function applyPreview(): void {
+    const btn = Array.from(
+        document.body.querySelectorAll(".modal-button-container button"),
+    ).find((b) => b.textContent === "Apply") as HTMLButtonElement | undefined;
+    if (!btn) throw new Error("Preview Apply button not found");
+    btn.click();
+}
+
+function cancelPreview(): void {
+    const btn = Array.from(
+        document.body.querySelectorAll(".modal-button-container button"),
+    ).find((b) => b.textContent === "Cancel") as HTMLButtonElement | undefined;
+    if (!btn) throw new Error("Preview Cancel button not found");
+    btn.click();
+}
+
 const SIMPLE_YAML = `
 matches:
   - trigger: ":brb"
@@ -161,8 +178,8 @@ describe("EspansoSection — import flow (B-045)", () => {
         groupInput.value = ""; // empty → falls back to default
         yaml.value = SIMPLE_YAML;
         importBtn.click();
-        await Promise.resolve();
-        await Promise.resolve();
+        applyPreview();
+        await settle();
 
         expect(plugin.settings.snippets["espanso-import/brb"]).toBe("be right back");
         expect(plugin.settings.snippets["espanso-import/omw"]).toBe("on my way");
@@ -176,8 +193,8 @@ describe("EspansoSection — import flow (B-045)", () => {
         groupInput.value = "My Hub Pack 2024!";
         yaml.value = SIMPLE_YAML;
         importBtn.click();
-        await Promise.resolve();
-        await Promise.resolve();
+        applyPreview();
+        await settle();
 
         // slugifyGroup("My Hub Pack 2024!") → "my-hub-pack-2024"
         expect(plugin.settings.snippets["my-hub-pack-2024/brb"]).toBe("be right back");
@@ -189,8 +206,8 @@ describe("EspansoSection — import flow (B-045)", () => {
         const { yaml, importBtn } = mount();
         yaml.value = SIMPLE_YAML;
         importBtn.click();
-        await Promise.resolve();
-        await Promise.resolve();
+        applyPreview();
+        await settle();
         expect(saveSpy).toHaveBeenCalledTimes(1);
     });
 
@@ -223,10 +240,10 @@ describe("EspansoSection — import flow (B-045)", () => {
         const { yaml, importBtn } = mount();
         yaml.value = SIMPLE_YAML;
         importBtn.click();
+        applyPreview();
         await settle();
 
-        // No refusal Notice, nothing written yet (omw has no conflict ->
-        // direct install path writes immediately).
+        // No refusal Notice; the preview was applied, omw landed.
         expect(noticeCalls.some((m) => m.includes("trigger name collision"))).toBe(false);
         expect(plugin.settings.snippets["espanso-import/omw"]).toBe("on my way");
         expect(
@@ -300,6 +317,7 @@ matches:
         const { yaml, importBtn } = mount();
         yaml.value = SIMPLE_YAML;
         importBtn.click();
+        applyPreview();
         await settle();
         const msg = noticeCalls.find((m) => m.startsWith("Installed 1 snippet"));
         expect(msg).toContain("brb (already used by an ungrouped snippet)");
@@ -414,8 +432,8 @@ matches:
         groupInput.value = "Espanso import";
         yaml.value = SIMPLE_YAML;
         importBtn.click();
-        await Promise.resolve();
-        await Promise.resolve();
+        applyPreview();
+        await settle();
 
         // No collision Notice — the same key + value is silent.
         expect(
@@ -459,6 +477,7 @@ matches:
         const { yaml, importBtn } = mount();
         yaml.value = mixedYaml;
         importBtn.click();
+        applyPreview();
         await flush();
 
         expect(plugin.settings.snippets["espanso-import/brb"]).toBe("be right back");
@@ -623,12 +642,13 @@ describe("EspansoSection — reported install count reflects actual changes, not
 });
 
 describe("EspansoSection: failed save rolls back (B-181)", () => {
-    it("direct-install path restores the previous snippets when saveSettings rejects", async () => {
+    it("no-conflict path restores the previous snippets when saveSettings rejects", async () => {
         const previous = plugin.settings.snippets;
         plugin.saveSettings = vi.fn().mockRejectedValue(new Error("disk full"));
         const { yaml, importBtn } = mount();
         yaml.value = SIMPLE_YAML;
         importBtn.click();
+        applyPreview();
         await settle();
 
         expect(noticeCalls.some((m) => m.startsWith("Failed to install from YAML"))).toBe(true);
@@ -655,5 +675,63 @@ describe("EspansoSection: failed save rolls back (B-181)", () => {
         expect(plugin.settings.snippets).toEqual({ "espanso-import/brb": "USER EDIT" });
         expect(plugin.settings.snippets["espanso-import/omw"]).toBeUndefined();
         expect(noticeCalls).toContain("Failed to install from YAML: disk full");
+    });
+});
+
+// ---- B-186: the preview always opens ----
+describe("EspansoSection: always previews before writing (B-186)", () => {
+    function previewOpen(): boolean {
+        return document.body.querySelector(".modal-button-container") !== null;
+    }
+
+    it("opens the preview even with no collisions and writes nothing until Apply", async () => {
+        const saveSpy = vi.spyOn(plugin, "saveSettings");
+        const { yaml, importBtn } = mount();
+        yaml.value = SIMPLE_YAML;
+        importBtn.click();
+        await settle();
+
+        expect(previewOpen()).toBe(true);
+        expect(plugin.settings.snippets).toEqual({});
+        expect(saveSpy).not.toHaveBeenCalled();
+    });
+
+    it("Cancel writes nothing and does not save", async () => {
+        const saveSpy = vi.spyOn(plugin, "saveSettings");
+        const { yaml, importBtn } = mount();
+        yaml.value = SIMPLE_YAML;
+        importBtn.click();
+        cancelPreview();
+        await settle();
+
+        expect(plugin.settings.snippets).toEqual({});
+        expect(saveSpy).not.toHaveBeenCalled();
+        expect(noticeCalls.some((m) => m.startsWith("Installed"))).toBe(false);
+    });
+
+    it("Apply writes once", async () => {
+        const saveSpy = vi.spyOn(plugin, "saveSettings");
+        const { yaml, importBtn } = mount();
+        yaml.value = SIMPLE_YAML;
+        importBtn.click();
+        applyPreview();
+        await settle();
+
+        expect(saveSpy).toHaveBeenCalledTimes(1);
+        expect(plugin.settings.snippets["espanso-import/brb"]).toBe("be right back");
+        expect(noticeCalls).toContain('Installed 2 snippets into "Espanso import"');
+    });
+
+    it("shows the left-out collisions and skipped constructs in the preview before applying", async () => {
+        plugin.settings.snippets["other-group/brb"] = "different";
+        const { yaml, importBtn } = mount();
+        yaml.value = `${SIMPLE_YAML}\n  - trigger: ":addr"\n    form: "A"\n    form_fields:\n      a: {}`;
+        importBtn.click();
+        await settle();
+
+        const info = document.body.querySelector(".snipsidian-modal .snipsy-espanso-skip-status");
+        expect(info?.textContent).toContain("brb");
+        expect(info?.textContent).toContain("addr");
+        expect(plugin.settings.snippets["espanso-import/omw"]).toBeUndefined();
     });
 });

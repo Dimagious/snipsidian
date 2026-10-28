@@ -3,6 +3,7 @@ import type SnipSidianPlugin from "../../main";
 import type { HotkeysTabHandle } from "../../types";
 import { isRecordOfString } from "../../shared/guards";
 import { ImportPreviewModal } from "./Modals";
+import { currentValuesForRejected, filterImportKeys } from "../../services/import-diff";
 import { DEFAULT_SNIPPETS_GROUP, planRestoreDefaults } from "../../store/presets";
 import { joinKey } from "../../store/keys";
 import { commitSnippets } from "../../core/commit-snippets";
@@ -238,14 +239,23 @@ export class BasicTab {
                     return;
                 }
 
+                // B-177: only keys that pass the trigger/replacement checks
+                // are ever written; the modal lists the rest with reasons.
+                const { accepted, rejected } = filterImportKeys(parsed);
                 new ImportPreviewModal(this.app, {
                     current: this.plugin.settings.snippets,
                     incoming: parsed,
                     onConfirm: async (mode) => {
                         const next =
                             mode === "replace"
-                                ? parsed
-                                : { ...this.plugin.settings.snippets, ...parsed };
+                                ? {
+                                      ...currentValuesForRejected(
+                                          this.plugin.settings.snippets,
+                                          rejected,
+                                      ),
+                                      ...accepted,
+                                  }
+                                : { ...this.plugin.settings.snippets, ...accepted };
                         try {
                             // B-181: rolls the in-memory map back if the save
                             // rejects (the modal only console.errors a rejection).
@@ -257,11 +267,13 @@ export class BasicTab {
                             new Notice(`Import failed: ${sanitizeForNotice(message)}`);
                             return;
                         }
-                        const count = Object.keys(parsed).length;
+                        const count = Object.keys(accepted).length;
+                        const skippedNote =
+                            rejected.length > 0 ? ` (${rejected.length} skipped)` : "";
                         new Notice(
                             mode === "replace"
-                                ? `Replaced library with ${count} snippet${count === 1 ? "" : "s"}`
-                                : `Merged ${count} snippet${count === 1 ? "" : "s"}`,
+                                ? `Replaced library with ${count} snippet${count === 1 ? "" : "s"}${skippedNote}`
+                                : `Merged ${count} snippet${count === 1 ? "" : "s"}${skippedNote}`,
                         );
                         this.onDeclarativeChange?.();
                     },

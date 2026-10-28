@@ -36,6 +36,8 @@ export default class HotstringsPlugin extends Plugin {
                     // must not silently kill all expansion in prefix mode.
                     return char === ":" || char === ";" ? char : ":";
                 },
+                // B-176: read at use time, so toggling needs no reload.
+                () => this.settings.expansion?.highlight === true,
             ),
         );
 
