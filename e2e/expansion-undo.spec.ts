@@ -13,7 +13,7 @@ import { test, expect, ui } from "./fixtures";
  *   - After moving the caret away, Backspace is native (deletes one char).
  *   - Setting off (default): Backspace is native, no mark class.
  *   - Cmd+Z after a Backspace-undo re-applies the expansion (own history
- *     step), unverified assumption about CM6 history grouping.
+ *     step); Cmd+Z after a plain expansion keeps the B-132 behaviour.
  */
 
 async function setHighlight(win: import("@playwright/test").Page, on: boolean) {
@@ -84,18 +84,37 @@ test.describe("[B-176] expansion highlight + Backspace undo", () => {
         expect(await ui.editorText(win)).toBe("be right back ");
     });
 
-    test("Cmd+Z after a Backspace-undo re-applies the expansion (unverified history grouping)", async ({ win }) => {
+    test("Cmd+Z after a Backspace-undo re-applies the expansion", async ({ win }) => {
         await ui.typeInEditor(win, "brb ");
         await win.keyboard.press("Backspace");
         await win.keyboard.press("Meta+Z");
         expect(await ui.editorText(win)).toBe("be right back ");
     });
 
-    test("Cmd+Z right after an expansion still restores the trigger (B-132)", async ({ win }) => {
+    test("[B-132] with highlight on, undo after an expansion behaves as before", async ({ win }) => {
+        // Mirrors expansion.spec.ts B-132: CM6 groups the typed trigger and
+        // the untagged expansion into one undo event, so an anchor line plus
+        // a wait past the grouping window gives a clean boundary. One Cmd+Z
+        // removes trigger + expansion together and must not re-expand.
+        await ui.typeInEditor(win, "anchor line");
+        await win.keyboard.press("Enter");
+        await win.waitForTimeout(700);
         await ui.typeInEditor(win, "brb ");
+        expect(await ui.editorText(win)).toContain("be right back");
+
         await win.keyboard.press("Meta+Z");
-        expect(await ui.editorText(win)).toContain("brb");
-        expect(await ui.editorText(win)).not.toContain("be right back");
+        await win.waitForTimeout(300);
+        let text = await ui.editorText(win);
+        expect(text).toContain("anchor line");
+        expect(text).not.toContain("be right back");
+        expect(text).not.toContain("brb");
+
+        await win.waitForTimeout(300);
+        text = await ui.editorText(win);
+        expect(text).toContain("anchor line");
+        expect(text).not.toContain("be right back");
+        expect(text).not.toContain("brb");
+        await expect(win.locator(".cm-content .snipsy-expanded")).toHaveCount(0);
     });
 
     test("setting off: no mark and Backspace is native", async ({ win }) => {
