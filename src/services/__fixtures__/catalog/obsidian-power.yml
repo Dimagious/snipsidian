@@ -1,0 +1,56 @@
+name: "Obsidian Power-User"
+version: "1.1.0"
+author: "snipsidian-community"
+license: "MIT"
+description: "Dataview blocks, frontmatter scaffolds, query templates — everything that takes Obsidian beyond plain markdown."
+category: "obsidian"
+tags: ["obsidian", "dataview", "frontmatter", "advanced"]
+
+snippets:
+  # Frontmatter
+  - trigger: "fmm"
+    replace: "---\ntitle: $|\ndate: $date\ntags: []\nstatus: \n---\n"
+  - trigger: "fmtags"
+    replace: "tags:\n  - $|"
+  - trigger: "fmaliases"
+    replace: "aliases:\n  - $|"
+
+  # Dataview
+  - trigger: "dvb"
+    replace: "```dataview\n$|\n```"
+  - trigger: "dvjs"
+    replace: "```dataviewjs\n$|\n```"
+  - trigger: "dvtable"
+    replace: "```dataview\ntable $| from \"\"\nwhere \n```"
+  - trigger: "dvlist"
+    replace: "```dataview\nlist from #$|\nwhere \n```"
+  - trigger: "dvtask"
+    replace: "```dataview\ntask from \"$|\"\nwhere !completed\n```"
+
+  # Embeds / transclusion
+  - trigger: "embb"
+    replace: "![[$|]]"
+  - trigger: "embsec"
+    replace: "![[$|#]]"
+  - trigger: "embblk"
+    replace: "![[$|^]]"
+  - trigger: "blkref"
+    replace: "^$|"
+
+  # Internal navigation
+  - trigger: "wlnk"
+    replace: "[[$|]]"
+  - trigger: "wlnkalias"
+    replace: "[[$||]]"
+  - trigger: "wlnksec"
+    replace: "[[$|#]]"
+  - trigger: "tg"
+    replace: "#$|"
+
+  # Templater (works if Templater is installed)
+  - trigger: "tplr"
+    replace: "<% $| %>"
+  - trigger: "tplrdate"
+    replace: "<% tp.date.now(\"YYYY-MM-DD\") %>"
+  - trigger: "tplrfile"
+    replace: "<% tp.file.title %>"

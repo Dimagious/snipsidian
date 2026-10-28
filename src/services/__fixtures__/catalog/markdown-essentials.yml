@@ -1,0 +1,78 @@
+name: "Markdown Essentials"
+version: "1.2.0"
+author: "snipsidian-community"
+license: "MIT"
+description: "The shortcuts you use every minute writing markdown — tables, links, callouts, code fences. Triggers are short and don't collide with English words."
+category: "markdown"
+tags: ["markdown", "essentials", "popular"]
+
+snippets:
+  # Headings — simple and memorable
+  - trigger: "hh1"
+    replace: "# $|"
+  - trigger: "hh2"
+    replace: "## $|"
+  - trigger: "hh3"
+    replace: "### $|"
+
+  # Inline emphasis (wrapping templates — also work via picker on a selection)
+  - trigger: "bld"
+    replace: "**$|**"
+  - trigger: "ital"
+    replace: "_$|_"
+  - trigger: "strk"
+    replace: "~~$|~~"
+  - trigger: "ic"
+    replace: "`$|`"
+  - trigger: "hlt"
+    replace: "==$|=="
+
+  # Code fences
+  - trigger: "codeb"
+    replace: "```\n$|\n```"
+  - trigger: "jscb"
+    replace: "```javascript\n$|\n```"
+  - trigger: "tscb"
+    replace: "```typescript\n$|\n```"
+  - trigger: "pycb"
+    replace: "```python\n$|\n```"
+  - trigger: "shcb"
+    replace: "```bash\n$|\n```"
+
+  # Links / images
+  - trigger: "lnk"
+    replace: "[$|](url)"
+  - trigger: "mdimg"
+    replace: "![$|](url)"
+  - trigger: "wlnk"
+    replace: "[[$|]]"
+  - trigger: "emb"
+    replace: "![[$|]]"
+
+  # Tables
+  - trigger: "tbl2"
+    replace: "| H1 | H2 |\n| --- | --- |\n| $| | |"
+  - trigger: "tbl3"
+    replace: "| H1 | H2 | H3 |\n| --- | --- | --- |\n| $| | | |"
+  - trigger: "tbl4"
+    replace: "| H1 | H2 | H3 | H4 |\n| --- | --- | --- | --- |\n| $| | | | |"
+
+  # Lists
+  - trigger: "tdo"
+    replace: "- [ ] $|"
+  - trigger: "dn"
+    replace: "- [x] $|"
+  - trigger: "bul"
+    replace: "- $|"
+  - trigger: "numl"
+    replace: "1. $|"
+
+  # Structural
+  - trigger: "hrr"
+    replace: "\n---\n\n$|"
+  - trigger: "qte"
+    replace: "> $|"
+  - trigger: "fnote"
+    replace: "[^$|]"
+  - trigger: "dtls"
+    replace: "<details>\n<summary>$|</summary>\n\n\n\n</details>"
