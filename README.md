@@ -277,6 +277,14 @@ expands. See [Prefix mode](#prefix-mode).
 </details>
 
 <details>
+<summary>Triggers don't expand on Linux (Wayland)</summary>
+
+Start Obsidian with `--ozone-platform=x11`. If that fixes it, please report it in an issue
+with your desktop and input method.
+
+</details>
+
+<details>
 <summary>Does it work on my phone?</summary>
 
 Yes. The plugin is not desktop-only, and the picker fits a phone screen.

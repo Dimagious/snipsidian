@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Triggers expand again when the separator arrives through an input method** (B-191): on some setups (reported on Linux Wayland) every character, including the space after a trigger, is delivered as its own IME composition. The expander correctly never edits mid-composition, but it also never retried once the composition ended, so `brb ` stayed as typed. If a typed separator was skipped only because of composition, the expansion now runs once right after the composition ends (never while composing, and not for paste, undo or drop). On Wayland, `--ozone-platform=x11` is a workaround if triggers still do not expand.
+
 ## [1.6.0] - 2026-10-08
 
 ### Added

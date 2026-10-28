@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { isTypingUserEvent, shouldAttemptExpansion } from "./change-source-gate";
+import {
+    isDeferredByComposition,
+    isTypingUserEvent,
+    shouldAttemptExpansion,
+    shouldRunDeferredExpansion,
+} from "./change-source-gate";
 
 /**
  * Boundary tests for the B-149 change-source gate. Per ADR-0005: the
@@ -117,5 +122,48 @@ describe("shouldAttemptExpansion", () => {
 
     it("does not fire for a drop", () => {
         expect(shouldAttemptExpansion(["input.drop"], false)).toBe(false);
+    });
+});
+
+describe("isDeferredByComposition [B-191]", () => {
+    it("is true for a typing event while composing", () => {
+        expect(isDeferredByComposition(["input.type"], true)).toBe(true);
+        expect(isDeferredByComposition(["input.type.compose"], true)).toBe(true);
+    });
+
+    it("is false when not composing (the normal path handles it)", () => {
+        expect(isDeferredByComposition(["input.type"], false)).toBe(false);
+    });
+
+    it("is false for non-typing events while composing (paste/undo/drop/untagged)", () => {
+        for (const ev of ["input.paste", "input.drop", "undo", "redo", undefined]) {
+            expect(isDeferredByComposition([ev], true)).toBe(false);
+        }
+    });
+
+    it("is true if any one transaction is typing", () => {
+        expect(isDeferredByComposition(["undo", "input.type"], true)).toBe(true);
+    });
+
+    it("is false for an empty transaction list", () => {
+        expect(isDeferredByComposition([], true)).toBe(false);
+    });
+});
+
+describe("shouldRunDeferredExpansion [B-191]", () => {
+    it("runs only when pending, not composing and focused", () => {
+        expect(shouldRunDeferredExpansion(true, false, true)).toBe(true);
+    });
+
+    it("never runs while still composing (B-141)", () => {
+        expect(shouldRunDeferredExpansion(true, true, true)).toBe(false);
+    });
+
+    it("does not run when unfocused", () => {
+        expect(shouldRunDeferredExpansion(true, false, false)).toBe(false);
+    });
+
+    it("does not run when nothing is pending", () => {
+        expect(shouldRunDeferredExpansion(false, false, true)).toBe(false);
     });
 });
