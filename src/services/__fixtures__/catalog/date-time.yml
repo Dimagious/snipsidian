@@ -1,0 +1,39 @@
+name: "Date & Time Stamps"
+version: "1.2.0"
+author: "snipsidian-community"
+license: "MIT"
+description: "Insert today's date, current time, ISO timestamps, week numbers. Uses Snipsy's $date and $time variables — substituted at typing time."
+category: "utility"
+tags: ["date", "time", "timestamps", "journal"]
+
+snippets:
+  - trigger: "tdate"
+    replace: "$date"
+  - trigger: "ttime"
+    replace: "$time"
+  - trigger: "tnow"
+    replace: "$date $time"
+  - trigger: "tiso"
+    replace: "$date"
+  - trigger: "tstamp"
+    replace: "[$date $time] $|"
+
+  # Log entry templates
+  - trigger: "logln"
+    replace: "- $date $time · $|"
+  - trigger: "logsec"
+    replace: "## $date\n\n$|"
+  - trigger: "logh3"
+    replace: "### $date — $|\n\n"
+
+  # Markdown date as link (for daily-notes flow)
+  - trigger: "tdwl"
+    replace: "[[$date]] $|"
+
+  # Time-of-day labels
+  - trigger: "tmorn"
+    replace: "**Morning · $date**\n\n$|"
+  - trigger: "taftn"
+    replace: "**Afternoon · $date**\n\n$|"
+  - trigger: "tevn"
+    replace: "**Evening · $date**\n\n$|"

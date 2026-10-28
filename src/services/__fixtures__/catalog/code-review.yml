@@ -1,0 +1,54 @@
+name: "Code Review"
+version: "1.1.0"
+author: "snipsidian-community"
+license: "MIT"
+description: "Conventional Comments-style prefixes for code reviews. Faster, kinder, more specific feedback."
+category: "development"
+tags: ["code-review", "conventional-comments", "team"]
+
+snippets:
+  # Conventional Comments labels (https://conventionalcomments.org)
+  - trigger: "crpraise"
+    replace: "**praise:** $|"
+  - trigger: "crnit"
+    replace: "**nit:** $|"
+  - trigger: "sugg"
+    replace: "**suggestion:** $|"
+  - trigger: "qstn"
+    replace: "**question:** $|"
+  - trigger: "iss"
+    replace: "**issue:** $|"
+  - trigger: "thot"
+    replace: "**thought:** $|"
+  - trigger: "crtodo"
+    replace: "**todo:** $|"
+  - trigger: "crchore"
+    replace: "**chore:** $|"
+  - trigger: "crpolicy"
+    replace: "**policy:** $|"
+  - trigger: "crnote"
+    replace: "**note:** $|"
+
+  # Decorators (combine with label)
+  - trigger: "crblock"
+    replace: "**(blocking)** $|"
+  - trigger: "nonbk"
+    replace: "**(non-blocking)** $|"
+  - trigger: "ifmin"
+    replace: "**(if-minor)** $|"
+
+  # Quick reactions
+  - trigger: "lgtm"
+    replace: "LGTM ✅ $|"
+  - trigger: "shipit"
+    replace: ":shipit: $|"
+  - trigger: "rfc"
+    replace: "Request for comments: $|"
+
+  # Common patterns
+  - trigger: "crwhy"
+    replace: "**Rationale:** $|"
+  - trigger: "altopt"
+    replace: "**Alternative:** $|"
+  - trigger: "outscope"
+    replace: "_Out of scope for this PR — flagging for follow-up:_ $|"

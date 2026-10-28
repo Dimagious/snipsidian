@@ -1,0 +1,69 @@
+name: "GTD & Productivity"
+version: "1.2.0"
+author: "snipsidian-community"
+license: "MIT"
+description: "Getting Things Done templates: projects, next-actions, waiting-fors, context tags. The system fits in your vault."
+category: "productivity"
+tags: ["gtd", "productivity", "tasks", "projects"]
+
+snippets:
+  - trigger: "proj"
+    replace: |-
+      # Project: $|
+
+      **Outcome:** 
+      **Status:** active
+      **Started:** $date
+
+      ## Next actions
+      - [ ]
+
+      ## Reference
+
+      ## Notes
+
+  - trigger: "nxt"
+    replace: "- [ ] $| #next"
+  - trigger: "wtfor"
+    replace: "- [ ] Waiting for $| — #waiting · since $date"
+  - trigger: "smday"
+    replace: "- [ ] $| #someday"
+  - trigger: "inbx"
+    replace: "## Inbox — $date\n\n- $|"
+
+  # Context tags
+  - trigger: "chome"
+    replace: "#@home "
+  - trigger: "cwork"
+    replace: "#@work "
+  - trigger: "ccall"
+    replace: "#@calls "
+  - trigger: "cerrand"
+    replace: "#@errands "
+  - trigger: "cdeep"
+    replace: "#@deep-work "
+
+  # Review checklists
+  - trigger: "wkprev"
+    replace: |-
+      # Weekly review — $date
+
+      ## Process inboxes
+      - [ ] Email inbox to zero
+      - [ ] Slack mentions cleared
+      - [ ] Physical inbox empty
+      - [ ] Notes inbox processed
+
+      ## Get current
+      - [ ] Review action lists
+      - [ ] Review previous calendar week
+      - [ ] Review upcoming calendar week
+      - [ ] Review waiting-for list
+
+      ## Get clear
+      - [ ] Review project list
+      - [ ] Review someday/maybe
+      - [ ] Be creative — capture new ideas
+
+  - trigger: "donee"
+    replace: "- [x] $| · done $date"

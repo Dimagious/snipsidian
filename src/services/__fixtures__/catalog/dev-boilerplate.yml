@@ -1,0 +1,58 @@
+name: "Developer Boilerplate"
+version: "1.1.0"
+author: "snipsidian-community"
+license: "MIT"
+description: "Inline code shortcuts for JS/TS/Python — log lines, function shells, try-catch, type guards. Wrap your snippet in a code fence to keep markdown happy."
+category: "development"
+tags: ["javascript", "typescript", "python", "boilerplate"]
+
+snippets:
+  # JavaScript / TypeScript
+  - trigger: "tslog"
+    replace: "console.log($|);"
+  - trigger: "tsdbg"
+    replace: "console.log(\"$| →\", );"
+  - trigger: "tserr"
+    replace: "console.error($|);"
+  - trigger: "fnct"
+    replace: "function $|() {\n  \n}"
+  - trigger: "afn"
+    replace: "($|) => "
+  - trigger: "afnb"
+    replace: "($|) => {\n  \n}"
+  - trigger: "async"
+    replace: "async ($|) => {\n  \n}"
+  - trigger: "tryc"
+    replace: "try {\n  $|\n} catch (err) {\n  console.error(err);\n}"
+  - trigger: "iife"
+    replace: "(() => {\n  $|\n})();"
+
+  # Type guards / TS
+  - trigger: "iface"
+    replace: "interface $| {\n  \n}"
+  - trigger: "tdef"
+    replace: "type $| = "
+  - trigger: "isstr"
+    replace: "function is$|(value: unknown): value is string {\n  return typeof value === \"string\";\n}"
+
+  # Python
+  - trigger: "pyfn"
+    replace: "def $|():\n    \"\"\"\"\"\"\n    "
+  - trigger: "pyclass"
+    replace: "class $|:\n    def __init__(self, ):\n        "
+  - trigger: "pyimp"
+    replace: "from $| import "
+  - trigger: "pylog"
+    replace: "print(f\"$| = {}\")"
+  - trigger: "pdb"
+    replace: "import pdb; pdb.set_trace()  # $|"
+  - trigger: "pytry"
+    replace: "try:\n    $|\nexcept  as e:\n    "
+  - trigger: "ifmain"
+    replace: "if __name__ == \"__main__\":\n    $|"
+
+  # Shell / git
+  - trigger: "shbang"
+    replace: "#!/usr/bin/env $|"
+  - trigger: "gitco"
+    replace: "$ git commit -m \"$|\""

@@ -12,6 +12,20 @@ export interface ValidationResult {
   warnings: string[];
 }
 
+/** Categories accepted by the submission validator (B-202). Union of the
+ *  original list and the categories the official catalog actually uses. */
+export const PACKAGE_CATEGORIES: readonly string[] = [
+  // original submission categories
+  "markdown", "programming", "academic", "business",
+  "creative", "productivity", "language", "other",
+  // categories used by the approved catalog
+  "development", "emojis", "journaling", "obsidian",
+  "research", "symbols", "utility", "work",
+];
+
+/** Maximum length of a single package tag before a warning (B-202). */
+export const PACKAGE_MAX_TAG_LENGTH = 30;
+
 export interface PackageValidationOptions {
   strictMode?: boolean;
   checkContent?: boolean;
@@ -45,7 +59,6 @@ export function validatePackage(
   // Validate required fields
   if (checkFormat) {
     validateRequiredFields(packageData, errors);
-    validateOptionalFields(packageData, warnings);
   }
 
   // Validate package structure
@@ -66,7 +79,13 @@ export function validatePackage(
   // Validate snippets
   validateSnippets(packageData, errors, warnings);
 
-  const isValid = errors.length === 0 && (!strictMode || warnings.length === 0);
+  // B-202: strict mode turns warnings into a failure; a false result must
+  // always say why, so surface them as an error instead of an empty list.
+  if (strictMode && errors.length === 0 && warnings.length > 0) {
+    errors.push(`Strict mode: resolve ${warnings.length} warning(s): ${warnings.join("; ")}`);
+  }
+
+  const isValid = errors.length === 0;
 
   return { isValid, errors, warnings };
 }
@@ -77,16 +96,6 @@ function validateRequiredFields(packageData: PackageData, errors: string[]) {
   for (const field of requiredFields) {
     if (!packageData[field]) {
       errors.push(`Required field '${field}' is missing`);
-    }
-  }
-}
-
-function validateOptionalFields(packageData: PackageData, warnings: string[]) {
-  const optionalFields = ["category", "tags", "license", "homepage"];
-  
-  for (const field of optionalFields) {
-    if (!packageData[field]) {
-      warnings.push(`Optional field '${field}' is missing`);
     }
   }
 }
@@ -130,12 +139,8 @@ function validatePackageStructure(packageData: PackageData, errors: string[], wa
 
   // Validate category
   if (packageData.category) {
-    const validCategories = [
-      "markdown", "programming", "academic", "business",
-      "creative", "productivity", "language", "other"
-    ];
-    if (!validCategories.includes(packageData.category)) {
-      errors.push(`Invalid category. Must be one of: ${validCategories.join(", ")}`);
+    if (!PACKAGE_CATEGORIES.includes(packageData.category)) {
+      errors.push(`Invalid category. Must be one of: ${PACKAGE_CATEGORIES.join(", ")}`);
     }
   }
 
@@ -149,8 +154,8 @@ function validatePackageStructure(packageData: PackageData, errors: string[], wa
       for (const tag of packageData.tags) {
         if (typeof tag !== "string") {
           errors.push("All tags must be strings");
-        } else if (tag.length < 2 || tag.length > 20) {
-          warnings.push(`Tag '${tag}' should be between 2 and 20 characters`);
+        } else if (tag.length < 2 || tag.length > PACKAGE_MAX_TAG_LENGTH) {
+          warnings.push(`Tag '${tag}' should be between 2 and ${PACKAGE_MAX_TAG_LENGTH} characters`);
         }
       }
     }
@@ -168,9 +173,10 @@ function validatePackageStructure(packageData: PackageData, errors: string[], wa
 function validateNamingConventions(packageData: PackageData, errors: string[]) {
   // Validate package name
   if (packageData.name) {
-    // Hyphen moved to end of character class to avoid escaping
-    if (!/^[a-zA-Z0-9\s_-]+$/.test(packageData.name)) {
-      errors.push("Package name can only contain letters, numbers, spaces, hyphens, and underscores");
+    // Literal space only (not \s: tabs/newlines are control chars). `&` is
+    // used by catalog names such as "GTD & Productivity" (B-202).
+    if (!/^[a-zA-Z0-9 _&-]+$/.test(packageData.name)) {
+      errors.push("Package name can only contain letters, numbers, spaces, hyphens, underscores, and ampersands");
     }
   }
 

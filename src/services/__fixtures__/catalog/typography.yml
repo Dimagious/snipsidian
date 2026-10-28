@@ -1,0 +1,44 @@
+name: "Typography"
+version: "1.0.0"
+author: "snipsidian-community"
+license: "MIT"
+description: "Arrows, comparisons and the em dash from the characters you already type. Expands only after a space or punctuation, never inside code or math. Needs Snipsy 1.6.0 or newer."
+category: "symbols"
+tags: ["symbols", "typography", "arrows", "math"]
+
+# Left out on purpose, because they break Markdown:
+#   >>  nested blockquote at the start of a line
+#   ^2  footnotes: [^2] would become [²]
+#   --> closing an HTML comment: <!-- note -->
+# Not possible with word-bound triggers: != ... (c) 1/2
+# Known trade-off: "--" also fires in "<!-- " (the "!" is a separator).
+# Obsidian comments (%% ... %%) are unaffected.
+
+snippets:
+  # Arrows
+  - trigger: "->"
+    replace: "→"
+  - trigger: "<-"
+    replace: "←"
+  - trigger: "<->"
+    replace: "↔"
+  - trigger: "=>"
+    replace: "⇒"
+  - trigger: "<=>"
+    replace: "⇔"
+
+  # Comparison and math
+  - trigger: "<="
+    replace: "≤"
+  - trigger: ">="
+    replace: "≥"
+  - trigger: "~="
+    replace: "≈"
+  - trigger: "+-"
+    replace: "±"
+  - trigger: "-+"
+    replace: "∓"
+
+  # Dash
+  - trigger: "--"
+    replace: "—"

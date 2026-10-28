@@ -1,4 +1,8 @@
 import { describe, it, expect } from "vitest";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { parse as parseYaml } from "yaml";
+import type { PackageData } from "./package-types";
 import {
   validatePackage,
   validatePackageFile,
@@ -6,6 +10,8 @@ import {
   validatePackageForInstall,
   INSTALL_MAX_SNIPPETS,
   INSTALL_MAX_REPLACEMENT_LEN,
+  PACKAGE_CATEGORIES,
+  PACKAGE_MAX_TAG_LENGTH,
 } from "./package-validator";
 
 describe("package-validator", () => {
@@ -88,7 +94,7 @@ describe("package-validator", () => {
 
       const result = validatePackage(packageData);
       expect(result.isValid).toBe(false);
-      expect(result.errors).toContain("Invalid category. Must be one of: markdown, programming, academic, business, creative, productivity, language, other");
+      expect(result.errors).toContain(`Invalid category. Must be one of: ${PACKAGE_CATEGORIES.join(", ")}`);
     });
 
     it("should validate snippets", () => {
@@ -157,24 +163,24 @@ describe("package-validator", () => {
       expect(result.errors).toContain("Snippet 1: trigger can only contain letters, numbers, colons, underscores, and the symbols - < > = + ~ * ^ | &");
     });
 
-    it("should warn about missing optional fields", () => {
+    it("should not warn about missing optional fields", () => {
       const packageData = {
-        name: "Test Package",
+        name: "Sample Pack",
         version: "1.0.0",
-        author: "test-author",
-        description: "A test package",
+        author: "sample-author",
+        description: "A sample package",
         snippets: [
           {
-            trigger: ":test",
-            replace: "This is a test"
+            trigger: ":smp",
+            replace: "Sample text"
           }
         ]
       };
 
       const result = validatePackage(packageData, { strictMode: false });
       expect(result.isValid).toBe(true);
-      expect(result.warnings).toContain("Optional field 'category' is missing");
-      expect(result.warnings).toContain("Optional field 'tags' is missing");
+      expect(result.warnings).toEqual([]);
+      expect(validatePackage(packageData).isValid).toBe(true);
     });
 
     it("should warn about inappropriate content", () => {
@@ -541,7 +547,7 @@ describe("package-validator", () => {
       };
 
       const result = validatePackage(packageData, { strictMode: false });
-      expect(result.errors).toContain("Package name can only contain letters, numbers, spaces, hyphens, and underscores");
+      expect(result.errors).toContain("Package name can only contain letters, numbers, spaces, hyphens, underscores, and ampersands");
     });
 
     it("should warn about inappropriate words in package name", () => {
@@ -609,7 +615,7 @@ describe("package-validator", () => {
       };
 
       const result = validatePackage(packageData, { strictMode: false });
-      expect(result.warnings).toContain("Tag 'a' should be between 2 and 20 characters");
+      expect(result.warnings).toContain("Tag 'a' should be between 2 and 30 characters");
     });
 
     it("should validate tag length too long", () => {
@@ -618,7 +624,7 @@ describe("package-validator", () => {
         version: "1.0.0",
         author: "test-author",
         description: "A test package",
-        tags: ["valid", "a".repeat(21)], // One tag too long, but array has 2 items
+        tags: ["valid", "a".repeat(31)], // One tag too long, but array has 2 items
         snippets: [
           {
             trigger: ":test",
@@ -628,7 +634,17 @@ describe("package-validator", () => {
       };
 
       const result = validatePackage(packageData, { strictMode: false });
-      expect(result.warnings).toContain(`Tag '${"a".repeat(21)}' should be between 2 and 20 characters`);
+      expect(result.warnings).toContain(`Tag '${"a".repeat(31)}' should be between 2 and 30 characters`);
+    });
+
+    it("accepts a tag of exactly the maximum length without a warning", () => {
+      const result = validatePackage({
+        name: "Sample Pack", version: "1.0.0", author: "sample-author",
+        description: "A sample package", tags: ["valid", "a".repeat(PACKAGE_MAX_TAG_LENGTH)],
+        snippets: [{ trigger: ":smp", replace: "x" }],
+      }, { strictMode: false });
+      expect(PACKAGE_MAX_TAG_LENGTH).toBe(30);
+      expect(result.warnings).toEqual([]);
     });
 
     it("should validate tag as non-string", () => {
@@ -739,7 +755,7 @@ describe("package-validator", () => {
       };
 
       const result = validatePackage(packageData, { strictMode: false });
-      expect(result.errors).toContain("Invalid category. Must be one of: markdown, programming, academic, business, creative, productivity, language, other");
+      expect(result.errors).toContain(`Invalid category. Must be one of: ${PACKAGE_CATEGORIES.join(", ")}`);
     });
 
     it("should validate tags as non-array", () => {
@@ -1016,6 +1032,93 @@ describe("package-validator", () => {
       expect(mk("a\\b").errors.join(" ")).toMatch(/can only contain/);
       expect(mk("$x").errors.join(" ")).toMatch(/can only contain/);
       expect(mk("a b").errors.join(" ")).toMatch(/can only contain/);
+    });
+  });
+
+  describe("catalog compatibility (B-202)", () => {
+    const dir = join(__dirname, "__fixtures__", "catalog");
+    const files = readdirSync(dir).filter((f) => f.endsWith(".yml"));
+
+    const base = (over: Record<string, unknown> = {}): PackageData => ({
+      name: "Sample Pack",
+      version: "1.0.0",
+      author: "sample-author",
+      description: "A sample package for tests",
+      category: "other",
+      tags: ["one", "two"],
+      license: "MIT",
+      homepage: "https://example.com",
+      snippets: [{ trigger: ":a", replace: "b" }],
+      ...over,
+    });
+
+    it("fixture dir holds every approved catalog pack", () => {
+      expect(files.length).toBe(13);
+    });
+
+    it.each(files)("accepts approved pack %s (default strict and non-strict)", (file) => {
+      const data = parseYaml(readFileSync(join(dir, file), "utf8")) as PackageData;
+      for (const opts of [undefined, { strictMode: false }]) {
+        const result = validatePackage(data, opts);
+        expect(result.errors).toEqual([]);
+        expect(result.warnings).toEqual([]);
+        expect(result.isValid).toBe(true);
+      }
+    });
+
+    it.each(PACKAGE_CATEGORIES.map((c) => [c]))("accepts category %s", (category) => {
+      expect(validatePackage(base({ category }), { strictMode: false }).errors).toEqual([]);
+    });
+
+    it("keeps the catalog categories in the allowlist", () => {
+      for (const c of ["development", "emojis", "journaling", "markdown", "obsidian",
+        "productivity", "research", "symbols", "utility", "work"]) {
+        expect(PACKAGE_CATEGORIES).toContain(c);
+      }
+    });
+
+    it("rejects an unknown category and lists the allowed values", () => {
+      const result = validatePackage(base({ category: "bogus" }), { strictMode: false });
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain(`Invalid category. Must be one of: ${PACKAGE_CATEGORIES.join(", ")}`);
+    });
+
+    it("accepts '&' in the package name", () => {
+      expect(validatePackage(base({ name: "GTD & Productivity" }), { strictMode: false }).errors).toEqual([]);
+    });
+
+    it.each(["Bad <b>", "a/b pack", "a\\b pack", "Tab\tName", "New\nLine", "Nul\u0000Name"])(
+      "still rejects name %j",
+      (name) => {
+        const result = validatePackage(base({ name }), { strictMode: false });
+        expect(result.isValid).toBe(false);
+        expect(result.errors.join(" ")).toMatch(/Package name can only contain/);
+      }
+    );
+
+    it("still enforces the name length limit with '&'", () => {
+      const result = validatePackage(base({ name: "&".repeat(51) }));
+      expect(result.errors).toContain("Package name must be between 3 and 50 characters");
+    });
+
+    it("explains a strict-mode failure caused only by warnings", () => {
+      const result = validatePackage(base({ tags: ["x"] }));
+      expect(result.isValid).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors[0]).toMatch(/^Strict mode: resolve \d+ warning/);
+    });
+
+    it("never returns isValid=false with an empty errors list", () => {
+      const cases: PackageData[] = [
+        base(), base({ homepage: undefined }), base({ tags: ["x"] }),
+        base({ category: "nope" }), base({ name: "" }),
+      ];
+      for (const strictMode of [true, false]) {
+        for (const c of cases) {
+          const r = validatePackage(c, { strictMode });
+          if (!r.isValid) expect(r.errors.length).toBeGreaterThan(0);
+        }
+      }
     });
   });
 });

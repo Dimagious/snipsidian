@@ -63,8 +63,18 @@ type PackageCategory =
   | "creative"      // Creative writing and content
   | "productivity"  // General productivity tools
   | "language"      // Language learning and translation
+  | "development"   // Developer boilerplate, code review
+  | "emojis"        // Emoji shortcodes
+  | "journaling"    // Daily notes, reviews, mood logs
+  | "obsidian"      // Obsidian syntax: callouts, embeds, Dataview
+  | "research"      // Literature notes, citations
+  | "symbols"       // Math symbols, typography
+  | "utility"       // Dates, times, small helpers
+  | "work"          // Meetings, decisions, 1:1s
   | "other";        // Everything else
 ```
+
+The list lives in `PACKAGE_CATEGORIES` in `src/services/package-validator.ts`; the second half matches the categories used by the community catalog.
 
 ### Category Descriptions
 - **markdown**: Headers, lists, tables, links, formatting

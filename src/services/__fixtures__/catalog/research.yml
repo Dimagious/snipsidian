@@ -1,0 +1,73 @@
+name: "Research & Academic"
+version: "1.2.0"
+author: "snipsidian-community"
+license: "MIT"
+description: "Literature notes, claim-evidence templates, paper summaries, citation scaffolds. Adapted from Zettelkasten and academic writing practice."
+category: "research"
+tags: ["academic", "zettelkasten", "research", "citations"]
+
+snippets:
+  - trigger: "litn"
+    replace: |-
+      # $|
+
+      **Authors:** 
+      **Year:**
+      **Source:**
+      **Status:** to-read
+
+      ## Summary in one sentence
+
+
+      ## Key claims
+      - **Claim:**
+        - **Evidence:**
+
+      ## My take
+
+
+      ## Connections
+      - [[ ]]
+
+      ## Citation
+
+
+  - trigger: "clm"
+    replace: "**Claim:** $|\n\n**Evidence:**\n- "
+  - trigger: "evi"
+    replace: "**Evidence:** $|"
+  - trigger: "cntr"
+    replace: "**Counter-evidence:** $|"
+  - trigger: "asmp"
+    replace: "**Assumption:** $|"
+
+  - trigger: "perma"
+    replace: |-
+      # Permanent note — $|
+
+
+
+      ---
+
+      _Source: [[ ]]_
+      _Date: $date_
+      _Connected to:_
+
+  - trigger: "fltn"
+    replace: "_Fleeting note · $date · $time_\n\n$|"
+
+  - trigger: "citeapa"
+    replace: "$| (Year). *Title*. "
+  - trigger: "citehp"
+    replace: "[$|](url) — "
+  - trigger: "doii"
+    replace: "https://doi.org/$|"
+
+  - trigger: "abstr"
+    replace: "## Abstract\n\n$|\n\n## Why I'm reading this\n\n"
+  - trigger: "mthd"
+    replace: "**Method:** $|"
+  - trigger: "fndg"
+    replace: "**Finding:** $|"
+  - trigger: "lmtn"
+    replace: "**Limitations:** $|"

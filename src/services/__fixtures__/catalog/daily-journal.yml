@@ -1,0 +1,70 @@
+name: "Daily Journal"
+version: "1.2.0"
+author: "snipsidian-community"
+license: "MIT"
+description: "Skeletons for daily notes, weekly reviews, gratitude prompts, mood logs. Drops a full structure ready to fill in."
+category: "journaling"
+tags: ["journal", "pkm", "daily-notes", "review"]
+
+snippets:
+  - trigger: "jrnl"
+    replace: |-
+      # $date
+
+      ## Three intentions for today
+      1. $|
+      2.
+      3.
+
+      ## Notes
+
+
+      ## Wins
+
+
+      ## What I'm grateful for
+
+
+  - trigger: "jmorn"
+    replace: |-
+      ## Morning pages
+
+      Mood: $|
+      Energy (1-10): 
+      One thing I'm looking forward to: 
+
+  - trigger: "jevn"
+    replace: |-
+      ## Evening reflection
+
+      What went well: $|
+      What didn't:
+      What I'll do differently tomorrow:
+
+  - trigger: "wkrev"
+    replace: |-
+      # Weekly review — week of $date
+
+      ## What worked this week
+      - $|
+
+      ## What didn't
+      -
+
+      ## What to drop next week
+      -
+
+      ## What to double down on
+      -
+
+      ## Gratitude
+      -
+
+  - trigger: "moodlog"
+    replace: "Mood (1-5): $| · Energy (1-5):  · Sleep (h):  · Notes: "
+  - trigger: "grtd"
+    replace: "## Today I'm grateful for\n\n1. $|\n2. \n3. "
+  - trigger: "hbt"
+    replace: "- [ ] $| — $date"
+  - trigger: "mit"
+    replace: "## Most important task\n\n**$|**\n\nWhy it matters: \nFirst step: "
