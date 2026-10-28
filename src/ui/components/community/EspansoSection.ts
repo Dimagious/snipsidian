@@ -8,7 +8,7 @@ import {
   type CollisionSkip,
 } from "../../../core/install-plan";
 import { commitSnippets } from "../../../core/commit-snippets";
-import { joinKey, slugifyGroup } from "../../../store/keys";
+import { slugifyGroup } from "../../../store/keys";
 import { GroupManager } from "../../utils/group-utils";
 import { renderSettingGroup } from "../../utils/setting-group";
 import { sanitizeForNotice } from "../../../shared/notice-text";
@@ -287,82 +287,61 @@ export class EspansoSection {
         return;
       }
 
-      // B-045: build the grouped map for the direct-install (no
-      // conflicts) path below. Triggers stay reachable via
-      // `<groupSlug>/<trigger>` keys — same shape as community packs.
-      const incoming: Record<string, string> = {};
-      for (const [trigger, replacement] of Object.entries(plan.importable)) {
-        incoming[joinKey(groupSlug, trigger)] = replacement;
-      }
-
       // B-139 skip summary is a PARSE-time concept — "how many matches
       // parsed vs. got skipped" — and stays constant regardless of
       // what the user later chooses in the conflict modal. Keep it
       // decoupled from the ux#7 "what actually changed" count below.
       const parsedCount = Object.keys(plan.importable).length;
 
-      if (plan.diff.conflicts.length > 0) {
-        // B-060: conflict modal title matches the section heading.
-        const modal = new PackagePreviewModal(
-          this.app,
-          this.plugin,
-          "Import from Espanso YAML",
-          plan.diff,
-        );
-        modal.onConfirm = async (resolved) => {
-          // The modal only logs a rejected onConfirm, so surface it here
-          // (mirrors `installFromIncoming`).
-          try {
-            // B-181: rolls the in-memory map back if the save rejects.
-            await commitSnippets(this.plugin.settings, resolved, () => this.plugin.saveSettings());
-            // Fold-in (ux#7): report what actually changed given the
-            // user's per-conflict choices, not the full pack size — a
-            // "keep everything" resolution used to still claim every
-            // entry as "imported".
-            const changedCount = countAppliedChanges(plan.diff, resolved);
-            this.reportInstalled(
-              espansoStatusEl,
-              changedCount,
-              parsedCount,
-              rawGroupLabel,
-              parsed.skipped,
-              plan.skippedCollisions,
-            );
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            new Notice(`Failed to install from YAML: ${sanitizeForNotice(message)}`);
-          }
-        };
-        modal.open();
-        // B-139: the skip list must also be visible in the confirm
-        // modal path, not just the eventual success Notice — inject
-        // it as the modal's first block so the user sees it BEFORE
-        // deciding how to resolve conflicts, without touching the
-        // shared `PackagePreviewModal` class (also used by
-        // `PackageBrowser`).
-        if (parsed.skipped.length > 0 || plan.skippedCollisions.length > 0) {
-          const skipEl = modal.contentEl.createDiv({
-            cls: "snipsy-espanso-skip-status",
-            attr: { "aria-live": "polite" },
-          });
-          skipEl.setText(formatSkipSummary(parsedCount, parsed.skipped, plan.skippedCollisions));
-          modal.contentEl.insertBefore(skipEl, modal.contentEl.firstChild);
+      // B-186: always preview, even with zero conflicts (same as the
+      // Text Snippets import and PackageBrowser). The user sees what
+      // lands, the "left out" collisions and the skipped constructs
+      // BEFORE anything is written, and Cancel writes nothing.
+      // B-060: modal title matches the section heading.
+      const modal = new PackagePreviewModal(
+        this.app,
+        this.plugin,
+        "Import from Espanso YAML",
+        plan.diff,
+      );
+      modal.onConfirm = async (resolved) => {
+        // The modal only logs a rejected onConfirm, so surface it here.
+        try {
+          // B-181: rolls the in-memory map back if the save rejects.
+          await commitSnippets(this.plugin.settings, resolved, () => this.plugin.saveSettings());
+          // Fold-in (ux#7): report what actually changed given the
+          // user's per-conflict choices, not the full pack size — a
+          // "keep everything" resolution used to still claim every
+          // entry as "imported".
+          const changedCount = countAppliedChanges(plan.diff, resolved);
+          this.reportInstalled(
+            espansoStatusEl,
+            changedCount,
+            parsedCount,
+            rawGroupLabel,
+            parsed.skipped,
+            plan.skippedCollisions,
+          );
+        } catch (err) {
+          // B-034 (finding #7): untrusted-YAML import path — sanitize
+          // before the Notice, same as every other error from this flow.
+          const message = err instanceof Error ? err.message : String(err);
+          new Notice(`Failed to install from YAML: ${sanitizeForNotice(message)}`);
         }
-      } else {
-        // No conflicts: every incoming entry is either genuinely new
-        // (`plan.diff.added`) or an identical-value no-op re-import
-        // that `diffIncoming` silently drops — `plan.diff.added.length`
-        // is the honest "actually changed" count (ux#7), not
-        // `Object.keys(incoming).length`.
-        void this.installFromIncoming(
-          incoming,
-          plan.diff.added.length,
-          parsedCount,
-          rawGroupLabel,
-          espansoStatusEl,
-          parsed.skipped,
-          plan.skippedCollisions,
-        );
+      };
+      modal.open();
+      // B-139: the skip list must be visible in the preview, not just
+      // the eventual success Notice — inject it as the modal's first
+      // block so the user sees it BEFORE applying, without touching the
+      // shared `PackagePreviewModal` class (also used by
+      // `PackageBrowser`).
+      if (parsed.skipped.length > 0 || plan.skippedCollisions.length > 0) {
+        const skipEl = modal.contentEl.createDiv({
+          cls: "snipsy-espanso-skip-status",
+          attr: { "aria-live": "polite" },
+        });
+        skipEl.setText(formatSkipSummary(parsedCount, parsed.skipped, plan.skippedCollisions));
+        modal.contentEl.insertBefore(skipEl, modal.contentEl.firstChild);
       }
     };
   }
@@ -398,37 +377,6 @@ export class EspansoSection {
       new Notice(`${base}. ${msg}`);
     } else {
       new Notice(base);
-    }
-  }
-
-  /** Apply already-prefixed snippets to settings. Caller has done the
-   *  collision check + diff computation. B-061: no re-parse.
-   *  `changedCount` is `plan.diff.added.length` — see the ux#7 note at
-   *  the call site. */
-  private async installFromIncoming(
-    incoming: Record<string, string>,
-    changedCount: number,
-    parsedCount: number,
-    groupLabel: string,
-    statusEl: HTMLElement,
-    skipped: EspansoSkip[],
-    collided: CollisionSkip[],
-  ) {
-    try {
-      // B-181: build a new map and commit it, so a rejected save rolls
-      // the in-memory snippets back instead of leaving them half-applied.
-      await commitSnippets(
-        this.plugin.settings,
-        { ...this.plugin.settings.snippets, ...incoming },
-        () => this.plugin.saveSettings(),
-      );
-      this.reportInstalled(statusEl, changedCount, parsedCount, groupLabel, skipped, collided);
-    } catch (err) {
-      // B-034 (finding #7): this is still on the untrusted-YAML
-      // import path — sanitize before the Notice, same as every other
-      // error surfaced from this flow.
-      const message = err instanceof Error ? err.message : String(err);
-      new Notice(`Failed to install from YAML: ${sanitizeForNotice(message)}`);
     }
   }
 }

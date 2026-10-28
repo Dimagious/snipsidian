@@ -733,6 +733,37 @@ describe("BasicTab — rollback when saveSettings rejects (B-181)", () => {
         expect(noticeCalls).toContain("Replaced library with 1 snippet");
     });
 
+    // ---- B-177: trigger checks on JSON import ----
+    it("B-177: merge writes only valid keys; bare `-` and oversize replacements are left out", async () => {
+        plugin.settings.snippets = { keep: "me" };
+        const { root } = mount();
+        await pickImportFile(root, { "-": "x", "->": "arrow", big: "a".repeat(10001) });
+        await applyImport("merge");
+
+        expect(plugin.settings.snippets).toEqual({ keep: "me", "->": "arrow" });
+        expect(Object.prototype.hasOwnProperty.call(plugin.settings.snippets, "-")).toBe(false);
+        expect(noticeCalls).toContain("Merged 1 snippet (2 skipped)");
+    });
+
+    it("B-177: replace keeps valid existing keys that the file also holds and drops rejected ones", async () => {
+        plugin.settings.snippets = { keep: "me", gone: "x" };
+        const { root } = mount();
+        await pickImportFile(root, { keep: "me", "+": "plus" });
+        await applyImport("replace");
+
+        expect(plugin.settings.snippets).toEqual({ keep: "me" });
+        expect(noticeCalls).toContain("Replaced library with 1 snippet (1 skipped)");
+    });
+
+    it("B-177: replace keeps the CURRENT value of an existing key the file holds but the import rejects", async () => {
+        plugin.settings.snippets = { "+": "old", keep: "me" };
+        const { root } = mount();
+        await pickImportFile(root, { "+": "new", fresh: "f" });
+        await applyImport("replace");
+
+        expect(plugin.settings.snippets).toEqual({ "+": "old", fresh: "f" });
+    });
+
     it("Restore default snippets restores the previous map and shows a Notice when the save rejects", async () => {
         const previous = { keep: "me" };
         plugin.settings.snippets = previous;

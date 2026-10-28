@@ -774,6 +774,27 @@ export class ImportPreviewModal extends Modal {
         const listEl = contentEl.createDiv({ cls: "snipsy-import-list" });
         this.refreshDiffList(listEl, diff);
 
+        // B-177: keys the import refuses to write, shown in both modes.
+        if (diff.rejected.length > 0) {
+            const MAX_REJECTED_ROWS = 50;
+            contentEl.createEl("p", {
+                cls: "snipsy-import-rejected-head",
+                text: `${diff.rejected.length} snippet${diff.rejected.length === 1 ? "" : "s"} will be skipped:`,
+            });
+            const rejectedEl = contentEl.createDiv({ cls: "snipsy-import-list snipsy-import-rejected" });
+            for (const r of diff.rejected.slice(0, MAX_REJECTED_ROWS)) {
+                const row = rejectedEl.createDiv({ cls: "snipsy-import-row" });
+                row.createSpan({ cls: "snipsy-import-key", text: r.key });
+                row.createSpan({ cls: "snipsy-import-value", text: r.reason });
+            }
+            if (diff.rejected.length > MAX_REJECTED_ROWS) {
+                rejectedEl.createDiv({
+                    cls: "snipsy-import-more",
+                    text: `…and ${diff.rejected.length - MAX_REJECTED_ROWS} more`,
+                });
+            }
+        }
+
         const footer = contentEl.createDiv({ cls: "modal-button-container" });
         const cancel = footer.createEl("button", { text: "Cancel" });
         cancel.onclick = () => this.close();
@@ -857,7 +878,9 @@ export class ImportPreviewModal extends Modal {
         diff: ReturnType<typeof computeImportDiff>,
     ) {
         if (this.mode === "replace") {
-            btn.textContent = `Replace all (${Object.keys(this.opts.incoming).length})`;
+            // Count what will actually be written (rejected keys are not).
+            const importCount = diff.added.length + diff.conflicts.length + diff.unchangedCount;
+            btn.textContent = `Replace all (${importCount})`;
             // Danger affordance: red CTA. Designer Q5 explicitly does NOT
             // want a second-confirm dialog — the visual + the `removed`
             // list in the diff is the affordance.

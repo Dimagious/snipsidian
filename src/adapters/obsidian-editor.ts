@@ -1,4 +1,4 @@
-import { moment } from "obsidian";
+import { moment, Notice } from "obsidian";
 import type { Editor, EditorPosition } from "obsidian";
 import { mapTabstops, resolveTabstops, substituteVariables } from "../engine/placeholders";
 import { clock } from "./clock";
@@ -196,6 +196,31 @@ function samePos(a: EditorPosition, b: EditorPosition): boolean {
     return a.line === b.line && a.ch === b.ch;
 }
 
+/** B-199: shown when the captured selection no longer holds the same text. */
+const STALE_TARGET_NOTICE = "Snippet not inserted: the note changed";
+
+/**
+ * B-199: the user moved (or the note changed) during the async placeholder
+ * resolution, so the live selection is not the captured one. Write over the
+ * captured range ONLY if it still holds the captured selection text; if the
+ * document changed above it (sync, another plugin) the positions are stale
+ * and overwriting would hit the wrong characters, so write nothing and tell
+ * the user instead.
+ */
+function replaceCapturedSelection(
+    editor: Editor,
+    text: string,
+    from: EditorPosition,
+    to: EditorPosition,
+    selection: string,
+): void {
+    if (editor.getRange(from, to) !== selection) {
+        new Notice(STALE_TARGET_NOTICE);
+        return;
+    }
+    editor.replaceRange(text, from, to);
+}
+
 /**
  * Inserts a snippet at the current cursor position, running the same
  * placeholder pipeline as trigger expansion (B-192 tabstops, then B-197
@@ -213,6 +238,10 @@ export async function insertSnippetAtCursor(
     const selection = editor.getSelection();
     const from = selection ? editor.getCursor("from") : cursor;
     const to = selection ? editor.getCursor("to") : cursor;
+    // B-199: cheap staleness probe for the no-selection target.
+    const capturedLine = editor.getLine(cursor.line);
+    const lineStillThere = (): boolean =>
+        cursor.line <= editor.lastLine() && editor.getLine(cursor.line) === capturedLine;
     const resolved = await substituteVariables(resolveTabstops(replacement), pickerContext(editor, deps));
 
     // Handle cursor position after insertion
@@ -228,7 +257,15 @@ export async function insertSnippetAtCursor(
 
     if (!samePos(editor.getCursor(), cursor) || editor.getSelection() !== selection) {
         // The user moved during the await: insert where they chose, do not teleport the cursor.
-        editor.replaceRange(cleanReplacement, from, to);
+        if (selection) {
+            replaceCapturedSelection(editor, cleanReplacement, from, to, selection);
+            return;
+        }
+        // B-199: the captured position is only trusted while its line still
+        // has the text it had at capture time; otherwise the note changed
+        // above it and the live cursor is the best target.
+        const target = lineStillThere() ? cursor : editor.getCursor();
+        editor.replaceRange(cleanReplacement, target, target);
         return;
     }
 
@@ -320,8 +357,9 @@ export async function wrapSelectionWithSnippet(
     const finalText = template.replace(CURSOR_SENTINEL, "");
 
     if (!samePos(editor.getCursor(), cursor) || editor.getSelection() !== selection) {
-        // The user moved during the await: replace the captured range, leave the cursor.
-        editor.replaceRange(finalText, from, to);
+        // The user moved during the await: replace the captured range (if it
+        // still holds the selection, B-199), leave the cursor.
+        replaceCapturedSelection(editor, finalText, from, to, selection);
         return;
     }
 

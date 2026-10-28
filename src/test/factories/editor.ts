@@ -35,12 +35,24 @@ export class MockEditor {
         this.cursor = { line: pos.line, ch: pos.ch };
     }
 
-    getCursor(_mode?: "from" | "to" | "head" | "anchor"): CursorPos {
-        // All cursor modes collapse to the single tracked position in
-        // this mock. Snipsy only reads `getCursor()` (no mode) on the
-        // hot path and `getCursor("from")` / `getCursor("to")` for
-        // selection bounds, which we don't model separately.
+    getCursor(mode?: "from" | "to" | "head" | "anchor"): CursorPos {
+        // The mock tracks one position. A selection is assumed to END at
+        // the cursor on a single line (same assumption as
+        // `replaceSelection`), so `"from"` is that many characters back.
+        // Every other mode returns the cursor itself.
+        if (mode === "from" && this.selection) {
+            return { line: this.cursor.line, ch: this.cursor.ch - this.selection.length };
+        }
         return { ...this.cursor };
+    }
+
+    /** Text between `from` and `to` (B-199 staleness check). */
+    getRange(from: CursorPos, to: CursorPos): string {
+        if (from.line === to.line) return this.getLine(from.line).slice(from.ch, to.ch);
+        const parts = [this.getLine(from.line).slice(from.ch)];
+        for (let l = from.line + 1; l < to.line; l++) parts.push(this.getLine(l));
+        parts.push(this.getLine(to.line).slice(0, to.ch));
+        return parts.join("\n");
     }
 
     getLine(i: number): string {

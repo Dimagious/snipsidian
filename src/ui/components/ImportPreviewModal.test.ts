@@ -260,3 +260,31 @@ describe("ImportPreviewModal — truncation", () => {
         expect(more?.textContent).toBe("…and 10 more");
     });
 });
+
+describe("ImportPreviewModal: rejected keys (B-177)", () => {
+    const incoming = { "-": "bullet", "a$b": "x", ok: "fine" };
+
+    it("lists each rejected key with its reason in merge mode", () => {
+        const { modal } = mount({ incoming });
+        const rows = modal.contentEl.querySelectorAll(".snipsy-import-rejected .snipsy-import-row");
+        expect(rows.length).toBe(2);
+        const text = modal.contentEl.querySelector(".snipsy-import-rejected")?.textContent ?? "";
+        expect(text).toContain("-");
+        expect(text).toContain("would rewrite Markdown lists");
+        expect(text).toContain("a$b");
+        expect(text).toContain("characters Snipsy can't use");
+    });
+
+    it("keeps listing them in replace mode and counts only writable keys on the button", () => {
+        const { modal } = mount({ incoming });
+        pickMode(modal, "replace");
+        expect(modal.contentEl.querySelectorAll(".snipsy-import-rejected .snipsy-import-row").length).toBe(2);
+        const apply = modal.contentEl.querySelector(".modal-button-container .mod-cta");
+        expect(apply?.textContent).toBe("Replace all (1)");
+    });
+
+    it("does not render a rejected section when every key is valid", () => {
+        const { modal } = mount({ incoming: { ok: "fine" } });
+        expect(modal.contentEl.querySelector(".snipsy-import-rejected")).toBeNull();
+    });
+});

@@ -383,6 +383,9 @@ export const INSTALL_MAX_SNIPPETS = 500;
  *  submission-time cap in `validateSnippets`. */
 export const INSTALL_MAX_REPLACEMENT_LEN = 10000;
 
+/** Maximum trigger length at install time (and JSON import, S-014). */
+export const INSTALL_MAX_TRIGGER_LEN = 50;
+
 /** Maximum total bytes a single install may write to `settings.snippets`.
  *  Defence against a small `snippets` count with megabyte-sized replacements. */
 export const INSTALL_MAX_TOTAL_BYTES = 2 * 1024 * 1024; // 2 MiB
@@ -438,8 +441,8 @@ export function validatePackageForInstall(
       errors.push("Trigger must be a non-empty string");
       continue;
     }
-    if (trigger.length > 50) {
-      errors.push(`Trigger "${truncate(trigger)}" exceeds 50 characters`);
+    if (trigger.length > INSTALL_MAX_TRIGGER_LEN) {
+      errors.push(`Trigger "${truncate(trigger)}" exceeds ${INSTALL_MAX_TRIGGER_LEN} characters`);
       continue;
     }
     if (SINGLE_STRUCTURAL_TRIGGER_RE.test(trigger)) {

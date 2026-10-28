@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 import { installObsidianDomHelpers } from "../../test/dom-polyfill";
 import { SnippetPickerService } from "../../core/snippet-picker";
 import { makeMockApp, makeMockEditor } from "../../test/factories/plugin";
@@ -301,5 +301,33 @@ describe("SnippetPickerModal — search filters live", () => {
 
         expect(modal.contentEl.querySelector(".empty-state")).not.toBeNull();
         expect(modal.contentEl.querySelectorAll(".snippet-item").length).toBe(0);
+    });
+});
+
+describe("SnippetPickerModal: close after insert is safe (B-199)", () => {
+    it("a throwing close() after the insert settles is logged, not an unhandled rejection", async () => {
+        const { modal } = mount({
+            snippets: [makeSnippet({ trigger: ":hi", replacement: "hello" })],
+        });
+        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const closeSpy = vi.spyOn(modal, "close").mockImplementation(() => {
+            throw new Error("already closed");
+        });
+        const unhandled = vi.fn();
+        process.on("unhandledRejection", unhandled);
+        try {
+            const input = modal.contentEl.querySelector(
+                "input[role=\"combobox\"]",
+            ) as HTMLInputElement;
+            input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+            await new Promise((r) => setTimeout(r, 20));
+
+            expect(closeSpy).toHaveBeenCalled();
+            expect(errorSpy).toHaveBeenCalledWith("Error closing snippet picker:", expect.any(Error));
+            expect(unhandled).not.toHaveBeenCalled();
+        } finally {
+            process.off("unhandledRejection", unhandled);
+            errorSpy.mockRestore();
+        }
     });
 });

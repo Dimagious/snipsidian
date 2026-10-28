@@ -1,4 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+
+// Capture `new Notice(msg)` so B-199 tests can assert the stale-target notice.
+const noticeCalls = vi.hoisted(() => [] as string[]);
+vi.mock("obsidian", async () => {
+    const actual = await vi.importActual("../test/stubs/obsidian");
+    return {
+        ...actual,
+        Notice: vi.fn().mockImplementation((msg: string) => {
+            noticeCalls.push(msg);
+        }),
+    };
+});
+
 import { makeExpandInput, makeContext, applyEditPlan, tryExpandAtSeparator, insertSnippetAtCursor, wrapSelectionWithSnippet } from "./obsidian-editor";
 import type { Dict } from "../engine/types";
 import { MockEditor } from "../test/factories/editor";
@@ -327,8 +340,8 @@ describe("adapters/obsidian-editor: wrapSelectionWithSnippet", () => {
     });
 
     it("[F3] strips $2..$9 in the wrap path: function $1($2) { $| }", async () => {
-        const ed = new MockEditor("");
-        ed.setCursor({ line: 0, ch: 0 });
+        const ed = new MockEditor("foo");
+        ed.setCursor({ line: 0, ch: 3 });
         ed.selection = "foo";
         await wrapSelectionWithSnippet(ed as any, "function $1($2) { $| }");
         expect(ed.getLine(0)).toBe("function foo() {  }");
@@ -534,8 +547,8 @@ describe("adapters/obsidian-editor: B-197 picker paths run the placeholder pipel
     });
 
     it("wrap: the caret lands at $| after substituted variables", async () => {
-        const ed = new MockEditor("");
-        ed.setCursor({ line: 0, ch: 0 });
+        const ed = new MockEditor("sel");
+        ed.setCursor({ line: 0, ch: 3 });
         ed.selection = "sel";
         await wrapSelectionWithSnippet(ed as any, "$date $|-$1", { now });
         expect(ed.getLine(0)).toBe("2025-09-02 -sel");
@@ -550,5 +563,109 @@ describe("adapters/obsidian-editor: B-197 picker paths run the placeholder pipel
             readClipboard: async () => { throw new Error("x"); },
         });
         expect(ed.getLine(0)).toBe("[s]");
+    });
+});
+
+// ---- B-199: validate the captured target after the async await ----
+describe("adapters/obsidian-editor: B-199 target validated after the $clipboard await", () => {
+    beforeEach(() => {
+        noticeCalls.length = 0;
+    });
+
+    /** Doc "Hello world" with "world" selected (cursor at its end). */
+    function selectedWorld(): MockEditor {
+        const ed = new MockEditor("above\nHello world");
+        ed.setCursor({ line: 1, ch: 11 });
+        ed.selection = "world";
+        return ed;
+    }
+
+    it("wrap: an unchanged document still wraps the selection and shows no Notice", async () => {
+        const ed = selectedWorld();
+        await wrapSelectionWithSnippet(ed as any, "**$1**$clipboard", { readClipboard: async () => "C" });
+        expect(ed.getLine(1)).toBe("Hello **world**C");
+        expect(noticeCalls).toEqual([]);
+    });
+
+    it("wrap: text inserted ABOVE during the await shifts the range, so nothing is overwritten and a Notice shows", async () => {
+        const ed = selectedWorld();
+        await wrapSelectionWithSnippet(ed as any, "**$1**$clipboard", {
+            readClipboard: async () => {
+                // Another plugin / sync edits the target line's start; the
+                // user's cursor/selection drifts with it.
+                ed.lines[1] = "XX" + ed.lines[1];
+                ed.cursor = { line: 1, ch: 13 };
+                return "C";
+            },
+        });
+        expect(ed.getLine(1)).toBe("XXHello world");
+        expect(noticeCalls).toEqual(["Snippet not inserted: the note changed"]);
+    });
+
+    it("wrap: the user moved but the captured range still holds the selection, so it is replaced there", async () => {
+        const ed = selectedWorld();
+        await wrapSelectionWithSnippet(ed as any, "**$1**$clipboard", {
+            readClipboard: async () => {
+                ed.selection = "";
+                ed.setCursor({ line: 0, ch: 2 });
+                return "C";
+            },
+        });
+        expect(ed.getLine(1)).toBe("Hello **world**C");
+        expect(noticeCalls).toEqual([]);
+    });
+
+    it("insert: the user moved but the captured line is unchanged, so it lands at the captured position (B-136 kept)", async () => {
+        const ed = new MockEditor("ab\ncd");
+        ed.setCursor({ line: 0, ch: 1 });
+        await insertSnippetAtCursor(ed as any, "X$clipboard", {
+            readClipboard: async () => {
+                ed.setCursor({ line: 1, ch: 2 });
+                return "C";
+            },
+        });
+        expect(ed.getLine(0)).toBe("aXCb");
+        expect(noticeCalls).toEqual([]);
+    });
+
+    it("insert: the captured line changed during the await, so it falls back to the live cursor", async () => {
+        const ed = new MockEditor("ab\ncd");
+        ed.setCursor({ line: 0, ch: 1 });
+        await insertSnippetAtCursor(ed as any, "X$clipboard", {
+            readClipboard: async () => {
+                // A line is inserted above; the captured line index now holds other text.
+                ed.lines.unshift("new first line");
+                ed.setCursor({ line: 2, ch: 2 }); // user is on "cd", now line 2
+                return "C";
+            },
+        });
+        expect(ed.lines).toEqual(["new first line", "ab", "cdXC"]);
+        expect(noticeCalls).toEqual([]);
+    });
+
+    it("insert with a selection: a stale captured range writes nothing and shows the Notice", async () => {
+        const ed = selectedWorld();
+        await insertSnippetAtCursor(ed as any, "U$clipboard", {
+            readClipboard: async () => {
+                ed.lines[1] = "XX" + ed.lines[1];
+                ed.cursor = { line: 1, ch: 13 };
+                return "C";
+            },
+        });
+        expect(ed.getLine(1)).toBe("XXHello world");
+        expect(noticeCalls).toEqual(["Snippet not inserted: the note changed"]);
+    });
+
+    it("insert: the note shrank so the captured line no longer exists, falls back to the live cursor", async () => {
+        const ed = new MockEditor("a\nb\nc");
+        ed.setCursor({ line: 2, ch: 1 });
+        await insertSnippetAtCursor(ed as any, "X$clipboard", {
+            readClipboard: async () => {
+                ed.lines = ["a"];
+                ed.setCursor({ line: 0, ch: 1 });
+                return "C";
+            },
+        });
+        expect(ed.lines).toEqual(["aXC"]);
     });
 });

@@ -422,7 +422,13 @@ export class SnippetPickerModal extends Modal {
             })
             .finally(() => {
                 this.isInserting = false;
-                this.close();
+                // B-199: Escape may already have closed the modal during the
+                // await; a throw here would be an unhandled rejection.
+                try {
+                    this.close();
+                } catch (error) {
+                    console.error("Error closing snippet picker:", error);
+                }
             });
     }
 }

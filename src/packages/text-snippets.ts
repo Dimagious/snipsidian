@@ -12,7 +12,7 @@ import {
     isBadTrigger,
     normalizeTrigger,
 } from "../engine/triggers";
-import { INSTALL_MAX_REPLACEMENT_LEN } from "../services/package-validator";
+import { INSTALL_MAX_REPLACEMENT_LEN, INSTALL_MAX_TRIGGER_LEN } from "../services/package-validator";
 
 /** One record that couldn't be imported, and why. */
 export interface TextSnippetsSkip {
@@ -45,7 +45,7 @@ const DEFAULT_PASTE = "$pst$";
 const PAIR_SEPARATOR = " : ";
 
 /** Same cap as `validatePackageForInstall` (trigger length). */
-const MAX_TRIGGER_LEN = 50;
+const MAX_TRIGGER_LEN = INSTALL_MAX_TRIGGER_LEN;
 
 /** The sample record the source plugin ships as its default
  *  `snippets_file`; importing it would just add a junk `snippets` snippet. */
