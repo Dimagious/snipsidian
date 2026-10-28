@@ -903,10 +903,11 @@ replacement: |
         <div class="keys" style="flex-direction:column;gap:8px;max-width:720px">
           <div><code>$|</code> where the caret lands. Without it, the caret goes after the text.</div>
           <div><code>$date</code> today, as <code>YYYY-MM-DD</code>.</div>
-          <div><code>$time</code> the time now, as <code>HH:MM</code>.</div>
+          <div><code>$time</code> the time now, as <code>HH:mm</code>.</div>
+          <div><code>{{date:FORMAT}}</code>, <code>{{time:FORMAT}}</code> a formatted date or time, the same syntax as core Templates. <code>{{date}}</code> alone is <code>YYYY-MM-DD</code>.</div>
           <div><code>$filename</code> the name of the note you are typing in.</div>
           <div><code>$clipboard</code> what is on the clipboard, read at the moment the snippet expands.</div>
-          <div><code>$1</code> the selected text, when you wrap a selection through <b>Insert snippet…</b>.</div>
+          <div><code>$1</code> the selected text when you wrap a selection through <b>Insert snippet…</b>; otherwise the caret, if there is no <code>$|</code>.</div>
         </div>
         <div class="pair side" style="margin-top:22px">
           <div class="codeblock" data-code>
@@ -922,8 +923,8 @@ replacement: |
           </div>
         </div>
         <div class="callout warn">
-          <div class="callout-title"><svg><use href="#i-alert"/></svg><code style="background:none;border:0;padding:0;color:inherit">$1</code> and <code style="background:none;border:0;padding:0;color:inherit">$2</code> are not Tab-stops</div>
-          <p>Snipsy has one caret position per snippet. Pressing Tab after an expansion does not jump to a next field. <code>$1</code> only means "the selection" when you wrap one.</p>
+          <div class="callout-title"><svg><use href="#i-alert"/></svg>One caret per snippet</div>
+          <p>Tab does not jump to a next field. The first <code>$1</code> becomes the caret and <code>$2</code> to <code>$9</code> are dropped. Prices like <code>$1.50</code> or <code>$1,000</code> and anything inside code stay as typed; write <code>\$5</code> for a literal <code>$5</code>.</p>
         </div>
       </section>
 
@@ -1002,6 +1003,7 @@ replacement: |
           <span class="chip"><code class="tr">:todo␣</code><span class="ar">→</span><span class="rs">- [ ] <i class="cur"></i>␣</span></span>
         </div>
         <p class="prose" style="margin-top:14px">The prefix is consumed: it does not stay in the note. It is one switch for every trigger, and it is off by default.</p>
+        <p class="prose" style="margin-top:14px">In the same place, <b>Highlight expansions</b> underlines the text an expansion just inserted. Press Backspace right away and the trigger comes back, so <code>brb␣</code> turns into <code>be right back␣</code> and back again. Move the caret or keep typing and the underline goes. Off by default.</p>
         <figure class="shot">
           <picture>
             <source data-dark srcset="img/prefix-dark.png" media="(prefers-color-scheme: dark)">
