@@ -7,9 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Formatted date and time placeholders** (B-166): `{{date}}`, `{{time}}`, `{{date:FORMAT}}` and `{{time:FORMAT}}`, the same syntax as core Templates, formatted with Obsidian's Moment. Defaults are `YYYY-MM-DD` and `HH:mm`; an empty format (`{{date:}}`) uses the default, `[text]` escapes literals, unknown tokens such as `{{foo}}` stay as typed. `$date` and `$time` are unchanged. The values are resolved before the cursor marker, so `$|` after a long date still lands in the right place.
+- **Placeholder cheat-line** (B-195): the Add snippet window and the inline Edit form show a one-line reminder of the available placeholders under the Replacement field, with a link to the README section.
+
 ### Fixed
 
 - **Triggers expand again when the separator arrives through an input method** (B-191): on some setups (reported on Linux Wayland) every character, including the space after a trigger, is delivered as its own IME composition. The expander correctly never edits mid-composition, but it also never retried once the composition ended, so `brb ` stayed as typed. If a typed separator was skipped only because of composition, the expansion now runs once right after the composition ends (never while composing, and not for paste, undo or drop). On Wayland, `--ozone-platform=x11` is a workaround if triggers still do not expand.
+- **Insert snippet now expands variables** (B-197): snippets inserted from "Insert snippet…" (with or without a selection) used to skip `$date`, `$time`, `{{date}}`/`{{time}}` (with formats), `$filename` and `$clipboard`, so `## $date $|` produced `## `. They now go through the same placeholder pipeline as trigger expansion. Over a selection the selection is inserted last and verbatim, so selected text containing `$date`, `$1` or `{{date}}` is never expanded. If the clipboard cannot be read, `$clipboard` becomes empty.
+- **`$1` no longer leaks into the note** (B-192): when a snippet expanded from a trigger, or inserted from the picker with no selection, contained `$1` (for example `[$1](url)`), the literal `$1` was typed. Now the first `$1`..`$9` becomes the cursor when the snippet has no `$|` (`$|` wins when both are present) and the rest are dropped. A `$N` followed by a letter, digit or `_` (`$10`, `$1x`, `$1é`), or by `.` or `,` and a digit (`$1.50`, `$1,000`), and any `$N` inside a code block or inline code, stays as typed; `\$5` writes a literal `$5` (the backslash is dropped). A bare `$5` in a price is still a tabstop, so escape it. Inserting over a selection puts the selection at the first `$1`, and now also drops `$2`..`$9` instead of leaving them in the note; the selection itself is inserted verbatim.
 
 ## [1.6.0] - 2026-10-08
 

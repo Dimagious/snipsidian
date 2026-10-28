@@ -3,6 +3,7 @@ import type SnipSidianPlugin from "../../main";
 import { splitKey, slugifyGroup } from "../../store/keys";
 import { GroupManager } from "../utils/group-utils";
 import { UIStateManager } from "../utils/ui-state";
+import { renderPlaceholderHint } from "../utils/placeholder-hint";
 import { AddSnippetModal, ConfirmModal, GroupPickerModal, TextPromptModal, type SnippetOpResult } from "./Modals";
 import { applyAddSnippet, planEditSnippet } from "../../core/snippet-ops";
 
@@ -652,6 +653,8 @@ export class SnippetsTab {
         replacementInput.addEventListener("input", () => {
             draft.replacement = replacementInput.value;
         });
+        // B-195: placeholder cheat-line under the textarea.
+        renderPlaceholderHint(replacementField);
 
         const actions = form.createDiv({ cls: "actions" });
         const cancelBtn = actions.createEl("button", {

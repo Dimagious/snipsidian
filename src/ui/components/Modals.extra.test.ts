@@ -333,6 +333,17 @@ describe("AddSnippetModal", () => {
         expect(tagged[0]?.querySelector("textarea")).toBeTruthy();
     });
 
+    it("[B-195] shows the placeholder cheat-line in the Replacement row only", () => {
+        const modal = new AddSnippetModal(app);
+        modal.open();
+        const hints = modal.contentEl.querySelectorAll(".snipsidian-placeholder-hint");
+        expect(hints.length).toBe(1);
+        expect(hints[0]?.closest(".setting-item")?.querySelector("textarea")).toBeTruthy();
+        expect(hints[0]?.textContent).toContain("$| cursor");
+        expect(hints[0]?.textContent).toContain("$clipboard");
+        expect(hints[0]?.querySelector("a")?.getAttribute("href")).toContain("#placeholders");
+    });
+
     it("prefills the replacement (multi-line preserved) and leaves the trigger empty (B-175)", () => {
         const modal = new AddSnippetModal(app, undefined, undefined, "a\nb\n$date");
         modal.open();

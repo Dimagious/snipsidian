@@ -173,6 +173,19 @@ describe("SnippetsTab — single-edit-mode (B-021 regression surface)", () => {
         expect(replacementInput.value).toBe("world");
     });
 
+    it("[B-195] shows the placeholder cheat-line under the Replacement textarea", () => {
+        mount({ hello: "world" });
+        expandGroup("Ungrouped");
+        findRowEditButton("hello")!.click();
+        const field = root.querySelector(".snippet-row.is-editing .field.is-full");
+        const hint = field!.querySelector(".snipsidian-placeholder-hint");
+        expect(hint?.textContent).toContain("$1 selection or cursor");
+        expect(hint?.textContent).toContain("{{date:FORMAT}}");
+        expect(hint?.querySelector("a")?.getAttribute("href")).toBe(
+            "https://github.com/Dimagious/snipsidian#placeholders",
+        );
+    });
+
     it("discards row A's draft when the user opens Edit on row B (single-edit-mode)", () => {
         mount({ alpha: "1", bravo: "2" });
         expandGroup("Ungrouped");

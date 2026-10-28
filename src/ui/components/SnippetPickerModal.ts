@@ -2,6 +2,8 @@ import { Modal, App, MarkdownView, Notice, setIcon } from "obsidian";
 import type { SnippetItem, SnippetSearchQuery } from "../../types";
 import type { SnippetPickerAPI } from "../../core/snippet-picker";
 import { insertSnippetAtCursor, wrapSelectionWithSnippet } from "../../adapters/obsidian-editor";
+import { clock } from "../../adapters/clock";
+import { readClipboardSafe } from "../../adapters/clipboard";
 import { PICKER_HOST_CLASS } from "../utils/style-hooks";
 
 /**
@@ -407,19 +409,21 @@ export class SnippetPickerModal extends Modal {
         this.isInserting = true;
         const editor = activeView.editor;
         const selection = editor.getSelection();
+        const deps = { filename: activeView.file?.name, now: clock.now(), readClipboard: readClipboardSafe };
 
-        try {
-            if (selection) {
-                wrapSelectionWithSnippet(editor, selectedSnippet.replacement);
-            } else {
-                insertSnippetAtCursor(editor, selectedSnippet.replacement);
-            }
-        } catch (error) {
-            console.error('Error inserting snippet:', error);
-        } finally {
-            this.isInserting = false;
-            this.close();
-        }
+        // B-197: the placeholder pipeline is async (`$clipboard`). The target
+        // position is captured inside the adapter before its first await.
+        const run = selection
+            ? wrapSelectionWithSnippet(editor, selectedSnippet.replacement, deps)
+            : insertSnippetAtCursor(editor, selectedSnippet.replacement, deps);
+        void run
+            .catch((error: unknown) => {
+                console.error("Error inserting snippet:", error);
+            })
+            .finally(() => {
+                this.isInserting = false;
+                this.close();
+            });
     }
 }
 

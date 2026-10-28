@@ -162,11 +162,13 @@ and tables.
 | Placeholder | Becomes |
 |---|---|
 | `$\|` | where the cursor lands after expanding |
+| `$1` | the selected text, when you insert the snippet from the picker over a selection. Otherwise it is the cursor when the snippet has no `$\|`: `[$1](url)` puts the caret between the brackets. Further `$1`..`$9` are dropped. Not a tabstop: `$1` followed by a letter, digit or `_` (`$10`, `$1x`, `$1é`), by `.` or `,` and a digit (`$1.50`, `$1,000`), or inside a code block or `inline code`. `$5 each` is still a tabstop, so write `\$5` for a literal dollar amount |
 | `$date` | today, `YYYY-MM-DD` |
-| `$time` | now, `HH:MM` |
+| `$time` | now, `HH:mm` |
+| `{{date}}`, `{{time}}` | today / now in `YYYY-MM-DD` / `HH:mm`, the same tokens as core Templates |
+| `{{date:FORMAT}}`, `{{time:FORMAT}}` | your own [Moment.js format](https://momentjs.com/docs/#/displaying/format/), e.g. `{{date:dddd, D MMMM}}` gives `Tuesday, 2 September`; wrap literal text in `[ ]`. An empty format (`{{date:}}`) uses the default |
 | `$filename` | the current note's name |
 | `$clipboard` | what is on your clipboard at that moment |
-| `$1` | the selected text, when you insert the snippet from the picker over a selection |
 
 ### Groups
 

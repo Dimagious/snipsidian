@@ -6,6 +6,9 @@ export type ExpandContext = {
     isInFrontmatter: boolean;
     filename?: string;
     now: Date;
+    /** B-166: formats `now` with a moment-style format string for `{{date:FMT}}`
+     *  / `{{time:FMT}}`. Injected by the adapter (engine stays Obsidian-free). */
+    formatDate?: (date: Date, format: string) => string;
     readClipboard?: () => Promise<string>;
 };
 

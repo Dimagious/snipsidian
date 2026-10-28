@@ -5,6 +5,7 @@ import { displayGroupTitle, slugifyGroup, splitKey } from "../../store/keys";
 import { computeImportDiff } from "../../services/import-diff";
 import { normalizeTrigger } from "../../engine/triggers";
 import { SETTING_TEXTAREA_CLASS } from "../utils/style-hooks";
+import { renderPlaceholderHint } from "../utils/placeholder-hint";
 
 /** Simple JSON copy/paste modal */
 export class JSONModal extends Modal {
@@ -596,6 +597,8 @@ export class AddSnippetModal extends Modal {
         // Full-width stacked layout hook (replaces a `:has(textarea)` rule
         // the community scorecard flags).
         replacementSetting.settingEl.addClass(SETTING_TEXTAREA_CLASS);
+        // B-195: placeholder cheat-line as a second line of the row description.
+        renderPlaceholderHint(replacementSetting.descEl);
 
         new Setting(contentEl)
             .setName("Group")

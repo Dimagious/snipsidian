@@ -77,22 +77,29 @@ test.describe("variable substitution in real expansion", () => {
         expect(text).toMatch(/Today: \d{4}-\d{2}-\d{2} — more done /);
     });
 
-    test("tabstops `$1` `$2` stay as literal markers in the inserted text", async ({
+    test("tabstops `$1` `$2` are not left as literal text (B-192)", async ({
         win,
     }) => {
-        // The snippet picker uses tabstops, but for hotstring
-        // expansion the current engine inserts them literally —
-        // they're a placeholder for the user to fill in. Pin this
-        // contract so a future refactor (e.g. wiring CM6 snippet
-        // mode) doesn't silently break expansions that contain
-        // numeric placeholders.
+        // B-192: hotstring expansion used to insert `$1`/`$2` literally.
+        // With a `$|` present it wins and every `$N` is stripped.
         await seedSnippet(win, "fn", "function $1($2) { $| }");
         await ui.typeInEditor(win, "fn ");
         const text = await ui.editorText(win);
-        expect(text).toContain("$1");
-        expect(text).toContain("$2");
-        // `$|` marker is consumed (replaced by cursor placement),
-        // not left literally in the document.
+        expect(text).not.toContain("$1");
+        expect(text).not.toContain("$2");
         expect(text).not.toContain("$|");
+        expect(text).toContain("function () {  }");
+    });
+
+    test("[B-192] `[$1](url)` with no `$|` puts the caret between the brackets", async ({
+        win,
+    }) => {
+        await seedSnippet(win, "lnk", "[$1](url)");
+        await ui.typeInEditor(win, "lnk ");
+        expect(await ui.editorText(win)).toBe("[](url) ");
+        // Hotstring cursor lands before the separator-free expansion end;
+        // typing now must go inside the brackets, not after the link.
+        await ui.typeInEditor(win, "text");
+        expect(await ui.editorText(win)).toBe("[text](url) ");
     });
 });

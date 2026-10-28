@@ -739,10 +739,18 @@
    "renders as a full-size line with a divider under it, so it looks
    like a fourth setting"). */
 .snipsidian-modal .snipsidian-addsnippet-hint,
-.snipsidian-modal .snipsidian-prompt-hint {
+.snipsidian-modal .snipsidian-prompt-hint,
+.snipsidian-modal .snipsidian-placeholder-hint {
   display: block;
   margin-top: 4px;
 }
+
+/* B-195: same muted line under the inline edit form's Replacement textarea. */
+.snipsidian-settings .snipsidian-placeholder-hint {
+  display: block;
+  margin-top: 4px;
+}
+
 .snipsidian-modal .snipsidian-addsnippet-hint {
   color: var(--text-accent);
 }

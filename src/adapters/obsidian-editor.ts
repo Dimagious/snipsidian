@@ -1,4 +1,8 @@
+import { moment } from "obsidian";
 import type { Editor, EditorPosition } from "obsidian";
+import { mapTabstops, resolveTabstops, substituteVariables } from "../engine/placeholders";
+import { clock } from "./clock";
+import { readClipboardSafe } from "./clipboard";
 import { expand } from "../engine";
 import type { Dict, EditPlan, ExpandContext, ExpandInput } from "../engine/types";
 import { isSeparator } from "../shared/delimiters";
@@ -53,6 +57,7 @@ export function makeContext(
         isInFrontmatter: isFront,
         filename,
         now,
+        formatDate: (date, format) => moment(date).format(format),
         readClipboard
     };
 }
@@ -176,23 +181,55 @@ export async function tryExpandAtSeparator(
     applyEditPlan(editor, plan, targetLine);
 }
 
+/** B-197: what the picker paths need to run the full placeholder pipeline. */
+export type SnippetInsertDeps = {
+    filename?: string;
+    now?: Date;
+    readClipboard?: () => Promise<string>;
+};
+
+function pickerContext(editor: Editor, deps: SnippetInsertDeps): ExpandContext {
+    return makeContext(editor, deps.filename, deps.now ?? clock.now(), deps.readClipboard ?? readClipboardSafe);
+}
+
+function samePos(a: EditorPosition, b: EditorPosition): boolean {
+    return a.line === b.line && a.ch === b.ch;
+}
+
 /**
- * Inserts a snippet at the current cursor position
+ * Inserts a snippet at the current cursor position, running the same
+ * placeholder pipeline as trigger expansion (B-192 tabstops, then B-197
+ * variables, then the `$|` cursor). The target position is captured BEFORE
+ * the (possibly async, `$clipboard`) substitution: if the user moved
+ * meanwhile the text still lands at the captured position and the cursor is
+ * left alone (B-136 / B-147).
  */
-export function insertSnippetAtCursor(editor: Editor, replacement: string): void {
+export async function insertSnippetAtCursor(
+    editor: Editor,
+    replacement: string,
+    deps: SnippetInsertDeps = {},
+): Promise<void> {
     const cursor = editor.getCursor();
     const selection = editor.getSelection();
     const from = selection ? editor.getCursor("from") : cursor;
+    const to = selection ? editor.getCursor("to") : cursor;
+    const resolved = await substituteVariables(resolveTabstops(replacement), pickerContext(editor, deps));
 
     // Handle cursor position after insertion
-    const cursorMatch = replacement.indexOf('$|');
-    let cleanReplacement = replacement;
+    const cursorMatch = resolved.indexOf('$|');
+    let cleanReplacement = resolved;
     let cursorPrefix = "";
 
     if (cursorMatch !== -1) {
         // Remove $| from text
-        cleanReplacement = replacement.replace(/\$\|/g, '');
-        cursorPrefix = replacement.slice(0, cursorMatch);
+        cleanReplacement = resolved.replace(/\$\|/g, '');
+        cursorPrefix = resolved.slice(0, cursorMatch);
+    }
+
+    if (!samePos(editor.getCursor(), cursor) || editor.getSelection() !== selection) {
+        // The user moved during the await: insert where they chose, do not teleport the cursor.
+        editor.replaceRange(cleanReplacement, from, to);
+        return;
     }
 
     if (selection) {
@@ -223,41 +260,70 @@ export function insertSnippetAtCursor(editor: Editor, replacement: string): void
 }
 
 /**
- * Wraps selection with a snippet (if supported)
+ * Wraps selection with a snippet. Pipeline (B-197): resolve tabstops on the
+ * template (the first `$1` is the selection slot, other tabstops are
+ * stripped) -> substitute variables -> locate `$|` -> insert the selection
+ * verbatim (never re-scanned, so a selection containing `$date`, `$1` or
+ * `$|` stays literal) -> place the cursor.
  */
-export function wrapSelectionWithSnippet(editor: Editor, replacement: string): void {
+export async function wrapSelectionWithSnippet(
+    editor: Editor,
+    replacement: string,
+    deps: SnippetInsertDeps = {},
+): Promise<void> {
     const selection = editor.getSelection();
-    
+
     if (!selection) {
         // If no selection, just insert
-        insertSnippetAtCursor(editor, replacement);
+        await insertSnippetAtCursor(editor, replacement, deps);
         return;
     }
-    
-    // Get current cursor position before replacement
+
+    // Capture the target before any await (B-136 / B-147).
+    const cursor = editor.getCursor();
     const from = editor.getCursor('from');
+    const to = editor.getCursor('to');
 
     const CURSOR_SENTINEL = "__SNIPSIDIAN_CURSOR__";
-    const cursorMatch = replacement.indexOf("$|");
+    // Private-use delimiters: a word character here would defeat the `\b` of
+    // `$clipboard$1` / `$date$1` during variable substitution.
+    const SELECTION_SLOT = "\uE000SNIPSIDIAN_SELECTION\uE001";
+    const hasSelToken = replacement.includes("${SEL}");
+    let slotUsed = false;
+    let template = mapTabstops(replacement, (n) => {
+        if (n === 1 && !hasSelToken && !slotUsed) {
+            slotUsed = true;
+            return SELECTION_SLOT;
+        }
+        return "";
+    });
 
-    let template = replacement;
+    template = await substituteVariables(template, pickerContext(editor, deps));
+
+    const cursorMatch = template.indexOf("$|");
     if (cursorMatch >= 0) {
-        template = replacement.replace("$|", CURSOR_SENTINEL).replace(/\$\|/g, "");
-    } else {
-        template = replacement.replace(/\$\|/g, "");
+        template = template.replace("$|", CURSOR_SENTINEL).replace(/\$\|/g, "");
     }
 
-    if (template.includes("${SEL}")) {
-        template = template.replace("${SEL}", selection);
-    } else if (template.includes("$1")) {
-        template = template.replace("$1", selection);
+    // The selection goes in LAST, through replacer functions, so it is
+    // inserted verbatim (`$2`, `$&`, `$date`).
+    if (hasSelToken) {
+        template = template.replace("${SEL}", () => selection);
+    } else if (slotUsed) {
+        template = template.replace(SELECTION_SLOT, () => selection);
     } else if (template.includes(CURSOR_SENTINEL)) {
         // If no selection placeholders exist, insert selection at cursor marker.
-        template = template.replace(CURSOR_SENTINEL, `${selection}${CURSOR_SENTINEL}`);
+        template = template.replace(CURSOR_SENTINEL, () => `${selection}${CURSOR_SENTINEL}`);
     }
 
     const cursorOffset = template.indexOf(CURSOR_SENTINEL);
     const finalText = template.replace(CURSOR_SENTINEL, "");
+
+    if (!samePos(editor.getCursor(), cursor) || editor.getSelection() !== selection) {
+        // The user moved during the await: replace the captured range, leave the cursor.
+        editor.replaceRange(finalText, from, to);
+        return;
+    }
 
     editor.replaceSelection(finalText);
 
