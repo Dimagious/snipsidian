@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-28
+
 ### Added
 
 - **Formatted date and time placeholders** (B-166): `{{date}}`, `{{time}}`, `{{date:FORMAT}}` and `{{time:FORMAT}}`, the same syntax as core Templates, formatted with Obsidian's Moment. Defaults are `YYYY-MM-DD` and `HH:mm`; an empty format (`{{date:}}`) uses the default, `[text]` escapes literals, unknown tokens such as `{{foo}}` stay as typed. `$date` and `$time` are unchanged. The values are resolved before the cursor marker, so `$|` after a long date still lands in the right place.
