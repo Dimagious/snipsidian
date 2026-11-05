@@ -43,11 +43,21 @@ Symbols work too, so `->` can become `→`.
 **Install a pack.** Twelve packs, one click each: Meetings, Daily Journal, Code Review, Symbols &
 Math and more. Each pack gets its own group, so you can mute it or delete it whole.
 
+<p>
+  <img alt="A signature is selected and Add snippet from selection opens with it filled in. After saving the trigger sig, typing sig and a space on a new line expands into the signature" src="docs/screens/add-from-selection.gif" width="49%">
+  <img alt="Install on the Meetings pack opens a preview of 8 new snippets. After Apply, typing mtg and a space expands into a meeting template with the cursor on Attendees" src="docs/screens/install-pack.gif" width="49%">
+</p>
+
 **Take an expansion back.** Undo removes it in one step. Turn on **Highlight expansions** and
 Backspace restores the trigger too.
 
 **Stop accidental expansions.** Mute a group, or turn on prefix mode so only `:todo` expands and
 `todo` stays a word.
+
+<p>
+  <img alt="With Highlight expansions on, typing brb and a space expands into be right back with a dotted underline, and Backspace restores brb" src="docs/screens/take-back.gif" width="49%">
+  <img alt="Typing now and a space expands into a time. With Require a prefix before triggers on, now stays a word and :now expands into 14:05" src="docs/screens/prefix-mode.gif" width="49%">
+</p>
 
 ## Coming from another tool
 
