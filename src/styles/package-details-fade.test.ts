@@ -65,3 +65,31 @@ describe("package details — scrollable list fade", () => {
         expect(css).toContain(`.modal.${PICKER_HOST_CLASS} .modal-title`);
     });
 });
+
+// B-216: in a squeezed picker (phone, soft keyboard open) the results
+// list gives up height before the preview card does.
+describe("picker — list yields height before the preview (B-216)", () => {
+    const css = readFileSync(join(__dirname, "main.css"), "utf8");
+    const body = (selector: string): string => {
+        const match = new RegExp(`${selector.replace(/[.]/g, "\\.")}\\s*\\{([^}]*)\\}`).exec(css);
+        if (!match?.[1]) throw new Error(`Rule "${selector}" not found`);
+        return match[1];
+    };
+
+    it("preview card does not shrink", () => {
+        expect(body(".snippet-picker-modal .snippet-preview")).toMatch(/flex-shrink\s*:\s*0/);
+        expect(body(".snippet-picker-modal .preview-label")).not.toMatch(/flex-shrink/);
+    });
+
+    it("results list keeps shrinking (overflow auto) and has no unscoped min-height", () => {
+        const list = body(".snippet-picker-modal .snippet-results");
+        expect(list).toMatch(/overflow-y\s*:\s*auto/);
+        expect(list).not.toMatch(/min-height/);
+        expect(list).not.toMatch(/flex-shrink\s*:\s*0/);
+    });
+
+    it("the min-height floor applies on phones only", () => {
+        const phone = body(".is-phone .snippet-picker-modal .snippet-results");
+        expect(phone).toMatch(/min-height\s*:\s*\d+px/);
+    });
+});

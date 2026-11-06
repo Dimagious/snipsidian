@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Picker preview on small screens** (B-216): on a phone with little vertical room, the picker's preview is no longer cut off; the results list gives up height first.
 - **Commands have icons** (B-215): "Insert snippet…", "Add snippet from selection" and "Open settings" showed a question mark when added to the mobile toolbar. They now show a text-cursor, a text-selection and a settings icon.
 - Share a package (B-202): the submission validator rejected every approved catalog pack. It now accepts the catalog categories (`development`, `emojis`, `journaling`, `obsidian`, `research`, `symbols`, `utility`, `work`) and `&` in package names (other whitespace than a plain space is now rejected there), a failed strict-mode check always reports a reason, missing optional fields (category, tags, license, homepage) no longer warn, and the tag length limit is 30. The whole catalog now passes in default (strict) mode.
 
