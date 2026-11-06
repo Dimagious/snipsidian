@@ -128,7 +128,7 @@ names the first five triggers before it asks.
 
 ### Community catalog
 
-**Settings → Snipsy → Packages.** Twelve packs, one click each:
+**Settings → Snipsy → Packages.** Thirteen packs, one click each:
 
 | | |
 |---|---|
@@ -138,6 +138,7 @@ names the first five triggers before it asks.
 | Code Review | Research & Academic |
 | Symbols & Math | Date & Time |
 | Obsidian Callouts | Basic Emojis |
+| Typography | |
 
 Reinstalling a pack whose snippets you have edited opens a preview before anything is written:
 keep your version or take the pack's, snippet by snippet. A pack that wants a trigger already

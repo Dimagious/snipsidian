@@ -40,7 +40,7 @@ triggers and replacements, preview the result and insert it. You can give it a h
 **Add your own.** Select text, run **Snipsy: Add snippet from selection** and type a trigger.
 Symbols work too, so `->` can become `→`.
 
-**Install a pack.** Twelve packs, one click each: Meetings, Daily Journal, Code Review, Symbols &
+**Install a pack.** Thirteen packs, one click each: Meetings, Daily Journal, Code Review, Symbols &
 Math and more. Each pack gets its own group, so you can mute it or delete it whole.
 
 <p>
