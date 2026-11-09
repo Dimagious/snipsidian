@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-11-09
+
 ### Fixed
 
 - **Picker preview on small screens** (B-216): on a phone with little vertical room, the picker's preview is no longer cut off; the results list gives up height first.
