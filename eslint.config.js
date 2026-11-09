@@ -162,6 +162,9 @@ export default [
       // .claude/** is the git-excluded local assistant workspace
       // (probe scripts, notes); never shipped, never linted.
       '.claude/**',
+      // design/** holds the owner's local design drafts (Remotion,
+      // stageshow); not plugin source, never shipped.
+      'design/**',
       // Playwright output, gitignored; minified trace-viewer JS.
       'test-results/**',
       'playwright-report/**',
