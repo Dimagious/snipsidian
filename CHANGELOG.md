@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Integration tests inside a real Obsidian** (B-219): new `integration/` folder with smoke tests that run through `obsidian-integration-testing` against the installed Obsidian (`npm run it`), latest public and catalyst builds (`npm run it:matrix`), or an Android emulator (`npm run it:android`). It is a standalone project with its own `package.json` and lockfile, not a workspace: `npm ci` at the root and CI do not install it, and the `it*` scripts install it on demand. `npm run it:typecheck` and `npm run it:lint` check it. The folder uses vitest 5 while the root stays on 3: the library imports `inject` from `vitest` at the top of its global setup, which vitest 3 rejects. Playwright e2e keeps UI, IME and media.
+- **E2E can drive any Obsidian binary** (B-220): `E2E_LAUNCH=cdp` (or setting `OBSIDIAN_BINARY=/path/to/Obsidian`) starts the real binary with `--remote-debugging-port` and attaches over CDP; `npm run e2e:cdp` runs the suite that way and no longer requires `/Applications/Obsidian.app`. The default launcher is unchanged. CDP mode cannot reach Electron's main process, so specs that call `app.evaluate` fail there with an explanation, and `recordVideo` (demo recording) is not available. `npm run e2e:typecheck` now covers every non-scratch spec.
+- **E2E checks which Obsidian it tested** (B-221): the `win` fixture reads the running version and compares it with `OBSIDIAN_VERSION` (an explicit `x.y.z`) or, when unset, the installed bundle. A mismatch fails the test; the version is added to the report as an annotation. Channel aliases such as `public-latest` are rejected in e2e and belong to `npm run it:matrix`.
+
 ## [1.7.1] - 2026-11-09
 
 ### Fixed

@@ -168,6 +168,9 @@ export default [
       'e2e-vault.pristine/**',
       'e2e/**',
       'playwright.config.ts',
+      // Integration layer (B-219): own tsconfig + lint config
+      // (`npm run it:lint`), same reason as e2e/**.
+      'integration/**',
     ],
   },
 ];

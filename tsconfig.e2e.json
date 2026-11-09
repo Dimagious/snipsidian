@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "obsidian"]
+  },
+  "include": ["e2e/**/*.ts"],
+  "exclude": ["node_modules", "e2e/zz-*.spec.ts"]
+}

@@ -32,6 +32,9 @@ e2e-vault.pristine/.obsidian/plugins/snipsidian/styles.css
 snipsidian-*.zip
 main.js
 
+# Integration layer (B-219): build staged for obsidian-integration-testing
+dist/
+
 # Env
 .env
 .env.*
