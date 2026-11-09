@@ -59,6 +59,11 @@ Backspace restores the trigger too.
   <img alt="Typing now and a space expands into a time. With Require a prefix before triggers on, now stays a word and :now expands into 14:05" src="docs/screens/prefix-mode.gif" width="49%">
 </p>
 
+**Use it on your phone.** The same snippets expand as you type, and the same picker opens. Add
+**Snipsy: Insert snippet…** to the editor toolbar in Obsidian's settings to open it with one tap.
+
+<img alt="On a phone, typing todo and a space turns the line into a task. The toolbar button opens Insert snippet, and picking today adds the date after Call Sam" src="docs/screens/phone.gif" width="49%">
+
 ## Coming from another tool
 
 **Text Snippets.** Its last release was in May 2022. On the Packages page, press **Import** under

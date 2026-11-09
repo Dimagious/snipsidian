@@ -816,6 +816,13 @@ footer.note-foot a { color: var(--muted); }
 
         <h3>A hotkey</h3>
         <p class="prose">The second command, <b>Snipsy: Open settings</b>, opens the plugin's settings tab. To put a key on either one, go to <span class="path">Settings<i>›</i>Hotkeys</span> and search for "snipsy". Or use <b>Set hotkey for Insert snippet</b> in Snipsy's settings: it opens that screen with the search already filled in.</p>
+
+        <h3 id="phone">On a phone</h3>
+        <p class="prose">The same snippets expand as you type on mobile, and the same picker opens. To reach it with one tap, add <b>Snipsy: Insert snippet…</b> to the editor toolbar under <span class="path">Settings<i>›</i>Toolbar</span>.</p>
+        <figure class="shot clip">
+          <video data-clip src="img/clip-phone.mp4" poster="img/clip-phone.jpg" width="480" height="600" muted loop playsinline preload="none" aria-label="On a phone, typing todo and a space turns the line into a task. The toolbar button opens Insert snippet, and picking today adds the date after Call Sam."></video>
+          <figcaption>A task by trigger, a date from the picker.</figcaption>
+        </figure>
         <p class="prose">On Obsidian 1.13 and later the settings are native: <b>Snippets</b> and <b>Packages</b> open as pages, everything else sits on the Snipsy settings screen, and Obsidian's settings search finds them. Older Obsidian shows the same settings as Snippets, Packages, General and About tabs.</p>
         <figure class="shot">
           <picture>
@@ -1162,7 +1169,7 @@ replacement: |
 
         <details class="callout">
           <summary class="callout-title"><svg><use href="#i-help"/></svg>Does it work on my phone?<svg class="chev"><use href="#i-right"/></svg></summary>
-          <p>Yes. The plugin is not desktop-only. Triggers expand on mobile the same way.</p>
+          <p>Yes. The plugin is not desktop-only. Triggers expand on mobile the same way, and the picker can sit on the editor toolbar. <a href="#phone">On a phone</a>.</p>
         </details>
         <details class="callout">
           <summary class="callout-title"><svg><use href="#i-help"/></svg>Will it fire in my code blocks?<svg class="chev"><use href="#i-right"/></svg></summary>
