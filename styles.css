@@ -1405,6 +1405,13 @@
   display: block;
 }
 
+/* B-216: on a phone, when the modal is squeezed (soft keyboard open)
+   the list is the part that gives up height, down to a floor of about
+   two rows, and scrolls. Desktop is unchanged. */
+.is-phone .snippet-picker-modal .snippet-results {
+  min-height: 96px;
+}
+
 /* Preview heading — F5e: mockup's `.prev .lbl` is plain sentence
    case, not an all-caps letter-spaced eyebrow. */
 .snippet-picker-modal .preview-label {
@@ -1424,6 +1431,9 @@
   border-radius: 6px;
   background: var(--background-secondary-alt, var(--background-secondary));
   min-height: 64px;
+  /* B-216: never shrink below its content; the results list yields
+     height first. */
+  flex-shrink: 0;
 }
 
 .snippet-picker-modal .snippet-preview-meta {

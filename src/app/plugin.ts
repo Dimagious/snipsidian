@@ -45,6 +45,8 @@ export default class HotstringsPlugin extends Plugin {
         this.addCommand({
             id: "insert-snippet",
             name: "Insert snippet…",
+            // B-215: without an icon the mobile toolbar shows a "?".
+            icon: "text-cursor-input",
             callback: () => {
                 const snippets = getAllSnippetsFlat(this.settings);
                 const api = new SnippetPickerService(snippets);
@@ -57,6 +59,7 @@ export default class HotstringsPlugin extends Plugin {
         this.addCommand({
             id: "add-snippet-from-selection",
             name: "Add snippet from selection",
+            icon: "text-select",
             editorCheckCallback: (checking, editor) => {
                 const selection = editor.getSelection();
                 if (selection.length === 0) return false;
@@ -69,6 +72,7 @@ export default class HotstringsPlugin extends Plugin {
         this.addCommand({
             id: "open-settings",
             name: "Open settings",
+            icon: "settings",
             callback: () => {
                 this.app.setting.open();
                 this.app.setting.openTabById(this.manifest.id);

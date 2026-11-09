@@ -75,6 +75,21 @@ describe("app/plugin", () => {
         expect(plugin.settings.snippets).toBeDefined();
     });
 
+    // B-215: a command without `icon` renders as "?" in the mobile toolbar.
+    it("every command declares an icon (B-215)", async () => {
+        const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
+        // @ts-ignore ctor signature comes from stub
+        const plugin = new PluginClass(app);
+        await plugin.onload();
+        const cmds = plugin.addCommandCalls.map((c: any[]) => c[0]);
+        const icons = Object.fromEntries(cmds.map((c: any) => [c.id, c.icon]));
+        expect(icons).toEqual({
+            "insert-snippet": "text-cursor-input",
+            "add-snippet-from-selection": "text-select",
+            "open-settings": "settings",
+        });
+    });
+
     describe("add-snippet-from-selection command (B-175)", () => {
         async function getCommand(): Promise<{ plugin: any; cmd: any }> {
             const app = { workspace: { on: vi.fn(), offref: vi.fn() } } as any;
