@@ -1,5 +1,5 @@
-import { test, expect, ui } from "./fixtures";
-import type { ElectronApplication, Page } from "@playwright/test";
+import { test, expect, ui, type ObsidianApp } from "./fixtures";
+import type { Page } from "@playwright/test";
 
 /**
  * E2E: SnippetsTab edit-flow regression.
@@ -23,7 +23,7 @@ import type { ElectronApplication, Page } from "@playwright/test";
 // every UI locator below operates on that page. Data reads still go
 // through `win.evaluate` since `app`/the plugin instance are the same
 // singleton regardless of which window's global scope reaches them.
-async function openSnipsy(app: ElectronApplication, win: Page): Promise<Page> {
+async function openSnipsy(app: ObsidianApp, win: Page): Promise<Page> {
     const sw = await ui.openSettings(app, win);
     // B-151/ADR-0007: "Snippets" is a page entry one click deep on
     // Obsidian 1.13+ (a no-op below 1.13, where it is the default

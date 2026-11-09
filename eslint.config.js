@@ -162,12 +162,18 @@ export default [
       // .claude/** is the git-excluded local assistant workspace
       // (probe scripts, notes); never shipped, never linted.
       '.claude/**',
+      // design/** holds the owner's local design drafts (Remotion,
+      // stageshow); not plugin source, never shipped.
+      'design/**',
       // Playwright output, gitignored; minified trace-viewer JS.
       'test-results/**',
       'playwright-report/**',
       'e2e-vault.pristine/**',
       'e2e/**',
       'playwright.config.ts',
+      // Integration layer (B-219): own tsconfig + lint config
+      // (`npm run it:lint`), same reason as e2e/**.
+      'integration/**',
     ],
   },
 ];

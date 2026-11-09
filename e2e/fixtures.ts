@@ -1,8 +1,23 @@
-import { test as base, _electron, type ElectronApplication, type Page } from "@playwright/test";
+import {
+    test as base,
+    _electron,
+    type ElectronApplication,
+    type Page,
+    type TestInfo,
+} from "@playwright/test";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { fileURLToPath } from "node:url";
+import { removeDirTolerant } from "./remove-dir";
+import { launchObsidianCdp, obsidianWindows, waitForMainWindow, type CdpSession } from "./cdp-launch";
+import {
+    DEFAULT_MAC_BINARY,
+    DEFAULT_MAC_RESOURCES,
+    resolveExpectedVersion,
+    resourcesDirFor,
+} from "./obsidian-install";
+import { compareObsidianVersions } from "./obsidian-version";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,7 +26,8 @@ const __dirname = path.dirname(__filename);
  * Test fixtures for launching Obsidian against an isolated, fresh
  * copy of the pristine vault. Each test gets:
  *
- *   - `app`: the running ElectronApplication (closed automatically)
+ *   - `app`: the running Obsidian (an ElectronApplication, or a shim over
+ *            CDP in `E2E_LAUNCH=cdp` mode; closed automatically)
  *   - `win`: the first window, ready to drive (workspace mounted,
  *            community plugins loaded, Snipsy active)
  *   - `vaultPath`: the per-test vault directory (under `os.tmpdir()`)
@@ -35,8 +51,91 @@ const PRISTINE_VAULT = path.join(ROOT, "e2e-vault.pristine");
 // Playwright's `_electron.launch()` with no `executablePath` uses
 // the local `electron` devDependency (node_modules/.bin/electron).
 
+/** How Obsidian is started (B-220).
+ *
+ *  - `electron` (default): `_electron.launch` of Obsidian's `app.asar` over
+ *    our local `electron`. Full Playwright Electron API: `app.evaluate` in
+ *    the main process (clipboard, window bounds, zoom) and `recordVideo`,
+ *    which the media/demo specs depend on.
+ *  - `cdp`: the real Obsidian binary with `--remote-debugging-port`,
+ *    attached through `chromium.connectOverCDP`. Opt-in with
+ *    `E2E_LAUNCH=cdp` or by setting `OBSIDIAN_BINARY=/path/to/Obsidian`
+ *    (which implies it). Lets the suite drive any installed binary, but has
+ *    no main-process access and no video. */
+type LaunchMode = "electron" | "cdp";
+
+function launchMode(): LaunchMode {
+    const requested = process.env.E2E_LAUNCH;
+    if (requested !== undefined && requested !== "" && requested !== "electron" && requested !== "cdp") {
+        throw new Error(`E2E_LAUNCH="${requested}" is not valid; use "electron" (default) or "cdp".`);
+    }
+    if (requested === "cdp" || (requested !== "electron" && process.env.OBSIDIAN_BINARY)) {
+        return "cdp";
+    }
+    return "electron";
+}
+
+function cdpBinaryPath(): string {
+    return process.env.OBSIDIAN_BINARY || DEFAULT_MAC_BINARY;
+}
+
+/** The subset of Playwright's `ElectronApplication` the suite relies on.
+ *  The real thing satisfies it; the CDP launcher provides a shim whose
+ *  `evaluate` fails with an explanation instead of an obscure TypeError. */
+export type ObsidianApp = Pick<
+    ElectronApplication,
+    "windows" | "firstWindow" | "evaluate" | "process" | "close" | "context"
+>;
+
+function cdpApp(session: CdpSession): ObsidianApp {
+    return {
+        windows: () => obsidianWindows(session.context),
+        firstWindow: () => waitForMainWindow(session.context),
+        evaluate: () => {
+            throw new Error(
+                "app.evaluate() runs in Electron's main process, which is not reachable " +
+                    "when Obsidian is attached over CDP (E2E_LAUNCH=cdp / OBSIDIAN_BINARY). " +
+                    "Run this spec with the default launcher.",
+            );
+        },
+        process: () => session.child,
+        context: () => session.context,
+        close: () => session.shutdown(),
+    };
+}
+
+/** The CDP half of the `app` fixture. Everything that can fail after the
+ *  process is spawned happens inside `launchObsidianCdp` (which kills it on
+ *  failure) or the `finally` below, so a throwing test leaves no Obsidian
+ *  behind. A trace is kept only when the test failed, matching the
+ *  `retain-on-failure` policy of the Electron launcher. */
+async function useCdpApp(
+    env: NodeJS.ProcessEnv,
+    userDataDir: string,
+    use: (app: ObsidianApp) => Promise<void>,
+    testInfo: TestInfo,
+): Promise<void> {
+    if (process.env.SNIPSY_DEMO_VIDEO_DIR) {
+        throw new Error(
+            "SNIPSY_DEMO_VIDEO_DIR needs Playwright's recordVideo, which connectOverCDP " +
+                "does not support. Unset E2E_LAUNCH / OBSIDIAN_BINARY for demo recording.",
+        );
+    }
+    const session = await launchObsidianCdp({ binaryPath: cdpBinaryPath(), userDataDir, env });
+    try {
+        await use(cdpApp(session));
+    } finally {
+        const failed = testInfo.status !== testInfo.expectedStatus;
+        const tracePath = failed ? testInfo.outputPath("cdp-trace.zip") : undefined;
+        await session.shutdown(tracePath);
+        if (tracePath && fs.existsSync(tracePath)) {
+            await testInfo.attach("cdp-trace", { path: tracePath, contentType: "application/zip" });
+        }
+    }
+}
+
 interface SnipsyFixtures {
-    app: ElectronApplication;
+    app: ObsidianApp;
     win: Page;
     vaultPath: string;
 }
@@ -72,7 +171,14 @@ function copyTreeResolveLinks(src: string, dst: string): void {
  *  place. If not, fail fast with a useful message rather than
  *  blowing up deep inside Playwright's Electron launch. */
 function assertSetup(): void {
-    if (!fs.existsSync(OBSIDIAN_APP_ASAR)) {
+    if (launchMode() === "cdp") {
+        if (!fs.existsSync(cdpBinaryPath())) {
+            throw new Error(
+                `Obsidian binary not found at ${cdpBinaryPath()}.\n` +
+                    `Set OBSIDIAN_BINARY to the Obsidian executable (or install it at the default path).`,
+            );
+        }
+    } else if (!fs.existsSync(OBSIDIAN_APP_ASAR)) {
         throw new Error(
             `Obsidian is not installed at /Applications/Obsidian.app.\n` +
                 `Install it first; the fixture loads it via our local Electron.`,
@@ -87,6 +193,47 @@ function assertSetup(): void {
                 `the build into e2e-vault.pristine/.obsidian/plugins/snipsidian/`,
         );
     }
+}
+
+/** Version the renderer reports. `ipcRenderer.sendSync("version")` is what
+ *  Obsidian's own shell answers with; `obsidian.apiVersion` is the module
+ *  constant. Both track the asar that is actually running. `null` when
+ *  neither is reachable (the verdict is then "unknown", never a failure). */
+async function readRunningVersion(win: Page): Promise<string | null> {
+    return win.evaluate(() => {
+        const req = (globalThis as unknown as { require?: (id: string) => unknown }).require;
+        try {
+            const electron = req?.("electron") as
+                | { ipcRenderer?: { sendSync?: (channel: string) => unknown } }
+                | undefined;
+            const v = electron?.ipcRenderer?.sendSync?.("version");
+            if (typeof v === "string") return v;
+        } catch {
+            // fall through to the module constant
+        }
+        try {
+            const v = (req?.("obsidian") as { apiVersion?: unknown } | undefined)?.apiVersion;
+            if (typeof v === "string") return v;
+        } catch {
+            // unreadable: reported as "unknown" by the caller
+        }
+        return null;
+    });
+}
+
+async function verifyObsidianVersion(win: Page, testInfo: TestInfo): Promise<void> {
+    const resourcesDir =
+        launchMode() === "cdp" ? resourcesDirFor(cdpBinaryPath()) : DEFAULT_MAC_RESOURCES;
+    const expected = resolveExpectedVersion(resourcesDir);
+    const running = await readRunningVersion(win);
+    const verdict = compareObsidianVersions(expected, running);
+    testInfo.annotations.push(
+        { type: "obsidian-version", description: running ?? "unknown" },
+        { type: "obsidian-expected-version", description: expected ?? "unknown" },
+        { type: "launch-mode", description: launchMode() },
+    );
+    if (verdict.status === "mismatch") throw new Error(verdict.message);
+    if (verdict.status === "unknown") console.warn(`[e2e] version check skipped: ${verdict.message}`);
 }
 
 export const test = base.extend<SnipsyFixtures>({
@@ -109,14 +256,19 @@ export const test = base.extend<SnipsyFixtures>({
         }
     },
 
-    app: async ({ vaultPath }, use) => {
+    app: async ({ vaultPath }, use, testInfo) => {
         // `ELECTRON_RUN_AS_NODE=1` in the parent env forces our local
         // electron binary to run as plain Node, which rejects
         // Chromium-process flags like `--remote-debugging-port=0`
         // that Playwright passes for DevTools attachment. Strip it
         // from the spawn env so the child process starts as a real
         // Electron app even if the user's shell exported it.
-        const env = { ...process.env };
+        // (Filtered to defined values: `_electron.launch` wants string values.)
+        const env: Record<string, string> = Object.fromEntries(
+            Object.entries(process.env).filter(
+                (entry): entry is [string, string] => entry[1] !== undefined,
+            ),
+        );
         delete env.ELECTRON_RUN_AS_NODE;
 
         // Pre-register the test vault in Obsidian's vault registry.
@@ -140,6 +292,15 @@ export const test = base.extend<SnipsyFixtures>({
             path.join(userDataDir, "obsidian.json"),
             JSON.stringify(vaultRegistry),
         );
+
+        if (launchMode() === "cdp") {
+            try {
+                await useCdpApp(env, userDataDir, use, testInfo);
+            } finally {
+                removeDirTolerant(userDataDir);
+            }
+            return;
+        }
 
         // Opt-in video recording for the README demo
         // (`scripts/record-demo.sh`). Set SNIPSY_DEMO_VIDEO_DIR to an
@@ -176,15 +337,15 @@ export const test = base.extend<SnipsyFixtures>({
         } catch {
             // process already gone — fine
         }
-        try {
-            fs.rmSync(userDataDir, { recursive: true, force: true });
-        } catch {
-            // ignore
-        }
+        removeDirTolerant(userDataDir);
     },
 
-    win: async ({ app }, use) => {
+    win: async ({ app }, use, testInfo) => {
         const win = await app.firstWindow();
+
+        // B-221: fail fast when the Obsidian that came up is not the one
+        // this run was meant to test, and record the version on the report.
+        await verifyObsidianVersion(win, testInfo);
 
         // Auto-dismiss any native JS dialogs (alert/confirm/prompt).
         // Obsidian rarely uses these, but the playwright-electron
@@ -289,7 +450,7 @@ export const ui = {
      *  whichever `Page` actually got the content, so callers always
      *  interact with the right window regardless of which one
      *  Obsidian chose. */
-    async openSettings(app: ElectronApplication, win: Page): Promise<Page> {
+    async openSettings(app: ObsidianApp, win: Page): Promise<Page> {
         await win.evaluate(() => {
             const a = (globalThis as unknown as {
                 app?: { setting?: { open?: () => void; openTabById?: (id: string) => void } };
@@ -324,7 +485,7 @@ export const ui = {
      *  when the outer imperative shell class isn't present. `win`
      *  itself is checked the same way, so in-window Settings
      *  (`settingsPopoutWindow: false`) keeps working unchanged. */
-    async resolveSettingsWindow(app: ElectronApplication, win: Page): Promise<Page> {
+    async resolveSettingsWindow(app: ObsidianApp, win: Page): Promise<Page> {
         const SETTINGS_CONTENT_SELECTOR =
             ".vertical-tab-content-container, .vertical-tab-content, .setting-page";
 

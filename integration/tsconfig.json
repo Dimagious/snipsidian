@@ -1,0 +1,8 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "obsidian-integration-testing/vitest/typings"]
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules"]
+}

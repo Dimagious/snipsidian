@@ -1,4 +1,4 @@
-import { test, expect, ui } from "./fixtures";
+import { test, expect, ui, type ObsidianApp } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 /**
@@ -140,7 +140,7 @@ test.describe("settings: Add snippet validation (B-107)", () => {
     }
 
     async function openAddSnippetModal(
-        app: import("@playwright/test").ElectronApplication,
+        app: ObsidianApp,
         win: Page,
     ): Promise<Page> {
         const sw = await ui.openSettings(app, win);

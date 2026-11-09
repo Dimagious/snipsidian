@@ -23,7 +23,9 @@ OBSIDIAN_APP_ASAR="/Applications/Obsidian.app/Contents/Resources/app.asar"
 VAULT_PRISTINE="${ROOT}/e2e-vault.pristine"
 PLUGIN_DIR="${VAULT_PRISTINE}/.obsidian/plugins/snipsidian"
 
-if [[ ! -f "${OBSIDIAN_APP_ASAR}" ]]; then
+# The bootstrap asar is only needed by the default Electron launcher; CDP mode
+# (E2E_LAUNCH=cdp or OBSIDIAN_BINARY) drives whatever binary it is pointed at.
+if [[ "${E2E_LAUNCH:-}" != "cdp" && -z "${OBSIDIAN_BINARY:-}" && ! -f "${OBSIDIAN_APP_ASAR}" ]]; then
   echo "✗ Obsidian not found at ${OBSIDIAN_APP_ASAR}"
   echo "  Install Obsidian.app into /Applications/ first."
   exit 1
