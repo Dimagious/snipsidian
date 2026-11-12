@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { makeMockPlugin } from "../../test/factories/plugin";
 import { PackagePreviewModal } from "./Modals";
 import type { DiffResult } from "../../store/diff";
-import type SnipSidianPlugin from "../../../main";
+import type SnipSidianPlugin from "../../main";
 
 /**
  * Mount tests for PackagePreviewModal — the conflict-resolution UI

@@ -14,7 +14,7 @@ vi.mock("obsidian", async () => {
 import { makeMockPlugin } from "../../../test/factories/plugin";
 import { TextSnippetsSection, formatTextSnippetsSummary } from "./TextSnippetsSection";
 import type { App } from "obsidian";
-import type SnipSidianPlugin from "../../../../main";
+import type SnipSidianPlugin from "../../../main";
 
 let plugin: ReturnType<typeof makeMockPlugin>;
 let files: Map<string, string>;

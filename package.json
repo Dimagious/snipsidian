@@ -10,7 +10,6 @@
         "build:vault": "opdk build --vault",
         "dev:vault": "opdk build --vault --watch",
         "test": "vitest run --coverage",
-        "coverage": "vitest run --coverage",
         "scorecard:check": "opdk scan",
         "site:check": "node scripts/site-check.cjs",
         "site:assemble": "node scripts/assemble-site.cjs",
