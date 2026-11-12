@@ -2,7 +2,6 @@ import { copyFileSync, existsSync, mkdirSync, statSync, utimesSync } from "node:
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { TestProject } from "vitest/node";
-import { createSetup } from "obsidian-integration-testing/vitest-global-setup-plugin";
 
 /**
  * Global setup for the `integration/` layer (B-219).
@@ -17,7 +16,18 @@ import { createSetup } from "obsidian-integration-testing/vitest-global-setup-pl
  * older than `src/` ("stale build" guard). A fresh mtime from the copy would
  * make a forgotten `npm run build` look current and the suite would test an
  * old plugin.
+ *
+ * The library is imported dynamically into an `unknown` and described by the
+ * interface below. A static import is `any` for a linter that runs without
+ * `integration/node_modules` (the community scanner installs only the root
+ * dependencies) and would report every use of it as unsafe. `tsc` and
+ * `npm run it:lint` still resolve the real package.
  */
+
+interface LibrarySetup {
+    setup: (project: TestProject) => Promise<void>;
+    teardown: () => Promise<void>;
+}
 
 const ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const STAGE_DIR = join(ROOT, "dist", "build");
@@ -41,7 +51,8 @@ export function stageBuild(): void {
     }
 }
 
-const library = createSetup();
+const loaded: unknown = await import("obsidian-integration-testing/vitest-global-setup-plugin");
+const library = (loaded as { createSetup: () => LibrarySetup }).createSetup();
 
 export async function setup(project: TestProject): Promise<void> {
     stageBuild();

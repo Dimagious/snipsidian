@@ -8,66 +8,48 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-jobs:
-  test-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
+permissions:
+  contents: read
 
-      - uses: actions/setup-node@v7
+jobs:
+  # Lint, typecheck, unit tests with the coverage gate, the scanner, the release check, the build with its
+  # Node-only check, and the bundle artifact (snipsidian-bundle). coverage-artifact keeps the report for the
+  # Codecov job below (snipsidian-coverage).
+  kit:
+    uses: Dimagious/obsidian-plugin-dev-kit/.github/workflows/plugin-ci.yml@6e33ca4f10b24fc9f7547f41ea9902fe30ebb362 # v0.1.0
+    with:
+      coverage-artifact: true
+
+  # Only Snipsy checks this. It reads the repository's files and needs no install.
+  site:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-          cache: npm
-
-      - name: Install
-        run: npm ci
-
-      - name: Typecheck
-        run: npx tsc -p tsconfig.json --noEmit
-
-      - name: Verify versions (package.json vs manifest.json)
-        run: node scripts/assert-versions.cjs
-
-      # Mirrors the Obsidian community-plugins scorecard scanner. Fails
-      # the build if a `["a","b","c"].join(".")` domain-assembly pattern
-      # (B-063 / 1.1.5 → 1.1.6 score drop), a bare `window.setTimeout`,
-      # or other scorecard-flagged shape lands. Add new rules as scorecard
-      # introduces new checks.
-      - name: Scorecard regression gate
-        run: npm run scorecard:check
 
       - name: Project site (broken images, dead anchors, dashes, required files)
         run: npm run site:check
 
-      - name: Unit tests (with coverage gates)
-        run: npm run test
-
-      - name: Build release bundle
-        run: npm run build
-
-      - name: Pack plugin zip
-        run: npm run release:zip
+  coverage:
+    needs: kit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: snipsidian-coverage
+          path: coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: ./coverage/lcov.info
+          disable_search: true
           fail_ci_if_error: true
           verbose: true
-
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage
-          path: coverage/**
-
-      - name: Upload plugin bundle
-        uses: actions/upload-artifact@v7
-        with:
-          name: snipsidian-bundle
-          path: |
-            main.js
-            manifest.json
-            styles.css
-            snipsidian-*.zip
-          if-no-files-found: error

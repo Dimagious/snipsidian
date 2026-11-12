@@ -1,6 +1,4 @@
 import { test, expect } from "./fixtures";
-import * as fs from "node:fs";
-import * as path from "node:path";
 
 /**
  * E2E: settings persistence — save → write to disk → load back.
@@ -22,7 +20,8 @@ import * as path from "node:path";
 test.describe("persistence: save → disk round-trip", () => {
     test("a snippet added via the plugin API lands in data.json on disk", async ({
         win,
-        vaultPath,
+        vault,
+        obsidian,
     }) => {
         // Mutate settings via the plugin's public API and trigger
         // saveSettings(). This is the same path the UI uses
@@ -51,20 +50,14 @@ test.describe("persistence: save → disk round-trip", () => {
         // the file Obsidian will load on next startup. If
         // saveSettings is broken, the snippet won't be here even
         // though it's in the in-memory cache.
-        const dataPath = path.join(
-            vaultPath,
-            ".obsidian",
-            "plugins",
-            "snipsidian",
-            "data.json",
-        );
-        const dataJson = JSON.parse(fs.readFileSync(dataPath, "utf8"));
+        const dataJson = JSON.parse(vault.read(".obsidian/plugins/snipsidian/data.json"));
         expect(dataJson.snippets).toBeDefined();
         expect(dataJson.snippets.persisted).toBe("value-after-save");
     });
 
     test("[B-110] an edited snippet replacement survives an Obsidian app reload", async ({
         win,
+        obsidian,
     }) => {
         // The existing reload test pins ADD + reload. This pins EDIT
         // + reload — saveSettings on a mutated existing key should
@@ -91,16 +84,9 @@ test.describe("persistence: save → disk round-trip", () => {
             await plugin.saveSettings();
         });
 
-        await win.evaluate(() => {
-            const a = (globalThis as unknown as {
-                app?: { commands?: { executeCommandById?: (id: string) => void } };
-            }).app;
-            a?.commands?.executeCommandById?.("app:reload");
-        });
-
-        await win.waitForSelector(".cm-content[contenteditable=true]", {
-            timeout: 30_000,
-        });
+        // `obsidian.reload()` runs Obsidian's "app:reload", waits for the
+        // old page to go and for every plugin to load again.
+        await obsidian.reload();
 
         const loadedValue = await win.evaluate(() => {
             const plugin = (globalThis as unknown as {
@@ -122,6 +108,7 @@ test.describe("persistence: save → disk round-trip", () => {
 
     test("[B-110] a deleted snippet stays deleted across an Obsidian app reload", async ({
         win,
+        obsidian,
     }) => {
         // Pre-seed + save + delete + save + reload. The key must be
         // absent in the post-reload settings. Pins the destructive
@@ -148,16 +135,9 @@ test.describe("persistence: save → disk round-trip", () => {
             await plugin.saveSettings();
         });
 
-        await win.evaluate(() => {
-            const a = (globalThis as unknown as {
-                app?: { commands?: { executeCommandById?: (id: string) => void } };
-            }).app;
-            a?.commands?.executeCommandById?.("app:reload");
-        });
-
-        await win.waitForSelector(".cm-content[contenteditable=true]", {
-            timeout: 30_000,
-        });
+        // `obsidian.reload()` runs Obsidian's "app:reload", waits for the
+        // old page to go and for every plugin to load again.
+        await obsidian.reload();
 
         const present = await win.evaluate(() => {
             const plugin = (globalThis as unknown as {
@@ -176,7 +156,7 @@ test.describe("persistence: save → disk round-trip", () => {
         expect(present).toBe(false);
     });
 
-    test("a snippet survives an Obsidian app reload", async ({ win }) => {
+    test("a snippet survives an Obsidian app reload", async ({ win, obsidian }) => {
         // Step 1: write a snippet and save to disk.
         await win.evaluate(async () => {
             const plugin = (globalThis as unknown as {
@@ -199,22 +179,12 @@ test.describe("persistence: save → disk round-trip", () => {
         // Step 2: reload the app's renderer process. After this
         // the plugin reloads from disk; the in-memory settings are
         // discarded.
-        await win.evaluate(() => {
-            const a = (globalThis as unknown as {
-                app?: { commands?: { executeCommandById?: (id: string) => void } };
-            }).app;
-            // "app:reload" is Obsidian's built-in command; it reloads
-            // the renderer process the same way Cmd+R does.
-            a?.commands?.executeCommandById?.("app:reload");
-        });
+        // `obsidian.reload()` runs Obsidian's built-in "app:reload", which
+        // reloads the renderer process the same way Cmd+R does, then
+        // waits for the old page to go and for every plugin to load again.
+        await obsidian.reload();
 
-        // Step 3: wait for the workspace to remount after reload.
-        // The .cm-content selector returns once the editor is back.
-        await win.waitForSelector(".cm-content[contenteditable=true]", {
-            timeout: 30_000,
-        });
-
-        // Step 4: verify the snippet came back from disk.
+        // Step 3: verify the snippet came back from disk.
         const loadedValue = await win.evaluate(() => {
             const plugin = (globalThis as unknown as {
                 app?: {

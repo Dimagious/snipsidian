@@ -1,7 +1,4 @@
-// @vitest-environment jsdom
-
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
-import { installObsidianDomHelpers } from "../../test/dom-polyfill";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { makeMockApp } from "../../test/factories/plugin";
 import { ImportPreviewModal } from "./Modals";
 import type { App } from "obsidian";
@@ -26,10 +23,6 @@ import type { App } from "obsidian";
  *   - The notice strings the caller emits after onConfirm: that's
  *     caller-side concern (BasicTab.startImport).
  */
-
-beforeAll(() => {
-    installObsidianDomHelpers();
-});
 
 let app: App;
 beforeEach(() => {

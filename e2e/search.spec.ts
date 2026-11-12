@@ -1,4 +1,4 @@
-import { test, expect, ui } from "./fixtures";
+import { test, expect } from "./fixtures";
 
 /**
  * E2E: global settings search finds Snipsy (B-151/ADR-0007).
@@ -20,15 +20,15 @@ import { test, expect, ui } from "./fixtures";
  */
 
 test.describe("Settings search finds Snipsy (B-151)", () => {
-    test("searching 'prefix' surfaces a Snipsy result group", async ({ win, app }) => {
-        const sw = await ui.openSettings(app, win);
+    test("searching 'prefix' surfaces a Snipsy result group", async ({ win, obsidian }) => {
+        await obsidian.openSettings("snipsidian");
 
-        const searchInput = sw.getByPlaceholder("Search settings...");
+        const searchInput = win.getByPlaceholder("Search settings...");
         await searchInput.waitFor({ state: "visible" });
         await searchInput.fill("prefix");
-        await sw.waitForTimeout(400);
+        await win.waitForTimeout(400);
 
-        const snipsyGroup = sw.locator(".setting-search-result-tab-label", {
+        const snipsyGroup = win.locator(".setting-search-result-tab-label", {
             hasText: "Snipsy",
         });
         await expect(snipsyGroup).toBeVisible();
@@ -36,16 +36,16 @@ test.describe("Settings search finds Snipsy (B-151)", () => {
 
     test("searching 'hotstring' (an alias, not row text) also surfaces a Snipsy result group", async ({
         win,
-        app,
+        obsidian,
     }) => {
-        const sw = await ui.openSettings(app, win);
+        await obsidian.openSettings("snipsidian");
 
-        const searchInput = sw.getByPlaceholder("Search settings...");
+        const searchInput = win.getByPlaceholder("Search settings...");
         await searchInput.waitFor({ state: "visible" });
         await searchInput.fill("hotstring");
-        await sw.waitForTimeout(400);
+        await win.waitForTimeout(400);
 
-        const snipsyGroup = sw.locator(".setting-search-result-tab-label", {
+        const snipsyGroup = win.locator(".setting-search-result-tab-label", {
             hasText: "Snipsy",
         });
         await expect(snipsyGroup).toBeVisible();

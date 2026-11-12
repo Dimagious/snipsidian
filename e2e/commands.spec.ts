@@ -19,43 +19,32 @@ import { test, expect, ui } from "./fixtures";
 test.describe("Snipsy commands", () => {
     test("`snipsidian:open-settings` opens Settings on our tab (B-106)", async ({
         win,
-        app,
+        obsidian,
     }) => {
         // Trigger the command the way the user would via the
         // command palette — bypassing the palette UI itself to
         // keep the test focused on the command's effect, not on
         // Obsidian's fuzzy-match heuristics.
-        await win.evaluate(() => {
-            const a = (globalThis as unknown as {
-                app?: {
-                    commands?: { executeCommandById?: (id: string) => boolean };
-                };
-            }).app;
-            a?.commands?.executeCommandById?.("snipsidian:open-settings");
-        });
+        await obsidian.runCommand("snipsidian:open-settings");
 
-        // B-158: the command's own `setting.open()` may render
-        // Settings as a separate popout window rather than inline in
-        // `win` (observed on Obsidian 1.13.7) — resolve whichever
-        // window actually got the content. Uses `resolveSettingsWindow`
-        // rather than `openSettings` since the command above already
-        // did the opening; this spec is testing that command, not the
-        // API `openSettings` itself calls.
-        const sw = await ui.resolveSettingsWindow(app, win);
+        // B-158: the kit's vault keeps Settings in the main window
+        // (`settingsPopoutWindow: false`), so the content the command
+        // opens is in `win`. This spec tests the command itself, so it
+        // does not go through `obsidian.openSettings`.
 
         // B-151/ADR-0007: on Obsidian 1.13+ the tab opens on the
         // declarative root (Snippets/Packages page entries + General/
         // About groups), so "Add snippet" is one click deeper — a
         // no-op below 1.13, where Snippets is already the default
         // landing tab.
-        await ui.openSnippetsPage(sw);
+        await ui.openSnippetsPage(win);
 
         // The Settings modal opens with our tab active, and the
         // Snippets page's "Add snippet" toolbar button — that's
         // SnippetsTab.ts's first piece of content and is unique to
         // the Snipsy tab — is visible.
         await expect(
-            sw.getByRole("button", { name: "Add snippet" }).first(),
+            win.getByRole("button", { name: "Add snippet" }).first(),
         ).toBeVisible({ timeout: 5_000 });
 
         // The Settings sidebar's Snipsy entry is also highlighted.

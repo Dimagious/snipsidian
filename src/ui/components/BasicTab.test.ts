@@ -1,5 +1,3 @@
-// @vitest-environment jsdom
-
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 
 // Stub `new Notice(msg)` so tests can assert on toast copy. `msg` can
@@ -10,7 +8,7 @@ vi.mock("obsidian", async () => {
     const actual = await vi.importActual("../../test/stubs/obsidian");
     return {
         ...actual,
-        Notice: vi.fn().mockImplementation((msg: string | DocumentFragment) => {
+        Notice: vi.fn().mockImplementation(function (msg: string | DocumentFragment) {
             noticeCalls.push(msg);
         }),
     };
@@ -27,7 +25,6 @@ vi.mock("../../services/package-validator", async () => {
     return { ...actual, validatePackageForInstall: validateSpy };
 });
 
-import { installObsidianDomHelpers } from "../../test/dom-polyfill";
 import { makeMockPlugin } from "../../test/factories/plugin";
 import { BasicTab } from "./BasicTab";
 import { DEFAULT_SNIPPETS } from "../../presets";
@@ -57,10 +54,6 @@ import type SnipSidianPlugin from "../../main";
  *      failure shows the path with a Copy path action instead of raw
  *      internals jargon.
  */
-
-beforeAll(() => {
-    installObsidianDomHelpers();
-});
 
 let plugin: ReturnType<typeof makeMockPlugin>;
 let app: App;

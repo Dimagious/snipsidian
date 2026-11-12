@@ -1,7 +1,4 @@
-// @vitest-environment jsdom
-
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
-import { installObsidianDomHelpers } from "../../test/dom-polyfill";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { SnippetPickerService } from "../../core/snippet-picker";
 import { makeMockApp, makeMockEditor } from "../../test/factories/plugin";
 import { makeSnippet, makeSnippetCollection } from "../../test/factories/snippet";
@@ -30,10 +27,6 @@ import type { SnippetItem } from "../../types";
  *     re-testing the adapter would be double-coverage.
  *   - Picker search algorithm: covered in core/snippet-picker.test.ts.
  */
-
-beforeAll(() => {
-    installObsidianDomHelpers();
-});
 
 let app: App;
 beforeEach(() => {

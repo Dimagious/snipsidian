@@ -1,20 +1,18 @@
-// @vitest-environment jsdom
-
 import { describe, it, expect } from "vitest";
 
 /**
  * Smoke test for the jsdom test environment (B-076).
  *
- * Vitest defaults to `environment: "node"` in `vitest.config.ts`,
- * which is correct for our hot-path engine + adapter tests (faster,
- * no DOM overhead). UI tests need a DOM — `jsdom` is already a
- * devDependency, so the cheapest opt-in is the per-file directive
- * `// @vitest-environment jsdom` at the very top of a test file.
+ * Tests run in `node` by default, which is correct for our hot-path
+ * engine + adapter tests (faster, no DOM overhead). UI tests need a DOM
+ * and the Obsidian DOM helpers: a test file opts in by being listed in
+ * the `dom` option of `defineUnitConfig()` in `vitest.config.ts`
+ * (everything under `src/ui`, plus a few single files, this one among them).
  *
  * This file exists to:
- *   1. Prove the directive works in our setup
- *   2. Give the next test author a copy-pasteable example for the
- *      first line of any UI mount test
+ *   1. Prove the `dom` project gives a file jsdom and the helpers
+ *   2. Give the next test author a smoke test to run when a file
+ *      moved to the `dom` list misbehaves
  *
  * If jsdom is misconfigured (e.g. removed from package.json),
  * vitest will fail to bootstrap this file with a clear message.

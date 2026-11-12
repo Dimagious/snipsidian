@@ -3,8 +3,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Page } from "@playwright/test";
-import { test, ui } from "./fixtures";
+import type { Locator, Page } from "@playwright/test";
+import { DEMO_VIEWPORT, onlyWhen, test, ui } from "./fixtures";
 import { beat, hideSubtitle, injectOverlays, moveAndClick, showSubtitle, typeSlowly } from "./overlays";
 
 /**
@@ -17,7 +17,7 @@ import { beat, hideSubtitle, injectOverlays, moveAndClick, showSubtitle, typeSlo
  *   3. fenced code is silent (voice/scene3.mp3)
  *   4. today -> $date        (voice/scene4.mp3)
  *   5. Settings: Add snippet (voice/scene5.mp3)
- *   6. Settings tab tour     (voice/scene6.mp3)
+ *   6. Settings tour         (voice/scene6.mp3)
  *
  * Timing: every scene is padded to (its narration clip length +
  * SCENE_TAIL) so the voice-over never runs into the next scene. The
@@ -30,13 +30,22 @@ import { beat, hideSubtitle, injectOverlays, moveAndClick, showSubtitle, typeSlo
  * trims everything before it (Obsidian boot, warm-up) and places each
  * clip at its scene mark, so audio lines up to the frame.
  *
- * Settings: the demo fixture sets `settingsPopoutWindow: false`, so
+ * Settings: the kit's fixture sets `settingsPopoutWindow: false`, so
  * Settings renders as a modal inside the recorded window instead of
  * Obsidian 1.13's separate popout window.
  *
- * DEMO_REHEARSE=1 (`npm run demo:rehearse`) runs the same flow without
- * the padding, to check selectors before burning a take.
+ * The file runs only when SNIPSY_DEMO=1 (set by `npm run demo:rehearse`
+ * and `demo:record:_inner`), so `npm run e2e` skips it. DEMO_REHEARSE=1
+ * (`npm run demo:rehearse`) runs the same flow without the padding, to
+ * check selectors before burning a take.
  */
+
+onlyWhen("SNIPSY_DEMO");
+
+// Playwright's `use.video` does not reach the Obsidian window (an Electron
+// launch is outside its browser contexts); the kit reads this setting and
+// records the window itself, at the size the take is encoded at.
+test.use({ video: { mode: "on", size: DEMO_VIEWPORT } });
 
 const REHEARSE = process.env.DEMO_REHEARSE === "1";
 const LANG = process.env.DEMO_LANG === "ru" ? "ru" : "en";
@@ -97,7 +106,12 @@ async function typeHuman(win: Page, text: string, delay = 55): Promise<void> {
     await editor.pressSequentially(text, { delay });
 }
 
-async function openSnipsySettings(win: Page): Promise<void> {
+/** Snipsy's page entry in the settings root (Obsidian 1.13+ declarative layout). */
+const pageEntry = (win: Page, name: string): Locator =>
+    win.locator(".setting-item.mod-navigable", { hasText: name }).first();
+
+/** Opens Settings on Snipsy's root: the Snippets and Packages page entries, then the General groups. */
+async function openSnipsyRoot(win: Page): Promise<void> {
     await win.evaluate(() => {
         const a = (globalThis as unknown as {
             app: { setting: { open(): void; openTabById(id: string): void } };
@@ -105,8 +119,15 @@ async function openSnipsySettings(win: Page): Promise<void> {
         a.setting.open();
         a.setting.openTabById("snipsidian");
     });
-    await win.locator("#snipsy-tab-snippets").waitFor({ state: "visible", timeout: 10_000 });
+    await pageEntry(win, "Snippets").waitFor({ state: "visible", timeout: 10_000 });
     await fitSettingsModal(win);
+}
+
+/** Opens Settings on the Snippets page, where the "Add snippet" toolbar is. */
+async function openSnipsySettings(win: Page): Promise<void> {
+    await openSnipsyRoot(win);
+    await pageEntry(win, "Snippets").click();
+    await win.getByRole("button", { name: "Add snippet" }).first().waitFor({ state: "visible", timeout: 10_000 });
     const shots = process.env.DEMO_SHOTS;
     if (shots) {
         fs.mkdirSync(shots, { recursive: true });
@@ -169,7 +190,7 @@ async function syncFlash(win: Page): Promise<void> {
 test.describe("Snipsy README demo", () => {
     test.setTimeout(REHEARSE ? 120_000 : 240_000);
 
-    test("six-scene continuous take", async ({ win }) => {
+    test("six-scene continuous take", async ({ win, obsidian }) => {
         const budget = {
             s1: clipSeconds("scene1") + SCENE_TAIL,
             s2: clipSeconds("scene2") + SCENE_TAIL,
@@ -180,20 +201,18 @@ test.describe("Snipsy README demo", () => {
         };
 
         // Warm-up (trimmed from the final video): load the Packages
-        // catalog once so the tab tour shows it instead of a spinner,
-        // then leave Settings on the Snippets tab.
-        await openSnipsySettings(win);
-        await win.locator("#snipsy-tab-packages").click();
+        // catalog once so the settings tour shows it instead of a spinner,
+        // then leave Settings on the Snippets page.
+        await openSnipsyRoot(win);
+        await pageEntry(win, "Packages").click();
         await win
             .getByRole("button", { name: /Install|Reinstall/ })
             .first()
             .waitFor({ state: "visible", timeout: 30_000 });
-        await win.locator("#snipsy-tab-snippets").click();
-        await win.waitForTimeout(300);
         await closeSettings(win);
 
         await injectOverlays(win);
-        await ui.clearEditor(win);
+        await obsidian.editor().clear();
         await win.mouse.move(1180, 640);
         await beat(win, 400);
 
@@ -222,7 +241,7 @@ test.describe("Snipsy README demo", () => {
 
         await test.step("scene 2: multi-line callout", async () => {
             mark("scene-2");
-            await ui.clearEditor(win);
+            await obsidian.editor().clear();
             await showSubtitle(win, "Multi-line snippets: the cursor lands where you type");
             await beat(win, 400);
             await typeHuman(win, "callout ");
@@ -233,7 +252,7 @@ test.describe("Snipsy README demo", () => {
 
         await test.step("scene 3: silent inside code", async () => {
             mark("scene-3");
-            await ui.clearEditor(win);
+            await obsidian.editor().clear();
             await showSubtitle(win, "Inside code or YAML? Snipsy stays silent.");
             await beat(win, 300);
             // Inside a fenced code block: the trigger must NOT fire.
@@ -252,7 +271,7 @@ test.describe("Snipsy README demo", () => {
 
         await test.step("scene 4: $date", async () => {
             mark("scene-4");
-            await ui.clearEditor(win);
+            await obsidian.editor().clear();
             await showSubtitle(win, "today  →  $date  (always current)");
             await beat(win, 400);
             await typeHuman(win, "today ");
@@ -281,28 +300,36 @@ test.describe("Snipsy README demo", () => {
 
             // Back to the note to use the new trigger.
             await closeSettings(win);
-            await ui.clearEditor(win);
+            await obsidian.editor().clear();
             await typeHuman(win, "sig ");
             await endScene(win, "scene-5", budget.s5);
         });
 
-        await test.step("scene 6: tab tour", async () => {
+        await test.step("scene 6: settings tour", async () => {
             mark("scene-6");
-            await openSnipsySettings(win);
-
-            const tabs = [
-                { id: "snippets", subtitle: "Snippets: manage, group, search your library" },
-                { id: "packages", subtitle: "Packages: community catalog + Espanso import" },
-                { id: "general", subtitle: "General: hotkeys, prefix mode, backup" },
-                { id: "about", subtitle: "About: docs, feedback, community" },
+            // Obsidian 1.13+ lays Snipsy's settings out as a root with two
+            // pages (Snippets, Packages) and the General and About groups below.
+            const stops = [
+                { subtitle: "Snippets: manage, group, search your library", page: "Snippets" },
+                { subtitle: "Packages: community catalog + Espanso import", page: "Packages" },
+                { subtitle: "General: hotkeys, prefix mode, backup", page: null },
+                { subtitle: "About: docs, feedback, community", page: null },
             ];
-            // Spread the tabs evenly over the narration.
-            const slot = (budget.s6 - 0.8) / tabs.length;
-            for (const [i, tab] of tabs.entries()) {
-                await showSubtitle(win, tab.subtitle);
-                await moveAndClick(win, win.locator(`#snipsy-tab-${tab.id}`), `${tab.id} tab`, {
-                    postClickDelay: 300,
-                });
+            // Spread the stops evenly over the narration.
+            const slot = (budget.s6 - 0.8) / stops.length;
+            for (const [i, stop] of stops.entries()) {
+                await openSnipsyRoot(win);
+                await showSubtitle(win, stop.subtitle);
+                if (stop.page !== null) {
+                    await moveAndClick(win, pageEntry(win, stop.page), `${stop.page} page`, {
+                        postClickDelay: 300,
+                    });
+                } else {
+                    const content = win.locator(".modal.mod-settings .vertical-tab-content").first();
+                    await content.evaluate((el, last) => {
+                        el.scrollTop = last ? el.scrollHeight : el.scrollHeight / 2;
+                    }, i === stops.length - 1);
+                }
                 await padTo(win, "scene-6", 0.3 + slot * (i + 1));
             }
             await endScene(win, "scene-6", budget.s6);

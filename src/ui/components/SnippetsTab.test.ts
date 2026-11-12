@@ -1,7 +1,4 @@
-// @vitest-environment jsdom
-
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
-import { installObsidianDomHelpers } from "../../test/dom-polyfill";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { makeMockPlugin } from "../../test/factories/plugin";
 import { SnippetsTab } from "./SnippetsTab";
 import type { App } from "obsidian";
@@ -32,10 +29,6 @@ import type SnipSidianPlugin from "../../main";
  * Also pinned: B-099 search count badge ("N of M") shows only on
  * filter, not on the unfiltered list.
  */
-
-beforeAll(() => {
-    installObsidianDomHelpers();
-});
 
 let plugin: SnipSidianPlugin;
 let app: App;

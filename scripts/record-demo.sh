@@ -5,13 +5,15 @@
 # which captures the Obsidian window through the Chromium pipeline at
 # logical pixels (1280×720). That bypasses macOS Screen Recording
 # permission entirely — no avfoundation, no permission prompts, no
-# captured menu bar or surrounding desktop.
+# captured menu bar or surrounding desktop. The obsidian-plugin-dev-kit
+# fixture starts the recording (the demo spec asks for it with
+# `test.use({ video })`).
 #
 # Flow:
-#   1. Point Playwright at a fresh video dir via env var, run the
+#   1. Point Playwright's output folder at a fresh dir, run the
 #      headed demo spec.
-#   2. When the run finishes, Playwright finalises a .webm in that
-#      dir.
+#   2. When the run finishes, the kit has attached a .webm in a
+#      subfolder of that dir.
 #   3. Convert .webm -> .mp4 (H.264, 1280×720) so it embeds inline in
 #      GitHub README.
 #
@@ -43,30 +45,26 @@ rm -rf "$VIDEO_DIR"
 rm -f "$PW_LOG"
 mkdir -p "$VIDEO_DIR"
 
-# Leftover Obsidian temp vaults from prior test runs cause flaky
-# launches — Obsidian sometimes dies during plugin-enable when /tmp
-# is crowded with stale vault dirs. Sweep before each recording.
-rm -rf "${TMPDIR:-/tmp}"/snipsy-e2e-* 2>/dev/null || true
-
 echo "→ Running headed demo spec (${DEMO_LANG}; Obsidian will open at 1280×720)…"
 echo "  Don't switch focus until the run completes."
 echo "  Log: $PW_LOG"
 
-# Run the demo. SNIPSY_DEMO_VIDEO_DIR triggers the recordVideo path
-# in e2e/fixtures.ts; the dir gets one .webm per spec run.
-if ! SNIPSY_DEMO_VIDEO_DIR="$VIDEO_DIR" npm run demo:record:_inner > "$PW_LOG" 2>&1; then
+# Run the demo. `--output` makes the dir the one Playwright keeps the
+# test's files in; the video lands in a subfolder of it.
+if ! npm run demo:record:_inner -- --output "$VIDEO_DIR" > "$PW_LOG" 2>&1; then
     echo "✗ Playwright demo failed. Last 40 log lines:" >&2
     tail -n 40 "$PW_LOG" >&2 || true
     exit 1
 fi
 
 # Locate the resulting .webm. Playwright names it after the page
-# handle, e.g. page@<hash>.webm. Take the largest in case Obsidian
-# opened any other window during the run.
-WEBM="$(ls -S "$VIDEO_DIR"/*.webm 2>/dev/null | head -n 1 || true)"
+# handle, e.g. page@<hash>.webm, and the kit keeps it under the
+# test's folder. Take the largest in case Obsidian opened any other
+# window during the run.
+WEBM="$(find "$VIDEO_DIR" -name '*.webm' -exec ls -S {} + 2>/dev/null | head -n 1 || true)"
 if [[ -z "${WEBM:-}" || ! -f "$WEBM" ]]; then
     echo "✗ No .webm produced under $VIDEO_DIR" >&2
-    ls -la "$VIDEO_DIR" >&2 || true
+    find "$VIDEO_DIR" >&2 || true
     exit 1
 fi
 echo "→ Captured: $WEBM"

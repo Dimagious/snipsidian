@@ -1,7 +1,4 @@
-// @vitest-environment jsdom
-
-import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
-import { installObsidianDomHelpers } from "../../test/dom-polyfill";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { makeMockPlugin } from "../../test/factories/plugin";
 import { __setRequireApiVersionResult } from "../../test/stubs/obsidian";
 import { createDeclarativePages } from "./declarative-pages";
@@ -22,10 +19,6 @@ import type SnipSidianPlugin from "../../main";
  * `CommunityTab` instance, and `hide()` being callable without
  * throwing.
  */
-
-beforeAll(() => {
-    installObsidianDomHelpers();
-});
 
 afterEach(() => {
     __setRequireApiVersionResult(true);

@@ -1,7 +1,4 @@
-// @vitest-environment jsdom
-
-import { describe, it, expect, beforeAll, vi } from "vitest";
-import { installObsidianDomHelpers } from "../../test/dom-polyfill";
+import { describe, it, expect, vi } from "vitest";
 import { renderDefinitionGroups } from "./setting-definitions";
 import type { ControlHost } from "./settings-control-path";
 import type {
@@ -22,10 +19,6 @@ import type { SnipsyActionDef } from "./setting-definitions";
  * hand-built definitions, so a future definitions change can't
  * accidentally stop covering a vocabulary the adapter supports.
  */
-
-beforeAll(() => {
-    installObsidianDomHelpers();
-});
 
 function mount(): HTMLElement {
     const root = document.createElement("div");

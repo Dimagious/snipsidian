@@ -1,11 +1,11 @@
-import type { CDPSession } from "@playwright/test";
-import { test, expect, ui } from "./fixtures";
+import { test, expect } from "./fixtures";
 
 /**
  * E2E (B-191): expansion survives IME composition. Drives real
- * Chromium composition events via CDP (`Input.imeSetComposition` ->
+ * Chromium composition events (`Input.imeSetComposition` ->
  * compositionstart/update, `Input.insertText` -> commit +
  * compositionend), the same path an OS input method takes.
+ * `obsidian.editor().compose()` sends them over a CDP session.
  *
  * Scenarios 3 and 4 are the Linux Wayland (text-input-v3) shapes: the
  * separator's only document change happens while `view.composing` is
@@ -13,62 +13,50 @@ import { test, expect, ui } from "./fixtures";
  * retried after the composition ended.
  */
 
-async function compose(cdp: CDPSession, steps: string[], commit: string): Promise<void> {
-    for (const s of steps) {
-        await cdp.send("Input.imeSetComposition", {
-            text: s,
-            selectionStart: s.length,
-            selectionEnd: s.length,
-        });
-    }
-    await cdp.send("Input.insertText", { text: commit });
-}
-
 test.describe("[B-191] expansion with IME composition", () => {
-    let cdp: CDPSession;
-
-    test.beforeEach(async ({ app, win }) => {
-        await ui.clearEditor(win);
-        await win.locator(".cm-content").click();
-        cdp = await app.context().newCDPSession(win);
+    test.beforeEach(async ({ obsidian }) => {
+        await obsidian.editor().clear();
     });
 
-    test("trigger composed + committed, space typed after", async ({ win }) => {
-        await compose(cdp, ["b", "br", "brb"], "brb");
+    test("trigger composed + committed, space typed after", async ({ win, obsidian }) => {
+        await obsidian.editor().compose("brb");
         await win.keyboard.type(" ");
         await win.waitForTimeout(300);
-        expect(await ui.editorText(win)).toBe("be right back ");
+        expect(await obsidian.editor().text()).toBe("be right back ");
     });
 
-    test("commit carries the separator", async ({ win }) => {
-        await compose(cdp, ["b", "br", "brb"], "brb ");
+    test("commit carries the separator", async ({ win, obsidian }) => {
+        await obsidian.editor().compose("brb ");
         await win.waitForTimeout(300);
-        expect(await ui.editorText(win)).toBe("be right back ");
+        expect(await obsidian.editor().text()).toBe("be right back ");
     });
 
-    test("every character is its own composition (Wayland-like)", async ({ win }) => {
-        for (const c of "brb ") await compose(cdp, [c], c);
+    test("every character is its own composition (Wayland-like)", async ({ win, obsidian }) => {
+        await obsidian.editor().compose("brb ", { chunking: "character" });
         await win.waitForTimeout(300);
-        expect(await ui.editorText(win)).toBe("be right back ");
+        expect(await obsidian.editor().text()).toBe("be right back ");
     });
 
-    test("plain-typed trigger, separator arrives as a composition", async ({ win }) => {
-        await ui.typeInEditor(win, "brb");
-        await compose(cdp, [" "], " ");
+    test("plain-typed trigger, separator arrives as a composition", async ({ win, obsidian }) => {
+        await obsidian.editor().type("brb");
+        await obsidian.editor().compose(" ");
         await win.waitForTimeout(300);
-        expect(await ui.editorText(win)).toBe("be right back ");
+        expect(await obsidian.editor().text()).toBe("be right back ");
     });
 
-    test("trigger composed after an external link", async ({ win }) => {
-        await ui.typeInEditor(win, "[x](https://a.b) ");
-        await compose(cdp, ["b", "br", "brb"], "brb");
+    test("trigger composed after an external link", async ({ win, obsidian }) => {
+        await obsidian.editor().type("[x](https://a.b) ");
+        await obsidian.editor().compose("brb");
         await win.keyboard.type(" ");
         await win.waitForTimeout(300);
-        expect(await ui.editorText(win)).toBe("[x](https://a.b) be right back ");
+        expect(await obsidian.editor().text()).toBe("[x](https://a.b) be right back ");
     });
 
-    test("an open composition is never rewritten mid-flight", async ({ win }) => {
-        await ui.typeInEditor(win, "brb");
+    // `compose()` always commits; this scenario leaves a preedit open, so it
+    // keeps a raw CDP session.
+    test("an open composition is never rewritten mid-flight", async ({ win, obsidian }) => {
+        await obsidian.editor().type("brb");
+        const cdp = await win.context().newCDPSession(win);
         await cdp.send("Input.imeSetComposition", {
             text: " ",
             selectionStart: 1,
@@ -76,9 +64,9 @@ test.describe("[B-191] expansion with IME composition", () => {
         });
         await win.waitForTimeout(300);
         // Preedit still open: the trigger must be untouched.
-        expect(await ui.editorText(win)).toBe("brb ");
+        expect(await obsidian.editor().text()).toBe("brb ");
         await cdp.send("Input.insertText", { text: " " });
         await win.waitForTimeout(300);
-        expect(await ui.editorText(win)).toBe("be right back ");
+        expect(await obsidian.editor().text()).toBe("be right back ");
     });
 });

@@ -1,6 +1,4 @@
-// @vitest-environment jsdom
-
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // Stub `new Notice(msg)` so tests can assert on toast copy. The
 // default obsidian stub silently swallows the message.
@@ -9,7 +7,7 @@ vi.mock("obsidian", async () => {
     const actual = await vi.importActual("../../../test/stubs/obsidian");
     return {
         ...actual,
-        Notice: vi.fn().mockImplementation((msg: string) => {
+        Notice: vi.fn().mockImplementation(function (msg: string) {
             noticeCalls.push(msg);
         }),
     };
@@ -26,7 +24,6 @@ vi.mock("../../../services/package-validator", async () => {
     return { ...actual, validatePackageForInstall: validateSpy };
 });
 
-import { installObsidianDomHelpers } from "../../../test/dom-polyfill";
 import { makeMockPlugin } from "../../../test/factories/plugin";
 import { EspansoSection } from "./EspansoSection";
 import type { App } from "obsidian";
@@ -50,10 +47,6 @@ import type SnipSidianPlugin from "../../../../main";
  *   7. Cross-group trigger collision (same name in another group,
  *      different replacement) → Notice "Skipped install".
  */
-
-beforeAll(() => {
-    installObsidianDomHelpers();
-});
 
 let plugin: ReturnType<typeof makeMockPlugin>;
 let app: App;

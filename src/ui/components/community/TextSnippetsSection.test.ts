@@ -1,27 +1,20 @@
-// @vitest-environment jsdom
-
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const noticeCalls: string[] = [];
 vi.mock("obsidian", async () => {
     const actual = await vi.importActual("../../../test/stubs/obsidian");
     return {
         ...actual,
-        Notice: vi.fn().mockImplementation((msg: string) => {
+        Notice: vi.fn().mockImplementation(function (msg: string) {
             noticeCalls.push(msg);
         }),
     };
 });
 
-import { installObsidianDomHelpers } from "../../../test/dom-polyfill";
 import { makeMockPlugin } from "../../../test/factories/plugin";
 import { TextSnippetsSection, formatTextSnippetsSummary } from "./TextSnippetsSection";
 import type { App } from "obsidian";
 import type SnipSidianPlugin from "../../../../main";
-
-beforeAll(() => {
-    installObsidianDomHelpers();
-});
 
 let plugin: ReturnType<typeof makeMockPlugin>;
 let files: Map<string, string>;

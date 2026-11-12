@@ -1,180 +1,53 @@
-import obsidianmd from 'eslint-plugin-obsidianmd';
-import js from '@eslint/js';
-import tseslint from 'typescript-eslint';
+import { obsidianPlugin } from 'obsidian-plugin-dev-kit/eslint';
 
-/**
- * B-180: the public scorecard runs the plugin's own `recommended` set, which
- * is wider than the hand-picked list below (`ui/sentence-case`, `no-unsafe-*`,
- * restricted globals, ...) and counts warnings as issues.
- * Spread it first for shipped code only, with every warning promoted to an
- * error; our own, stricter rules further down still win where both define one.
- */
-const escalate = (entry) => {
-  if (Array.isArray(entry)) {
-    const [level, ...opts] = entry;
-    return [level === 'warn' || level === 1 ? 'error' : level, ...opts];
-  }
-  return entry === 'warn' || entry === 1 ? 'error' : entry;
-};
-const scannerParity = obsidianmd.configs.recommended
-  // package.json / non-source blocks do not apply to src/**
-  .filter((cfg) => !(Array.isArray(cfg.files) && cfg.files.includes('package.json')))
-  .map((cfg) => ({
-    ...cfg,
-    files: ['src/**/*.ts'],
-    ignores: ['src/**/*.test.ts', 'src/test/**'],
-    ...(cfg.rules
-      ? { rules: Object.fromEntries(Object.entries(cfg.rules).map(([k, v]) => [k, escalate(v)])) }
-      : {}),
-  }));
-
+// The lint config is the kit's: eslint-plugin-obsidianmd's `recommended` preset
+// (which carries ESLint's recommended rules and typescript-eslint's
+// type-checked ones), with `prefer-window-timers`, `prefer-setting-definitions`
+// and the unused-variable policy of the community scanner as errors. Run with
+// `--max-warnings=0`, so a warning from the preset fails the run too.
 export default [
-  // Base JavaScript recommended
-  js.configs.recommended,
-  
-  // TypeScript recommended (without type checking for faster linting)
-  ...tseslint.configs.recommended,
-  
-  ...scannerParity,
-
-  // Obsidian plugin rules
-  {
-    plugins: {
-      obsidianmd: obsidianmd,
-    },
-    files: ['**/*.ts', '**/*.tsx'],
-    languageOptions: {
-      parser: tseslint.parser,
-      parserOptions: {
-        project: './tsconfig.json',
-        tsconfigRootDir: import.meta.dirname,
-      },
-      globals: {
-        process: 'readonly',
-      },
-    },
-    rules: {
-      // Obsidian recommended rules
-      'obsidianmd/commands/no-command-in-command-id': 'error',
-      'obsidianmd/commands/no-command-in-command-name': 'error',
-      'obsidianmd/commands/no-default-hotkeys': 'error',
-      'obsidianmd/commands/no-plugin-id-in-command-id': 'error',
-      'obsidianmd/commands/no-plugin-name-in-command-name': 'error',
-      'obsidianmd/settings-tab/no-manual-html-headings': 'error',
-      'obsidianmd/settings-tab/no-problematic-settings-headings': 'error',
-      'obsidianmd/vault/iterate': 'error',
-      'obsidianmd/detach-leaves': 'error',
-      'obsidianmd/hardcoded-config-path': 'error',
-      'obsidianmd/no-forbidden-elements': 'error',
-      'obsidianmd/no-plugin-as-component': 'error',
-      'obsidianmd/no-sample-code': 'error',
-      'obsidianmd/no-tfile-tfolder-cast': 'error',
-      'obsidianmd/no-view-references-in-plugin': 'error',
-      'obsidianmd/no-static-styles-assignment': 'error',
-      'obsidianmd/object-assign': 'error',
-      'obsidianmd/platform': 'error',
-      'obsidianmd/prefer-abstract-input-suggest': 'error',
-      'obsidianmd/regex-lookbehind': 'error',
-      'obsidianmd/sample-names': 'error',
-      'obsidianmd/validate-manifest': 'error',
-      'obsidianmd/validate-license': 'error',
-
-      // eslint-plugin-obsidianmd 0.4.x additions (scorecard parity, 2026-08-05):
-      // `prefer-window-timers` flipped direction vs 0.1.x — it now demands
-      // bare `window.setTimeout`/`window.clearTimeout` and flags
-      // `activeWindow.*` timers (popout windows still get a `window` that
-      // resolves correctly via the timer's own closure; `activeWindow` was
-      // never required for timers specifically, only for DOM/`document`
-      // access). See src/ui/utils/ui-state.ts, SnippetPickerModal.ts,
-      // SnippetsTab.ts, BasicTab.ts for the flipped call sites.
-      'obsidianmd/prefer-window-timers': 'error',
-      // Presence-only check: flags PluginSettingTab subclasses missing a
-      // getSettingDefinitions() method. See src/ui/components/SettingsTab.ts
-      // (B-151/ADR-0007): it returns the real declarative tree on 1.13+ and
-      // `[]` below that, where `SettingPage` isn't usable and `display()`
-      // must keep rendering the tab strip.
-      'obsidianmd/settings-tab/prefer-setting-definitions': 'error',
-      // B-151/ADR-0007: was missing from this hand-picked rule list even
-      // though it's 'error' in the plugin's own `recommended` config (the
-      // public scorecard runs that, not our list) — flags any 1.13+-only
-      // API use (SettingPage, SettingTab#update/refreshDomState, ...) at
-      // minAppVersion 1.5.0 UNLESS wrapped in `if (requireApiVersion(...))
-      // { ... }` (spike report, Q6). `declarative-pages.ts` and
-      // `SettingsTab.ts#refreshDeclarative` are written around exactly
-      // this guard shape — enabling the rule here closes the gap where
-      // that guard could regress without `npm run lint` ever catching it.
-      'obsidianmd/no-unsupported-api': 'error',
-
-      // `obsidianmd/ui/sentence-case` comes from the `scannerParity` block
-      // above (B-180); it used to be switched off here, which hid exactly
-      // what the public scorecard flags.
-
-      // Match the Obsidian scorecard scanner's strict no-unused-vars policy:
-      // every declared argument must be used (or prefixed with `_`).
-      '@typescript-eslint/no-unused-vars': ['error', {
-        args: 'all',
-        argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_',
-        caughtErrors: 'all',
-        caughtErrorsIgnorePattern: '^_',
-      }],
-
-      // Scorecard parity (0.4.1): a Promise returned where a DOM listener
-      // (or other void-typed callback) expects `void` silently drops
-      // rejections. Requires parserOptions.project (already configured
-      // above) for the type information the rule needs.
-      '@typescript-eslint/no-misused-promises': 'error',
-    },
-  },
-  
-  // Config files - no type checking
-  {
-    files: ['*.config.ts', '*.config.js', 'vitest.config.ts'],
-    languageOptions: {
-      parser: tseslint.parser,
-      // No parserOptions.project for config files to avoid parsing errors
-    },
-    rules: {
-      // Disable rules that require type checking for config files
-      'obsidianmd/no-plugin-as-component': 'off',
-    },
-  },
-  
-  // Ignore patterns
-  {
+  ...obsidianPlugin({
+    rootDir: import.meta.dirname,
     ignores: [
-      'node_modules/**',
-      'coverage/**',
-      'dist/**',
-      'main.js',
-      'scripts/**',
-      'src/**/*.test.ts',
-      'vitest.config.ts', // Exclude from type checking to avoid parsing errors
-      // e2e/**, e2e-vault.pristine/**, and playwright.config.ts are
-      // git-tracked, but outside tsconfig's `include` (`src/**/*.ts`
-      // only), so the type-aware rules can't parse them ("file not
-      // found in any of the provided project(s)"); none of this code
-      // ships in main.js. E2E lint setup (its own tsconfig + config
-      // block) is a separate future task.
-      // .obsidian-unpacked/** is a local/untracked unpacked-vault
-      // artifact, not source.
-      '.obsidian-unpacked/**',
-      // .claude/** is the git-excluded local assistant workspace
-      // (probe scripts, notes); never shipped, never linted.
+      // .claude/** is the git-excluded local assistant workspace (probe
+      // scripts, notes); never shipped, never linted.
       '.claude/**',
-      // design/** holds the owner's local design drafts (Remotion,
-      // stageshow); not plugin source, never shipped.
-      'design/**',
       // Playwright output, gitignored; minified trace-viewer JS.
       'test-results/**',
       'playwright-report/**',
-      'e2e-vault.pristine/**',
-      'e2e/**',
-      'playwright.config.ts',
-      // Integration layer (B-219): own tsconfig + lint config
-      // (`npm run it:lint`), same reason as e2e/**.
+      // Integration layer (B-219): its own tsconfig and lint config
+      // (`npm run it:lint`), outside this project's tsconfig.
       'integration/**',
+      // Test scaffolding: the fake Obsidian, the DOM shim, the fake vault and
+      // the factories. None of it is bundled, and the plugin preset's rules
+      // have no meaning for code that stands in for the host.
+      'src/test/**',
     ],
+  }),
+  {
+    files: ['**/*.ts'],
+    rules: {
+      // The preset leaves this off in favour of obsidianmd/no-nodejs-modules,
+      // which only warns. The plugin runs on phones: no `require` belongs in it.
+      '@typescript-eslint/no-require-imports': 'error',
+    },
+  },
+  {
+    files: ['src/**/*.ts'],
+    rules: {
+      // Snipsy kept UI text in sentence case on purpose (B-153, B-180), with the
+      // strict option it had under obsidianmd 0.4.1; the 0.5.x preset turns the
+      // rule off. It reports nothing in src today.
+      'obsidianmd/ui/sentence-case': ['error', { enforceCamelCaseLower: true }],
+      // Snipsy's own scorecard gate (the retired scripts/scorecard-check.cjs)
+      // failed on a bare `window.<member>` besides `window.open` and the timer
+      // functions, which the preset's rules do not cover: a bare `window`
+      // belongs to the main window and breaks in a popout, where
+      // `activeWindow` is the right one. `opdk scan` does not check it either.
+      'no-restricted-syntax': ['error', {
+        selector: "MemberExpression[object.name='window'][property.name!=/^(open|setTimeout|clearTimeout|setInterval|clearInterval|requestAnimationFrame)$/]",
+        message: 'A bare `window.*` breaks in popout windows. Use `activeWindow.*` (`window.open` and the timer functions are the only exceptions).',
+      }],
+    },
   },
 ];
-

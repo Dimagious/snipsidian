@@ -184,7 +184,7 @@ export function textSnippetsDataToSnippets(jsonText: string): TextSnippetsImport
         data = JSON.parse(jsonText);
     } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);
-        throw new Error(`Text Snippets data.json is not valid JSON: ${detail}`);
+        throw new Error(`Text Snippets data.json is not valid JSON: ${detail}`, { cause: err });
     }
     if (typeof data !== "object" || data === null || Array.isArray(data)) {
         throw new Error("Text Snippets data.json must contain a JSON object");

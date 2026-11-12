@@ -3,6 +3,6 @@
   "compilerOptions": {
     "types": ["node", "obsidian"]
   },
-  "include": ["e2e/**/*.ts"],
+  "include": ["e2e/**/*.ts", "playwright.config.ts"],
   "exclude": ["node_modules", "e2e/zz-*.spec.ts"]
 }

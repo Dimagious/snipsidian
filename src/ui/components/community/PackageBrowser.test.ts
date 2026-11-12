@@ -1,6 +1,4 @@
-// @vitest-environment jsdom
-
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // Stub `new Notice(msg)` so tests can assert on toast copy.
 const noticeCalls: string[] = [];
@@ -8,7 +6,7 @@ vi.mock("obsidian", async () => {
     const actual = await vi.importActual("../../../test/stubs/obsidian");
     return {
         ...actual,
-        Notice: vi.fn().mockImplementation((msg: string) => {
+        Notice: vi.fn().mockImplementation(function (msg: string) {
             noticeCalls.push(msg);
         }),
     };
@@ -26,7 +24,6 @@ vi.mock("../../../services/community-packages", () => ({
     loadAllCommunityPackages: loadAllCommunityPackagesMock,
 }));
 
-import { installObsidianDomHelpers } from "../../../test/dom-polyfill";
 import { makeMockPlugin } from "../../../test/factories/plugin";
 import { PackageBrowser, shouldOpenPackageDetailsOnKeydown } from "./PackageBrowser";
 import type { App } from "obsidian";
@@ -38,10 +35,6 @@ import type SnipSidianPlugin from "../../../main";
  * guard (a regression here would silently un-wire the a11y fix without
  * any test failing).
  */
-
-beforeAll(() => {
-    installObsidianDomHelpers();
-});
 
 let plugin: ReturnType<typeof makeMockPlugin>;
 let app: App;

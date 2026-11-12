@@ -1509,9 +1509,13 @@
    variables only. Not scoped under `.snipsidian-settings`: it lives in
    the note editor. */
 .snipsy-expanded {
-  text-decoration: underline dotted var(--interactive-accent);
-  text-underline-offset: 3px;
-  border-radius: var(--radius-s);
+  /* A dotted border instead of `text-decoration: underline dotted`: the
+     community scanner reports any `text-decoration` beyond a bare
+     `underline` as only partially supported. On an inline span a border
+     adds no height to the line. No `border-radius`: with one the
+     dotted line curves up at both ends, so the flash has square
+     corners. */
+  border-bottom: 1px dotted var(--interactive-accent);
   animation: snipsy-expanded-flash 1.2s ease-out;
 }
 

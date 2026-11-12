@@ -12,7 +12,7 @@ import { test, expect, ui } from "./fixtures";
  */
 
 test.describe("snippet picker via command palette", () => {
-    test("[B-197] picker insert substitutes $date and {{date:YYYY}}", async ({ win }) => {
+    test("[B-197] picker insert substitutes $date and {{date:YYYY}}", async ({ win, obsidian }) => {
         await win.evaluate(async () => {
             const plugin = (globalThis as unknown as {
                 app?: { plugins?: { plugins?: { snipsidian?: {
@@ -40,12 +40,13 @@ test.describe("snippet picker via command palette", () => {
         await win.waitForTimeout(300);
         await win.keyboard.press("Enter");
         await expect
-            .poll(() => ui.editorText(win))
+            .poll(() => obsidian.editor().text())
             .toMatch(/^## \d{4}-\d{2}-\d{2} \/ \d{4}$/);
     });
 
     test("inserts a selected snippet into the active editor", async ({
         win,
+        obsidian,
     }) => {
         // Make sure the editor has focus so the inserted snippet
         // lands somewhere we can read it back. The win fixture
@@ -81,11 +82,11 @@ test.describe("snippet picker via command palette", () => {
 
         // The replacement for `brb` is `be right back`. Verify it
         // landed in the editor.
-        const value = await ui.editorText(win);
+        const value = await obsidian.editor().text();
         expect(value).toContain("be right back");
     });
 
-    test("Esc closes the picker without inserting", async ({ win }) => {
+    test("Esc closes the picker without inserting", async ({ win, obsidian }) => {
         const editor = ui.activeEditor(win);
         await editor.click();
         await win.keyboard.press("Meta+A");
@@ -113,7 +114,7 @@ test.describe("snippet picker via command palette", () => {
         await expect(filter).not.toBeVisible();
 
         // Editor is still empty — nothing was inserted.
-        const value = await ui.editorText(win);
+        const value = await obsidian.editor().text();
         expect(value).toBe("");
     });
 });
