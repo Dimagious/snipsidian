@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
-import { test, ui } from "./fixtures";
+import { DEMO_VIEWPORT, onlyWhen, test, ui } from "./fixtures";
 import { beat, hideSubtitle, injectOverlays, moveAndClick, showSubtitle, typeSlowly } from "./overlays";
 
 /**
@@ -30,13 +30,22 @@ import { beat, hideSubtitle, injectOverlays, moveAndClick, showSubtitle, typeSlo
  * trims everything before it (Obsidian boot, warm-up) and places each
  * clip at its scene mark, so audio lines up to the frame.
  *
- * Settings: the demo fixture sets `settingsPopoutWindow: false`, so
+ * Settings: the kit's fixture sets `settingsPopoutWindow: false`, so
  * Settings renders as a modal inside the recorded window instead of
  * Obsidian 1.13's separate popout window.
  *
- * DEMO_REHEARSE=1 (`npm run demo:rehearse`) runs the same flow without
- * the padding, to check selectors before burning a take.
+ * The file runs only when SNIPSY_DEMO=1 (set by `npm run demo:rehearse`
+ * and `demo:record:_inner`), so `npm run e2e` skips it. DEMO_REHEARSE=1
+ * (`npm run demo:rehearse`) runs the same flow without the padding, to
+ * check selectors before burning a take.
  */
+
+onlyWhen("SNIPSY_DEMO");
+
+// Playwright's `use.video` does not reach the Obsidian window (an Electron
+// launch is outside its browser contexts); the kit reads this setting and
+// records the window itself, at the size the take is encoded at.
+test.use({ video: { mode: "on", size: DEMO_VIEWPORT } });
 
 const REHEARSE = process.env.DEMO_REHEARSE === "1";
 const LANG = process.env.DEMO_LANG === "ru" ? "ru" : "en";
@@ -169,7 +178,7 @@ async function syncFlash(win: Page): Promise<void> {
 test.describe("Snipsy README demo", () => {
     test.setTimeout(REHEARSE ? 120_000 : 240_000);
 
-    test("six-scene continuous take", async ({ win }) => {
+    test("six-scene continuous take", async ({ win, obsidian }) => {
         const budget = {
             s1: clipSeconds("scene1") + SCENE_TAIL,
             s2: clipSeconds("scene2") + SCENE_TAIL,
@@ -193,7 +202,7 @@ test.describe("Snipsy README demo", () => {
         await closeSettings(win);
 
         await injectOverlays(win);
-        await ui.clearEditor(win);
+        await obsidian.editor().clear();
         await win.mouse.move(1180, 640);
         await beat(win, 400);
 
@@ -222,7 +231,7 @@ test.describe("Snipsy README demo", () => {
 
         await test.step("scene 2: multi-line callout", async () => {
             mark("scene-2");
-            await ui.clearEditor(win);
+            await obsidian.editor().clear();
             await showSubtitle(win, "Multi-line snippets: the cursor lands where you type");
             await beat(win, 400);
             await typeHuman(win, "callout ");
@@ -233,7 +242,7 @@ test.describe("Snipsy README demo", () => {
 
         await test.step("scene 3: silent inside code", async () => {
             mark("scene-3");
-            await ui.clearEditor(win);
+            await obsidian.editor().clear();
             await showSubtitle(win, "Inside code or YAML? Snipsy stays silent.");
             await beat(win, 300);
             // Inside a fenced code block: the trigger must NOT fire.
@@ -252,7 +261,7 @@ test.describe("Snipsy README demo", () => {
 
         await test.step("scene 4: $date", async () => {
             mark("scene-4");
-            await ui.clearEditor(win);
+            await obsidian.editor().clear();
             await showSubtitle(win, "today  →  $date  (always current)");
             await beat(win, 400);
             await typeHuman(win, "today ");
@@ -281,7 +290,7 @@ test.describe("Snipsy README demo", () => {
 
             // Back to the note to use the new trigger.
             await closeSettings(win);
-            await ui.clearEditor(win);
+            await obsidian.editor().clear();
             await typeHuman(win, "sig ");
             await endScene(win, "scene-5", budget.s5);
         });
