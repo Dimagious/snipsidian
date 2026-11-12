@@ -10,6 +10,12 @@ import { runObsidianVersionMatrix } from "obsidian-integration-testing";
  *
  * `OBSIDIAN_VERSION` (comma-separated `x.y.z` / `public-latest` /
  * `catalyst-latest`) overrides the default pair.
+ *
+ * This is a plain `.mjs` (type-checked through `checkJs`, see tsconfig.json)
+ * and not a `.ts` file on purpose: the community scanner lints tracked `.ts`
+ * files without `integration/node_modules`, where the library is `any` and
+ * `node:child_process` is reported as unavailable on mobile. This runner is a
+ * Node-only dev script and neither applies to it.
  */
 await runObsidianVersionMatrix({
     versions: process.env.OBSIDIAN_VERSION || undefined,

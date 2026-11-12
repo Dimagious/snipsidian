@@ -1,8 +1,10 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
     "types": ["node", "obsidian-integration-testing/vitest/typings"]
   },
-  "include": ["**/*.ts"],
+  "include": ["**/*.ts", "**/*.mjs"],
   "exclude": ["node_modules"]
 }

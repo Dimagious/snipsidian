@@ -28,4 +28,9 @@ export default [
       '@typescript-eslint/no-explicit-any': 'error',
     },
   },
+  {
+    // run-matrix.mjs is a plain Node script, outside the TypeScript project.
+    files: ['**/*.mjs'],
+    languageOptions: { globals: { process: 'readonly' } },
+  },
 ];

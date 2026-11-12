@@ -5,7 +5,7 @@
     "description": "Integration layer (B-219): smoke tests inside a real Obsidian. Standalone project, not a workspace, so root installs and CI never pull it in.",
     "scripts": {
         "it": "cd .. && vitest run --config integration/vitest.config.ts --project desktop",
-        "it:matrix": "cd .. && tsx integration/run-matrix.ts",
+        "it:matrix": "cd .. && node integration/run-matrix.mjs",
         "it:android": "cd .. && vitest run --config integration/vitest.config.ts --project android",
         "typecheck": "tsc --noEmit -p tsconfig.json",
         "lint": "eslint --config eslint.config.js ."
@@ -16,7 +16,6 @@
         "eslint": "9.39.5",
         "obsidian": "1.13.1",
         "obsidian-integration-testing": "17.9.1",
-        "tsx": "4.23.8",
         "typescript": "5.9.3",
         "typescript-eslint": "8.66.0",
         "vitest": "5.1.0"
