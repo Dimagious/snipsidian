@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { makeMockPlugin } from "../../test/factories/plugin";
 import { CommunityTab } from "./CommunityTab";
 import type { App } from "obsidian";
-import type SnipSidianPlugin from "../../../main";
+import type SnipSidianPlugin from "../../main";
 
 /**
  * Smoke tests for `CommunityTab` — the wrapper that mounts the

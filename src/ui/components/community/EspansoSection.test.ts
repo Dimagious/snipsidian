@@ -27,7 +27,7 @@ vi.mock("../../../services/package-validator", async () => {
 import { makeMockPlugin } from "../../../test/factories/plugin";
 import { EspansoSection } from "./EspansoSection";
 import type { App } from "obsidian";
-import type SnipSidianPlugin from "../../../../main";
+import type SnipSidianPlugin from "../../../main";
 
 /**
  * Mount tests for the Espanso-import section — focused on the

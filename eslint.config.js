@@ -18,10 +18,13 @@ export default [
       // Integration layer (B-219): its own tsconfig and lint config
       // (`npm run it:lint`), outside this project's tsconfig.
       'integration/**',
-      // Test scaffolding: the fake Obsidian, the DOM shim, the fake vault and
-      // the factories. None of it is bundled, and the plugin preset's rules
-      // have no meaning for code that stands in for the host.
-      'src/test/**',
+      // Test scaffolding: the fake Obsidian and the factories. None of it is
+      // bundled, and the plugin preset's rules have no meaning for code that
+      // stands in for the host. The `*.test.ts` files beside it are ignored
+      // by the kit's defaults, and tsconfig.json leaves them out, so the
+      // type-aware rules could not run on them yet.
+      'src/test/stubs/**',
+      'src/test/factories/**',
     ],
   }),
   {
