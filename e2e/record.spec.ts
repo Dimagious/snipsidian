@@ -1,4 +1,4 @@
-import { test } from "./fixtures";
+import { onlyWhen, test } from "./fixtures";
 
 /**
  * Recording harness. Not a real test — it boots Obsidian against the
@@ -22,13 +22,9 @@ import { test } from "./fixtures";
 // CI runs that don't have a human waiting (the suite hangs).
 //
 // Default behaviour: skipped. To drive: `E2E_RECORD=1 npm run e2e:record`.
-// The npm script in `package.json` already sets the env var; the
-// `--grep-invert` in `npm run e2e` stays as belt-and-braces for
-// anyone running `npx playwright test` directly without npm.
-test.skip(
-    process.env.E2E_RECORD !== "1",
-    "set E2E_RECORD=1 to drive the interactive recording session",
-);
+// `onlyWhen` skips the file unless the variable is exactly `1`, and a
+// skipped file never starts Obsidian. The npm script already sets it.
+onlyWhen("E2E_RECORD");
 
 test("interactive recording session", async ({ win }) => {
     // eslint-disable-next-line no-console

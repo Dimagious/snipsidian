@@ -1,4 +1,5 @@
-import { test, expect, ui, type ObsidianApp } from "./fixtures";
+import { test, expect, ui } from "./fixtures";
+import type { ObsidianHelpers } from "obsidian-plugin-dev-kit/e2e";
 import type { Page } from "@playwright/test";
 
 /**
@@ -17,27 +18,24 @@ import type { Page } from "@playwright/test";
  *   3. Opening edit on row B discards row A's draft (single-edit-mode)
  */
 
-// B-158: Settings can render as a separate popout window rather than
-// inline in `win` (observed on Obsidian 1.13.7) — `ui.openSettings`
-// resolves whichever window actually got the Snipsy tab content, and
-// every UI locator below operates on that page. Data reads still go
-// through `win.evaluate` since `app`/the plugin instance are the same
-// singleton regardless of which window's global scope reaches them.
-async function openSnipsy(app: ObsidianApp, win: Page): Promise<Page> {
-    const sw = await ui.openSettings(app, win);
+// B-158: Obsidian 1.13 can open Settings as a separate popout window.
+// The kit's fixture sets `settingsPopoutWindow: false` in the vault, so
+// `obsidian.openSettings` renders Settings inside `win` and every UI
+// locator below runs there. Data reads still go through `win.evaluate`.
+async function openSnipsy(obsidian: ObsidianHelpers, win: Page): Promise<void> {
+    await obsidian.openSettings("snipsidian");
     // B-151/ADR-0007: "Snippets" is a page entry one click deep on
     // Obsidian 1.13+ (a no-op below 1.13, where it is the default
     // landing tab already).
-    await ui.openSnippetsPage(sw);
-    await sw
+    await ui.openSnippetsPage(win);
+    await win
         .getByRole("button", { name: "Add snippet" })
         .first()
         .waitFor({ state: "visible" });
-    return sw;
 }
 
-async function expandUngrouped(sw: Page) {
-    const toggle = sw.getByRole("button", { name: "Expand group Ungrouped" });
+async function expandUngrouped(win: Page) {
+    const toggle = win.getByRole("button", { name: "Expand group Ungrouped" });
     if (await toggle.isVisible().catch(() => false)) {
         await toggle.click();
     }
@@ -47,23 +45,24 @@ test.describe("edit-flow: B-021 regression surface", () => {
     test("edits a snippet's replacement via Edit button and persists", async ({
         win,
         app,
+        obsidian,
     }) => {
-        const sw = await openSnipsy(app, win);
-        await expandUngrouped(sw);
+        await openSnipsy(obsidian, win);
+        await expandUngrouped(win);
 
         // `brb` is seeded in the pristine vault with replacement
         // "be right back". Click its Edit button.
-        const editBtn = sw.getByRole("button", { name: "Edit snippet brb" });
+        const editBtn = win.getByRole("button", { name: "Edit snippet brb" });
         await editBtn.click();
 
         // Edit-mode renders trigger + replacement inputs in-place.
-        const replacementInput = sw.getByRole("textbox", {
+        const replacementInput = win.getByRole("textbox", {
             name: "Snippet replacement",
         });
         await replacementInput.fill("be right back!! EDITED");
 
         // Save (mod-cta button inside the edit form's .actions row).
-        await sw
+        await win
             .locator(".snippet-row.is-editing .actions .mod-cta")
             .click();
 
@@ -80,29 +79,30 @@ test.describe("edit-flow: B-021 regression surface", () => {
     test("opening Edit on row B closes row A's edit form (single-edit-mode)", async ({
         win,
         app,
+        obsidian,
     }) => {
-        const sw = await openSnipsy(app, win);
-        await expandUngrouped(sw);
+        await openSnipsy(obsidian, win);
+        await expandUngrouped(win);
 
         // Open edit on `brb`.
-        await sw.getByRole("button", { name: "Edit snippet brb" }).click();
+        await win.getByRole("button", { name: "Edit snippet brb" }).click();
         // Type into A's replacement — should be tracked in the
         // UIStateManager draft, NOT yet persisted.
-        const replacementInputA = sw.getByRole("textbox", {
+        const replacementInputA = win.getByRole("textbox", {
             name: "Snippet replacement",
         });
         await replacementInputA.fill("UNSAVED EDIT");
 
         // Without saving, open edit on `h1`.
-        await sw.getByRole("button", { name: "Edit snippet h1" }).click();
+        await win.getByRole("button", { name: "Edit snippet h1" }).click();
 
         // Only ONE row should be in edit mode now (h1's).
-        const editingRows = sw.locator(".snippet-row.is-editing");
+        const editingRows = win.locator(".snippet-row.is-editing");
         await expect(editingRows).toHaveCount(1);
 
         // The active edit form should belong to h1 — its trigger
         // input contains "h1", not "brb".
-        const triggerInput = sw.getByRole("textbox", { name: "Snippet trigger" });
+        const triggerInput = win.getByRole("textbox", { name: "Snippet trigger" });
         await expect(triggerInput).toHaveValue("h1");
 
         // The unsaved A draft did NOT land in settings.
@@ -115,22 +115,22 @@ test.describe("edit-flow: B-021 regression surface", () => {
         expect(stillOriginal).toBe("be right back");
     });
 
-    test("Cancel discards the draft without writing", async ({ win, app }) => {
-        const sw = await openSnipsy(app, win);
-        await expandUngrouped(sw);
+    test("Cancel discards the draft without writing", async ({ win, app, obsidian }) => {
+        await openSnipsy(obsidian, win);
+        await expandUngrouped(win);
 
-        await sw.getByRole("button", { name: "Edit snippet brb" }).click();
-        await sw
+        await win.getByRole("button", { name: "Edit snippet brb" }).click();
+        await win
             .getByRole("textbox", { name: "Snippet replacement" })
             .fill("DISCARDED");
 
         // Click the non-CTA action (Cancel).
-        await sw
+        await win
             .locator(".snippet-row.is-editing .actions button:not(.mod-cta)")
             .click();
 
         // Editor closed.
-        await expect(sw.locator(".snippet-row.is-editing")).toHaveCount(0);
+        await expect(win.locator(".snippet-row.is-editing")).toHaveCount(0);
 
         // Settings still has the original value.
         const stored = await win.evaluate(() => {
@@ -142,23 +142,23 @@ test.describe("edit-flow: B-021 regression surface", () => {
         expect(stored).toBe("be right back");
     });
 
-    test("renames the trigger key via Edit (B-105)", async ({ win, app }) => {
+    test("renames the trigger key via Edit (B-105)", async ({ win, app, obsidian }) => {
         // Renaming the trigger is a *different* path from editing
         // the replacement: it routes through `safeRenameKey` and
         // shifts the entry under a new key (touching splitKey /
         // joinKey / hasTriggerCollision). The replacement-edit test
         // above never exercises this path because the key stays
         // the same.
-        const sw = await openSnipsy(app, win);
-        await expandUngrouped(sw);
+        await openSnipsy(obsidian, win);
+        await expandUngrouped(win);
 
-        await sw.getByRole("button", { name: "Edit snippet brb" }).click();
+        await win.getByRole("button", { name: "Edit snippet brb" }).click();
 
         // Change the trigger; keep the replacement intact.
-        const triggerInput = sw.getByRole("textbox", { name: "Snippet trigger" });
+        const triggerInput = win.getByRole("textbox", { name: "Snippet trigger" });
         await triggerInput.fill("bbb");
 
-        await sw
+        await win
             .locator(".snippet-row.is-editing .actions .mod-cta")
             .click();
 
@@ -177,10 +177,10 @@ test.describe("edit-flow: B-021 regression surface", () => {
         // UI reflects the rename — old edit-button gone, new one
         // present.
         await expect(
-            sw.getByRole("button", { name: "Edit snippet brb" }),
+            win.getByRole("button", { name: "Edit snippet brb" }),
         ).toHaveCount(0);
         await expect(
-            sw.getByRole("button", { name: "Edit snippet bbb" }),
+            win.getByRole("button", { name: "Edit snippet bbb" }),
         ).toBeVisible();
     });
 });

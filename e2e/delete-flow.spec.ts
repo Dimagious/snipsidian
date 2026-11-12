@@ -1,4 +1,5 @@
-import { test, expect, ui, type ObsidianApp } from "./fixtures";
+import { test, expect, ui } from "./fixtures";
+import type { ObsidianHelpers } from "obsidian-plugin-dev-kit/e2e";
 import type { Page } from "@playwright/test";
 
 /**
@@ -15,28 +16,25 @@ import type { Page } from "@playwright/test";
  * "skip-confirm" regression is caught.
  */
 
-// B-158: Settings can render as a separate popout window rather than
-// inline in `win` (observed on Obsidian 1.13.7) — `ui.openSettings`
-// resolves whichever window actually got the Snipsy tab content, and
-// every UI locator below operates on that page. Data reads/writes
-// still go through `win.evaluate` (`readSnippets` etc.) since
-// `app`/the plugin instance are the same singleton regardless of
-// which window's global scope reaches them.
-async function openSnipsy(app: ObsidianApp, win: Page): Promise<Page> {
-    const sw = await ui.openSettings(app, win);
+// B-158: Obsidian 1.13 can open Settings as a separate popout window.
+// The kit's fixture sets `settingsPopoutWindow: false` in the vault, so
+// `obsidian.openSettings` renders Settings inside `win` and every UI
+// locator below runs there. Data reads/writes still go through
+// `win.evaluate` (`readSnippets` etc.).
+async function openSnipsy(obsidian: ObsidianHelpers, win: Page): Promise<void> {
+    await obsidian.openSettings("snipsidian");
     // B-151/ADR-0007: "Snippets" is a page entry one click deep on
     // Obsidian 1.13+ (a no-op below 1.13, where it is the default
     // landing tab already).
-    await ui.openSnippetsPage(sw);
-    await sw
+    await ui.openSnippetsPage(win);
+    await win
         .getByRole("button", { name: "Add snippet" })
         .first()
         .waitFor({ state: "visible" });
-    return sw;
 }
 
-async function expandGroup(sw: Page, groupTitle: string) {
-    const toggle = sw.getByRole("button", {
+async function expandGroup(win: Page, groupTitle: string) {
+    const toggle = win.getByRole("button", {
         name: `Expand group ${groupTitle}`,
     });
     if (await toggle.isVisible().catch(() => false)) {
@@ -69,10 +67,10 @@ async function readSnippets(
 test.describe("delete flows: ConfirmModal surface", () => {
     test("deletes a single snippet via row 🗑️ + Confirm (B-103)", async ({
         win,
-        app,
+        obsidian,
     }) => {
-        const sw = await openSnipsy(app, win);
-        await expandGroup(sw, "Ungrouped");
+        await openSnipsy(obsidian, win);
+        await expandGroup(win, "Ungrouped");
 
         // `brb` is seeded in the pristine vault. Sanity-check it's
         // present before we attempt to delete it — otherwise a
@@ -82,7 +80,7 @@ test.describe("delete flows: ConfirmModal surface", () => {
 
         // Click the row's 🗑️. The button's accessible name is
         // `Delete snippet brb` (set in SnippetsTab.ts:421).
-        await sw
+        await win
             .getByRole("button", { name: "Delete snippet brb" })
             .click();
 
@@ -90,7 +88,7 @@ test.describe("delete flows: ConfirmModal surface", () => {
         // class; the confirm button is the one with text "Delete"
         // and `.mod-cta`. Cancel is focused by default — clicking
         // Delete forces the confirmed path explicitly.
-        const confirmModal = sw.locator(".snipsidian-confirm-modal");
+        const confirmModal = win.locator(".snipsidian-confirm-modal");
         await expect(confirmModal).toBeVisible();
         await expect(confirmModal).toContainText('Delete snippet "brb"?');
 
@@ -107,24 +105,24 @@ test.describe("delete flows: ConfirmModal surface", () => {
         // name) — `.snippet-trigger` is too broad and would match
         // by-substring.
         await expect(
-            sw.getByRole("button", { name: "Edit snippet brb" }),
+            win.getByRole("button", { name: "Edit snippet brb" }),
         ).toHaveCount(0);
     });
 
     test("Cancel keeps the snippet (B-103 regression guard)", async ({
         win,
-        app,
+        obsidian,
     }) => {
         // Without this test, a future change that always-confirms
         // (skipping the modal click) would still pass the
         // happy-path delete test. This pins the Cancel half.
-        const sw = await openSnipsy(app, win);
-        await expandGroup(sw, "Ungrouped");
+        await openSnipsy(obsidian, win);
+        await expandGroup(win, "Ungrouped");
 
-        await sw
+        await win
             .getByRole("button", { name: "Delete snippet brb" })
             .click();
-        const confirmModal = sw.locator(".snipsidian-confirm-modal");
+        const confirmModal = win.locator(".snipsidian-confirm-modal");
         await expect(confirmModal).toBeVisible();
 
         // Cancel by name — `:not(.mod-cta)` used to be unique to it,
@@ -137,7 +135,7 @@ test.describe("delete flows: ConfirmModal surface", () => {
         expect(after.brb).toBe("be right back");
     });
 
-    test("deletes an entire group via group 🗑️ (B-104)", async ({ win, app }) => {
+    test("deletes an entire group via group 🗑️ (B-104)", async ({ win, app, obsidian }) => {
         // Seed a fresh named group with two snippets, then delete
         // the group. Using a fresh group keeps the test
         // independent of the seed's exact contents AND verifies
@@ -162,7 +160,7 @@ test.describe("delete flows: ConfirmModal surface", () => {
             await plugin.saveSettings?.();
         });
 
-        const sw = await openSnipsy(app, win);
+        await openSnipsy(obsidian, win);
         // The group title is the display form — `slugifyGroup`
         // produces the same slug for `"test-group"`, and
         // `displayGroupTitle` reconstructs `"Test group"` per the
@@ -174,11 +172,11 @@ test.describe("delete flows: ConfirmModal surface", () => {
 
         // Group is visible in the tree.
         await expect(
-            sw.getByRole("button", { name: `Expand group ${groupTitle}` }),
+            win.getByRole("button", { name: `Expand group ${groupTitle}` }),
         ).toBeVisible();
 
         // Click the group's 🗑️. Aria-label set in SnippetsTab.ts:339.
-        await sw
+        await win
             .getByRole("button", { name: `Delete group ${groupTitle}` })
             .click();
 
@@ -186,7 +184,7 @@ test.describe("delete flows: ConfirmModal surface", () => {
         // first 5 trigger names. Copy last changed in B-053 (1.1.7);
         // `.snipsidian-confirm-modal` is the content element — the
         // title lives in a sibling `titleEl`, not checked here.
-        const confirmModal = sw.locator(".snipsidian-confirm-modal");
+        const confirmModal = win.locator(".snipsidian-confirm-modal");
         await expect(confirmModal).toBeVisible();
         await expect(confirmModal).toContainText(
             `Delete 2 snippets from "${groupTitle}": alpha, beta.`,
@@ -203,7 +201,7 @@ test.describe("delete flows: ConfirmModal surface", () => {
 
         // Group header no longer renders.
         await expect(
-            sw.getByRole("button", { name: `Expand group ${groupTitle}` }),
+            win.getByRole("button", { name: `Expand group ${groupTitle}` }),
         ).toHaveCount(0);
     });
 });

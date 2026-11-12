@@ -33,6 +33,7 @@ async function openPicker(win: import("@playwright/test").Page) {
 test.describe("picker features", () => {
     test("wrap-selection title appears when editor has a non-empty selection (U-002)", async ({
         win,
+        obsidian,
     }) => {
         // Type some text then select it. We need a real editor
         // selection at the moment the picker opens — that's what
@@ -41,7 +42,7 @@ test.describe("picker features", () => {
         await editor.click();
         await win.keyboard.press("Meta+A");
         await win.keyboard.press("Delete");
-        await ui.typeInEditor(win, "this will be wrapped");
+        await obsidian.editor().type("this will be wrapped");
         // Cmd+A inside the editor selects all editor content.
         await win.keyboard.press("Meta+A");
 
@@ -134,6 +135,7 @@ test.describe("picker features", () => {
 
     test("wrap-selection actually wraps the selected text (B-100)", async ({
         win,
+        obsidian,
     }) => {
         // The title-flip is covered by the U-002 test above. This
         // test pins the *behaviour*: picking a wrap-style snippet
@@ -150,7 +152,7 @@ test.describe("picker features", () => {
         await editor.click();
         await win.keyboard.press("Meta+A");
         await win.keyboard.press("Delete");
-        await ui.typeInEditor(win, "hello");
+        await obsidian.editor().type("hello");
         await win.keyboard.press("Meta+A");
 
         await openPicker(win);
@@ -165,12 +167,13 @@ test.describe("picker features", () => {
         // Picker closes; assert via plugin API rather than DOM —
         // CodeMirror virtualises lines and `.cm-content`'s
         // innerText can drop the second line.
-        const value = await ui.editorText(win);
+        const value = await obsidian.editor().text();
         expect(value).toBe("> [!note]\n> hello");
     });
 
     test("keyboard navigation: Arrow / Home / End / Enter (B-101)", async ({
         win,
+        obsidian,
     }) => {
         // Pins the listbox a11y contract (A-006). The picker is a
         // WAI-ARIA combobox; selection is tracked via
@@ -230,7 +233,7 @@ test.describe("picker features", () => {
 
         // `h1` replacement is `# $|`; the cursor marker is stripped
         // on insert, leaving `# ` in the editor.
-        const value = await ui.editorText(win);
+        const value = await obsidian.editor().text();
         expect(value).toBe("# ");
     });
 
