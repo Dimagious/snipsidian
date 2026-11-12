@@ -45,11 +45,6 @@ rm -rf "$VIDEO_DIR"
 rm -f "$PW_LOG"
 mkdir -p "$VIDEO_DIR"
 
-# Leftover Obsidian temp vaults from prior test runs cause flaky
-# launches — Obsidian sometimes dies during plugin-enable when /tmp
-# is crowded with stale vault dirs. Sweep before each recording.
-rm -rf "${TMPDIR:-/tmp}"/opdk-e2e-* 2>/dev/null || true
-
 echo "→ Running headed demo spec (${DEMO_LANG}; Obsidian will open at 1280×720)…"
 echo "  Don't switch focus until the run completes."
 echo "  Log: $PW_LOG"
