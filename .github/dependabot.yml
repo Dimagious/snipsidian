@@ -22,6 +22,9 @@ updates:
       # Obsidian runs on its own Electron; ours only drives it for the e2e suite and moves with the kit's.
       - dependency-name: "electron"
         update-types: ["version-update:semver-major"]
+      # Exact pins that match obsidian's peerDependencies (any other version fails `npm ci` with
+      # ERESOLVE); move them by hand together with `obsidian`.
+      - dependency-name: "@codemirror/*"
     groups:
       # One pull request, one lockfile. Separate ones conflict with each other
       # the moment the first is merged.
