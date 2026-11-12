@@ -39,7 +39,6 @@
     "devDependencies": {
         "@codemirror/state": "6.5.0",
         "@codemirror/view": "6.38.6",
-        "@electron/asar": "^4.2.0",
         "@playwright/test": "^1.62.0",
         "@types/node": "^22.20.5",
         "@vitest/coverage-v8": "^5.0.2",
