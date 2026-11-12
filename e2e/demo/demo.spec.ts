@@ -17,7 +17,7 @@ import { beat, hideSubtitle, injectOverlays, moveAndClick, showSubtitle, typeSlo
  *   3. fenced code is silent (voice/scene3.mp3)
  *   4. today -> $date        (voice/scene4.mp3)
  *   5. Settings: Add snippet (voice/scene5.mp3)
- *   6. Settings tab tour     (voice/scene6.mp3)
+ *   6. Settings tour         (voice/scene6.mp3)
  *
  * Timing: every scene is padded to (its narration clip length +
  * SCENE_TAIL) so the voice-over never runs into the next scene. The
@@ -201,8 +201,8 @@ test.describe("Snipsy README demo", () => {
         };
 
         // Warm-up (trimmed from the final video): load the Packages
-        // catalog once so the tab tour shows it instead of a spinner,
-        // then leave Settings on the Snippets tab.
+        // catalog once so the settings tour shows it instead of a spinner,
+        // then leave Settings on the Snippets page.
         await openSnipsyRoot(win);
         await pageEntry(win, "Packages").click();
         await win
@@ -305,7 +305,7 @@ test.describe("Snipsy README demo", () => {
             await endScene(win, "scene-5", budget.s5);
         });
 
-        await test.step("scene 6: tab tour", async () => {
+        await test.step("scene 6: settings tour", async () => {
             mark("scene-6");
             // Obsidian 1.13+ lays Snipsy's settings out as a root with two
             // pages (Snippets, Packages) and the General and About groups below.
