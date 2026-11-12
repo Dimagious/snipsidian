@@ -25,25 +25,33 @@ import type SnipSidianPlugin from "../../../main";
 // Mock the three sub-sections so this test stays focused on the
 // wrapper's wiring (not on what the sub-sections render).
 vi.mock("./community/PackageBrowser", () => ({
-    PackageBrowser: vi.fn().mockImplementation(() => ({
-        render: vi.fn().mockResolvedValue(undefined),
-    })),
+    PackageBrowser: vi.fn().mockImplementation(function () {
+        return {
+            render: vi.fn().mockResolvedValue(undefined),
+        };
+    }),
 }));
 vi.mock("./community/PackageSubmissionSection", () => ({
-    PackageSubmissionSection: vi.fn().mockImplementation(() => ({
-        render: vi.fn(),
-    })),
+    PackageSubmissionSection: vi.fn().mockImplementation(function () {
+        return {
+            render: vi.fn(),
+        };
+    }),
 }));
 vi.mock("./community/EspansoSection", () => ({
-    EspansoSection: vi.fn().mockImplementation(() => ({
-        render: vi.fn(),
-    })),
+    EspansoSection: vi.fn().mockImplementation(function () {
+        return {
+            render: vi.fn(),
+        };
+    }),
 }));
 
 vi.mock("./community/TextSnippetsSection", () => ({
-    TextSnippetsSection: vi.fn().mockImplementation(() => ({
-        render: vi.fn(),
-    })),
+    TextSnippetsSection: vi.fn().mockImplementation(function () {
+        return {
+            render: vi.fn(),
+        };
+    }),
 }));
 
 import { PackageBrowser } from "./community/PackageBrowser";

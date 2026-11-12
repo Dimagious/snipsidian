@@ -47,8 +47,8 @@
         "@eslint/js": "^9.39.1",
         "@microsoft/eslint-plugin-sdl": "^1.1.0",
         "@playwright/test": "^1.60.0",
-        "@types/node": "^20.12.12",
-        "@vitest/coverage-v8": "^3.2.4",
+        "@types/node": "^22.20.5",
+        "@vitest/coverage-v8": "^5.0.2",
         "electron": "^39.8.3",
         "esbuild": "^0.28.0",
         "eslint": "^9.39.1",
@@ -59,7 +59,7 @@
         "tsx": "^4.20.5",
         "typescript": "^5.5.0",
         "typescript-eslint": "^8.46.3",
-        "vitest": "^3.2.4"
+        "vitest": "^5.0.1"
     },
     "overrides": {
         "brace-expansion": "^2.0.1",

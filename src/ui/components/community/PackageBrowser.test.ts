@@ -8,7 +8,7 @@ vi.mock("obsidian", async () => {
     const actual = await vi.importActual("../../../test/stubs/obsidian");
     return {
         ...actual,
-        Notice: vi.fn().mockImplementation((msg: string) => {
+        Notice: vi.fn().mockImplementation(function (msg: string) {
             noticeCalls.push(msg);
         }),
     };
