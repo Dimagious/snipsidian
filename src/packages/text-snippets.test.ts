@@ -328,6 +328,16 @@ describe("textSnippetsDataToSnippets: malformed input", () => {
         expect(() => textSnippetsDataToSnippets("{not json")).toThrow(/not valid JSON/);
     });
 
+    it("keeps the parser's error as the cause of the invalid JSON error", () => {
+        let thrown: unknown;
+        try {
+            textSnippetsDataToSnippets("{not json");
+        } catch (err) {
+            thrown = err;
+        }
+        expect((thrown as Error).cause).toBeInstanceOf(SyntaxError);
+    });
+
     it("throws when the top level is not an object", () => {
         expect(() => textSnippetsDataToSnippets("[]")).toThrow(/JSON object/);
         expect(() => textSnippetsDataToSnippets("null")).toThrow(/JSON object/);
