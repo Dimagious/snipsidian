@@ -84,8 +84,7 @@ test.describe("picker features", () => {
 
         // Filter to "brb" should leave exactly one match — `brb`
         // itself; other defaults / seeds don't contain that substring.
-        await filter.fill("brb");
-        await expect(ui.pickerSelectedTrigger(win)).toHaveText("brb"); // 200ms debounce + render
+        await ui.fillPickerFilter(win, "brb", "brb"); // 200ms debounce + render
         const filteredCount = await win
             .locator(".snippet-picker-modal .snippet-item")
             .count();
@@ -118,8 +117,7 @@ test.describe("picker features", () => {
         const filter = win.locator(
             ".snippet-picker-modal input[role='combobox']",
         );
-        await filter.fill("brb");
-        await expect(ui.pickerSelectedTrigger(win)).toHaveText("brb");
+        await ui.fillPickerFilter(win, "brb", "brb");
         await win.keyboard.press("Enter");
 
         // Notice should surface. Obsidian's Notice container is
@@ -164,8 +162,7 @@ test.describe("picker features", () => {
         const filter = win.locator(
             ".snippet-picker-modal input[role='combobox']",
         );
-        await filter.fill("callout");
-        await expect(ui.pickerSelectedTrigger(win)).toHaveText("callout"); // debounce + render
+        await ui.fillPickerFilter(win, "callout", "callout"); // debounce + render
         await win.keyboard.press("Enter");
 
         // Picker closes; assert via plugin API rather than DOM —
@@ -230,8 +227,7 @@ test.describe("picker features", () => {
         // hit. We get there by filtering first (more reliable than
         // counting ArrowDowns over a default list whose order may
         // shift if presets grow).
-        await filter.fill("h1");
-        await expect(ui.pickerSelectedTrigger(win)).toHaveText("h1");
+        await ui.fillPickerFilter(win, "h1", "h1");
         await expect(items.first()).toBeVisible();
         await win.keyboard.press("Enter");
 
@@ -264,8 +260,7 @@ test.describe("picker features", () => {
         const filter = win.locator(
             ".snippet-picker-modal input[role='combobox']",
         );
-        await filter.fill("brb");
-        await expect(ui.pickerSelectedTrigger(win)).toHaveText("brb");
+        await ui.fillPickerFilter(win, "brb", "brb");
         const badge = win.locator(".snippet-picker-modal .snipsy-picker-count");
         await expect(badge).toHaveClass(/is-hidden/);
 

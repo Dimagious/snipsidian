@@ -36,8 +36,7 @@ test.describe("snippet picker via command palette", () => {
         });
         const filter = win.locator(".snippet-picker-modal input[role='combobox']");
         await filter.waitFor({ state: "visible" });
-        await filter.fill("zzdate");
-        await expect(ui.pickerSelectedTrigger(win)).toHaveText("zzdate");
+        await ui.fillPickerFilter(win, "zzdate", "zzdate");
         await win.keyboard.press("Enter");
         await expect
             .poll(() => obsidian.editor().text())
@@ -74,10 +73,9 @@ test.describe("snippet picker via command palette", () => {
             ".snippet-picker-modal input[role='combobox']",
         );
         await filter.waitFor({ state: "visible" });
-        await filter.fill("brb");
+        await ui.fillPickerFilter(win, "brb", "brb");
         // Wait for the result list to settle — the picker has a
         // 200ms search debounce.
-        await expect(ui.pickerSelectedTrigger(win)).toHaveText("brb");
         await win.keyboard.press("Enter");
 
         // The replacement for `brb` is `be right back`. Verify it
@@ -104,8 +102,7 @@ test.describe("snippet picker via command palette", () => {
             ".snippet-picker-modal input[role='combobox']",
         );
         await filter.waitFor({ state: "visible" });
-        await filter.fill("brb");
-        await expect(ui.pickerSelectedTrigger(win)).toHaveText("brb");
+        await ui.fillPickerFilter(win, "brb", "brb");
 
         // Close without selecting
         await win.keyboard.press("Escape");
