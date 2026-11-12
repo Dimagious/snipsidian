@@ -35,11 +35,10 @@ export default [
   {
     files: ['src/**/*.ts'],
     rules: {
-      // Snipsy turned this on deliberately (B-153, B-180): the public scorecard
-      // flags UI text that is not in sentence case, and the 0.5.x preset has
-      // it off. Restoring it reported nothing in src: every UI string was
-      // already in sentence case.
-      'obsidianmd/ui/sentence-case': 'error',
+      // Snipsy kept UI text in sentence case on purpose (B-153, B-180), with the
+      // strict option it had under obsidianmd 0.4.1; the 0.5.x preset turns the
+      // rule off. It reports nothing in src today.
+      'obsidianmd/ui/sentence-case': ['error', { enforceCamelCaseLower: true }],
       // Snipsy's own scorecard gate (the retired scripts/scorecard-check.cjs)
       // failed on a bare `window.<member>` besides `window.open` and the timer
       // functions, which the preset's rules do not cover: a bare `window`
