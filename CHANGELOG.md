@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-11-13
+
 ### Changed
 
 - **Integration tests inside a real Obsidian** (B-219): new `integration/` folder with smoke tests that run through `obsidian-integration-testing` against the installed Obsidian (`npm run it`), latest public and catalyst builds (`npm run it:matrix`), or an Android emulator (`npm run it:android`). It is a standalone project with its own `package.json` and lockfile, not a workspace: `npm ci` at the root and CI do not install it, and the `it*` scripts install it on demand. `npm run it:typecheck` and `npm run it:lint` check it. The folder needs Vitest 5: the library imports `inject` from `vitest` at the top of its global setup, which Vitest 3 rejects. The root was on 3 when the folder was added and is on 5 now (see the unit tests entry below). Playwright e2e keeps UI, IME and media.
