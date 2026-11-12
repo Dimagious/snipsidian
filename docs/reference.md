@@ -266,15 +266,15 @@ No. See [Privacy](#privacy).
 npm install
 npm test           # vitest, with coverage gates
 npm run lint       # eslint + eslint-plugin-obsidianmd
-npx tsc --noEmit
+npm run typecheck  # src and the e2e specs
 npm run build      # main.js + styles.css
 ```
 
 | | |
 |---|---|
 | `npm run e2e` | the suite against a real Obsidian |
-| `npm run scorecard:check` | mirrors the community-plugin review scanner |
-| `npm run release:check` | versions in sync, tests, build |
+| `npm run scorecard:check` | `opdk scan`: mirrors the community-plugin review scanner |
+| `npm run release:check` | `opdk release check` (versions, `versions.json`, manifest, CHANGELOG, a reproducible build), the scan, lint, typecheck, tests and the site check |
 
 `VAULT_PLUGIN="/path/to/vault/.obsidian/plugins/snipsidian" npm run dev:vault` builds straight
 into a test vault and watches for changes.

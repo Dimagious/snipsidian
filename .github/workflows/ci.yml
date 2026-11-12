@@ -25,8 +25,8 @@ jobs:
       - name: Typecheck
         run: npx tsc -p tsconfig.json --noEmit
 
-      - name: Verify versions (package.json vs manifest.json)
-        run: node scripts/assert-versions.cjs
+      - name: Release check (versions, versions.json, manifest, CHANGELOG)
+        run: npx opdk release check --no-build --no-api
 
       # Mirrors the Obsidian community-plugins scorecard scanner. Fails
       # the build if a `["a","b","c"].join(".")` domain-assembly pattern
@@ -44,9 +44,6 @@ jobs:
 
       - name: Build release bundle
         run: npm run build
-
-      - name: Pack plugin zip
-        run: npm run release:zip
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
@@ -69,5 +66,4 @@ jobs:
             main.js
             manifest.json
             styles.css
-            snipsidian-*.zip
           if-no-files-found: error
