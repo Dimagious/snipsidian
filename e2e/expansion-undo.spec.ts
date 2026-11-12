@@ -57,7 +57,8 @@ test.describe("[B-176] expansion highlight + Backspace undo", () => {
         await win.keyboard.press("Backspace");
         expect(await obsidian.editor().text()).toBe("brb ");
         await expect(win.locator(".cm-content .snipsy-expanded")).toHaveCount(0);
-        // still not expanded a moment later
+        // still not expanded a moment later. Fixed wait on purpose: the expected result is "nothing happens", so
+        // there is no state to wait for.
         await win.waitForTimeout(300);
         expect(await obsidian.editor().text()).toBe("brb ");
     });
@@ -98,17 +99,20 @@ test.describe("[B-176] expansion highlight + Backspace undo", () => {
         // removes trigger + expansion together and must not re-expand.
         await obsidian.editor().type("anchor line");
         await win.keyboard.press("Enter");
+        // Fixed wait on purpose: CM6 groups undo events by the time between edits, not by page state.
         await win.waitForTimeout(700);
         await obsidian.editor().type("brb ");
         expect(await obsidian.editor().text()).toContain("be right back");
 
         await win.keyboard.press("Meta+Z");
-        await win.waitForTimeout(300);
+        await expect.poll(() => obsidian.editor().text()).not.toContain("be right back");
         let text = await obsidian.editor().text();
         expect(text).toContain("anchor line");
         expect(text).not.toContain("be right back");
         expect(text).not.toContain("brb");
 
+        // Fixed wait on purpose: the expected result is "nothing happens" (no delayed re-expansion), so there is
+        // no state to wait for.
         await win.waitForTimeout(300);
         text = await obsidian.editor().text();
         expect(text).toContain("anchor line");

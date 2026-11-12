@@ -182,7 +182,9 @@ test.describe("expansion fires in the real editor", () => {
         await win.keyboard.press("Enter");
         // Exceeds CM6's default history-grouping window so the
         // trigger below starts its own undo group, independent of
-        // this setup line.
+        // this setup line. Fixed wait on purpose: history grouping
+        // is decided by the time between two edits, so there is no
+        // page state to wait for.
         await win.waitForTimeout(700);
 
         await obsidian.editor().type("brb ");
@@ -191,9 +193,9 @@ test.describe("expansion fires in the real editor", () => {
         expect(text).not.toContain("brb");
 
         await win.keyboard.press("Meta+Z");
-        // Give the editor-change handler a chance to react to the
-        // undo's document mutation before we assert.
-        await win.waitForTimeout(300);
+        // Wait for the undo to land (the editor-change handler also
+        // reacts to its document mutation) before we assert.
+        await expect.poll(() => obsidian.editor().text()).not.toContain("be right back");
 
         // Undo reverted the trigger + its expansion together, back to
         // just the anchor line — neither the raw trigger nor the
@@ -205,7 +207,9 @@ test.describe("expansion fires in the real editor", () => {
 
         // The critical assertion: undo must not be a trap. Wait
         // again to catch any delayed re-expansion, then confirm the
-        // document is still in the undone state.
+        // document is still in the undone state. Fixed wait on
+        // purpose: the expected result is "nothing happens", so
+        // there is no state to wait for.
         await win.waitForTimeout(300);
         text = await obsidian.editor().text();
         expect(text).toContain("anchor line");
@@ -226,6 +230,8 @@ test.describe("expansion fires in the real editor", () => {
         // this is where a re-expansion trap would show up.
         await obsidian.editor().type("anchor line");
         await win.keyboard.press("Enter");
+        // Fixed wait on purpose: CM6 groups undo events by the time
+        // between edits (see B-132 above), not by page state.
         await win.waitForTimeout(700);
 
         await obsidian.editor().type("brb");
@@ -244,8 +250,9 @@ test.describe("expansion fires in the real editor", () => {
         // (bounded) until the expansion itself is gone; the assertion
         // that matters is that it never comes BACK.
         for (let i = 0; i < 4 && text.includes("be right back"); i++) {
+            const before = text;
             await win.keyboard.press("Meta+Z");
-            await win.waitForTimeout(300);
+            await expect.poll(() => obsidian.editor().text()).not.toBe(before);
             text = await obsidian.editor().text();
         }
 
@@ -253,7 +260,9 @@ test.describe("expansion fires in the real editor", () => {
         expect(text).not.toContain("be right back");
 
         // The critical assertion: undo must not be a trap. Wait
-        // again to catch any delayed re-expansion.
+        // again to catch any delayed re-expansion. Fixed wait on
+        // purpose: the expected result is "nothing happens", so there
+        // is no state to wait for.
         await win.waitForTimeout(300);
         text = await obsidian.editor().text();
         expect(text).not.toContain("be right back");

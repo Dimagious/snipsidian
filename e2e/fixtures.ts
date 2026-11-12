@@ -22,6 +22,13 @@ export const ui = {
         return win.locator(".cm-content[contenteditable=true]").first();
     },
 
+    /** The trigger of the picker row Enter would insert (the row with `aria-selected="true"`). The picker filters
+     *  after a 200 ms debounce and selects the first row again after each render, so an assertion on this locator
+     *  is the wait for "the filter was applied" before Enter. */
+    pickerSelectedTrigger(win: Page): Locator {
+        return win.locator(".snippet-picker-modal .snippet-item[aria-selected='true'] .snippet-name");
+    },
+
     /** Navigates to the Snippets page content, regardless of whether
      *  Settings rendered the pre-1.13 tab strip (Snippets is the
      *  default landing tab there — `TABS[0]` in `SettingsTab.ts`) or

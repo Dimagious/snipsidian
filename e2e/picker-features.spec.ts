@@ -1,3 +1,4 @@
+import type { App } from "obsidian";
 import { test, expect, ui } from "./fixtures";
 
 /**
@@ -84,7 +85,7 @@ test.describe("picker features", () => {
         // Filter to "brb" should leave exactly one match — `brb`
         // itself; other defaults / seeds don't contain that substring.
         await filter.fill("brb");
-        await win.waitForTimeout(300); // 200ms debounce + render
+        await expect(ui.pickerSelectedTrigger(win)).toHaveText("brb"); // 200ms debounce + render
         const filteredCount = await win
             .locator(".snippet-picker-modal .snippet-item")
             .count();
@@ -96,6 +97,7 @@ test.describe("picker features", () => {
 
     test("no-active-editor shows a Notice instead of inserting (B-037)", async ({
         win,
+        obsidian,
     }) => {
         // Close the active editor leaf so there's no markdown view
         // to insert into. The picker should detect this and surface
@@ -108,14 +110,16 @@ test.describe("picker features", () => {
         });
 
         // Wait for the leaf to detach.
-        await win.waitForTimeout(200);
+        await expect
+            .poll(() => obsidian.evaluate((app: App) => app.workspace.getLeavesOfType("markdown").length))
+            .toBe(0);
 
         await openPicker(win);
         const filter = win.locator(
             ".snippet-picker-modal input[role='combobox']",
         );
         await filter.fill("brb");
-        await win.waitForTimeout(300);
+        await expect(ui.pickerSelectedTrigger(win)).toHaveText("brb");
         await win.keyboard.press("Enter");
 
         // Notice should surface. Obsidian's Notice container is
@@ -161,7 +165,7 @@ test.describe("picker features", () => {
             ".snippet-picker-modal input[role='combobox']",
         );
         await filter.fill("callout");
-        await win.waitForTimeout(300); // debounce + render
+        await expect(ui.pickerSelectedTrigger(win)).toHaveText("callout"); // debounce + render
         await win.keyboard.press("Enter");
 
         // Picker closes; assert via plugin API rather than DOM —
@@ -227,7 +231,7 @@ test.describe("picker features", () => {
         // counting ArrowDowns over a default list whose order may
         // shift if presets grow).
         await filter.fill("h1");
-        await win.waitForTimeout(300);
+        await expect(ui.pickerSelectedTrigger(win)).toHaveText("h1");
         await expect(items.first()).toBeVisible();
         await win.keyboard.press("Enter");
 
@@ -261,7 +265,7 @@ test.describe("picker features", () => {
             ".snippet-picker-modal input[role='combobox']",
         );
         await filter.fill("brb");
-        await win.waitForTimeout(300);
+        await expect(ui.pickerSelectedTrigger(win)).toHaveText("brb");
         const badge = win.locator(".snippet-picker-modal .snipsy-picker-count");
         await expect(badge).toHaveClass(/is-hidden/);
 
@@ -293,7 +297,6 @@ test.describe("picker features", () => {
         });
 
         await openPicker(win);
-        await win.waitForTimeout(300);
         await expect(badge).not.toHaveClass(/is-hidden/);
         await expect(badge).toContainText(/Showing 100 of \d+/);
 

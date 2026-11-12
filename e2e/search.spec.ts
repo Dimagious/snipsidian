@@ -26,7 +26,6 @@ test.describe("Settings search finds Snipsy (B-151)", () => {
         const searchInput = win.getByPlaceholder("Search settings...");
         await searchInput.waitFor({ state: "visible" });
         await searchInput.fill("prefix");
-        await win.waitForTimeout(400);
 
         const snipsyGroup = win.locator(".setting-search-result-tab-label", {
             hasText: "Snipsy",
@@ -43,7 +42,6 @@ test.describe("Settings search finds Snipsy (B-151)", () => {
         const searchInput = win.getByPlaceholder("Search settings...");
         await searchInput.waitFor({ state: "visible" });
         await searchInput.fill("hotstring");
-        await win.waitForTimeout(400);
 
         const snipsyGroup = win.locator(".setting-search-result-tab-label", {
             hasText: "Snipsy",
