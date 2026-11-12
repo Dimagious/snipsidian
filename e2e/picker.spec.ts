@@ -26,7 +26,7 @@ test.describe("snippet picker via command palette", () => {
         });
         const editor = ui.activeEditor(win);
         await editor.click();
-        await win.keyboard.press("Meta+A");
+        await obsidian.press("Mod+A");
         await win.keyboard.press("Delete");
         await win.evaluate(() => {
             const a = (globalThis as unknown as {
@@ -36,8 +36,7 @@ test.describe("snippet picker via command palette", () => {
         });
         const filter = win.locator(".snippet-picker-modal input[role='combobox']");
         await filter.waitFor({ state: "visible" });
-        await filter.fill("zzdate");
-        await win.waitForTimeout(300);
+        await ui.fillPickerFilter(win, "zzdate", "zzdate");
         await win.keyboard.press("Enter");
         await expect
             .poll(() => obsidian.editor().text())
@@ -54,7 +53,7 @@ test.describe("snippet picker via command palette", () => {
         // the editor to focus.
         const editor = ui.activeEditor(win);
         await editor.click();
-        await win.keyboard.press("Meta+A");
+        await obsidian.press("Mod+A");
         await win.keyboard.press("Delete");
 
         // Open Snipsy's "Insert snippet" command via Obsidian's
@@ -74,10 +73,7 @@ test.describe("snippet picker via command palette", () => {
             ".snippet-picker-modal input[role='combobox']",
         );
         await filter.waitFor({ state: "visible" });
-        await filter.fill("brb");
-        // Wait for the result list to settle — the picker has a
-        // 200ms search debounce.
-        await win.waitForTimeout(300);
+        await ui.fillPickerFilter(win, "brb", "brb");
         await win.keyboard.press("Enter");
 
         // The replacement for `brb` is `be right back`. Verify it
@@ -89,7 +85,7 @@ test.describe("snippet picker via command palette", () => {
     test("Esc closes the picker without inserting", async ({ win, obsidian }) => {
         const editor = ui.activeEditor(win);
         await editor.click();
-        await win.keyboard.press("Meta+A");
+        await obsidian.press("Mod+A");
         await win.keyboard.press("Delete");
 
         // Open picker
@@ -104,8 +100,7 @@ test.describe("snippet picker via command palette", () => {
             ".snippet-picker-modal input[role='combobox']",
         );
         await filter.waitFor({ state: "visible" });
-        await filter.fill("brb");
-        await win.waitForTimeout(300);
+        await ui.fillPickerFilter(win, "brb", "brb");
 
         // Close without selecting
         await win.keyboard.press("Escape");

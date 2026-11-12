@@ -22,6 +22,26 @@ export const ui = {
         return win.locator(".cm-content[contenteditable=true]").first();
     },
 
+    /** Types `query` into the open picker's filter and waits until the filter has been applied: the list got shorter
+     *  than the unfiltered one and the row Enter would insert (`aria-selected="true"`) shows `trigger`. The picker
+     *  filters after a 200 ms debounce, so before that the full list is still on screen, and its first row can
+     *  already be the wanted trigger: the row count is what tells the two states apart. Call it on an unfiltered
+     *  picker. */
+    async fillPickerFilter(win: Page, query: string, trigger: string): Promise<void> {
+        const rows = win.locator(".snippet-picker-modal .snippet-item");
+        const unfiltered = await rows.count();
+        expect(unfiltered, "fillPickerFilter needs the picker's full list on screen").toBeGreaterThan(0);
+        await win.locator(".snippet-picker-modal input[role='combobox']").fill(query);
+        await expect
+            .poll(() => rows.count(), {
+                message: `picker list did not shrink for "${query}": does it match every row, or was the picker already filtered?`,
+            })
+            .toBeLessThan(unfiltered);
+        await expect(
+            win.locator(".snippet-picker-modal .snippet-item[aria-selected='true'] .snippet-name"),
+        ).toHaveText(trigger);
+    },
+
     /** Navigates to the Snippets page content, regardless of whether
      *  Settings rendered the pre-1.13 tab strip (Snippets is the
      *  default landing tab there — `TABS[0]` in `SettingsTab.ts`) or

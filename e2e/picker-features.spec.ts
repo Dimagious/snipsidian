@@ -1,3 +1,4 @@
+import type { App } from "obsidian";
 import { test, expect, ui } from "./fixtures";
 
 /**
@@ -40,11 +41,11 @@ test.describe("picker features", () => {
         // the picker reads in `detectInitialSelection()`.
         const editor = ui.activeEditor(win);
         await editor.click();
-        await win.keyboard.press("Meta+A");
+        await obsidian.press("Mod+A");
         await win.keyboard.press("Delete");
         await obsidian.editor().type("this will be wrapped");
         // Cmd+A inside the editor selects all editor content.
-        await win.keyboard.press("Meta+A");
+        await obsidian.press("Mod+A");
 
         await openPicker(win);
 
@@ -67,9 +68,6 @@ test.describe("picker features", () => {
         await editor.click();
 
         await openPicker(win);
-        const filter = win.locator(
-            ".snippet-picker-modal input[role='combobox']",
-        );
 
         // The picker shows pristine-seeded snippets PLUS Snipsy's
         // bundled DEFAULT_SNIPPETS (presets.ts: brb, omw, ty, imo,
@@ -83,8 +81,7 @@ test.describe("picker features", () => {
 
         // Filter to "brb" should leave exactly one match — `brb`
         // itself; other defaults / seeds don't contain that substring.
-        await filter.fill("brb");
-        await win.waitForTimeout(300); // 200ms debounce + render
+        await ui.fillPickerFilter(win, "brb", "brb"); // 200ms debounce + render
         const filteredCount = await win
             .locator(".snippet-picker-modal .snippet-item")
             .count();
@@ -96,6 +93,7 @@ test.describe("picker features", () => {
 
     test("no-active-editor shows a Notice instead of inserting (B-037)", async ({
         win,
+        obsidian,
     }) => {
         // Close the active editor leaf so there's no markdown view
         // to insert into. The picker should detect this and surface
@@ -108,14 +106,15 @@ test.describe("picker features", () => {
         });
 
         // Wait for the leaf to detach.
-        await win.waitForTimeout(200);
+        await expect
+            .poll(() => obsidian.evaluate((app: App) => app.workspace.getLeavesOfType("markdown").length))
+            .toBe(0);
 
         await openPicker(win);
         const filter = win.locator(
             ".snippet-picker-modal input[role='combobox']",
         );
-        await filter.fill("brb");
-        await win.waitForTimeout(300);
+        await ui.fillPickerFilter(win, "brb", "brb");
         await win.keyboard.press("Enter");
 
         // Notice should surface. Obsidian's Notice container is
@@ -150,18 +149,14 @@ test.describe("picker features", () => {
         // `> [!note]\n> hello`.
         const editor = ui.activeEditor(win);
         await editor.click();
-        await win.keyboard.press("Meta+A");
+        await obsidian.press("Mod+A");
         await win.keyboard.press("Delete");
         await obsidian.editor().type("hello");
-        await win.keyboard.press("Meta+A");
+        await obsidian.press("Mod+A");
 
         await openPicker(win);
 
-        const filter = win.locator(
-            ".snippet-picker-modal input[role='combobox']",
-        );
-        await filter.fill("callout");
-        await win.waitForTimeout(300); // debounce + render
+        await ui.fillPickerFilter(win, "callout", "callout"); // debounce + render
         await win.keyboard.press("Enter");
 
         // Picker closes; assert via plugin API rather than DOM —
@@ -182,13 +177,10 @@ test.describe("picker features", () => {
         // also carries `aria-selected="true"` while active.
         const editor = ui.activeEditor(win);
         await editor.click();
-        await win.keyboard.press("Meta+A");
+        await obsidian.press("Mod+A");
         await win.keyboard.press("Delete");
 
         await openPicker(win);
-        const filter = win.locator(
-            ".snippet-picker-modal input[role='combobox']",
-        );
 
         // Wait for the initial render. With an empty query the picker
         // shows ALL seeded + default snippets; we just need ≥ 2 for
@@ -226,8 +218,7 @@ test.describe("picker features", () => {
         // hit. We get there by filtering first (more reliable than
         // counting ArrowDowns over a default list whose order may
         // shift if presets grow).
-        await filter.fill("h1");
-        await win.waitForTimeout(300);
+        await ui.fillPickerFilter(win, "h1", "h1");
         await expect(items.first()).toBeVisible();
         await win.keyboard.press("Enter");
 
@@ -257,11 +248,7 @@ test.describe("picker features", () => {
 
         // Case 1 — narrow query → badge hidden.
         await openPicker(win);
-        const filter = win.locator(
-            ".snippet-picker-modal input[role='combobox']",
-        );
-        await filter.fill("brb");
-        await win.waitForTimeout(300);
+        await ui.fillPickerFilter(win, "brb", "brb");
         const badge = win.locator(".snippet-picker-modal .snipsy-picker-count");
         await expect(badge).toHaveClass(/is-hidden/);
 
@@ -293,7 +280,6 @@ test.describe("picker features", () => {
         });
 
         await openPicker(win);
-        await win.waitForTimeout(300);
         await expect(badge).not.toHaveClass(/is-hidden/);
         await expect(badge).toContainText(/Showing 100 of \d+/);
 
