@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The lint ignore for `src/test/` names only the fake Obsidian (`src/test/stubs/`) and the factories (`src/test/factories/`), and its comment no longer mentions the deleted DOM shim. The test files there (`site-check.test.ts` and the four `integration/` tests) are still not linted: the kit ignores `src/**/*.test.ts` and `tsconfig.json` excludes them, so that waits for type-checking the tests.
 - Removed `lint-results.txt` (ESLint output from 1.0.0) and `styles.css.backup`, which nothing referenced, the `e2e/zz-*.spec.ts` exclude in `tsconfig.e2e.json` (no such file exists), and the `coverage` script, which was the same command as `test`.
 - Dependabot is on (`.github/dependabot.yml`), monthly and grouped like Garmy and Dashy: one pull request for the npm dev dependencies and one for the actions. The kit (`obsidian-plugin-dev-kit` in `package.json`, and its reusable workflows in `ci.yml` and `release.yml`) is ignored because its three pins move together by hand; TypeScript at 6.1 or later (outside the kit's peer range) and Electron majors are ignored too. `integration/` has its own lockfile and is not covered.
+- Deleted four unused pictures from `docs/screens/`: `basic.png`, `packages.png`, `snippets.png` (screenshots from 2025, before the settings redesign) and `espanso-demo.gif` (9.8 MB). Nothing in the README, the site, the docs, the scripts, the e2e specs or this file referenced them.
 
 ## [1.7.1] - 2026-11-09
 
