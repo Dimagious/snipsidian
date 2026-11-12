@@ -68,9 +68,6 @@ test.describe("picker features", () => {
         await editor.click();
 
         await openPicker(win);
-        const filter = win.locator(
-            ".snippet-picker-modal input[role='combobox']",
-        );
 
         // The picker shows pristine-seeded snippets PLUS Snipsy's
         // bundled DEFAULT_SNIPPETS (presets.ts: brb, omw, ty, imo,
@@ -159,9 +156,6 @@ test.describe("picker features", () => {
 
         await openPicker(win);
 
-        const filter = win.locator(
-            ".snippet-picker-modal input[role='combobox']",
-        );
         await ui.fillPickerFilter(win, "callout", "callout"); // debounce + render
         await win.keyboard.press("Enter");
 
@@ -187,9 +181,6 @@ test.describe("picker features", () => {
         await win.keyboard.press("Delete");
 
         await openPicker(win);
-        const filter = win.locator(
-            ".snippet-picker-modal input[role='combobox']",
-        );
 
         // Wait for the initial render. With an empty query the picker
         // shows ALL seeded + default snippets; we just need ≥ 2 for
@@ -257,9 +248,6 @@ test.describe("picker features", () => {
 
         // Case 1 — narrow query → badge hidden.
         await openPicker(win);
-        const filter = win.locator(
-            ".snippet-picker-modal input[role='combobox']",
-        );
         await ui.fillPickerFilter(win, "brb", "brb");
         const badge = win.locator(".snippet-picker-modal .snipsy-picker-count");
         await expect(badge).toHaveClass(/is-hidden/);

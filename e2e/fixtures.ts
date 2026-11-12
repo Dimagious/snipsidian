@@ -30,8 +30,13 @@ export const ui = {
     async fillPickerFilter(win: Page, query: string, trigger: string): Promise<void> {
         const rows = win.locator(".snippet-picker-modal .snippet-item");
         const unfiltered = await rows.count();
+        expect(unfiltered, "fillPickerFilter needs the picker's full list on screen").toBeGreaterThan(0);
         await win.locator(".snippet-picker-modal input[role='combobox']").fill(query);
-        await expect.poll(() => rows.count()).toBeLessThan(unfiltered);
+        await expect
+            .poll(() => rows.count(), {
+                message: `picker list did not shrink for "${query}": does it match every row, or was the picker already filtered?`,
+            })
+            .toBeLessThan(unfiltered);
         await expect(
             win.locator(".snippet-picker-modal .snippet-item[aria-selected='true'] .snippet-name"),
         ).toHaveText(trigger);

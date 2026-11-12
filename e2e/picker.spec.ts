@@ -74,8 +74,6 @@ test.describe("snippet picker via command palette", () => {
         );
         await filter.waitFor({ state: "visible" });
         await ui.fillPickerFilter(win, "brb", "brb");
-        // Wait for the result list to settle — the picker has a
-        // 200ms search debounce.
         await win.keyboard.press("Enter");
 
         // The replacement for `brb` is `be right back`. Verify it
