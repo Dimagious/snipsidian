@@ -1,7 +1,4 @@
-// @vitest-environment jsdom
-
-import { describe, it, expect, beforeAll, beforeEach } from "vitest";
-import { installObsidianDomHelpers } from "../../test/dom-polyfill";
+import { describe, it, expect, beforeEach } from "vitest";
 import { makeMockPlugin } from "../../test/factories/plugin";
 import { PackagePreviewModal } from "./Modals";
 import type { DiffResult } from "../../store/diff";
@@ -21,10 +18,6 @@ import type SnipSidianPlugin from "../../../main";
  * The fix mutates each conflict's `<select>` element in place
  * (no close+open). These tests pin the new behaviour.
  */
-
-beforeAll(() => {
-    installObsidianDomHelpers();
-});
 
 let plugin: ReturnType<typeof makeMockPlugin>;
 beforeEach(() => {

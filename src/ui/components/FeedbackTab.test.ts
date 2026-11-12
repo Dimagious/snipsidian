@@ -1,7 +1,4 @@
-// @vitest-environment jsdom
-
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
-import { installObsidianDomHelpers } from "../../test/dom-polyfill";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { makeMockPlugin } from "../../test/factories/plugin";
 import { FeedbackTab } from "./FeedbackTab";
 import type { App } from "obsidian";
@@ -24,10 +21,6 @@ import type SnipSidianPlugin from "../../main";
  *     primary action into Obsidian's community plugin browser
  *     (`obsidian://show-plugin?id=dashsidian`) and a website link.
  */
-
-beforeAll(() => {
-    installObsidianDomHelpers();
-});
 
 let plugin: ReturnType<typeof makeMockPlugin>;
 let app: App;

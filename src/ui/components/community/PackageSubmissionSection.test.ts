@@ -1,6 +1,4 @@
-// @vitest-environment jsdom
-
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const noticeCalls: string[] = [];
 vi.mock("obsidian", async () => {
@@ -13,7 +11,6 @@ vi.mock("obsidian", async () => {
     };
 });
 
-import { installObsidianDomHelpers } from "../../../test/dom-polyfill";
 import { makeMockPlugin } from "../../../test/factories/plugin";
 import { PackageSubmissionSection } from "./PackageSubmissionSection";
 import type { App } from "obsidian";
@@ -29,10 +26,6 @@ import type SnipSidianPlugin from "../../../../main";
  * coverage; these pin the validate → enable-submit → open-issue
  * contract end to end.
  */
-
-beforeAll(() => {
-    installObsidianDomHelpers();
-});
 
 let plugin: ReturnType<typeof makeMockPlugin>;
 let app: App;

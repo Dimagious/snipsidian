@@ -1,6 +1,4 @@
-// @vitest-environment jsdom
-
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // Stub `new Notice(msg)` so tests can assert toast copy.
 const noticeCalls: string[] = [];
@@ -14,7 +12,6 @@ vi.mock("obsidian", async () => {
     };
 });
 
-import { installObsidianDomHelpers } from "../../test/dom-polyfill";
 import { makeMockApp } from "../../test/factories/plugin";
 import {
     JSONModal,
@@ -25,10 +22,6 @@ import {
     computeTriggerHint,
 } from "./Modals";
 import type { App } from "obsidian";
-
-beforeAll(() => {
-    installObsidianDomHelpers();
-});
 
 let app: App;
 beforeEach(() => {

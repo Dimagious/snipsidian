@@ -1,7 +1,4 @@
-// @vitest-environment jsdom
-
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
-import { installObsidianDomHelpers } from "../../test/dom-polyfill";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 /**
  * `renderSettingGroup` (src/ui/utils/setting-group.ts) feature-detects
@@ -15,10 +12,6 @@ import { installObsidianDomHelpers } from "../../test/dom-polyfill";
  * "fallback" block re-imports the module against a mocked `obsidian`
  * with `SettingGroup` stripped out, mirroring an older install.
  */
-
-beforeAll(() => {
-    installObsidianDomHelpers();
-});
 
 beforeEach(() => {
     document.body.innerHTML = "";

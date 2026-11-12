@@ -1,9 +1,7 @@
-// @vitest-environment jsdom
-//
 // jsdom is required for the debounced group-open save test below:
 // `UIStateManager#setGroupOpen` schedules its save via `window.setTimeout`
-// (ui-state.ts), and `window` is undefined under vitest's default "node"
-// environment.
+// (ui-state.ts), and `window` is undefined in the "node" environment. Every
+// test under src/ui runs in jsdom (the `dom` list in vitest.config.ts).
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { UIStateManager } from "./ui-state";

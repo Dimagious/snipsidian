@@ -1,7 +1,4 @@
-// @vitest-environment jsdom
-
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
-import { installObsidianDomHelpers } from "../../test/dom-polyfill";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { makeMockPlugin } from "../../test/factories/plugin";
 import { SnipSidianSettingTab } from "./SettingsTab";
 import { __setRequireApiVersionResult } from "../../test/stubs/obsidian";
@@ -65,10 +62,6 @@ function findActionByName(items: SettingGroupItem[] | undefined, name: string): 
  * other test files (which never touch `SnipSidianSettingTab`) aren't
  * affected by leftover state.
  */
-
-beforeAll(() => {
-    installObsidianDomHelpers();
-});
 
 afterEach(() => {
     __setRequireApiVersionResult(true);

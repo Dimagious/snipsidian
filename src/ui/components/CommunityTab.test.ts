@@ -1,7 +1,4 @@
-// @vitest-environment jsdom
-
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
-import { installObsidianDomHelpers } from "../../test/dom-polyfill";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { makeMockPlugin } from "../../test/factories/plugin";
 import { CommunityTab } from "./CommunityTab";
 import type { App } from "obsidian";
@@ -58,10 +55,6 @@ import { PackageBrowser } from "./community/PackageBrowser";
 import { PackageSubmissionSection } from "./community/PackageSubmissionSection";
 import { EspansoSection } from "./community/EspansoSection";
 import { TextSnippetsSection } from "./community/TextSnippetsSection";
-
-beforeAll(() => {
-    installObsidianDomHelpers();
-});
 
 let plugin: ReturnType<typeof makeMockPlugin>;
 let app: App;
