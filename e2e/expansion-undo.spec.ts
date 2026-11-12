@@ -88,7 +88,7 @@ test.describe("[B-176] expansion highlight + Backspace undo", () => {
     test("Cmd+Z after a Backspace-undo re-applies the expansion", async ({ win, obsidian }) => {
         await obsidian.editor().type("brb ");
         await win.keyboard.press("Backspace");
-        await win.keyboard.press("Meta+Z");
+        await obsidian.press("Mod+Z");
         expect(await obsidian.editor().text()).toBe("be right back ");
     });
 
@@ -104,7 +104,7 @@ test.describe("[B-176] expansion highlight + Backspace undo", () => {
         await obsidian.editor().type("brb ");
         expect(await obsidian.editor().text()).toContain("be right back");
 
-        await win.keyboard.press("Meta+Z");
+        await obsidian.press("Mod+Z");
         await expect.poll(() => obsidian.editor().text()).not.toContain("be right back");
         let text = await obsidian.editor().text();
         expect(text).toContain("anchor line");

@@ -41,11 +41,11 @@ test.describe("picker features", () => {
         // the picker reads in `detectInitialSelection()`.
         const editor = ui.activeEditor(win);
         await editor.click();
-        await win.keyboard.press("Meta+A");
+        await obsidian.press("Mod+A");
         await win.keyboard.press("Delete");
         await obsidian.editor().type("this will be wrapped");
         // Cmd+A inside the editor selects all editor content.
-        await win.keyboard.press("Meta+A");
+        await obsidian.press("Mod+A");
 
         await openPicker(win);
 
@@ -154,10 +154,10 @@ test.describe("picker features", () => {
         // `> [!note]\n> hello`.
         const editor = ui.activeEditor(win);
         await editor.click();
-        await win.keyboard.press("Meta+A");
+        await obsidian.press("Mod+A");
         await win.keyboard.press("Delete");
         await obsidian.editor().type("hello");
-        await win.keyboard.press("Meta+A");
+        await obsidian.press("Mod+A");
 
         await openPicker(win);
 
@@ -186,7 +186,7 @@ test.describe("picker features", () => {
         // also carries `aria-selected="true"` while active.
         const editor = ui.activeEditor(win);
         await editor.click();
-        await win.keyboard.press("Meta+A");
+        await obsidian.press("Mod+A");
         await win.keyboard.press("Delete");
 
         await openPicker(win);

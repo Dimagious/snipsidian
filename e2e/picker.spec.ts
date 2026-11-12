@@ -26,7 +26,7 @@ test.describe("snippet picker via command palette", () => {
         });
         const editor = ui.activeEditor(win);
         await editor.click();
-        await win.keyboard.press("Meta+A");
+        await obsidian.press("Mod+A");
         await win.keyboard.press("Delete");
         await win.evaluate(() => {
             const a = (globalThis as unknown as {
@@ -54,7 +54,7 @@ test.describe("snippet picker via command palette", () => {
         // the editor to focus.
         const editor = ui.activeEditor(win);
         await editor.click();
-        await win.keyboard.press("Meta+A");
+        await obsidian.press("Mod+A");
         await win.keyboard.press("Delete");
 
         // Open Snipsy's "Insert snippet" command via Obsidian's
@@ -89,7 +89,7 @@ test.describe("snippet picker via command palette", () => {
     test("Esc closes the picker without inserting", async ({ win, obsidian }) => {
         const editor = ui.activeEditor(win);
         await editor.click();
-        await win.keyboard.press("Meta+A");
+        await obsidian.press("Mod+A");
         await win.keyboard.press("Delete");
 
         // Open picker

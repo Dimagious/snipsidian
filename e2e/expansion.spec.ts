@@ -192,7 +192,7 @@ test.describe("expansion fires in the real editor", () => {
         expect(text).toContain("be right back");
         expect(text).not.toContain("brb");
 
-        await win.keyboard.press("Meta+Z");
+        await obsidian.press("Mod+Z");
         // Wait for the undo to land (the editor-change handler also
         // reacts to its document mutation) before we assert.
         await expect.poll(() => obsidian.editor().text()).not.toContain("be right back");
@@ -251,7 +251,7 @@ test.describe("expansion fires in the real editor", () => {
         // that matters is that it never comes BACK.
         for (let i = 0; i < 4 && text.includes("be right back"); i++) {
             const before = text;
-            await win.keyboard.press("Meta+Z");
+            await obsidian.press("Mod+Z");
             await expect.poll(() => obsidian.editor().text()).not.toBe(before);
             text = await obsidian.editor().text();
         }
@@ -282,7 +282,7 @@ test.describe("expansion fires in the real editor", () => {
         });
         const editor = ui.activeEditor(win);
         await editor.click();
-        await win.keyboard.press("Meta+V");
+        await obsidian.press("Mod+V");
 
         const text = await obsidian.editor().text();
         expect(text).toContain("notes: brb");
