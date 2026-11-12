@@ -1,0 +1,46 @@
+# Security fixes arrive on their own (Dependabot security updates). This file
+# is about the other half: keeping versions from drifting so far that the
+# eventual jump has to be verified by hand.
+#
+# Monthly and grouped, so the noise stays at one pull request per ecosystem.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    ignore:
+      # The kit pin moves by hand, together with the two workflow SHAs (see the github-actions block).
+      - dependency-name: "obsidian-plugin-dev-kit"
+      # The kit's peer range is >=4.8.4 <6.1.0; revisit when a kit release allows more.
+      - dependency-name: "typescript"
+        versions: [">=6.1.0"]
+      # Obsidian runs on its own Electron; ours only drives it for the e2e suite and moves with the kit's.
+      - dependency-name: "electron"
+        update-types: ["version-update:semver-major"]
+    groups:
+      # One pull request, one lockfile. Separate ones conflict with each other
+      # the moment the first is merged.
+      dev-dependencies:
+        dependency-type: "development"
+        patterns: ["*"]
+
+  # ci.yml, release.yml and pages.yml pin every action to a full commit SHA with the version in a comment;
+  # Dependabot moves both together.
+  # The three kit pins (the tag in package.json, the SHA in ci.yml, the SHA in release.yml) move together by
+  # hand with a kit release, so Dependabot leaves the kit's reusable workflows alone.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "chore(ci)"
+    ignore:
+      - dependency-name: "Dimagious/obsidian-plugin-dev-kit*"
+    groups:
+      actions:
+        patterns: ["*"]
