@@ -14,7 +14,7 @@ vi.mock("obsidian", async () => {
 import { makeMockPlugin } from "../../../test/factories/plugin";
 import { PackageSubmissionSection } from "./PackageSubmissionSection";
 import type { App } from "obsidian";
-import type SnipSidianPlugin from "../../../../main";
+import type SnipSidianPlugin from "../../../main";
 
 /**
  * Mount tests for "Share a package" (PackageSubmissionSection).
