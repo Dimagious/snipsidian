@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, seedSnippets } from "./fixtures";
 
 /**
  * E2E: variable substitution + cursor placement.
@@ -14,40 +14,13 @@ import { test, expect } from "./fixtures";
  * don't depend on the pristine vault to know about them.
  */
 
-async function seedSnippet(
-    win: import("@playwright/test").Page,
-    trigger: string,
-    replacement: string,
-) {
-    await win.evaluate(
-        async ({ trigger, replacement }) => {
-            const plugin = (globalThis as unknown as {
-                app?: {
-                    plugins?: {
-                        plugins?: {
-                            snipsidian?: {
-                                settings: { snippets: Record<string, string> };
-                                saveSettings: () => Promise<void>;
-                            };
-                        };
-                    };
-                };
-            }).app?.plugins?.plugins?.snipsidian;
-            if (!plugin) throw new Error("snipsidian plugin not loaded");
-            plugin.settings.snippets[trigger] = replacement;
-            await plugin.saveSettings();
-        },
-        { trigger, replacement },
-    );
-}
-
 test.describe("variable substitution in real expansion", () => {
     test.beforeEach(async ({ obsidian }) => {
         await obsidian.editor().clear();
     });
 
-    test("`$date` expands to today's date (YYYY-MM-DD)", async ({ win, obsidian }) => {
-        await seedSnippet(win, "datestamp", "$date");
+    test("`$date` expands to today's date (YYYY-MM-DD)", async ({ obsidian }) => {
+        await seedSnippets(obsidian, { datestamp: "$date" });
         await obsidian.editor().type("datestamp ");
         const text = await obsidian.editor().text();
         // Don't pin the exact date — the test could run across
@@ -57,16 +30,13 @@ test.describe("variable substitution in real expansion", () => {
         expect(text).not.toContain("datestamp");
     });
 
-    test("`$|` cursor marker substitutes AFTER `$date` (B-011 regression)", async ({
-        win,
-        obsidian,
-    }) => {
+    test("`$|` cursor marker substitutes AFTER `$date` (B-011 regression)", async ({ obsidian }) => {
         // The bug: the marker offset was computed against the raw
         // template, so once `$date` was substituted (length-changing
         // variable), the cursor landed mid-string. Fix: substitute
         // variables first, then locate the marker. Pin the contract
         // end-to-end.
-        await seedSnippet(win, "datelog", "Today: $date — $|done");
+        await seedSnippets(obsidian, { datelog: "Today: $date — $|done" });
         await obsidian.editor().type("datelog ");
         // Type more text. If the cursor landed at $| AFTER
         // substitution, "more" should appear between the dash and
@@ -78,13 +48,10 @@ test.describe("variable substitution in real expansion", () => {
         expect(text).toMatch(/Today: \d{4}-\d{2}-\d{2} — more done /);
     });
 
-    test("tabstops `$1` `$2` are not left as literal text (B-192)", async ({
-        win,
-        obsidian,
-    }) => {
+    test("tabstops `$1` `$2` are not left as literal text (B-192)", async ({ obsidian }) => {
         // B-192: hotstring expansion used to insert `$1`/`$2` literally.
         // With a `$|` present it wins and every `$N` is stripped.
-        await seedSnippet(win, "fn", "function $1($2) { $| }");
+        await seedSnippets(obsidian, { fn: "function $1($2) { $| }" });
         await obsidian.editor().type("fn ");
         const text = await obsidian.editor().text();
         expect(text).not.toContain("$1");
@@ -93,11 +60,8 @@ test.describe("variable substitution in real expansion", () => {
         expect(text).toContain("function () {  }");
     });
 
-    test("[B-192] `[$1](url)` with no `$|` puts the caret between the brackets", async ({
-        win,
-        obsidian,
-    }) => {
-        await seedSnippet(win, "lnk", "[$1](url)");
+    test("[B-192] `[$1](url)` with no `$|` puts the caret between the brackets", async ({ obsidian }) => {
+        await seedSnippets(obsidian, { lnk: "[$1](url)" });
         await obsidian.editor().type("lnk ");
         expect(await obsidian.editor().text()).toBe("[](url) ");
         // Hotstring cursor lands before the separator-free expansion end;

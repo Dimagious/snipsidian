@@ -1,4 +1,5 @@
 import { createObsidianTest } from "obsidian-plugin-dev-kit/e2e";
+import type { AppWithInternals, ObsidianHelpers, PluginInstance } from "obsidian-plugin-dev-kit/e2e";
 import type { Locator, Page } from "@playwright/test";
 
 /**
@@ -14,6 +15,83 @@ import type { Locator, Page } from "@playwright/test";
 export const { test, expect, onlyWhen } = createObsidianTest({
     seedVault: "e2e-vault.pristine",
 });
+
+/** The plugin id, as in `manifest.json`. The one place the specs name it. */
+const PLUGIN_ID = "snipsidian";
+
+/** What the specs read of the plugin's settings. */
+interface SnipsySettings {
+    snippets: Record<string, string>;
+    expansion?: { highlight?: boolean };
+}
+
+/** The Snipsy instance as `app.plugins.plugins[id]` holds it: the kit's `PluginInstance` plus what the plugin adds. */
+type SnipsyPlugin = PluginInstance & { settings?: SnipsySettings; saveSettings?: () => Promise<void> };
+
+/** The `app` type for `obsidian.evaluate((app: SnipsyApp) => ...)` in a spec that reads the plugin itself. A function
+ *  passed to `evaluate` is serialised into the page and cannot call Node code, so the lookup
+ *  `app.plugins.plugins[id]` is repeated inside each one; the helpers below hold the common ones. */
+export type SnipsyApp = AppWithInternals<SnipsyPlugin>;
+
+/** The live `settings.snippets` of the plugin: the source of truth for "did the write happen?", since the DOM lags
+ *  behind on re-render. Throws when the plugin is not loaded. */
+export async function readSnippets(obsidian: ObsidianHelpers): Promise<Record<string, string>> {
+    return await obsidian.evaluate((app: SnipsyApp, id: string) => {
+        const settings = app.plugins.plugins[id]?.settings;
+        if (!settings) throw new Error(`${id} plugin is not loaded`);
+        return { ...settings.snippets };
+    }, PLUGIN_ID);
+}
+
+/** Adds `snippets` (trigger to replacement) to the plugin's settings and saves them to `data.json`, like the Add
+ *  button does. Seeds mid-test, which `test.use({ seed })` cannot do, and goes through `saveSettings()` so a spec
+ *  that reloads afterwards reads the snippets back from disk. Pass `persist: false` for in-memory only. */
+export async function seedSnippets(
+    obsidian: ObsidianHelpers,
+    snippets: Record<string, string>,
+    { persist = true }: { persist?: boolean } = {},
+): Promise<void> {
+    await obsidian.evaluate(
+        async (app: SnipsyApp, arg: { id: string; snippets: Record<string, string>; persist: boolean }) => {
+            const plugin = app.plugins.plugins[arg.id];
+            if (!plugin?.settings || !plugin.saveSettings) throw new Error(`${arg.id} plugin is not loaded`);
+            Object.assign(plugin.settings.snippets, arg.snippets);
+            if (arg.persist) await plugin.saveSettings();
+        },
+        { id: PLUGIN_ID, snippets, persist },
+    );
+}
+
+/** Removes `trigger` from the plugin's settings and saves them. */
+export async function deleteSnippet(obsidian: ObsidianHelpers, trigger: string): Promise<void> {
+    await obsidian.evaluate(
+        async (app: SnipsyApp, arg: { id: string; trigger: string }) => {
+            const plugin = app.plugins.plugins[arg.id];
+            if (!plugin?.settings || !plugin.saveSettings) throw new Error(`${arg.id} plugin is not loaded`);
+            delete plugin.settings.snippets[arg.trigger];
+            await plugin.saveSettings();
+        },
+        { id: PLUGIN_ID, trigger },
+    );
+}
+
+/** Switches the "Highlight expansions" setting and saves it. */
+export async function setHighlight(obsidian: ObsidianHelpers, on: boolean): Promise<void> {
+    await obsidian.evaluate(
+        async (app: SnipsyApp, arg: { id: string; on: boolean }) => {
+            const plugin = app.plugins.plugins[arg.id];
+            if (!plugin?.settings || !plugin.saveSettings) throw new Error(`${arg.id} plugin is not loaded`);
+            plugin.settings.expansion = { ...plugin.settings.expansion, highlight: arg.on };
+            await plugin.saveSettings();
+        },
+        { id: PLUGIN_ID, on },
+    );
+}
+
+/** Runs an Obsidian command by id, like a hotkey would. Returns false when no command has that id. */
+export async function runCommandById(obsidian: ObsidianHelpers, commandId: string): Promise<boolean> {
+    return await obsidian.evaluate((app: AppWithInternals, id: string) => app.commands.executeCommandById(id), commandId);
+}
 
 /** Snipsy's own page objects. Everything generic lives in the kit's `obsidian` fixture. */
 export const ui = {

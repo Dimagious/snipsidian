@@ -1,5 +1,6 @@
 import type { App } from "obsidian";
-import { test, expect, ui } from "./fixtures";
+import type { ObsidianHelpers } from "obsidian-plugin-dev-kit/e2e";
+import { test, expect, ui, runCommandById, seedSnippets } from "./fixtures";
 
 /**
  * E2E: SnippetPickerModal features beyond the happy path.
@@ -19,13 +20,8 @@ import { test, expect, ui } from "./fixtures";
  * editor adapter wiring; this is the file that proves it.
  */
 
-async function openPicker(win: import("@playwright/test").Page) {
-    await win.evaluate(() => {
-        const a = (globalThis as unknown as {
-            app?: { commands?: { executeCommandById?: (id: string) => void } };
-        }).app;
-        a?.commands?.executeCommandById?.("snipsidian:insert-snippet");
-    });
+async function openPicker(win: import("@playwright/test").Page, obsidian: ObsidianHelpers) {
+    await runCommandById(obsidian, "snipsidian:insert-snippet");
     await win
         .locator(".snippet-picker-modal input[role='combobox']")
         .waitFor({ state: "visible" });
@@ -47,7 +43,7 @@ test.describe("picker features", () => {
         // Cmd+A inside the editor selects all editor content.
         await obsidian.press("Mod+A");
 
-        await openPicker(win);
+        await openPicker(win, obsidian);
 
         // Obsidian wraps `titleEl` in `.modal > .modal-header >
         // .modal-title`, as a sibling of `.modal-content` (which is
@@ -63,11 +59,11 @@ test.describe("picker features", () => {
         await win.keyboard.press("Escape");
     });
 
-    test("filter narrows results in the picker", async ({ win }) => {
+    test("filter narrows results in the picker", async ({ win, obsidian }) => {
         const editor = ui.activeEditor(win);
         await editor.click();
 
-        await openPicker(win);
+        await openPicker(win, obsidian);
 
         // The picker shows pristine-seeded snippets PLUS Snipsy's
         // bundled DEFAULT_SNIPPETS (presets.ts: brb, omw, ty, imo,
@@ -98,11 +94,8 @@ test.describe("picker features", () => {
         // Close the active editor leaf so there's no markdown view
         // to insert into. The picker should detect this and surface
         // a Notice rather than silently no-op'ing on Enter.
-        await win.evaluate(() => {
-            const ws = (globalThis as unknown as {
-                app?: { workspace?: { detachLeavesOfType?: (t: string) => void } };
-            }).app?.workspace;
-            ws?.detachLeavesOfType?.("markdown");
+        await obsidian.evaluate((app: App) => {
+            app.workspace.detachLeavesOfType("markdown");
         });
 
         // Wait for the leaf to detach.
@@ -110,7 +103,7 @@ test.describe("picker features", () => {
             .poll(() => obsidian.evaluate((app: App) => app.workspace.getLeavesOfType("markdown").length))
             .toBe(0);
 
-        await openPicker(win);
+        await openPicker(win, obsidian);
         const filter = win.locator(
             ".snippet-picker-modal input[role='combobox']",
         );
@@ -154,7 +147,7 @@ test.describe("picker features", () => {
         await obsidian.editor().type("hello");
         await obsidian.press("Mod+A");
 
-        await openPicker(win);
+        await openPicker(win, obsidian);
 
         await ui.fillPickerFilter(win, "callout", "callout"); // debounce + render
         await win.keyboard.press("Enter");
@@ -180,7 +173,7 @@ test.describe("picker features", () => {
         await obsidian.press("Mod+A");
         await win.keyboard.press("Delete");
 
-        await openPicker(win);
+        await openPicker(win, obsidian);
 
         // Wait for the initial render. With an empty query the picker
         // shows ALL seeded + default snippets; we just need ≥ 2 for
@@ -230,6 +223,7 @@ test.describe("picker features", () => {
 
     test("result-count badge shows only when results are truncated (B-102 / B-099)", async ({
         win,
+        obsidian,
     }) => {
         // The badge `.snipsy-picker-count` is `is-hidden` by default
         // and only loses that class when search returns more matches
@@ -247,7 +241,7 @@ test.describe("picker features", () => {
         await editor.click();
 
         // Case 1 — narrow query → badge hidden.
-        await openPicker(win);
+        await openPicker(win, obsidian);
         await ui.fillPickerFilter(win, "brb", "brb");
         const badge = win.locator(".snippet-picker-modal .snipsy-picker-count");
         await expect(badge).toHaveClass(/is-hidden/);
@@ -255,31 +249,18 @@ test.describe("picker features", () => {
         // Case 2 — seed 110 snippets, reopen picker with empty
         // query → badge shows "Showing 100 of 110".
         await win.keyboard.press("Escape");
-        await win.evaluate(() => {
-            const settings = (globalThis as unknown as {
-                app?: {
-                    plugins?: {
-                        plugins?: {
-                            snipsidian?: {
-                                settings?: { snippets?: Record<string, string> };
-                                saveSettings?: () => Promise<void>;
-                            };
-                        };
-                    };
-                };
-            }).app?.plugins?.plugins?.snipsidian;
-            if (!settings?.settings?.snippets) return;
-            // 110 unique triggers, all prefixed `bulkN`.
-            for (let i = 0; i < 110; i++) {
-                settings.settings.snippets[`bulk${i}`] = `bulk replacement ${i}`;
-            }
-            // Don't bother persisting — picker reads from in-memory
-            // settings via getAllSnippetsFlat. Skipping the disk
-            // write keeps the test fast and avoids a races against
-            // the per-test vault cleanup.
-        });
+        // 110 unique triggers, all prefixed `bulkN`.
+        const bulk: Record<string, string> = {};
+        for (let i = 0; i < 110; i++) {
+            bulk[`bulk${i}`] = `bulk replacement ${i}`;
+        }
+        // Don't bother persisting — picker reads from in-memory
+        // settings via getAllSnippetsFlat. Skipping the disk
+        // write keeps the test fast and avoids a races against
+        // the per-test vault cleanup.
+        await seedSnippets(obsidian, bulk, { persist: false });
 
-        await openPicker(win);
+        await openPicker(win, obsidian);
         await expect(badge).not.toHaveClass(/is-hidden/);
         await expect(badge).toContainText(/Showing 100 of \d+/);
 

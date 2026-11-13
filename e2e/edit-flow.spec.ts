@@ -1,4 +1,4 @@
-import { test, expect, ui } from "./fixtures";
+import { test, expect, ui, readSnippets } from "./fixtures";
 import type { ObsidianHelpers } from "obsidian-plugin-dev-kit/e2e";
 import type { Page } from "@playwright/test";
 
@@ -67,12 +67,7 @@ test.describe("edit-flow: B-021 regression surface", () => {
             .click();
 
         // Verify via plugin API — that's the source of truth.
-        const stored = await win.evaluate(() => {
-            const p = (globalThis as unknown as {
-                app?: { plugins?: { plugins?: { snipsidian?: { settings?: { snippets?: Record<string, string> } } } } };
-            }).app?.plugins?.plugins?.snipsidian?.settings?.snippets ?? {};
-            return p.brb;
-        });
+        const stored = (await readSnippets(obsidian)).brb;
         expect(stored).toBe("be right back!! EDITED");
     });
 
@@ -106,12 +101,7 @@ test.describe("edit-flow: B-021 regression surface", () => {
         await expect(triggerInput).toHaveValue("h1");
 
         // The unsaved A draft did NOT land in settings.
-        const stillOriginal = await win.evaluate(() => {
-            const p = (globalThis as unknown as {
-                app?: { plugins?: { plugins?: { snipsidian?: { settings?: { snippets?: Record<string, string> } } } } };
-            }).app?.plugins?.plugins?.snipsidian?.settings?.snippets ?? {};
-            return p.brb;
-        });
+        const stillOriginal = (await readSnippets(obsidian)).brb;
         expect(stillOriginal).toBe("be right back");
     });
 
@@ -133,12 +123,7 @@ test.describe("edit-flow: B-021 regression surface", () => {
         await expect(win.locator(".snippet-row.is-editing")).toHaveCount(0);
 
         // Settings still has the original value.
-        const stored = await win.evaluate(() => {
-            const p = (globalThis as unknown as {
-                app?: { plugins?: { plugins?: { snipsidian?: { settings?: { snippets?: Record<string, string> } } } } };
-            }).app?.plugins?.plugins?.snipsidian?.settings?.snippets ?? {};
-            return p.brb;
-        });
+        const stored = (await readSnippets(obsidian)).brb;
         expect(stored).toBe("be right back");
     });
 
@@ -164,13 +149,7 @@ test.describe("edit-flow: B-021 regression surface", () => {
 
         // Settings: old key gone, new key holds the original
         // replacement.
-        const snippets = await win.evaluate(() => {
-            return (
-                (globalThis as unknown as {
-                    app?: { plugins?: { plugins?: { snipsidian?: { settings?: { snippets?: Record<string, string> } } } } };
-                }).app?.plugins?.plugins?.snipsidian?.settings?.snippets ?? {}
-            );
-        });
+        const snippets = await readSnippets(obsidian);
         expect(snippets.brb).toBeUndefined();
         expect(snippets.bbb).toBe("be right back");
 

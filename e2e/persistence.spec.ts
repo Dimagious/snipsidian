@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, deleteSnippet, readSnippets, seedSnippets } from "./fixtures";
 
 /**
  * E2E: settings persistence — save → write to disk → load back.
@@ -28,23 +28,7 @@ test.describe("persistence: save → disk round-trip", () => {
         // internally — testing it explicitly proves that
         // saveSettings actually writes to disk and doesn't just
         // mutate the in-memory cache.
-        await win.evaluate(async () => {
-            const plugin = (globalThis as unknown as {
-                app?: {
-                    plugins?: {
-                        plugins?: {
-                            snipsidian?: {
-                                settings: { snippets: Record<string, string> };
-                                saveSettings: () => Promise<void>;
-                            };
-                        };
-                    };
-                };
-            }).app?.plugins?.plugins?.snipsidian;
-            if (!plugin) throw new Error("snipsidian plugin not loaded");
-            plugin.settings.snippets["persisted"] = "value-after-save";
-            await plugin.saveSettings();
-        });
+        await seedSnippets(obsidian, { persisted: "value-after-save" });
 
         // Read the actual data.json from the vault on disk. This is
         // the file Obsidian will load on next startup. If
@@ -62,46 +46,16 @@ test.describe("persistence: save → disk round-trip", () => {
         // The existing reload test pins ADD + reload. This pins EDIT
         // + reload — saveSettings on a mutated existing key should
         // overwrite the data.json entry, not leave a stale value.
-        await win.evaluate(async () => {
-            const plugin = (globalThis as unknown as {
-                app?: {
-                    plugins?: {
-                        plugins?: {
-                            snipsidian?: {
-                                settings: { snippets: Record<string, string> };
-                                saveSettings: () => Promise<void>;
-                            };
-                        };
-                    };
-                };
-            }).app?.plugins?.plugins?.snipsidian;
-            if (!plugin) throw new Error("snipsidian plugin not loaded");
-            // Pre-seed an entry (idempotent — fresh vault each test).
-            plugin.settings.snippets["edited"] = "original value";
-            await plugin.saveSettings();
-            // Now mutate the same key and save again.
-            plugin.settings.snippets["edited"] = "new value after edit";
-            await plugin.saveSettings();
-        });
+        // Pre-seed an entry (idempotent — fresh vault each test).
+        await seedSnippets(obsidian, { edited: "original value" });
+        // Now mutate the same key and save again.
+        await seedSnippets(obsidian, { edited: "new value after edit" });
 
         // `obsidian.reload()` runs Obsidian's "app:reload", waits for the
         // old page to go and for every plugin to load again.
         await obsidian.reload();
 
-        const loadedValue = await win.evaluate(() => {
-            const plugin = (globalThis as unknown as {
-                app?: {
-                    plugins?: {
-                        plugins?: {
-                            snipsidian?: {
-                                settings: { snippets: Record<string, string> };
-                            };
-                        };
-                    };
-                };
-            }).app?.plugins?.plugins?.snipsidian;
-            return plugin?.settings?.snippets?.["edited"] ?? null;
-        });
+        const loadedValue = (await readSnippets(obsidian)).edited ?? null;
         // The edit MUST survive — not the original value.
         expect(loadedValue).toBe("new value after edit");
     });
@@ -115,66 +69,20 @@ test.describe("persistence: save → disk round-trip", () => {
         // round-trip — without this, a saveSettings that skipped the
         // delete branch would leave dead snippets resurrect across
         // reloads.
-        await win.evaluate(async () => {
-            const plugin = (globalThis as unknown as {
-                app?: {
-                    plugins?: {
-                        plugins?: {
-                            snipsidian?: {
-                                settings: { snippets: Record<string, string> };
-                                saveSettings: () => Promise<void>;
-                            };
-                        };
-                    };
-                };
-            }).app?.plugins?.plugins?.snipsidian;
-            if (!plugin) throw new Error("snipsidian plugin not loaded");
-            plugin.settings.snippets["soon_deleted"] = "to be removed";
-            await plugin.saveSettings();
-            delete plugin.settings.snippets["soon_deleted"];
-            await plugin.saveSettings();
-        });
+        await seedSnippets(obsidian, { soon_deleted: "to be removed" });
+        await deleteSnippet(obsidian, "soon_deleted");
 
         // `obsidian.reload()` runs Obsidian's "app:reload", waits for the
         // old page to go and for every plugin to load again.
         await obsidian.reload();
 
-        const present = await win.evaluate(() => {
-            const plugin = (globalThis as unknown as {
-                app?: {
-                    plugins?: {
-                        plugins?: {
-                            snipsidian?: {
-                                settings: { snippets: Record<string, string> };
-                            };
-                        };
-                    };
-                };
-            }).app?.plugins?.plugins?.snipsidian;
-            return plugin?.settings?.snippets?.["soon_deleted"] !== undefined;
-        });
+        const present = (await readSnippets(obsidian)).soon_deleted !== undefined;
         expect(present).toBe(false);
     });
 
     test("a snippet survives an Obsidian app reload", async ({ win, obsidian }) => {
         // Step 1: write a snippet and save to disk.
-        await win.evaluate(async () => {
-            const plugin = (globalThis as unknown as {
-                app?: {
-                    plugins?: {
-                        plugins?: {
-                            snipsidian?: {
-                                settings: { snippets: Record<string, string> };
-                                saveSettings: () => Promise<void>;
-                            };
-                        };
-                    };
-                };
-            }).app?.plugins?.plugins?.snipsidian;
-            if (!plugin) throw new Error("snipsidian plugin not loaded");
-            plugin.settings.snippets["survives_reload"] = "still here";
-            await plugin.saveSettings();
-        });
+        await seedSnippets(obsidian, { survives_reload: "still here" });
 
         // Step 2: reload the app's renderer process. After this
         // the plugin reloads from disk; the in-memory settings are
@@ -185,20 +93,7 @@ test.describe("persistence: save → disk round-trip", () => {
         await obsidian.reload();
 
         // Step 3: verify the snippet came back from disk.
-        const loadedValue = await win.evaluate(() => {
-            const plugin = (globalThis as unknown as {
-                app?: {
-                    plugins?: {
-                        plugins?: {
-                            snipsidian?: {
-                                settings: { snippets: Record<string, string> };
-                            };
-                        };
-                    };
-                };
-            }).app?.plugins?.plugins?.snipsidian;
-            return plugin?.settings?.snippets?.["survives_reload"] ?? null;
-        });
+        const loadedValue = (await readSnippets(obsidian)).survives_reload ?? null;
         expect(loadedValue).toBe("still here");
     });
 });
