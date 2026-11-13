@@ -19,7 +19,6 @@ import { test, expect, deleteSnippet, readSnippets, seedSnippets } from "./fixtu
 
 test.describe("persistence: save → disk round-trip", () => {
     test("a snippet added via the plugin API lands in data.json on disk", async ({
-        win,
         vault,
         obsidian,
     }) => {
@@ -40,7 +39,6 @@ test.describe("persistence: save → disk round-trip", () => {
     });
 
     test("[B-110] an edited snippet replacement survives an Obsidian app reload", async ({
-        win,
         obsidian,
     }) => {
         // The existing reload test pins ADD + reload. This pins EDIT
@@ -61,7 +59,6 @@ test.describe("persistence: save → disk round-trip", () => {
     });
 
     test("[B-110] a deleted snippet stays deleted across an Obsidian app reload", async ({
-        win,
         obsidian,
     }) => {
         // Pre-seed + save + delete + save + reload. The key must be
@@ -80,7 +77,7 @@ test.describe("persistence: save → disk round-trip", () => {
         expect(present).toBe(false);
     });
 
-    test("a snippet survives an Obsidian app reload", async ({ win, obsidian }) => {
+    test("a snippet survives an Obsidian app reload", async ({ obsidian }) => {
         // Step 1: write a snippet and save to disk.
         await seedSnippets(obsidian, { survives_reload: "still here" });
 

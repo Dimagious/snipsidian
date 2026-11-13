@@ -1,6 +1,6 @@
 import type { App } from "obsidian";
 import type { ObsidianHelpers } from "obsidian-plugin-dev-kit/e2e";
-import { test, expect, ui, runCommandById, seedSnippets } from "./fixtures";
+import { test, expect, ui, seedSnippets } from "./fixtures";
 
 /**
  * E2E: SnippetPickerModal features beyond the happy path.
@@ -21,7 +21,7 @@ import { test, expect, ui, runCommandById, seedSnippets } from "./fixtures";
  */
 
 async function openPicker(win: import("@playwright/test").Page, obsidian: ObsidianHelpers) {
-    await runCommandById(obsidian, "snipsidian:insert-snippet");
+    await obsidian.runCommand("snipsidian:insert-snippet");
     await win
         .locator(".snippet-picker-modal input[role='combobox']")
         .waitFor({ state: "visible" });

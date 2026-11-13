@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **The e2e specs read the plugin through one typed accessor.** `e2e/fixtures.ts` now holds `readSnippets`, `seedSnippets`, `deleteSnippet`, `setHighlight` and `runCommandById`, typed with the kit's `AppWithInternals`, and the specs call them through `obsidian.evaluate`. This replaces 25 copies of an inline `globalThis as unknown as { app?: ... }` cast across nine specs and seven hand-written seed blocks. No assertion changed.
+- **The e2e specs read the plugin through one typed accessor.** `e2e/fixtures.ts` now holds `readSnippets`, `seedSnippets`, `deleteSnippet` and `setHighlight`, typed with the kit's `AppWithInternals`; each runs one `obsidian.evaluate`, and the specs call the helpers. This replaces 25 copies of an inline `globalThis as unknown as { app?: ... }` cast across nine specs and the hand-written snippet seeding in each of them. The picker specs open the picker with the kit's `obsidian.runCommand`, which fails at once on an unknown command id. No assertion changed.
 - **The dev kit is [obsidian-plugin-dev-kit](https://github.com/Dimagious/obsidian-plugin-dev-kit) 0.2.0** (was 0.1.0), moved with its new `opdk kit upgrade` command: the tag in `package.json`, the lockfile and the two kit workflow lines name commit `32a1860`, and `opdk release check` now fails when they disagree. Snipsy's `eslint.config.js` keeps its own `no-restricted-syntax` rule for a bare `window.*`, which replaces the one the kit's preset now brings. Typecheck (src and e2e), lint, unit tests, build, `opdk scan`, `opdk release check`, `site:check` and the e2e pass on it.
 
 ## [1.7.2] - 2026-11-13

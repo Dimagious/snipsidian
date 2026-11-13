@@ -88,11 +88,6 @@ export async function setHighlight(obsidian: ObsidianHelpers, on: boolean): Prom
     );
 }
 
-/** Runs an Obsidian command by id, like a hotkey would. Returns false when no command has that id. */
-export async function runCommandById(obsidian: ObsidianHelpers, commandId: string): Promise<boolean> {
-    return await obsidian.evaluate((app: AppWithInternals, id: string) => app.commands.executeCommandById(id), commandId);
-}
-
 /** Snipsy's own page objects. Everything generic lives in the kit's `obsidian` fixture. */
 export const ui = {
     /** Locator for the active CodeMirror editor's contenteditable. */

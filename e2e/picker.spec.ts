@@ -1,4 +1,4 @@
-import { test, expect, ui, runCommandById, seedSnippets } from "./fixtures";
+import { test, expect, ui, seedSnippets } from "./fixtures";
 
 /**
  * E2E: Snippet Picker via command palette.
@@ -18,7 +18,7 @@ test.describe("snippet picker via command palette", () => {
         await editor.click();
         await obsidian.press("Mod+A");
         await win.keyboard.press("Delete");
-        await runCommandById(obsidian, "snipsidian:insert-snippet");
+        await obsidian.runCommand("snipsidian:insert-snippet");
         const filter = win.locator(".snippet-picker-modal input[role='combobox']");
         await filter.waitFor({ state: "visible" });
         await ui.fillPickerFilter(win, "zzdate", "zzdate");
@@ -45,7 +45,7 @@ test.describe("snippet picker via command palette", () => {
         // internal API. Avoids the command-palette typing dance,
         // which is flaky because some Obsidian versions
         // fuzzy-match different commands first.
-        await runCommandById(obsidian, "snipsidian:insert-snippet");
+        await obsidian.runCommand("snipsidian:insert-snippet");
 
         // The picker modal opens. Filter to `brb` (seeded in the
         // pristine vault) so there's exactly one hit, then Enter.
@@ -69,7 +69,7 @@ test.describe("snippet picker via command palette", () => {
         await win.keyboard.press("Delete");
 
         // Open picker
-        await runCommandById(obsidian, "snipsidian:insert-snippet");
+        await obsidian.runCommand("snipsidian:insert-snippet");
 
         const filter = win.locator(
             ".snippet-picker-modal input[role='combobox']",
