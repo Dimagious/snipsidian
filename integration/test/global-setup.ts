@@ -22,6 +22,13 @@ import type { TestProject } from "vitest/node";
  * `integration/node_modules` (the community scanner installs only the root
  * dependencies) and would report every use of it as unsafe. `tsc` and
  * `npm run it:lint` still resolve the real package.
+ *
+ * The file lives in `integration/test/` on purpose. It imports `node:fs`,
+ * `node:path` and `node:url` and runs in Node under vitest, never inside
+ * Obsidian, but the community scanner lints a file named `global-setup.*`
+ * with the plugin rules and reports each of those imports as
+ * `obsidianmd/no-nodejs-modules` (a dynamic `import()` is reported the same).
+ * The scanner skips `test/` folders, as it does for the other test files.
  */
 
 interface LibrarySetup {
@@ -29,7 +36,7 @@ interface LibrarySetup {
     teardown: () => Promise<void>;
 }
 
-const ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
+const ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)), "..", "..");
 const STAGE_DIR = join(ROOT, "dist", "build");
 const BUILD_FILES = ["main.js", "manifest.json", "styles.css"] as const;
 
