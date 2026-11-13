@@ -16,7 +16,7 @@ jobs:
   # Node-only check, and the bundle artifact (snipsidian-bundle). coverage-artifact keeps the report for the
   # Codecov job below (snipsidian-coverage).
   kit:
-    uses: Dimagious/obsidian-plugin-dev-kit/.github/workflows/plugin-ci.yml@6e33ca4f10b24fc9f7547f41ea9902fe30ebb362 # v0.1.0
+    uses: Dimagious/obsidian-plugin-dev-kit/.github/workflows/plugin-ci.yml@32a1860033a8e07f6718d568434c6d116a5d1de7 # v0.2.0
     with:
       coverage-artifact: true
 
