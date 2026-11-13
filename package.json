@@ -43,7 +43,7 @@
         "eslint": "^10.11.0",
         "jsdom": "^30.1.1",
         "obsidian": "^1.13.1",
-        "obsidian-plugin-dev-kit": "github:Dimagious/obsidian-plugin-dev-kit#a10c9d845944c5d3035034ee6235e0b4d24d2fb6",
+        "obsidian-plugin-dev-kit": "github:Dimagious/obsidian-plugin-dev-kit#v0.3.0",
         "tsx": "^4.20.5",
         "typescript": "^6.0.3",
         "vite": "^8.3.8",
