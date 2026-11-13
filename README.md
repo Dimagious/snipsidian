@@ -18,7 +18,7 @@ Obsidian. **No scripting, and no templates to learn.**
 **Install:** Settings → **Community plugins** → **Browse** → search for **Snipsy**. Then open a
 note, type `todo` and a space.
 
-[Website](https://dimagious.github.io/snipsidian/) · [60-second demo](https://github.com/Dimagious/snipsidian/blob/HEAD/docs/screens/demo.mp4) · [Full reference](https://github.com/Dimagious/snipsidian/blob/HEAD/docs/reference.md)
+[Website](https://dimagious.github.io/snipsidian/) · [Full reference](https://github.com/Dimagious/snipsidian/blob/HEAD/docs/reference.md)
 
 ## Why Snipsy
 

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **The narrated README demo.** The README's "60-second demo" link pointed at a 2026-09 recording that shows the settings before 1.13; re-voicing it was dropped, the ten GIFs in the README show every feature. Gone with it: `docs/screens/demo.mp4`, `demo.gif`, `demo-ru.mp4`, `demo-ru.gif` and the voice clips in `docs/screens/voice/` and `voice-ru/` (6.5 MB), the recording and composing scripts `scripts/record-demo.sh`, `build-demo.sh` and `render-cards.py`, the demo spec `e2e/demo/`, and the `demo:rehearse`, `demo:record` and `demo:record:_inner` scripts. The README GIFs and `npm run e2e:record` are not affected.
+
+### Fixed
+
+- **The community scorecard no longer reports the `{{date:FMT}}` formatter.** The public scanner flagged `moment(date).format(...)` in `src/adapters/obsidian-editor.ts` as `no-unsafe-call`, `no-unsafe-member-access` and `no-unsafe-return`: it type-checks with TypeScript 6, under which `moment` imported from `obsidian` is not callable. The call is now typed by hand. Reproduced with `typescript@6.0` installed for the check (`opdk scan`: 3 findings before, 0 after; `tsc --noEmit` passes under 6.0.3 and 5.9.3). Date formatting is unchanged; its three unit tests fail when the formatter is broken on purpose.
+
 ### Changed
 
 - **The e2e specs read the plugin through one typed accessor.** `e2e/fixtures.ts` now holds `readSnippets`, `seedSnippets`, `deleteSnippet` and `setHighlight`, typed with the kit's `AppWithInternals`; each runs one `obsidian.evaluate`, and the specs call the helpers. This replaces 25 copies of an inline `globalThis as unknown as { app?: ... }` cast across nine specs and the hand-written snippet seeding in each of them. The picker specs open the picker with the kit's `obsidian.runCommand`, which fails at once on an unknown command id. No assertion changed.

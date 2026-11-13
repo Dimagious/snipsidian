@@ -8,6 +8,20 @@ import type { Dict, EditPlan, ExpandContext, ExpandInput } from "../engine/types
 import { isSeparator } from "../shared/delimiters";
 import { isInFencedCode, isInInlineCode, isInMath, isInYamlFrontmatter } from "../shared/markdown";
 
+/** The part of moment Snipsy uses. */
+interface MomentLike {
+    format(pattern: string): string;
+}
+
+/**
+ * Formats with `moment` from obsidian, typed by hand. Its typing is an `export =` namespace, which TypeScript 6
+ * (and 5 with `esModuleInterop`) does not treat as callable, so the community scanner reported the call as unsafe
+ * (K-058). Read at call time, so a module mock without `moment` does not break importing this file.
+ */
+function formatWithMoment(date: Date, format: string): string {
+    return (moment as unknown as (input: Date) => MomentLike)(date).format(format);
+}
+
 export function makeExpandInput(
     editor: Editor,
     sepCh: number,
@@ -57,7 +71,7 @@ export function makeContext(
         isInFrontmatter: isFront,
         filename,
         now,
-        formatDate: (date, format) => moment(date).format(format),
+        formatDate: formatWithMoment,
         readClipboard
     };
 }
