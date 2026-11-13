@@ -48,7 +48,7 @@ function mount(): HTMLButtonElement {
     new TextSnippetsSection(plugin.app as unknown as App, plugin as unknown as SnipSidianPlugin).render(root);
     const btn = Array.from(root.querySelectorAll("button")).find((b) => b.textContent === "Import");
     if (!btn) throw new Error("Import button not rendered");
-    return btn as HTMLButtonElement;
+    return btn;
 }
 
 async function clickAndSettle(btn: HTMLButtonElement): Promise<void> {
@@ -61,9 +61,9 @@ async function clickAndSettle(btn: HTMLButtonElement): Promise<void> {
 }
 
 function modalButton(label: string): HTMLButtonElement {
-    const btn = Array.from(document.body.querySelectorAll(".modal-button-container button")).find(
+    const btn = Array.from(document.body.querySelectorAll<HTMLButtonElement>(".modal-button-container button")).find(
         (b) => b.textContent === label,
-    ) as HTMLButtonElement | undefined;
+    );
     if (!btn) throw new Error(`Modal ${label} button not found`);
     return btn;
 }
@@ -221,7 +221,7 @@ describe("TextSnippetsSection", () => {
         await clickAndSettle(mount());
         const overwrite = Array.from(document.body.querySelectorAll("button")).find(
             (b) => b.textContent === "Overwrite all",
-        ) as HTMLButtonElement | undefined;
+        );
         if (!overwrite) throw new Error("Overwrite all button not found");
         overwrite.click();
         await apply();
@@ -282,7 +282,7 @@ describe("TextSnippetsSection: preview and write path", () => {
 
         const overwrite = Array.from(document.body.querySelectorAll("button")).find(
             (b) => b.textContent === "Overwrite all",
-        ) as HTMLButtonElement | undefined;
+        );
         if (!overwrite) throw new Error("Overwrite all button not found");
         overwrite.click();
         await apply();

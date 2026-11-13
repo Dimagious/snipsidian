@@ -12,15 +12,15 @@ describe("expand", () => {
 
     it("returns null if guard blocks (code/frontmatter)", async () => {
         const input = { textBefore: "fn", textAfter: "", lastTyped: " ", sepCh: 2 };
-        const plan1 = await expand(input as any, dict, { ...baseCtx, isInCode: true } as any);
+        const plan1 = await expand(input, dict, { ...baseCtx, isInCode: true });
         expect(plan1).toBeNull();
-        const plan2 = await expand(input as any, dict, { ...baseCtx, isInFrontmatter: true } as any);
+        const plan2 = await expand(input, dict, { ...baseCtx, isInFrontmatter: true });
         expect(plan2).toBeNull();
     });
 
     it("expands known trigger and positions cursor at $|", async () => {
         const input = { textBefore: "fn", textAfter: "", lastTyped: " ", sepCh: 2 };
-        const plan = await expand(input as any, dict, baseCtx as any);
+        const plan = await expand(input, dict, baseCtx);
         expect(plan).not.toBeNull();
         expect(plan!.insert).toBe("function () {}");
         expect(plan!.fromCh).toBe(0);
@@ -30,7 +30,7 @@ describe("expand", () => {
 
     it("returns null for unknown trigger", async () => {
         const input = { textBefore: "zzz", textAfter: "", lastTyped: " ", sepCh: 3 };
-        const plan = await expand(input as any, dict, baseCtx as any);
+        const plan = await expand(input, dict, baseCtx);
         expect(plan).toBeNull();
     });
 
@@ -40,6 +40,6 @@ describe("expand", () => {
     // clean no-match instead.
     it("[S-008] returns null (no throw) for inherited prototype key as trigger", async () => {
         const input = { textBefore: "constructor", textAfter: "", lastTyped: " ", sepCh: "constructor".length };
-        await expect(expand(input as any, dict, baseCtx as any)).resolves.toBeNull();
+        await expect(expand(input, dict, baseCtx)).resolves.toBeNull();
     });
 });

@@ -6,7 +6,7 @@ describe("buildEdit", () => {
         const input = { textBefore: "fn", textAfter: "", lastTyped: " ", sepCh: 2 };
         const match = { trigger: "fn", fromCh: 0, toCh: 2 };
         const applied = { text: "function () {}", cursorDelta: "function ".length };
-        const plan = buildEdit(input as any, match as any, applied as any);
+        const plan = buildEdit(input, match, applied);
         expect(plan.insert).toBe("function () {}");
         expect(plan.fromCh).toBe(0);
         expect(plan.toCh).toBe(2);
@@ -20,7 +20,7 @@ describe("buildEdit", () => {
         const input = { textBefore: "brb", textAfter: "", lastTyped: " ", sepCh: 3 };
         const match = { trigger: "brb", fromCh: 0, toCh: 3 };
         const applied = { text: "be right back" };
-        const plan = buildEdit(input as any, match as any, applied as any);
+        const plan = buildEdit(input, match, applied);
         expect(plan.newCursor).toBeUndefined();
         expect(plan.insert).toBe("be right back");
     });
@@ -34,7 +34,7 @@ describe("buildEdit", () => {
         // would be: text = "> [!note] \n> ", cursorDelta = 12 (the position of `$|` in the
         // pre-strip string; equal to length of "> [!note] \n> " here).
         const applied = { text: "> [!note] \n> ", cursorDelta: "> [!note] \n> ".length };
-        const plan = buildEdit(input as any, match as any, applied as any);
+        const plan = buildEdit(input, match, applied);
         expect(plan.newCursor).toEqual({ lineDelta: 1, ch: "> ".length });
     });
 
@@ -44,7 +44,7 @@ describe("buildEdit", () => {
         // Cursor target is at offset 2 ("> $|[!note] \n>"). Even though the
         // insert contains a newline, the marker is before any newline.
         const applied = { text: "> [!note] \n> ", cursorDelta: 2 };
-        const plan = buildEdit(input as any, match as any, applied as any);
+        const plan = buildEdit(input, match, applied);
         expect(plan.newCursor).toEqual({ lineDelta: 0, ch: 3 /* fromCh */ + 2 });
     });
 
@@ -53,7 +53,7 @@ describe("buildEdit", () => {
         const input = { textBefore: "cb", textAfter: "", lastTyped: " ", sepCh: 2 };
         const match = { trigger: "cb", fromCh: 0, toCh: 2 };
         const applied = { text: "line1\nline2" };
-        const plan = buildEdit(input as any, match as any, applied as any);
+        const plan = buildEdit(input, match, applied);
         expect(plan.newCursor).toBeUndefined();
     });
 });

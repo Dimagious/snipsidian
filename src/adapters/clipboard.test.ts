@@ -3,10 +3,7 @@ import { readClipboardSafe } from "./clipboard";
 
 afterEach(() => {
     // cleanup clipboard stub
-    try {
-        // @ts-ignore
-        delete (navigator as any).clipboard;
-    } catch { }
+    Reflect.deleteProperty(navigator, "clipboard");
 });
 
 describe("adapters/clipboard.readClipboardSafe", () => {

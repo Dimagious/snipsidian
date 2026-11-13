@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
+import type { EditorView, ViewUpdate } from "@codemirror/view";
+import type { App } from "obsidian";
+import { nth } from "../test/helpers";
 
 // mock the engine adapter call
 vi.mock("../adapters/obsidian-editor", () => ({
@@ -11,13 +14,26 @@ import { handleViewUpdate, CompositionRetry } from "./cm6-bridge";
  * B-149: `handleViewUpdate` is exported separately from the
  * `EditorView.updateListener.of(...)` extension builder so tests can
  * drive it with a hand-built fake `ViewUpdate` — no real CM6
- * `EditorView` required. Casts through `as any` at the boundary, same
- * pattern the rest of the suite uses for Obsidian/CM6 types (see
- * `src/test/stubs/obsidian.ts`).
+ * `EditorView` required. The fakes below are plain objects; `asView`,
+ * `asUpdate` and `asApp` are the places where they are presented as the
+ * CM6/Obsidian types.
  */
 
 type FakeTx = { userEvent?: string };
+type FakeState = { doc: object; selection: { main: { head: number } } };
+/** The part of an `EditorView` the bridge reads or writes. */
+interface FakeView {
+    hasFocus: boolean;
+    composing: boolean;
+    state?: FakeState;
+    dom?: unknown;
+    dispatch?: unknown;
+}
 const DOC = {};
+
+function asView(view: FakeView): EditorView {
+    return view as unknown as EditorView;
+}
 
 function makeUpdate(opts: {
     docChanged?: boolean;
@@ -28,15 +44,19 @@ function makeUpdate(opts: {
     inserts?: boolean;
     doc?: object;
     head?: number;
-}) {
+    /** Replaces the default view, e.g. one a `CompositionRetry` also holds. */
+    view?: FakeView;
+    dispatch?: unknown;
+}): ViewUpdate {
     const transactions = (opts.transactions ?? [{ userEvent: "input.type" }]).map((tx) => ({
         annotation: (_type: unknown) => tx.userEvent,
     }));
     return {
         docChanged: opts.docChanged ?? true,
-        view: {
+        view: opts.view ?? {
             hasFocus: opts.hasFocus ?? true,
             composing: opts.composing ?? false,
+            ...(opts.dispatch ? { dispatch: opts.dispatch } : {}),
         },
         transactions,
         changes: {
@@ -45,10 +65,10 @@ function makeUpdate(opts: {
             ) => f(0, 0, 0, 0, { length: opts.inserts === false ? 0 : 1 }),
         },
         state: { doc: opts.doc ?? DOC, selection: { main: { head: opts.head ?? 3 } } },
-    } as any;
+    } as unknown as ViewUpdate;
 }
 
-function makeApp(opts: { editor?: unknown; filename?: string } = {}) {
+function makeApp(opts: { editor?: unknown; filename?: string } = {}): App {
     const editor = opts.editor === undefined ? { mock: "editor" } : opts.editor;
     return {
         workspace: {
@@ -56,7 +76,7 @@ function makeApp(opts: { editor?: unknown; filename?: string } = {}) {
                 ? { editor, file: opts.filename ? { name: opts.filename } : null }
                 : null,
         },
-    } as any;
+    } as unknown as App;
 }
 
 describe("cm6-bridge/handleViewUpdate", () => {
@@ -228,15 +248,18 @@ describe("cm6-bridge/CompositionRetry [B-191]", () => {
     });
 
     function make(
-        view: { composing: boolean; hasFocus: boolean; state?: unknown } = {
+        init: { composing: boolean; hasFocus: boolean } = {
             composing: false,
             hasFocus: true,
         },
-    ) {
-        view.state ??= { doc: DOC, selection: { main: { head: 3 } } };
-        (view as any).dom = { ownerDocument: { defaultView: viewWin } };
-        const retry = new CompositionRetry(view as any, makeApp(), () => ({}), () => undefined);
-        return { retry, view: view as { composing: boolean; hasFocus: boolean; state: any } };
+    ): { retry: CompositionRetry; view: FakeView & { state: FakeState } } {
+        const view: FakeView & { state: FakeState } = {
+            ...init,
+            state: { doc: DOC, selection: { main: { head: 3 } } },
+            dom: { ownerDocument: { defaultView: viewWin } },
+        };
+        const retry = new CompositionRetry(asView(view), makeApp(), () => ({}), () => undefined);
+        return { retry, view };
     }
 
     /** One animation frame, then the macrotask queued by it. */
@@ -426,7 +449,7 @@ describe("cm6-bridge/CompositionRetry [B-191]", () => {
     it("schedules the frame on the view's own window (popout)", () => {
         const { retry, view } = make();
         const popFrames: Array<() => void> = [];
-        (view as any).dom = {
+        view.dom = {
             ownerDocument: {
                 defaultView: {
                     requestAnimationFrame: (fn: () => void) => popFrames.push(fn),
@@ -448,49 +471,49 @@ describe("cm6-bridge: expansion mark wiring (B-176)", () => {
         vi.clearAllMocks();
     });
 
-    function updateWithView() {
-        const update = makeUpdate({});
-        update.view.dispatch = vi.fn();
-        return update;
+    type MarkSpec = { effects: { value: unknown } };
+    function updateWithView(): { update: ViewUpdate; dispatch: Mock<(spec: MarkSpec) => void> } {
+        const dispatch = vi.fn<(spec: MarkSpec) => void>();
+        return { update: makeUpdate({ dispatch }), dispatch };
     }
 
     it("dispatches the mark effect on the update's view when the setting is on", async () => {
         vi.mocked(tryExpandAtSeparator).mockResolvedValueOnce(RESULT);
-        const update = updateWithView();
+        const { update, dispatch } = updateWithView();
         handleViewUpdate(makeApp(), () => ({}), update, () => undefined, () => true);
         await new Promise((r) => setTimeout(r, 0));
-        expect(update.view.dispatch).toHaveBeenCalledTimes(1);
-        const spec = update.view.dispatch.mock.calls[0][0];
+        expect(dispatch).toHaveBeenCalledTimes(1);
+        const spec = nth(dispatch.mock.calls, 0)[0];
         expect(spec.effects.value).toEqual(RESULT);
     });
 
     it("dispatches nothing when the setting is off (default)", async () => {
         vi.mocked(tryExpandAtSeparator).mockResolvedValueOnce(RESULT);
-        const update = updateWithView();
+        const { update, dispatch } = updateWithView();
         handleViewUpdate(makeApp(), () => ({}), update);
         await new Promise((r) => setTimeout(r, 0));
-        expect(update.view.dispatch).not.toHaveBeenCalled();
+        expect(dispatch).not.toHaveBeenCalled();
     });
 
     it("dispatches nothing when no expansion happened", async () => {
-        const update = updateWithView();
+        const { update, dispatch } = updateWithView();
         handleViewUpdate(makeApp(), () => ({}), update, () => undefined, () => true);
         await new Promise((r) => setTimeout(r, 0));
-        expect(update.view.dispatch).not.toHaveBeenCalled();
+        expect(dispatch).not.toHaveBeenCalled();
     });
 
     it("the B-191 composition retry marks the expansion too", async () => {
         vi.mocked(tryExpandAtSeparator).mockResolvedValueOnce(RESULT);
-        const view = { composing: false, hasFocus: true, state: { doc: DOC, selection: { main: { head: 3 } } }, dispatch: vi.fn() } as any;
-        const retry = new CompositionRetry(view, makeApp(), () => ({}), () => undefined, () => true);
-        const update = makeUpdate({ composing: true });
-        update.view = view;
+        const dispatch = vi.fn();
+        const view: FakeView = { composing: false, hasFocus: true, state: { doc: DOC, selection: { main: { head: 3 } } }, dispatch };
+        const retry = new CompositionRetry(asView(view), makeApp(), () => ({}), () => undefined, () => true);
+        const update = makeUpdate({ composing: true, view });
         view.composing = true;
         retry.record(update);
         expect(retry.pending).toBe(true);
         view.composing = false;
         retry.runPending();
         await new Promise((r) => setTimeout(r, 0));
-        expect(view.dispatch).toHaveBeenCalledTimes(1);
+        expect(dispatch).toHaveBeenCalledTimes(1);
     });
 });

@@ -19,35 +19,34 @@ import type SnipSidianPlugin from "../../main";
  * it to resolve synchronously to keep the test deterministic.
  */
 
-// Mock the three sub-sections so this test stays focused on the
-// wrapper's wiring (not on what the sub-sections render).
+// Mock the sub-sections so this test stays focused on the wrapper's wiring
+// (not on what the sub-sections render). Each mocked constructor hands out
+// an object whose `render` is one of these spies.
+const renders = vi.hoisted(() => ({
+    browser: vi.fn().mockResolvedValue(undefined),
+    submission: vi.fn(),
+    espanso: vi.fn(),
+    textSnippets: vi.fn(),
+}));
 vi.mock("./community/PackageBrowser", () => ({
     PackageBrowser: vi.fn().mockImplementation(function () {
-        return {
-            render: vi.fn().mockResolvedValue(undefined),
-        };
+        return { render: renders.browser };
     }),
 }));
 vi.mock("./community/PackageSubmissionSection", () => ({
     PackageSubmissionSection: vi.fn().mockImplementation(function () {
-        return {
-            render: vi.fn(),
-        };
+        return { render: renders.submission };
     }),
 }));
 vi.mock("./community/EspansoSection", () => ({
     EspansoSection: vi.fn().mockImplementation(function () {
-        return {
-            render: vi.fn(),
-        };
+        return { render: renders.espanso };
     }),
 }));
 
 vi.mock("./community/TextSnippetsSection", () => ({
     TextSnippetsSection: vi.fn().mockImplementation(function () {
-        return {
-            render: vi.fn(),
-        };
+        return { render: renders.textSnippets };
     }),
 }));
 
@@ -87,18 +86,14 @@ describe("CommunityTab smoke", () => {
 
         expect(root.classList.contains("snipsy-compact")).toBe(true);
         // The mocks' render fns should each have been called once.
-        const browserInstance = vi.mocked(PackageBrowser).mock.results[0]?.value;
-        const submissionInstance = vi.mocked(PackageSubmissionSection).mock.results[0]?.value;
-        const espansoInstance = vi.mocked(EspansoSection).mock.results[0]?.value;
-        expect(browserInstance?.render).toHaveBeenCalledTimes(1);
-        expect(submissionInstance?.render).toHaveBeenCalledTimes(1);
-        expect(espansoInstance?.render).toHaveBeenCalledTimes(1);
-        const textSnippetsInstance = vi.mocked(TextSnippetsSection).mock.results[0]?.value;
-        expect(textSnippetsInstance?.render).toHaveBeenCalledTimes(1);
+        expect(renders.browser).toHaveBeenCalledTimes(1);
+        expect(renders.submission).toHaveBeenCalledTimes(1);
+        expect(renders.espanso).toHaveBeenCalledTimes(1);
+        expect(renders.textSnippets).toHaveBeenCalledTimes(1);
         // Each sub-render gets the (now-emptied) root.
-        expect(browserInstance?.render).toHaveBeenCalledWith(root);
-        expect(submissionInstance?.render).toHaveBeenCalledWith(root);
-        expect(espansoInstance?.render).toHaveBeenCalledWith(root);
-        expect(textSnippetsInstance?.render).toHaveBeenCalledWith(root);
+        expect(renders.browser).toHaveBeenCalledWith(root);
+        expect(renders.submission).toHaveBeenCalledWith(root);
+        expect(renders.espanso).toHaveBeenCalledWith(root);
+        expect(renders.textSnippets).toHaveBeenCalledWith(root);
     });
 });

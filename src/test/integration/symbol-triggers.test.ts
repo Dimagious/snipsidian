@@ -1,9 +1,8 @@
 import { describe, it, expect } from "vitest";
 import * as YAML from "yaml";
 import { tryExpandAtSeparator } from "../../adapters/obsidian-editor";
-import type { Editor } from "obsidian";
 import type { Dict } from "../../engine/types";
-import { makeMockEditor } from "../factories/editor";
+import { asEditor, makeMockEditor } from "../factories/editor";
 import { espansoYamlToSnippets } from "../../packages/espanso";
 import { convertSnippetsToObject } from "../../services/community-api";
 import { validatePackageForInstall } from "../../services/package-validator";
@@ -26,7 +25,7 @@ async function run(
     const last = lines.length - 1;
     const cursor = opts.cursor ?? { line: last, ch: (lines[last] ?? "").length };
     const editor = makeMockEditor({ text, cursor });
-    await tryExpandAtSeparator(editor as unknown as Editor, dict, { now: NOW, prefix: opts.prefix });
+    await tryExpandAtSeparator(asEditor(editor), dict, { now: NOW, prefix: opts.prefix });
     return editor.value();
 }
 

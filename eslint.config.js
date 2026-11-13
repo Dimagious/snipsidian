@@ -20,13 +20,22 @@ export default [
       'integration/**',
       // Test scaffolding: the fake Obsidian and the factories. None of it is
       // bundled, and the plugin preset's rules have no meaning for code that
-      // stands in for the host. The `*.test.ts` files beside it are ignored
-      // by the kit's defaults, and tsconfig.json leaves them out, so the
-      // type-aware rules could not run on them yet.
+      // stands in for the host. The `*.test.ts` files and the other helpers
+      // in `src/test/` are linted (see the blocks below).
       'src/test/stubs/**',
       'src/test/factories/**',
     ],
   }),
+  // The preset ignores `src/**/*.test.ts` by default; take them back in.
+  { ignores: ['!src/**/*.test.ts'] },
+  {
+    files: ['src/**/*.test.ts'],
+    languageOptions: {
+      // tsconfig.json leaves the tests out, so the type-aware rules read them
+      // through the config that covers them.
+      parserOptions: { project: './tsconfig.test.json', tsconfigRootDir: import.meta.dirname },
+    },
+  },
   {
     files: ['**/*.ts'],
     rules: {
@@ -51,6 +60,22 @@ export default [
         selector: "MemberExpression[object.name='window'][property.name!=/^(open|setTimeout|clearTimeout|setInterval|clearInterval|requestAnimationFrame)$/]",
         message: 'A bare `window.*` breaks in popout windows. Use `activeWindow.*` (`window.open` and the timer functions are the only exceptions).',
       }],
+    },
+  },
+  {
+    // Rules that mean something for shipped code and only add noise to tests.
+    // Everything else, `no-explicit-any` and the `no-unsafe-*` family included,
+    // applies to test files as it does to src.
+    files: ['src/**/*.test.ts'],
+    rules: {
+      // Test strings are fixtures, not UI text ("hello", "Basic emojis").
+      'obsidianmd/ui/sentence-case': 'off',
+      // Tests run in node or jsdom, never in a popout window; some stub
+      // `window` itself (cm6-bridge.test.ts), so `window.setTimeout` would hit the stub.
+      'obsidianmd/prefer-window-timers': 'off',
+      // `expect(obj.method)` and `vi.spyOn(obj, "method")` read a method
+      // without calling it, and prototype tests name `toString` on purpose.
+      '@typescript-eslint/unbound-method': 'off',
     },
   },
 ];

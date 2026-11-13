@@ -84,7 +84,7 @@ function packageRow(root: HTMLElement, label: string): HTMLElement {
 function rowButton(row: HTMLElement, text: string): HTMLButtonElement {
     const btn = Array.from(row.querySelectorAll("button")).find(
         (b) => b.textContent === text,
-    ) as HTMLButtonElement | undefined;
+    );
     if (!btn) throw new Error(`Row button "${text}" not found`);
     return btn;
 }

@@ -33,7 +33,6 @@ interface SiteCheckModule {
     ) => string[];
 }
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const siteCheck = require("../../scripts/site-check.cjs") as SiteCheckModule;
 const {
     SITE_URL,
@@ -328,7 +327,6 @@ describe("site-check — runChecks, mutated fixtures each fail on exactly one ru
 });
 
 describe("assemble-site — substitutePlaceholders", () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { substitutePlaceholders } = require("../../scripts/assemble-site.cjs") as {
         substitutePlaceholders: (html: string, manifest: { version: string; minAppVersion: string }) => string;
     };

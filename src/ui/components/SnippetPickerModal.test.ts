@@ -4,6 +4,7 @@ import { makeMockApp, makeMockEditor } from "../../test/factories/plugin";
 import { makeSnippet, makeSnippetCollection } from "../../test/factories/snippet";
 import { SnippetPickerModal } from "./SnippetPickerModal";
 import type { App } from "obsidian";
+import { nth } from "../../test/helpers";
 import type { SnippetItem } from "../../types";
 
 /**
@@ -105,8 +106,8 @@ describe("SnippetPickerModal — WAI-ARIA combobox/listbox pattern (A-006)", () 
             expect(row.getAttribute("role")).toBe("option");
         });
         // First row is selected by default.
-        expect(rows[0].getAttribute("aria-selected")).toBe("true");
-        expect(rows[1].getAttribute("aria-selected")).toBe("false");
+        expect(nth(rows, 0).getAttribute("aria-selected")).toBe("true");
+        expect(nth(rows, 1).getAttribute("aria-selected")).toBe("false");
     });
 
     it("points aria-activedescendant at the currently selected row", () => {
@@ -142,10 +143,10 @@ describe("SnippetPickerModal — WAI-ARIA combobox/listbox pattern (A-006)", () 
         const rows = modal.contentEl.querySelectorAll(".snippet-item");
 
         input.dispatchEvent(new KeyboardEvent("keydown", { key: "End" }));
-        expect(rows[rows.length - 1].getAttribute("aria-selected")).toBe("true");
+        expect(nth(rows, rows.length - 1).getAttribute("aria-selected")).toBe("true");
 
         input.dispatchEvent(new KeyboardEvent("keydown", { key: "Home" }));
-        expect(rows[0].getAttribute("aria-selected")).toBe("true");
+        expect(nth(rows, 0).getAttribute("aria-selected")).toBe("true");
     });
 });
 
@@ -278,7 +279,7 @@ describe("SnippetPickerModal — search filters live", () => {
 
         const rows = modal.contentEl.querySelectorAll(".snippet-item");
         expect(rows.length).toBe(1);
-        expect(rows[0].textContent).toContain(":hello");
+        expect(nth(rows, 0).textContent).toContain(":hello");
     });
 
     it("renders an empty state when the query matches nothing", async () => {

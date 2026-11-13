@@ -1,8 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { tryExpandAtSeparator } from "../../adapters/obsidian-editor";
-import type { Editor } from "obsidian";
 import type { Dict } from "../../engine/types";
-import { makeMockEditor } from "../factories/editor";
+import { asEditor, makeMockEditor } from "../factories/editor";
 
 /**
  * Integration tests for the snippet expansion flow.
@@ -52,7 +51,7 @@ function typeTextEndingWithSeparator(text: string) {
 }
 
 async function expand(editor: ReturnType<typeof typeTextEndingWithSeparator>, dict: Dict) {
-    await tryExpandAtSeparator(editor as unknown as Editor, dict, { now: FIXED_NOW });
+    await tryExpandAtSeparator(asEditor(editor), dict, { now: FIXED_NOW });
 }
 
 describe("integration: keystroke → expansion (happy path)", () => {

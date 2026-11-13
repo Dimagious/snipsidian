@@ -21,7 +21,7 @@ import { describe, it, expect } from "vitest";
 describe("test environment: jsdom is wired up for UI tests", () => {
     it("exposes a DOM `document` global", () => {
         expect(typeof document).toBe("object");
-        expect(document.createElement).toBeInstanceOf(Function);
+        expect(document.createElement("div")).toBeInstanceOf(HTMLElement);
     });
 
     it("supports basic DOM operations (createElement / appendChild / classList)", () => {

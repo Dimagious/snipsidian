@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { makeMockPlugin } from "../../test/factories/plugin";
 import { PackagePreviewModal } from "./Modals";
 import type { DiffResult } from "../../store/diff";
+import { nth } from "../../test/helpers";
+import type { App } from "obsidian";
 import type SnipSidianPlugin from "../../main";
 
 /**
@@ -27,7 +29,7 @@ beforeEach(() => {
 
 function mount(diff: DiffResult): PackagePreviewModal {
     const modal = new PackagePreviewModal(
-        plugin.app,
+        plugin.app as unknown as App,
         plugin as unknown as SnipSidianPlugin,
         "Markdown Essentials",
         diff,
@@ -106,9 +108,9 @@ describe("PackagePreviewModal — bulk actions update selects in place", () => {
         const selects = modal.contentEl.querySelectorAll<HTMLSelectElement>(
             ".snipsidian-conflict-choice",
         );
-        selects[0].value = "overwrite";
-        selects[0].dispatchEvent(new Event("change"));
-        expect(selects[0].value).toBe("overwrite");
+        nth(selects, 0).value = "overwrite";
+        nth(selects, 0).dispatchEvent(new Event("change"));
+        expect(nth(selects, 0).value).toBe("overwrite");
 
         const keepAll = Array.from(
             modal.contentEl.querySelectorAll<HTMLButtonElement>(
@@ -176,7 +178,7 @@ describe("PackagePreviewModal — conflict cards", () => {
         const cards = modal.contentEl.querySelectorAll(".snipsidian-conflict-card");
         expect(cards.length).toBe(1);
 
-        const card = cards[0];
+        const card = nth(cards, 0);
         expect(card.querySelector(".snipsidian-conflict-key")?.textContent).toBe("Pack/c0");
         expect(
             card.querySelector(".snipsidian-conflict-key-group")?.textContent,
@@ -215,8 +217,8 @@ describe("PackagePreviewModal — conflict cards", () => {
         const selects = modal.contentEl.querySelectorAll<HTMLSelectElement>(
             ".snipsidian-conflict-choice",
         );
-        selects[0].value = "overwrite";
-        selects[0].dispatchEvent(new Event("change"));
+        nth(selects, 0).value = "overwrite";
+        nth(selects, 0).dispatchEvent(new Event("change"));
 
         const apply = Array.from(
             modal.contentEl.querySelectorAll<HTMLButtonElement>(

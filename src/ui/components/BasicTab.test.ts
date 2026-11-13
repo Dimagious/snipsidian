@@ -111,7 +111,7 @@ function rowByTitle(root: HTMLElement, title: string): HTMLElement {
 function buttonInRow(row: HTMLElement, text: string): HTMLButtonElement {
     const btn = Array.from(row.querySelectorAll("button")).find((b) => b.textContent === text);
     if (!btn) throw new Error(`Button "${text}" not found in row`);
-    return btn as HTMLButtonElement;
+    return btn;
 }
 
 async function click(btn: HTMLButtonElement) {
@@ -247,9 +247,9 @@ describe("BasicTab — onDeclarativeChange callback (finding #2)", () => {
 
         // The import flow opens `ImportPreviewModal` and waits for the
         // user to click Apply — click it (defaults to merge mode).
-        const apply = document.querySelector(
+        const apply = document.querySelector<HTMLButtonElement>(
             ".modal-button-container .mod-cta",
-        ) as HTMLButtonElement | null;
+        );
         expect(apply).toBeTruthy();
         apply!.click();
         await Promise.resolve();
@@ -445,8 +445,7 @@ describe("BasicTab — Export snippets on mobile (B-144)", () => {
 
     afterEach(() => {
         Platform.isDesktop = originalIsDesktop;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- cleanup only, test stub shape
-        delete (navigator as any).clipboard;
+        Reflect.deleteProperty(navigator, "clipboard");
     });
 
     function exportButton(root: HTMLElement): HTMLButtonElement {
@@ -498,7 +497,7 @@ describe("BasicTab — Export snippets on mobile (B-144)", () => {
             if (path === "snipsidian-snippets.json") {
                 throw new Error("File already exists");
             }
-            return undefined as never;
+            return undefined;
         });
         exportButton(root).click();
         await flushExport();
@@ -529,7 +528,7 @@ describe("BasicTab — Export snippets on mobile (B-144)", () => {
         await flushExport();
 
         expect(writeText).toHaveBeenCalledTimes(1);
-        expect(JSON.parse(writeText.mock.calls[0][0] as string)).toEqual({ hello: "world" });
+        expect(JSON.parse(String(writeText.mock.calls[0]?.[0]))).toEqual({ hello: "world" });
         expect(noticeCalls).toContain("Export copied to clipboard");
     });
 
@@ -592,8 +591,7 @@ describe("BasicTab — Set hotkey prefills the Hotkeys search box", () => {
     });
 
     it("does not throw when the returned tab has neither setQuery nor searchComponent", () => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- deliberately shape-mismatched internal-API stub
-        vi.spyOn(app.setting, "openTabById").mockReturnValue({} as any);
+        vi.spyOn(app.setting, "openTabById").mockReturnValue({});
         const { root } = mount();
 
         expect(() => setHotkeyButton(root, "Set hotkey for Insert snippet").click()).not.toThrow();
@@ -638,8 +636,7 @@ describe("BasicTab — Reveal data file (B-047)", () => {
             // vault. jsdom never has `window.require("electron")`
             // either way, so both branches fail; this one fails
             // earlier.
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- deliberately shape-mismatched adapter for this branch
-            (plugin.app.vault as any).adapter = {};
+            Reflect.set(plugin.app.vault, "adapter", {});
 
             buttonInRow(rowByTitle(root, "Reveal data file"), "Show in folder").click();
 
@@ -694,8 +691,7 @@ describe("BasicTab — Reveal data file (B-047)", () => {
             );
         } finally {
             errorSpy.mockRestore();
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- cleanup only, test stub shape
-            delete (navigator as any).clipboard;
+            Reflect.deleteProperty(navigator, "clipboard");
         }
     });
 });

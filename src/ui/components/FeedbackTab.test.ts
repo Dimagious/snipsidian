@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi, type MockInstance } from "vitest";
+import { nth } from "../../test/helpers";
 import { makeMockPlugin } from "../../test/factories/plugin";
 import { FeedbackTab } from "./FeedbackTab";
 import type { App } from "obsidian";
@@ -24,7 +25,7 @@ import type SnipSidianPlugin from "../../main";
 
 let plugin: ReturnType<typeof makeMockPlugin>;
 let app: App;
-let windowOpenSpy: ReturnType<typeof vi.spyOn>;
+let windowOpenSpy: MockInstance<typeof window.open>;
 
 beforeEach(() => {
     document.body.innerHTML = "";
@@ -57,7 +58,7 @@ function rowByTitle(root: HTMLElement, title: string): HTMLElement {
 function buttonInRow(row: HTMLElement, text: string): HTMLButtonElement {
     const btn = Array.from(row.querySelectorAll("button")).find((b) => b.textContent === text);
     if (!btn) throw new Error(`Button "${text}" not found in row`);
-    return btn as HTMLButtonElement;
+    return btn;
 }
 
 describe("FeedbackTab — shape (UI redesign, B-153)", () => {
@@ -89,7 +90,7 @@ describe("FeedbackTab — Feedback rows", () => {
         buttonInRow(row, "Open issue").click();
 
         expect(windowOpenSpy).toHaveBeenCalledTimes(1);
-        const [url] = windowOpenSpy.mock.calls[0] as [string, string, string];
+        const [url] = nth(windowOpenSpy.mock.calls, 0);
         expect(url).toContain("github.com");
         expect(url).toContain("issues/new");
     });

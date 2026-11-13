@@ -12,8 +12,10 @@ import type { SnipSidianSettings } from "../types";
 
 describe("store/snippets", () => {
     it("getDict returns settings.snippets or {}", () => {
-        expect(getDict({ snippets: { a: "1" } } as any)).toEqual({ a: "1" });
-        expect(getDict({ snippets: undefined } as any)).toEqual({});
+        expect(getDict({ snippets: { a: "1" } })).toEqual({ a: "1" });
+        // data.json written before `snippets` existed: the type forbids it, the loader can still hand it over
+        const withoutSnippets = { snippets: undefined } as unknown as SnipSidianSettings;
+        expect(getDict(withoutSnippets)).toEqual({});
     });
 
     it("getDict keeps first trigger when the same trigger exists in multiple groups", () => {
@@ -22,7 +24,7 @@ describe("store/snippets", () => {
                 "zeta/dup": "z",
                 "alpha/dup": "a"
             }
-        } as any;
+        };
         expect(getDict(settings)).toEqual({ dup: "a" });
     });
 
@@ -39,7 +41,7 @@ describe("store/snippets", () => {
                 "personal/sig": "Cheers",
                 "hello": "Hello"
             }
-        } as any;
+        };
 
         expect(hasTriggerCollision(settings, "sig")).toBe(true);
         expect(hasTriggerCollision(settings, "sig", "work/sig")).toBe(true);
@@ -54,7 +56,7 @@ describe("store/snippets", () => {
                 "personal/sig": "Cheers",
                 "hello": "Hello"
             }
-        } as any;
+        };
 
         expect(hasReplacementCollision(settings, "sig", "Best")).toBe(true);
         expect(hasReplacementCollision(settings, "sig", "Best", "personal/sig")).toBe(false);
