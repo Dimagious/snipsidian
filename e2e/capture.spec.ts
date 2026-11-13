@@ -265,3 +265,66 @@ for (const mode of BOTH) {
     });
     });
 }
+
+/**
+ * The pictures of the community directory listing: the whole window, dark, 2400 x 1600 (the directory shows 3:2).
+ * `opdk demo` copies them to `docs/listing` (`demo.outputs.listing`); the listing itself is updated by hand.
+ */
+test.describe("listing", () => {
+    const mode: Mode = "dark";
+    test.use({
+        seed: {
+            files: {
+                [DATA_PATH]: dataJson(libraryForStills()),
+                [APPEARANCE_PATH]: appearanceFile(mode),
+            },
+            // The note starts with its own heading: Obsidian's inline title above it would show the name twice.
+            config: { showInlineTitle: false },
+        },
+    });
+    const WINDOW = { settle: true, cursor: false, out: "listing" } as const;
+
+    test("listing: note, picker, settings, Snippets and Packages", async ({ win, obsidian, demo }) => {
+        const shoot = shooter(win, obsidian, demo);
+        await setUp(obsidian, (date) => demo.freezeTime(date));
+        await demo.themes([mode], async () => {
+            await obsidian.openFile("Weekly sync.md");
+            await expect(win.locator(".markdown-source-view .callout").first()).toBeVisible();
+            await win.mouse.move(2, 2);
+            await obsidian.settle();
+            await shoot("listing-1-note", mode, WINDOW);
+
+            await obsidian.runCommand("snipsidian:insert-snippet");
+            const filter = win.locator(".snippet-picker-modal input[role='combobox']");
+            await expect(filter).toBeVisible();
+            await filter.fill("dj");
+            await expect(win.locator(".snippet-picker-modal .snippet-item[aria-selected='true'] .snippet-name")).toHaveText("dj");
+            await shoot("listing-2-picker", mode, WINDOW);
+            await win.keyboard.press("Escape");
+            await expect(win.locator(".snippet-picker-modal")).toHaveCount(0);
+
+            await obsidian.openSettings("snipsidian");
+            await paintedAs(win, mode);
+            await obsidian.settle();
+            await shoot("listing-3-settings", mode, WINDOW);
+
+            await openSettingsPage(win, "Snippets");
+            const page = win.locator(".setting-page.vertical-tab-content");
+            await page.getByRole("button", { name: "Expand group Journal" }).click();
+            await page.getByRole("button", { name: "Expand group Meetings" }).click();
+            await win.mouse.move(2, 2);
+            await obsidian.settle();
+            await shoot("listing-4-snippets", mode, WINDOW);
+            await obsidian.closeSettings();
+
+            await obsidian.openSettings("snipsidian");
+            await paintedAs(win, mode);
+            await openSettingsPage(win, "Packages");
+            await expect(win.locator(".setting-page.vertical-tab-content .package-row")).toHaveCount(13);
+            await win.mouse.move(2, 2);
+            await obsidian.settle();
+            await shoot("listing-5-packages", mode, WINDOW);
+            await obsidian.closeSettings();
+        });
+    });
+});

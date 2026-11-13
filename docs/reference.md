@@ -273,7 +273,7 @@ npm run build      # main.js + styles.css
 | | |
 |---|---|
 | `npm run e2e` | the suite against a real Obsidian |
-| `npm run capture` | retakes the site pictures (`site/img/*-light.png`, `*-dark.png`) from the real Obsidian on a fixed day (`e2e/capture.spec.ts`), then `opdk demo` copies them. The spec is skipped by `npm run e2e` |
+| `npm run capture` | retakes the site pictures (`site/img/*-light.png`, `*-dark.png`) and the directory listing pictures (`docs/listing/`) from the real Obsidian on a fixed day (`e2e/capture.spec.ts`), then `opdk demo` copies them. The listing itself is updated by hand. The spec is skipped by `npm run e2e` |
 | `npm run scorecard:check` | `opdk scan`: mirrors the community-plugin review scanner |
 | `npm run release:check` | `opdk release check` (versions, `versions.json`, manifest, CHANGELOG, a reproducible build), the scan, lint, typecheck, tests and the site check |
 
