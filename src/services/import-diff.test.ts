@@ -108,9 +108,10 @@ describe("filterImportKeys / computeImportDiff trigger checks (B-177)", () => {
     it.each(["-", "+", ">", "*", "|"])("rejects the bare structural trigger %s", (t) => {
         const { accepted, rejected } = filterImportKeys({ [t]: "x" });
         expect(accepted).toEqual({});
-        expect(rejected).toEqual([
-            { key: t, reason: expect.stringContaining("would rewrite Markdown") },
-        ]);
+        expect(rejected).toHaveLength(1);
+        expect(rejected[0]?.key).toBe(t);
+        expect(rejected[0]?.reason).toContain("would rewrite Markdown");
+        expect(Object.keys(rejected[0] ?? {}).sort()).toEqual(["key", "reason"]);
     });
 
     it.each(["--", "->", ">=", "g/->"])("accepts %s", (k) => {

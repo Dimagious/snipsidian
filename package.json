@@ -20,7 +20,7 @@
         "e2e": "npm run build && playwright test",
         "e2e:headed": "npm run build && playwright test --headed",
         "e2e:typecheck": "tsc --noEmit -p tsconfig.e2e.json",
-        "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.e2e.json",
+        "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.e2e.json",
         "it": "npm run build && npm --prefix integration ci && npm --prefix integration run it",
         "it:matrix": "npm run build && npm --prefix integration ci && npm --prefix integration run it:matrix",
         "it:android": "npm run build && npm --prefix integration ci && npm --prefix integration run it:android",

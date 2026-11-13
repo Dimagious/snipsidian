@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
 import { makeMockApp } from "../../test/factories/plugin";
 import { ImportPreviewModal } from "./Modals";
 import type { App } from "obsidian";
@@ -30,12 +30,15 @@ beforeEach(() => {
     app = makeMockApp() as unknown as App;
 });
 
+type ImportConfirm = (mode: "replace" | "merge") => void;
+type ConfirmMock = Mock<ImportConfirm>;
+
 function mount(opts: {
     current?: Record<string, string>;
     incoming: Record<string, string>;
-    onConfirm?: ReturnType<typeof vi.fn>;
-}): { modal: ImportPreviewModal; onConfirm: ReturnType<typeof vi.fn> } {
-    const onConfirm = opts.onConfirm ?? vi.fn();
+    onConfirm?: ConfirmMock;
+}): { modal: ImportPreviewModal; onConfirm: ConfirmMock } {
+    const onConfirm = opts.onConfirm ?? vi.fn<ImportConfirm>();
     const modal = new ImportPreviewModal(app, {
         current: opts.current ?? {},
         incoming: opts.incoming,
@@ -50,15 +53,13 @@ function mount(opts: {
  *  match by class rather than label text. */
 function clickApply(modal: ImportPreviewModal): void {
     const apply = modal.contentEl
-        .querySelector(".modal-button-container .mod-cta") as HTMLButtonElement | null;
+        .querySelector<HTMLButtonElement>(".modal-button-container .mod-cta");
     if (!apply) throw new Error("Apply button not found in modal");
     apply.click();
 }
 
 function pickMode(modal: ImportPreviewModal, value: "merge" | "replace"): void {
-    const radio = modal.contentEl.querySelector(
-        `input[name="snipsy-import-mode"][value="${value}"]`,
-    ) as HTMLInputElement | null;
+    const radio = modal.contentEl.querySelector<HTMLInputElement>(`input[name="snipsy-import-mode"][value="${value}"]`);
     if (!radio) throw new Error(`mode radio "${value}" not found`);
     radio.checked = true;
     radio.dispatchEvent(new Event("change"));

@@ -29,6 +29,18 @@ import { isTypingUserEvent, shouldAttemptExpansion } from "./change-source-gate"
  * minus rendering.
  */
 
+/** CM6 types a decoration's `spec` as `any`; read the one field these tests need. */
+function decorationClass(spec: unknown): string {
+    if (typeof spec === "object" && spec !== null && "class" in spec) return String(spec.class);
+    return "";
+}
+
+function isReadyTransaction(
+    arg: Transaction | readonly Transaction[] | TransactionSpec,
+): arg is Transaction | readonly Transaction[] {
+    return arg instanceof Transaction || Array.isArray(arg);
+}
+
 class Harness {
     state: EditorState;
     composing = false;
@@ -43,11 +55,22 @@ class Harness {
         });
     }
 
-    dispatch = (spec: TransactionSpec): void => {
-        const tr = this.state.update(spec);
+    // Same three overloads as `EditorView.dispatch`, so a Harness satisfies
+    // `Pick<EditorView, "dispatch">` without a cast. Only specs are
+    // applied: no test hands it a ready-made Transaction.
+    dispatch(tr: Transaction): void;
+    dispatch(trs: readonly Transaction[]): void;
+    dispatch(...specs: TransactionSpec[]): void;
+    dispatch(...args: Array<Transaction | readonly Transaction[] | TransactionSpec>): void {
+        const specs: TransactionSpec[] = [];
+        for (const arg of args) {
+            if (isReadyTransaction(arg)) throw new Error("Harness.dispatch takes specs only");
+            specs.push(arg);
+        }
+        const tr = this.state.update(...specs);
         this.transactions.push(tr);
         this.state = tr.state;
-    };
+    }
 
     get text(): string {
         return this.state.doc.toString();
@@ -119,7 +142,7 @@ describe("expansion-mark: mark creation", () => {
         for (const set of sets) {
             const iter = set.iter();
             while (iter.value) {
-                ranges.push({ from: iter.from, to: iter.to, cls: iter.value.spec.class });
+                ranges.push({ from: iter.from, to: iter.to, cls: decorationClass(iter.value.spec) });
                 iter.next();
             }
         }

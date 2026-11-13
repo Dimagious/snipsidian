@@ -21,6 +21,7 @@ import {
     ConfirmModal,
     computeTriggerHint,
 } from "./Modals";
+import { nth } from "../../test/helpers";
 import type { App } from "obsidian";
 
 let app: App;
@@ -540,10 +541,10 @@ describe("GroupPickerModal", () => {
         const select = getSelect(modal);
         // Ungrouped + 2 groups + "New group…"
         expect(select.options.length).toBe(4);
-        expect(select.options[0].value).toBe("");                  // ungrouped
-        expect(select.options[1].value).toBe("work");
-        expect(select.options[2].value).toBe("personal");
-        expect(select.options[3].value).toBe("__new__");
+        expect(nth(select.options, 0).value).toBe("");                  // ungrouped
+        expect(nth(select.options, 1).value).toBe("work");
+        expect(nth(select.options, 2).value).toBe("personal");
+        expect(nth(select.options, 3).value).toBe("__new__");
     });
 
     it("Move forwards the selected group key to onSubmit", () => {

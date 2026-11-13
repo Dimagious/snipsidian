@@ -24,7 +24,12 @@ import {
 } from "./community-packages";
 import { loadCommunityPackagesFromGitHub } from "./community-api";
 
-import { requestUrl } from "obsidian";
+import { requestUrl, type RequestUrlResponse } from "obsidian";
+
+/** A `requestUrl` result with the two fields the loaders read. */
+function reply(status: number, text: string): RequestUrlResponse {
+  return { status, text, headers: {}, arrayBuffer: new ArrayBuffer(0), json: undefined };
+}
 
 describe("community-packages", () => {
   beforeEach(() => {
@@ -70,7 +75,7 @@ describe("community-packages", () => {
         settings: {},
         saveSettings: vi.fn().mockRejectedValue(new Error("disk full")),
       };
-      vi.mocked(requestUrl).mockResolvedValue({ status: 200, text: "[]" } as any);
+      vi.mocked(requestUrl).mockResolvedValue(reply(200, "[]"));
 
       const result = await loadAllCommunityPackages(mockPlugin);
       expect(result.source).toBe("fallback");
@@ -102,29 +107,23 @@ snippets:
 `;
 
       vi.mocked(requestUrl)
-        .mockResolvedValueOnce({
-          status: 200,
-          text: JSON.stringify(mockFiles)
-        } as any)
-        .mockResolvedValueOnce({
-          status: 200,
-          text: mockYamlContent
-        } as any);
+        .mockResolvedValueOnce(reply(200, JSON.stringify(mockFiles)))
+        .mockResolvedValueOnce(reply(200, mockYamlContent));
 
       const result = await loadCommunityPackagesFromGitHub();
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error("unreachable");
       expect(result.packages).toHaveLength(1);
-      expect(result.packages[0].label).toBe("Basic Emojis");
+      expect(result.packages[0]?.label).toBe("Basic Emojis");
       // B-117: leading `:` is stripped on convert so `:smile` becomes
       // `smile` — the form Snipsy's engine can actually match.
-      expect(result.packages[0].snippets).toHaveProperty("smile", "😄");
-      expect(result.packages[0].snippets).not.toHaveProperty(":smile");
+      expect(result.packages[0]?.snippets).toHaveProperty("smile", "😄");
+      expect(result.packages[0]?.snippets).not.toHaveProperty(":smile");
     });
 
     it("returns not_found on HTTP 404 (genuine empty-catalog)", async () => {
-      vi.mocked(requestUrl).mockResolvedValue({ status: 404, text: "" } as any);
+      vi.mocked(requestUrl).mockResolvedValue(reply(404, ""));
 
       const result = await loadCommunityPackagesFromGitHub();
 
@@ -136,7 +135,7 @@ snippets:
 
     it("returns rate_limited on HTTP 403 (the iOS-mobile foot-gun)", async () => {
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      vi.mocked(requestUrl).mockResolvedValue({ status: 403, text: "" } as any);
+      vi.mocked(requestUrl).mockResolvedValue(reply(403, ""));
 
       const result = await loadCommunityPackagesFromGitHub();
 
@@ -149,7 +148,7 @@ snippets:
 
     it("returns rate_limited on HTTP 429 too", async () => {
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      vi.mocked(requestUrl).mockResolvedValue({ status: 429, text: "" } as any);
+      vi.mocked(requestUrl).mockResolvedValue(reply(429, ""));
 
       const result = await loadCommunityPackagesFromGitHub();
 
@@ -161,7 +160,7 @@ snippets:
 
     it("returns http for non-2xx that isn't 403/404/429", async () => {
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      vi.mocked(requestUrl).mockResolvedValue({ status: 500, text: "" } as any);
+      vi.mocked(requestUrl).mockResolvedValue(reply(500, ""));
 
       const result = await loadCommunityPackagesFromGitHub();
 
@@ -186,7 +185,7 @@ snippets:
 
     it("returns parse when listing JSON is malformed", async () => {
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      vi.mocked(requestUrl).mockResolvedValue({ status: 200, text: "{not json" } as any);
+      vi.mocked(requestUrl).mockResolvedValue(reply(200, "{not json"));
 
       const result = await loadCommunityPackagesFromGitHub();
 
@@ -205,14 +204,8 @@ snippets:
       ];
 
       vi.mocked(requestUrl)
-        .mockResolvedValueOnce({
-          status: 200,
-          text: JSON.stringify(mockFiles)
-        } as any)
-        .mockResolvedValueOnce({
-          status: 200,
-          text: "invalid: yaml: content: ["
-        } as any);
+        .mockResolvedValueOnce(reply(200, JSON.stringify(mockFiles)))
+        .mockResolvedValueOnce(reply(200, "invalid: yaml: content: ["));
 
       const result = await loadCommunityPackagesFromGitHub();
 
@@ -237,14 +230,8 @@ snippets: []
 `;
 
       vi.mocked(requestUrl)
-        .mockResolvedValueOnce({
-          status: 200,
-          text: JSON.stringify(mockFiles)
-        } as any)
-        .mockResolvedValueOnce({
-          status: 200,
-          text: mockYamlContent
-        } as any);
+        .mockResolvedValueOnce(reply(200, JSON.stringify(mockFiles)))
+        .mockResolvedValueOnce(reply(200, mockYamlContent));
 
       const result = await loadCommunityPackagesFromGitHub();
 
@@ -268,10 +255,7 @@ snippets: []
       // First call returns the directory listing with a hostile download_url.
       // If the allowlist works, NO second `requestUrl` should fire — so we
       // intentionally don't mock a second response.
-      vi.mocked(requestUrl).mockResolvedValueOnce({
-        status: 200,
-        text: JSON.stringify(mockFiles),
-      } as any);
+      vi.mocked(requestUrl).mockResolvedValueOnce(reply(200, JSON.stringify(mockFiles)));
 
       const result = await loadCommunityPackagesFromGitHub();
 
@@ -296,10 +280,7 @@ snippets: []
         },
       ];
 
-      vi.mocked(requestUrl).mockResolvedValueOnce({
-        status: 200,
-        text: JSON.stringify(mockFiles),
-      } as any);
+      vi.mocked(requestUrl).mockResolvedValueOnce(reply(200, JSON.stringify(mockFiles)));
 
       const result = await loadCommunityPackagesFromGitHub();
       expect(result.ok).toBe(true);
@@ -324,11 +305,8 @@ snippets: []
       ];
 
       vi.mocked(requestUrl)
-        .mockResolvedValueOnce({ status: 200, text: JSON.stringify(mockFiles) } as any)
-        .mockResolvedValueOnce({
-          status: 200,
-          text: "name: OK\nsnippets:\n  - trigger: brb\n    replace: be right back\n",
-        } as any);
+        .mockResolvedValueOnce(reply(200, JSON.stringify(mockFiles)))
+        .mockResolvedValueOnce(reply(200, "name: OK\nsnippets:\n  - trigger: brb\n    replace: be right back\n"));
 
       // Must resolve (not reject) and return the one valid package.
       const result = await loadCommunityPackagesFromGitHub();
@@ -349,11 +327,8 @@ snippets: []
       ];
 
       vi.mocked(requestUrl)
-        .mockResolvedValueOnce({ status: 200, text: JSON.stringify(mockFiles) } as any)
-        .mockResolvedValueOnce({
-          status: 200,
-          text: "name: OK yaml\nsnippets:\n  - trigger: brb\n    replace: be right back\n",
-        } as any);
+        .mockResolvedValueOnce(reply(200, JSON.stringify(mockFiles)))
+        .mockResolvedValueOnce(reply(200, "name: OK yaml\nsnippets:\n  - trigger: brb\n    replace: be right back\n"));
 
       const result = await loadCommunityPackagesFromGitHub();
       expect(result.ok).toBe(true);
@@ -393,7 +368,7 @@ snippets: []
 
       expect(result.source).toBe("cache");
       expect(result.packages).toHaveLength(1);
-      expect(result.packages[0].label).toBe("Cached Package");
+      expect(result.packages[0]?.label).toBe("Cached Package");
       expect(requestUrl).not.toHaveBeenCalled();
     });
 
@@ -411,10 +386,7 @@ snippets: []
         saveSettings: vi.fn()
       };
 
-      vi.mocked(requestUrl).mockResolvedValue({
-        status: 200,
-        text: JSON.stringify([])
-      } as any);
+      vi.mocked(requestUrl).mockResolvedValue(reply(200, JSON.stringify([])));
 
       const result = await loadCommunityPackagesWithCache(mockPlugin);
 
@@ -431,10 +403,7 @@ snippets: []
         saveSettings: vi.fn()
       };
 
-      vi.mocked(requestUrl).mockResolvedValue({
-        status: 200,
-        text: JSON.stringify([])
-      } as any);
+      vi.mocked(requestUrl).mockResolvedValue(reply(200, JSON.stringify([])));
 
       const result = await loadCommunityPackagesWithCache(mockPlugin);
 
@@ -451,10 +420,7 @@ snippets: []
         saveSettings: vi.fn()
       };
 
-      vi.mocked(requestUrl).mockResolvedValue({
-        status: 404,
-        text: ""
-      } as any);
+      vi.mocked(requestUrl).mockResolvedValue(reply(404, ""));
 
       const result = await loadCommunityPackagesWithCache(mockPlugin);
 
@@ -487,7 +453,7 @@ snippets: []
         saveSettings: vi.fn()
       };
 
-      vi.mocked(requestUrl).mockResolvedValue({ status: 403, text: "" } as any);
+      vi.mocked(requestUrl).mockResolvedValue(reply(403, ""));
 
       const result = await loadCommunityPackagesWithCache(mockPlugin);
 
@@ -538,7 +504,7 @@ snippets: []
         saveSettings: vi.fn()
       };
 
-      vi.mocked(requestUrl).mockResolvedValue({ status: 500, text: "" } as any);
+      vi.mocked(requestUrl).mockResolvedValue(reply(500, ""));
 
       const result = await loadCommunityPackagesWithCache(mockPlugin);
 

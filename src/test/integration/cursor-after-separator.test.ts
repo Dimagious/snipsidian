@@ -1,8 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { tryExpandAtSeparator } from "../../adapters/obsidian-editor";
-import type { Editor } from "obsidian";
 import type { Dict } from "../../engine/types";
-import { makeMockEditor } from "../factories/editor";
+import { asEditor, makeMockEditor } from "../factories/editor";
 
 /**
  * B-182: after an expansion without `$|` the cursor must sit right AFTER the
@@ -23,7 +22,7 @@ async function expandAt(
     prefix?: string,
 ): Promise<ReturnType<typeof makeMockEditor>> {
     const editor = makeMockEditor({ text, cursor });
-    await tryExpandAtSeparator(editor as unknown as Editor, dict, { now: NOW, prefix });
+    await tryExpandAtSeparator(asEditor(editor), dict, { now: NOW, prefix });
     return editor;
 }
 

@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  // Wider lib than the build: the tests iterate NodeLists (DOM.Iterable). The build config still runs first in
+  // `npm run typecheck`, so production code is checked against the narrower lib.
+  "compilerOptions": { "lib": ["ES2022", "DOM", "DOM.Iterable"], "noEmit": true },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "coverage", "dist", "main.js", "scripts/**"]
+}

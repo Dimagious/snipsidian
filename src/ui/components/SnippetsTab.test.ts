@@ -31,6 +31,8 @@ import type SnipSidianPlugin from "../../main";
  */
 
 let plugin: SnipSidianPlugin;
+// The mock's save snapshots; `plugin` is typed as the real class, which has no such member.
+let saves: ReturnType<typeof makeMockPlugin>["_saveCalls"];
 let app: App;
 let root: HTMLDivElement;
 
@@ -48,6 +50,7 @@ function mount(
         settings: { snippets: initialSnippets },
     });
     plugin = mockPlugin as unknown as SnipSidianPlugin;
+    saves = mockPlugin._saveCalls;
     app = mockPlugin.app as unknown as App;
     const tab = new SnippetsTab(app, plugin);
     tab.render(root);
@@ -71,7 +74,7 @@ function findRow(triggerName: string): HTMLElement | null {
 function findRowEditButton(triggerName: string): HTMLButtonElement | null {
     const row = findRow(triggerName);
     if (!row) return null;
-    return row.querySelector('[aria-label^="Edit snippet"]') as HTMLButtonElement | null;
+    return row.querySelector<HTMLButtonElement>('[aria-label^="Edit snippet"]');
 }
 
 function expandGroup(groupTitle: string): void {
@@ -292,6 +295,7 @@ describe("SnippetsTab — redesign: muted-group flair + multi-line preview", () 
     ): void {
         const mockPlugin = makeMockPlugin({ settings: { snippets, disabledGroups } });
         plugin = mockPlugin as unknown as SnipSidianPlugin;
+        saves = mockPlugin._saveCalls;
         app = mockPlugin.app as unknown as App;
         new SnippetsTab(app, plugin).render(root);
     }
@@ -534,6 +538,7 @@ describe("SnippetsTab — per-group enable/disable (B-138)", () => {
             settings: { snippets, disabledGroups },
         });
         plugin = mockPlugin as unknown as SnipSidianPlugin;
+        saves = mockPlugin._saveCalls;
         app = mockPlugin.app as unknown as App;
         const tab = new SnippetsTab(app, plugin);
         tab.render(root);
@@ -556,15 +561,13 @@ describe("SnippetsTab — per-group enable/disable (B-138)", () => {
     // below reaches into it for the actual `<input>` that carries
     // `.checked` and fires `change`.
     function enableToggleFor(groupTitle: string): HTMLElement {
-        const toggle = groupHeaderFor(groupTitle).querySelector(
-            ".snipsy-group-enable-toggle",
-        ) as HTMLElement | null;
+        const toggle = groupHeaderFor(groupTitle).querySelector<HTMLElement>(".snipsy-group-enable-toggle");
         if (!toggle) throw new Error(`Enable toggle for "${groupTitle}" not found`);
         return toggle;
     }
 
     function enableCheckboxFor(groupTitle: string): HTMLInputElement {
-        const input = enableToggleFor(groupTitle).querySelector("input") as HTMLInputElement | null;
+        const input = enableToggleFor(groupTitle).querySelector<HTMLInputElement>("input");
         if (!input) throw new Error(`Enable checkbox for "${groupTitle}" not found`);
         return input;
     }
@@ -601,7 +604,7 @@ describe("SnippetsTab — per-group enable/disable (B-138)", () => {
         await flush();
 
         expect(plugin.settings.disabledGroups).toEqual(["work"]);
-        expect(plugin._saveCalls.length).toBe(1);
+        expect(saves.length).toBe(1);
         const groupEl = groupHeaderFor("Work").closest(".snippet-group");
         expect(groupEl?.classList.contains("snippet-group-disabled")).toBe(true);
     });
@@ -616,7 +619,7 @@ describe("SnippetsTab — per-group enable/disable (B-138)", () => {
         await flush();
 
         expect(plugin.settings.disabledGroups).toEqual([]);
-        expect(plugin._saveCalls.length).toBe(1);
+        expect(saves.length).toBe(1);
         checkbox = enableCheckboxFor("Work");
         expect(checkbox.checked).toBe(true);
         const groupEl = groupHeaderFor("Work").closest(".snippet-group");
@@ -828,7 +831,7 @@ describe("SnippetsTab — bulk delete + bulk move (B-142)", () => {
     function checkboxFor(triggerName: string): HTMLInputElement {
         const row = findRow(triggerName);
         if (!row) throw new Error(`Row "${triggerName}" not found`);
-        const cb = row.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+        const cb = row.querySelector<HTMLInputElement>('input[type="checkbox"]');
         if (!cb) throw new Error(`Checkbox for "${triggerName}" not found`);
         return cb;
     }
@@ -873,7 +876,7 @@ describe("SnippetsTab — bulk delete + bulk move (B-142)", () => {
         await flush();
 
         expect(plugin.settings.snippets).toEqual({ b: "2" });
-        expect(plugin._saveCalls.length).toBe(1);
+        expect(saves.length).toBe(1);
     });
 
     it("bulk delete leaves unselected snippets untouched", async () => {
@@ -901,7 +904,7 @@ describe("SnippetsTab — bulk delete + bulk move (B-142)", () => {
         modalConfirmButton("Cancel").click();
 
         expect(plugin.settings.snippets).toEqual({ a: "1", b: "2", c: "3" });
-        expect(plugin._saveCalls.length).toBe(0);
+        expect(saves.length).toBe(0);
     });
 
     it("selecting 2 of 3 snippets then bulk-moving them lands under the target group; the rest stay put", async () => {
@@ -929,7 +932,7 @@ describe("SnippetsTab — bulk delete + bulk move (B-142)", () => {
         expect(plugin.settings.snippets.c).toBeUndefined();
         // Untouched.
         expect(plugin.settings.snippets.b).toBe("2");
-        expect(plugin._saveCalls.length).toBe(1);
+        expect(saves.length).toBe(1);
     });
 });
 
@@ -1141,7 +1144,7 @@ describe("SnippetsTab — dead trigger warning (B-183)", () => {
         mount({ "g/:smile:": "😀", "g/other": "o" });
         expandGroup("G");
         (root.querySelector('[aria-label="Select snippets"]') as HTMLButtonElement).click();
-        const cb = findRow(":smile:")?.querySelector("input[type='checkbox']") as HTMLInputElement | null;
+        const cb = findRow(":smile:")?.querySelector<HTMLInputElement>("input[type='checkbox']");
         expect(cb).not.toBeNull();
         cb!.checked = true;
         cb!.dispatchEvent(new Event("change"));

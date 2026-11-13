@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi, type MockInstance } from "vitest";
+import { nth } from "../../../test/helpers";
 
 const noticeCalls: string[] = [];
 vi.mock("obsidian", async () => {
@@ -29,7 +30,7 @@ import type SnipSidianPlugin from "../../../main";
 
 let plugin: ReturnType<typeof makeMockPlugin>;
 let app: App;
-let windowOpenSpy: ReturnType<typeof vi.spyOn>;
+let windowOpenSpy: MockInstance<typeof window.open>;
 
 beforeEach(() => {
     document.body.innerHTML = "";
@@ -168,7 +169,7 @@ describe("PackageSubmissionSection — submit", () => {
         await Promise.resolve();
 
         expect(windowOpenSpy).toHaveBeenCalledTimes(1);
-        const [url] = windowOpenSpy.mock.calls[0] as [string, string, string];
+        const [url] = nth(windowOpenSpy.mock.calls, 0);
         expect(url).toContain("github.com");
         expect(url).toContain("issues/new");
     });

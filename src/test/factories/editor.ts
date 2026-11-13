@@ -10,6 +10,8 @@
  * here is cheap; modelling fold/transaction state is not necessary.
  */
 
+import type { Editor } from "obsidian";
+
 export interface CursorPos {
     line: number;
     ch: number;
@@ -205,4 +207,13 @@ export function makeMockEditor(opts: {
     }
     if (opts.selection) editor.selection = opts.selection;
     return editor;
+}
+
+/**
+ * The one place a `MockEditor` is presented as an `obsidian.Editor`. The
+ * mock models only the members Snipsy calls, so the production code's
+ * `Editor` parameter cannot accept it without this step.
+ */
+export function asEditor(mock: MockEditor): Editor {
+    return mock as unknown as Editor;
 }

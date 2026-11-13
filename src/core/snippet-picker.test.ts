@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { SnippetPickerService } from "./snippet-picker";
+import { nth } from "../test/helpers";
 import type { SnippetItem } from "../types";
 
 describe("SnippetPickerService", () => {
@@ -61,38 +62,38 @@ describe("SnippetPickerService", () => {
         it("should search by trigger", () => {
             const result = service.search({ text: "->" });
             expect(result.items).toHaveLength(1);
-            expect(result.items[0].trigger).toBe("->");
+            expect(nth(result.items, 0).trigger).toBe("->");
             expect(result.total).toBe(1);
         });
 
         it("should search by replacement", () => {
             const result = service.search({ text: "→" });
             expect(result.items).toHaveLength(1);
-            expect(result.items[0].replacement).toBe("→");
+            expect(nth(result.items, 0).replacement).toBe("→");
         });
 
         it("should search by folder", () => {
             const result = service.search({ text: "arrows" });
             expect(result.items).toHaveLength(1);
-            expect(result.items[0].folder).toBe("arrows");
+            expect(nth(result.items, 0).folder).toBe("arrows");
         });
 
         it("should search by keywords", () => {
             const result = service.search({ text: "heading" });
             expect(result.items).toHaveLength(1);
-            expect(result.items[0].trigger).toBe("h1");
+            expect(nth(result.items, 0).trigger).toBe("h1");
         });
 
         it("should be case insensitive", () => {
             const result = service.search({ text: "ARROW" });
             expect(result.items).toHaveLength(1);
-            expect(result.items[0].folder).toBe("arrows");
+            expect(nth(result.items, 0).folder).toBe("arrows");
         });
 
         it("should filter by folder when specified", () => {
             const result = service.search({ text: "note", folder: "callouts" });
             expect(result.items).toHaveLength(1);
-            expect(result.items[0].trigger).toBe(":note");
+            expect(nth(result.items, 0).trigger).toBe(":note");
             expect(result.total).toBe(1);
         });
 
@@ -110,7 +111,7 @@ describe("SnippetPickerService", () => {
         it("should return partial matches", () => {
             const result = service.search({ text: "note" });
             expect(result.items).toHaveLength(1);
-            expect(result.items[0].trigger).toBe(":note");
+            expect(nth(result.items, 0).trigger).toBe(":note");
         });
 
         // -------- Truncation contract (B-040 / U-003) --------
@@ -155,14 +156,14 @@ describe("SnippetPickerService", () => {
 
     describe("preview", () => {
         it("should return text without modification", () => {
-            const result = service.preview(mockSnippets[0]);
+            const result = service.preview(nth(mockSnippets, 0));
             expect(result.text).toBe("→");
             expect(result.cursorIdx).toBeUndefined();
             expect(result.tabstops).toBeUndefined();
         });
 
         it("should find cursor position", () => {
-            const result = service.preview(mockSnippets[1]);
+            const result = service.preview(nth(mockSnippets, 1));
             expect(result.text).toBe("> [!note] $|");
             expect(result.cursorIdx).toBe(10);
         });

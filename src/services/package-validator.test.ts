@@ -14,6 +14,11 @@ import {
   PACKAGE_MAX_TAG_LENGTH,
 } from "./package-validator";
 
+/** Package files are user-supplied JSON or YAML. These cases feed field types `PackageData` rules out, to check the validator reports them. */
+function wrongShape(value: object): PackageData {
+  return value as PackageData;
+}
+
 describe("package-validator", () => {
   describe("validatePackage", () => {
     it("should validate a correct package", () => {
@@ -351,7 +356,7 @@ describe("package-validator", () => {
         ]
       };
 
-      const result = validatePackage(packageData, { strictMode: false });
+      const result = validatePackage(wrongShape(packageData), { strictMode: false });
       expect(result.errors).toContain("Snippet 1: keywords must be an array");
     });
 
@@ -389,7 +394,7 @@ describe("package-validator", () => {
         ]
       };
 
-      const result = validatePackage(packageData, { strictMode: false });
+      const result = validatePackage(wrongShape(packageData), { strictMode: false });
       expect(result.errors).toContain("Snippet 1: all keywords must be strings");
     });
 
@@ -510,7 +515,7 @@ describe("package-validator", () => {
         ]
       };
 
-      const result = validatePackage(packageData, { strictMode: false });
+      const result = validatePackage(wrongShape(packageData), { strictMode: false });
       expect(result.errors).toContain("Snippet 1: trigger must be a string");
     });
 
@@ -595,7 +600,7 @@ describe("package-validator", () => {
         snippets: "not-an-array" // Should be array
       };
 
-      const result = validatePackage(packageData, { strictMode: false });
+      const result = validatePackage(wrongShape(packageData), { strictMode: false });
       expect(result.errors).toContain("Snippets must be an array");
     });
 
@@ -662,7 +667,7 @@ describe("package-validator", () => {
         ]
       };
 
-      const result = validatePackage(packageData, { strictMode: false });
+      const result = validatePackage(wrongShape(packageData), { strictMode: false });
       expect(result.errors).toContain("All tags must be strings");
     });
 
@@ -699,7 +704,7 @@ describe("package-validator", () => {
         ]
       };
 
-      const result = validatePackage(packageData, { strictMode: false });
+      const result = validatePackage(wrongShape(packageData), { strictMode: false });
       expect(result.errors).toContain("Package description must be a string");
     });
 
