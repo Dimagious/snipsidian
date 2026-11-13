@@ -33,3 +33,6 @@ dist/
 .env.*
 
 /.bmad-core
+
+# opdk demo: raw stills of the capture run (npm run capture)
+.opdk/

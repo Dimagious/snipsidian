@@ -27,6 +27,7 @@
         "it:typecheck": "npm --prefix integration ci && npm --prefix integration run typecheck",
         "it:lint": "npm --prefix integration ci && npm --prefix integration run lint",
         "e2e:ui": "npm run build && playwright test --ui",
+        "capture": "npm run build && CAPTURE=1 playwright test e2e/capture.spec.ts --reporter=list && opdk demo",
         "e2e:record": "npm run build && PWDEBUG=1 E2E_RECORD=1 playwright test e2e/record.spec.ts --headed --timeout=0"
     },
     "dependencies": {
