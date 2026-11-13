@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The community scorecard no longer reports the `{{date:FMT}}` formatter.** The public scanner flagged `moment(date).format(...)` in `src/adapters/obsidian-editor.ts` as `no-unsafe-call`, `no-unsafe-member-access` and `no-unsafe-return`: it type-checks with TypeScript 6, under which `moment` imported from `obsidian` is not callable. The call is now typed by hand. Reproduced with `typescript@6.0` installed for the check (`opdk scan`: 3 findings before, 0 after; `tsc --noEmit` passes under 6.0.3 and 5.9.3). Date formatting is unchanged; its three unit tests fail when the formatter is broken on purpose.
+
 ### Changed
 
 - **The dev kit is [obsidian-plugin-dev-kit](https://github.com/Dimagious/obsidian-plugin-dev-kit) 0.2.0** (was 0.1.0), moved with its new `opdk kit upgrade` command: the tag in `package.json`, the lockfile and the two kit workflow lines name commit `32a1860`, and `opdk release check` now fails when they disagree. Snipsy's `eslint.config.js` keeps its own `no-restricted-syntax` rule for a bare `window.*`, which replaces the one the kit's preset now brings. Typecheck (src and e2e), lint, unit tests, build, `opdk scan`, `opdk release check`, `site:check` and the e2e pass on it.
