@@ -1,4 +1,4 @@
-import { test, expect, ui } from "./fixtures";
+import { test, expect, ui, seedSnippets } from "./fixtures";
 
 /**
  * E2E: Snippet Picker via command palette.
@@ -13,27 +13,12 @@ import { test, expect, ui } from "./fixtures";
 
 test.describe("snippet picker via command palette", () => {
     test("[B-197] picker insert substitutes $date and {{date:YYYY}}", async ({ win, obsidian }) => {
-        await win.evaluate(async () => {
-            const plugin = (globalThis as unknown as {
-                app?: { plugins?: { plugins?: { snipsidian?: {
-                    settings: { snippets: Record<string, string> };
-                    saveSettings: () => Promise<void>;
-                } } } };
-            }).app?.plugins?.plugins?.snipsidian;
-            if (!plugin) throw new Error("snipsidian plugin not loaded");
-            plugin.settings.snippets["zzdate"] = "## $date / {{date:YYYY}}";
-            await plugin.saveSettings();
-        });
+        await seedSnippets(obsidian, { zzdate: "## $date / {{date:YYYY}}" });
         const editor = ui.activeEditor(win);
         await editor.click();
         await obsidian.press("Mod+A");
         await win.keyboard.press("Delete");
-        await win.evaluate(() => {
-            const a = (globalThis as unknown as {
-                app?: { commands?: { executeCommandById?: (id: string) => void } };
-            }).app;
-            a?.commands?.executeCommandById?.("snipsidian:insert-snippet");
-        });
+        await obsidian.runCommand("snipsidian:insert-snippet");
         const filter = win.locator(".snippet-picker-modal input[role='combobox']");
         await filter.waitFor({ state: "visible" });
         await ui.fillPickerFilter(win, "zzdate", "zzdate");
@@ -60,12 +45,7 @@ test.describe("snippet picker via command palette", () => {
         // internal API. Avoids the command-palette typing dance,
         // which is flaky because some Obsidian versions
         // fuzzy-match different commands first.
-        await win.evaluate(() => {
-            const a = (globalThis as unknown as {
-                app?: { commands?: { executeCommandById?: (id: string) => void } };
-            }).app;
-            a?.commands?.executeCommandById?.("snipsidian:insert-snippet");
-        });
+        await obsidian.runCommand("snipsidian:insert-snippet");
 
         // The picker modal opens. Filter to `brb` (seeded in the
         // pristine vault) so there's exactly one hit, then Enter.
@@ -89,12 +69,7 @@ test.describe("snippet picker via command palette", () => {
         await win.keyboard.press("Delete");
 
         // Open picker
-        await win.evaluate(() => {
-            const a = (globalThis as unknown as {
-                app?: { commands?: { executeCommandById?: (id: string) => void } };
-            }).app;
-            a?.commands?.executeCommandById?.("snipsidian:insert-snippet");
-        });
+        await obsidian.runCommand("snipsidian:insert-snippet");
 
         const filter = win.locator(
             ".snippet-picker-modal input[role='combobox']",

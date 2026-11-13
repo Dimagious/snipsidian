@@ -1,3 +1,4 @@
+import type { AppWithInternals } from "obsidian-plugin-dev-kit/e2e";
 import { test, expect, ui } from "./fixtures";
 
 /**
@@ -51,17 +52,7 @@ test.describe("Snipsy commands", () => {
         // We assert via the `data-tab-id` attribute that
         // Obsidian's settings panel exposes — more stable than a
         // text-based locator.
-        const activeTabId = await win.evaluate(() => {
-            return (
-                (globalThis as unknown as {
-                    app?: {
-                        setting?: {
-                            activeTab?: { id?: string };
-                        };
-                    };
-                }).app?.setting?.activeTab?.id ?? null
-            );
-        });
+        const activeTabId = await obsidian.evaluate((app: AppWithInternals) => app.setting.activeTab?.id ?? null);
         expect(activeTabId).toBe("snipsidian");
     });
 });

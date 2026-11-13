@@ -1,4 +1,4 @@
-import { test, expect, ui } from "./fixtures";
+import { test, expect, ui, readSnippets, seedSnippets } from "./fixtures";
 import type { ObsidianHelpers } from "obsidian-plugin-dev-kit/e2e";
 import type { Page } from "@playwright/test";
 
@@ -20,7 +20,7 @@ import type { Page } from "@playwright/test";
 // The kit's fixture sets `settingsPopoutWindow: false` in the vault, so
 // `obsidian.openSettings` renders Settings inside `win` and every UI
 // locator below runs there. Data reads/writes still go through
-// `win.evaluate` (`readSnippets` etc.).
+// `obsidian.evaluate` (`readSnippets`, `seedSnippets`).
 async function openSnipsy(obsidian: ObsidianHelpers, win: Page): Promise<void> {
     await obsidian.openSettings("snipsidian");
     // B-151/ADR-0007: "Snippets" is a page entry one click deep on
@@ -42,28 +42,6 @@ async function expandGroup(win: Page, groupTitle: string) {
     }
 }
 
-/** Read the live plugin settings.snippets map. Source of truth for
- *  "did the write happen?" — the DOM lags behind on re-render. */
-async function readSnippets(
-    win: import("@playwright/test").Page,
-): Promise<Record<string, string>> {
-    return await win.evaluate(() => {
-        return (
-            (globalThis as unknown as {
-                app?: {
-                    plugins?: {
-                        plugins?: {
-                            snipsidian?: {
-                                settings?: { snippets?: Record<string, string> };
-                            };
-                        };
-                    };
-                };
-            }).app?.plugins?.plugins?.snipsidian?.settings?.snippets ?? {}
-        );
-    });
-}
-
 test.describe("delete flows: ConfirmModal surface", () => {
     test("deletes a single snippet via row 🗑️ + Confirm (B-103)", async ({
         win,
@@ -75,7 +53,7 @@ test.describe("delete flows: ConfirmModal surface", () => {
         // `brb` is seeded in the pristine vault. Sanity-check it's
         // present before we attempt to delete it — otherwise a
         // failing delete is indistinguishable from a missing seed.
-        const before = await readSnippets(win);
+        const before = await readSnippets(obsidian);
         expect(before.brb).toBe("be right back");
 
         // Click the row's 🗑️. The button's accessible name is
@@ -97,7 +75,7 @@ test.describe("delete flows: ConfirmModal surface", () => {
             .click();
 
         // Settings reflect the removal.
-        const after = await readSnippets(win);
+        const after = await readSnippets(obsidian);
         expect(after.brb).toBeUndefined();
 
         // Row is gone from the UI. We assert via the absence of the
@@ -131,7 +109,7 @@ test.describe("delete flows: ConfirmModal surface", () => {
         // both footer buttons now match `:not(.mod-cta)`.
         await confirmModal.getByRole("button", { name: "Cancel" }).click();
 
-        const after = await readSnippets(win);
+        const after = await readSnippets(obsidian);
         expect(after.brb).toBe("be right back");
     });
 
@@ -141,23 +119,9 @@ test.describe("delete flows: ConfirmModal surface", () => {
         // independent of the seed's exact contents AND verifies
         // the group-delete path (which differs from row-delete:
         // iterates `items` and deletes each key).
-        await win.evaluate(async () => {
-            const plugin = (globalThis as unknown as {
-                app?: {
-                    plugins?: {
-                        plugins?: {
-                            snipsidian?: {
-                                settings?: { snippets?: Record<string, string> };
-                                saveSettings?: () => Promise<void>;
-                            };
-                        };
-                    };
-                };
-            }).app?.plugins?.plugins?.snipsidian;
-            if (!plugin?.settings?.snippets) return;
-            plugin.settings.snippets["test-group/alpha"] = "alpha replacement";
-            plugin.settings.snippets["test-group/beta"] = "beta replacement";
-            await plugin.saveSettings?.();
+        await seedSnippets(obsidian, {
+            "test-group/alpha": "alpha replacement",
+            "test-group/beta": "beta replacement",
         });
 
         await openSnipsy(obsidian, win);
@@ -195,7 +159,7 @@ test.describe("delete flows: ConfirmModal surface", () => {
             .click();
 
         // Both keys gone from settings.
-        const after = await readSnippets(win);
+        const after = await readSnippets(obsidian);
         expect(after["test-group/alpha"]).toBeUndefined();
         expect(after["test-group/beta"]).toBeUndefined();
 

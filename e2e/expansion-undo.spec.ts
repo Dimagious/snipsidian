@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, setHighlight } from "./fixtures";
 
 /**
  * E2E (B-176, NOT run by the maker: needs a real Obsidian window): the
@@ -16,34 +16,14 @@ import { test, expect } from "./fixtures";
  *     step); Cmd+Z after a plain expansion keeps the B-132 behaviour.
  */
 
-async function setHighlight(win: import("@playwright/test").Page, on: boolean) {
-    await win.evaluate(async (value) => {
-        const plugin = (globalThis as unknown as {
-            app?: {
-                plugins?: {
-                    plugins?: {
-                        snipsidian?: {
-                            settings: { expansion?: { highlight?: boolean } };
-                            saveSettings: () => Promise<void>;
-                        };
-                    };
-                };
-            };
-        }).app?.plugins?.plugins?.snipsidian;
-        if (!plugin) throw new Error("snipsidian plugin not loaded");
-        plugin.settings.expansion = { ...plugin.settings.expansion, highlight: value };
-        await plugin.saveSettings();
-    }, on);
-}
-
 test.describe("[B-176] expansion highlight + Backspace undo", () => {
-    test.beforeEach(async ({ win, obsidian }) => {
-        await setHighlight(win, true);
+    test.beforeEach(async ({ obsidian }) => {
+        await setHighlight(obsidian, true);
         await obsidian.editor().clear();
     });
 
-    test.afterEach(async ({ win }) => {
-        await setHighlight(win, false);
+    test.afterEach(async ({ obsidian }) => {
+        await setHighlight(obsidian, false);
     });
 
     test("the expanded text carries the mark class", async ({ win, obsidian }) => {
@@ -122,7 +102,7 @@ test.describe("[B-176] expansion highlight + Backspace undo", () => {
     });
 
     test("setting off: no mark and Backspace is native", async ({ win, obsidian }) => {
-        await setHighlight(win, false);
+        await setHighlight(obsidian, false);
         await obsidian.editor().type("brb ");
         await expect(win.locator(".cm-content .snipsy-expanded")).toHaveCount(0);
         await win.keyboard.press("Backspace");

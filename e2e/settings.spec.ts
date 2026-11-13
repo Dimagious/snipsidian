@@ -1,4 +1,4 @@
-import { test, expect, ui } from "./fixtures";
+import { test, expect, ui, readSnippets } from "./fixtures";
 import type { ObsidianHelpers } from "obsidian-plugin-dev-kit/e2e";
 import type { Page } from "@playwright/test";
 
@@ -66,12 +66,7 @@ test.describe("settings: Add snippet flow", () => {
         // ground truth) rather than scraping the DOM — the row may
         // not be rendered yet if the user's Ungrouped group is
         // collapsed.
-        const stored = await win.evaluate(() => {
-            const p = (globalThis as unknown as {
-                app?: { plugins?: { plugins?: { snipsidian?: { settings?: { snippets?: Record<string, string> } } } } };
-            }).app?.plugins?.plugins?.snipsidian?.settings?.snippets ?? {};
-            return p.e2etest;
-        });
+        const stored = (await readSnippets(obsidian)).e2etest;
         expect(stored).toBe("end-to-end works");
 
         // Also verify the row renders in the UI when the Ungrouped
@@ -113,31 +108,6 @@ test.describe("settings: Add snippet flow", () => {
 });
 
 test.describe("settings: Add snippet validation (B-107)", () => {
-    /** Read live `settings.snippets` — the source of truth for
-     *  "did the write happen?". Used to assert that validation
-     *  errors prevent persistence, not just paint an error toast. */
-    async function readSnippets(
-        win: import("@playwright/test").Page,
-    ): Promise<Record<string, string>> {
-        return await win.evaluate(() => {
-            return (
-                (globalThis as unknown as {
-                    app?: {
-                        plugins?: {
-                            plugins?: {
-                                snipsidian?: {
-                                    settings?: {
-                                        snippets?: Record<string, string>;
-                                    };
-                                };
-                            };
-                        };
-                    };
-                }).app?.plugins?.plugins?.snipsidian?.settings?.snippets ?? {}
-            );
-        });
-    }
-
     async function openAddSnippetModal(
         obsidian: ObsidianHelpers,
         win: Page,
@@ -176,7 +146,7 @@ test.describe("settings: Add snippet validation (B-107)", () => {
         await expect(err).toContainText("required");
 
         // Settings unchanged.
-        const after = await readSnippets(win);
+        const after = await readSnippets(obsidian);
         expect(after["e2e-empty"]).toBeUndefined();
     });
 
@@ -202,7 +172,7 @@ test.describe("settings: Add snippet validation (B-107)", () => {
         await expect(err).toBeVisible();
         await expect(err).toContainText("letter or number");
 
-        const after = await readSnippets(win);
+        const after = await readSnippets(obsidian);
         expect(after["e2e-badgroup"]).toBeUndefined();
     });
 
@@ -233,7 +203,7 @@ test.describe("settings: Add snippet validation (B-107)", () => {
         await expect(err).toContainText("already exists");
 
         // Original replacement preserved.
-        const after = await readSnippets(win);
+        const after = await readSnippets(obsidian);
         expect(after.brb).toBe("be right back");
     });
 });
