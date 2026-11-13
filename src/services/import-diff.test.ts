@@ -111,6 +111,7 @@ describe("filterImportKeys / computeImportDiff trigger checks (B-177)", () => {
         expect(rejected).toHaveLength(1);
         expect(rejected[0]?.key).toBe(t);
         expect(rejected[0]?.reason).toContain("would rewrite Markdown");
+        expect(Object.keys(rejected[0] ?? {}).sort()).toEqual(["key", "reason"]);
     });
 
     it.each(["--", "->", ">=", "g/->"])("accepts %s", (k) => {
