@@ -38,7 +38,7 @@ const shared = {
     // One Obsidian instance and one temporary vault per run: files must not
     // run in parallel (the library documents this as a flakiness source).
     fileParallelism: false,
-    globalSetup: ["./global-setup.ts"],
+    globalSetup: ["./test/global-setup.ts"],
     // Registers the per-worker transport/vault resolvers; without it a
     // worker silently builds its own un-prepared transport.
     setupFiles: ["obsidian-integration-testing/vitest-setup"],

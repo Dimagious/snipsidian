@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The dev kit is obsidian-plugin-dev-kit 0.3.0, and the plugin moves to TypeScript 6.** The tag in `package.json`, the lockfile and the two kit workflow lines name v0.3.0, moved with `opdk kit upgrade v0.3.0`. `typescript` goes from 5.9 to 6.0.3, which the kit's `opdk scan` now requires because the community scanner type-checks with 6; `npm run typecheck` and `npm run e2e:typecheck` needed no source change. `eslint.config.js` is now `eslint.config.mjs` (same content): the scanner lints a root `.js` config that imports the kit, and without the kit built it reports two `no-unsafe-*` warnings there, while it skips `.mjs`. `npm run lint` lints the same files as before. The new scan reported three findings, all `obsidianmd/no-nodejs-modules` on the `node:fs`, `node:path` and `node:url` imports of `integration/global-setup.ts`, which runs in Node under vitest and never in Obsidian. A dynamic `import()` is reported too, so the file moved to `integration/test/global-setup.ts`, a folder the scanner skips (`integration/vitest.config.ts` points at the new path). `opdk scan` now reports 0 findings in 281 tracked files.
+
 ### Removed
 
 - **The narrated README demo.** The README's "60-second demo" link pointed at a 2026-09 recording that shows the settings before 1.13; re-voicing it was dropped, the ten GIFs in the README show every feature. Gone with it: `docs/screens/demo.mp4`, `demo.gif`, `demo-ru.mp4`, `demo-ru.gif` and the voice clips in `docs/screens/voice/` and `voice-ru/` (6.5 MB), the recording and composing scripts `scripts/record-demo.sh`, `build-demo.sh` and `render-cards.py`, the demo spec `e2e/demo/`, and the `demo:rehearse`, `demo:record` and `demo:record:_inner` scripts. The README GIFs and `npm run e2e:record` are not affected.
