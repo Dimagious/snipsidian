@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The dev kit is obsidian-plugin-dev-kit 0.3.1.** The tag in `package.json`, the lockfile and the two kit workflow lines name v0.3.1, moved with `opdk kit upgrade v0.3.1`. Its `opdk scan` now also lints `e2e/` files that a `tsconfig.json` covers. Snipsy keeps its e2e type-checking in the root `tsconfig.e2e.json` (there is no `e2e/tsconfig.json`), so the scan reports nothing new here.
+
 ## [1.7.3] - 2026-11-14
 
 ### Changed
