@@ -31,7 +31,7 @@
         "e2e:record": "npm run build && PWDEBUG=1 E2E_RECORD=1 playwright test e2e/record.spec.ts --headed --timeout=0"
     },
     "dependencies": {
-        "yaml": "^2.9.0"
+        "yaml": "^2.9.1"
     },
     "devDependencies": {
         "@codemirror/state": "6.5.0",
