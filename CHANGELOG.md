@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- The integration tests pulled `moment` 2.29.4 through `obsidian` 1.13.1, which has a path traversal advisory
+  (GHSA-4p3w-j4w9-5jqw). An npm override in `integration/package.json` pins it to 2.31.0. Tests only; nothing in
+  `main.js` changes.
+
 ### Changed
 
 - **The dev kit is obsidian-plugin-dev-kit 0.3.1.** The tag in `package.json`, the lockfile and the two kit workflow lines name v0.3.1, moved with `opdk kit upgrade v0.3.1`. Its `opdk scan` now also lints `e2e/` files that a `tsconfig.json` covers. Snipsy keeps its e2e type-checking in the root `tsconfig.e2e.json` (there is no `e2e/tsconfig.json`), so the scan reports nothing new here.
