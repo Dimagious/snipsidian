@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-11-17
+
 ### Added
 
 - **Tab stops: Tab walks the fields of a snippet** (B-243). A snippet with two or more of `$1`..`$9` expands with the caret in `$1`; Tab jumps to the next field, Shift+Tab goes back, and the last Tab lands on `$|` (without it, where the caret would be with no fields: after the typed separator, or at the end of the insert for the command and the picker) and ends the session. Escape and clicking elsewhere also end it, and expanding a snippet with fields replaces the session (a plain or one-field snippet expanded inside the current field keeps it). Switching away from the editor (the Command Palette, another app) keeps the session. A snippet with fields gets no expansion highlight and no Backspace-undo (the caret moves into the first field). The keys are taken only while a session is open, so list indent and other plugins keep Tab. Empty fields show as a small underlined slot, filled ones with a soft background; nothing is written into the note. The same works from the picker (over a selection `$1` takes the selected text and Tab starts at the next field). A snippet with a single `$1` behaves as before. New command **Next field** for devices without a Tab key (no default hotkey). Text Snippets import: `$tb$` markers now become `$1`, `$2`... instead of being dropped; a stop glued to text still gives the cursor (`a$tb$b` becomes `a$|b`) and a literal `$5` next to stops is escaped.
