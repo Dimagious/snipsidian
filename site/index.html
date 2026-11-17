@@ -924,7 +924,7 @@ replacement: |
           <div><code>{{date:FORMAT}}</code>, <code>{{time:FORMAT}}</code> a formatted date or time, the same syntax as core Templates. <code>{{date}}</code> alone is <code>YYYY-MM-DD</code>.</div>
           <div><code>$filename</code> the name of the note you are typing in.</div>
           <div><code>$clipboard</code> what is on the clipboard, read at the moment the snippet expands.</div>
-          <div><code>$1</code> the selected text when you wrap a selection through <b>Insert snippet…</b>; otherwise the caret, if there is no <code>$|</code>.</div>
+          <div><code>$1</code> to <code>$9</code> fields: Tab jumps from one to the next, Shift+Tab goes back, and the last Tab lands on <code>$|</code>, or after the text. A snippet with a single <code>$1</code> just puts the caret there. Over a selection in <b>Insert snippet…</b>, the first <code>$1</code> takes the selected text.</div>
         </div>
         <div class="pair side" style="margin-top:22px">
           <div class="codeblock" data-code>
@@ -940,8 +940,8 @@ replacement: |
           </div>
         </div>
         <div class="callout warn">
-          <div class="callout-title"><svg><use href="#i-alert"/></svg>One caret per snippet</div>
-          <p>Tab does not jump to a next field. The first <code>$1</code> becomes the caret and <code>$2</code> to <code>$9</code> are dropped. Prices like <code>$1.50</code> or <code>$1,000</code> and anything inside code stay as typed; write <code>\$5</code> for a literal <code>$5</code>.</p>
+          <div class="callout-title"><svg><use href="#i-alert"/></svg>Fields only count with two or more</div>
+          <p>With two or more of <code>$1</code> to <code>$9</code>, Tab walks them (<code>[$1]($2)</code> opens with the caret between the brackets). Tab is taken only while that walk is open, so a list item still indents. Prices like <code>$1.50</code> or <code>$1,000</code> and anything inside code stay as typed; write <code>\$5</code> for a literal <code>$5</code>.</p>
         </div>
       </section>
 
@@ -1156,7 +1156,6 @@ replacement: |
           <li>templates with JavaScript (see <a href="https://github.com/SilentVoid13/Templater">Templater</a>)</li>
           <li>expansion outside Obsidian, in every app (see <a href="https://espanso.org">Espanso</a>)</li>
           <li>a snippet library you search but never type (see Snippets Manager)</li>
-          <li>Tab-stops that jump from field to field</li>
           <li>scripting of any kind</li>
         </ul>
         <p style="margin-top:14px" class="prose">If one of these stops you, <a href="https://github.com/Dimagious/snipsidian/issues">say what you tried</a>.</p>

@@ -42,4 +42,21 @@ describe("expand", () => {
         const input = { textBefore: "constructor", textAfter: "", lastTyped: " ", sepCh: "constructor".length };
         await expect(expand(input, dict, baseCtx)).resolves.toBeNull();
     });
+
+    // B-243
+    it("a snippet with two fields yields a plan with fields and a final stop", async () => {
+        const input = { textBefore: "lnk", textAfter: "", lastTyped: " ", sepCh: 3 };
+        const plan = await expand(input, { lnk: "[$1]($2)" }, baseCtx);
+        expect(plan?.insert).toBe("[]()");
+        expect(plan?.fields).toEqual([1, 3]);
+        expect(plan?.docOrder).toEqual([0, 1]);
+        // no `$|`: the adapter puts the final stop after the typed separator
+        expect(plan?.final).toBeUndefined();
+    });
+
+    it("a virtual separator at the caret expands the trigger before it (B-244 input shape)", async () => {
+        const input = { textBefore: "see brb", textAfter: " tail", lastTyped: "\n", sepCh: 7 };
+        const plan = await expand(input, dict, baseCtx);
+        expect(plan).toMatchObject({ fromCh: 4, toCh: 7, insert: "be right back" });
+    });
 });

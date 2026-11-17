@@ -1,10 +1,18 @@
 import { moment, Notice } from "obsidian";
 import type { Editor, EditorPosition } from "obsidian";
-import { mapTabstops, resolveTabstops, substituteVariables } from "../engine/placeholders";
+import {
+    countTabstops,
+    fieldMarker,
+    mapTabstops,
+    orderFieldHits,
+    prepareTabstops,
+    scanMarkers,
+    substituteVariables,
+} from "../engine/placeholders";
 import { clock } from "./clock";
 import { readClipboardSafe } from "./clipboard";
 import { expand } from "../engine";
-import type { Dict, EditPlan, ExpandContext, ExpandInput } from "../engine/types";
+import type { Dict, EditPlan, ExpandContext, ExpandInput, FieldStops } from "../engine/types";
 import { isSeparator } from "../shared/delimiters";
 import { isInFencedCode, isInInlineCode, isInMath, isInYamlFrontmatter } from "../shared/markdown";
 
@@ -144,7 +152,27 @@ export type ExpansionResult = {
     original: string;
     /** The separator typed after the trigger (`"\n"` for Enter). */
     separator: string;
+    /** B-243: the fields of the inserted text (document offsets), when the
+     *  snippet has two or more. The caller opens the field session. */
+    session?: FieldStops;
 };
+
+/** CM6 turns `\r\n` / `\r` in inserted text into `\n`; offsets must follow. */
+function normalizedLength(text: string): number {
+    return text.replace(/\r\n?/g, "\n").length;
+}
+
+/** B-243: offsets inside `insert` -> document offsets, given where it starts. */
+function toDocStops(
+    from: number,
+    insert: string,
+    fields: number[],
+    docOrder: number[] | undefined,
+    final: number,
+): FieldStops {
+    const at = (offset: number): number => from + normalizedLength(insert.slice(0, offset));
+    return { fields: fields.map(at), docOrder, final: at(final) };
+}
 
 export async function tryExpandAtSeparator(
     editor: Editor,
@@ -196,6 +224,24 @@ export async function tryExpandAtSeparator(
     const input = makeExpandInput(editor, sepCh, lastTyped, targetLine, deps.prefix);
     const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, targetLine, ctxCh);
 
+    return expandAndApply(editor, dict, input, ctx, targetLine, lineText, lastTyped, cursor);
+}
+
+/**
+ * Shared tail of the trigger paths: resolves the plan, guards against a note
+ * that changed during the (possibly async) resolution, applies it.
+ */
+async function expandAndApply(
+    editor: Editor,
+    dict: Dict,
+    input: ExpandInput,
+    ctx: ExpandContext,
+    targetLine: number,
+    lineText: string,
+    separator: string,
+    /** The live caret when the expansion started. */
+    cursorAtStart: EditorPosition,
+): Promise<ExpansionResult | undefined> {
     const plan = await expand(input, dict, ctx);
     if (!plan) return undefined;
 
@@ -210,13 +256,73 @@ export async function tryExpandAtSeparator(
     if (actualSlice !== expectedSlice) return undefined;
 
     const from = editor.posToOffset({ line: targetLine, ch: plan.fromCh });
-    applyEditPlan(editor, plan, targetLine);
-    return {
+    // B-147: the user may have moved during the (clipboard) await. A field
+    // session pulls the caret into the first field, so it opens only when the
+    // caret is still where the expansion started (same rule as the pickers).
+    const stayed = samePos(editor.getCursor(), cursorAtStart) && !editor.getSelection();
+    // A field plan carries a fallback caret (the first field); when the user
+    // moved, that must not pull the caret back either.
+    applyEditPlan(editor, plan.fields && !stayed ? { ...plan, newCursor: undefined } : plan, targetLine);
+    const result: ExpansionResult = {
         from,
         insert: plan.insert,
         original: expectedSlice,
-        separator: lastTyped,
+        separator,
     };
+    if (plan.fields && stayed) {
+        // Without `$|` the last Tab lands right after the inserted text plus the
+        // separator, where the caret sits with no fields (B-182). A session opens
+        // only when the caret was still exactly after the trigger and separator,
+        // so this is also where the live caret ends up. Enter in a list item: if
+        // the editor already continued the list marker before the expansion
+        // lands, the caret moved, so no field session opens (fields are dropped,
+        // caret stays on the new line).
+        const final =
+            plan.final !== undefined
+                ? from + normalizedLength(plan.insert.slice(0, plan.final))
+                : from + normalizedLength(plan.insert) + normalizedLength(separator);
+        const stops = toDocStops(from, plan.insert, plan.fields, plan.docOrder, 0);
+        result.session = { ...stops, final };
+    }
+    return result;
+}
+
+/**
+ * B-244: expands the trigger that ends right at the caret, without a
+ * separator (command "Expand trigger at cursor"). Same engine, same guards
+ * (code, math, frontmatter, prefix mode, the dict the caller passes already
+ * has disabled groups removed). A selection, the start of a line and a
+ * missing trigger all return `undefined`: the command stays silent.
+ */
+export async function tryExpandAtCursor(
+    editor: Editor,
+    dict: Dict,
+    deps: {
+        filename?: string;
+        now: Date;
+        readClipboard?: () => Promise<string>;
+        prefix?: string;
+    },
+): Promise<ExpansionResult | undefined> {
+    if (editor.getSelection()) return undefined;
+    const cursor = editor.getCursor();
+    if (cursor.ch === 0) return undefined;
+    const lineText = editor.getLine(cursor.line) ?? "";
+    // Inside a word (`sig|nature`) the text before the caret is not a trigger:
+    // typing would not expand there either (a separator ends the word first).
+    const after = lineText[cursor.ch];
+    if (after !== undefined && !isSeparator(after)) return undefined;
+    // `\n` is a virtual separator: `findTrigger` reads the trigger BEFORE
+    // `sepCh`, which here is the caret itself.
+    const input: ExpandInput = {
+        textBefore: lineText.slice(0, cursor.ch),
+        textAfter: lineText.slice(cursor.ch),
+        lastTyped: "\n",
+        sepCh: cursor.ch,
+        prefix: deps.prefix,
+    };
+    const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, cursor.line, cursor.ch);
+    return expandAndApply(editor, dict, input, ctx, cursor.line, lineText, "", cursor);
 }
 
 /** B-197: what the picker paths need to run the full placeholder pipeline. */
@@ -262,16 +368,18 @@ function replaceCapturedSelection(
 /**
  * Inserts a snippet at the current cursor position, running the same
  * placeholder pipeline as trigger expansion (B-192 tabstops, then B-197
- * variables, then the `$|` cursor). The target position is captured BEFORE
- * the (possibly async, `$clipboard`) substitution: if the user moved
- * meanwhile the text still lands at the captured position and the cursor is
- * left alone (B-136 / B-147).
+ * variables, then the `$|` cursor, B-243 fields). The target position is
+ * captured BEFORE the (possibly async, `$clipboard`) substitution: if the
+ * user moved meanwhile the text still lands at the captured position and the
+ * cursor is left alone (B-136 / B-147). Returns the field stops (document
+ * offsets) when the snippet has two or more fields and landed where the user
+ * was; the caller opens the session.
  */
 export async function insertSnippetAtCursor(
     editor: Editor,
     replacement: string,
     deps: SnippetInsertDeps = {},
-): Promise<void> {
+): Promise<FieldStops | undefined> {
     const cursor = editor.getCursor();
     const selection = editor.getSelection();
     const from = selection ? editor.getCursor("from") : cursor;
@@ -280,78 +388,72 @@ export async function insertSnippetAtCursor(
     const capturedLine = editor.getLine(cursor.line);
     const lineStillThere = (): boolean =>
         cursor.line <= editor.lastLine() && editor.getLine(cursor.line) === capturedLine;
-    const resolved = await substituteVariables(resolveTabstops(replacement), pickerContext(editor, deps));
+    const prepared = prepareTabstops(replacement);
+    const resolved = await substituteVariables(prepared.text, pickerContext(editor, deps), prepared.fields);
 
     // Handle cursor position after insertion
-    const cursorMatch = resolved.indexOf('$|');
-    let cleanReplacement = resolved;
-    let cursorPrefix = "";
-
-    if (cursorMatch !== -1) {
-        // Remove $| from text
-        cleanReplacement = resolved.replace(/\$\|/g, '');
-        cursorPrefix = resolved.slice(0, cursorMatch);
-    }
+    const scan = scanMarkers(resolved, prepared.fields, true);
+    const cleanReplacement = scan.text;
+    const { offsets: fields, docOrder } = orderFieldHits(scan.fields);
+    // Without `$|` the first field is where the caret goes if no session starts.
+    const cursorOffset = scan.cursor ?? fields[0];
+    const cursorPrefix = cursorOffset === undefined ? "" : cleanReplacement.slice(0, cursorOffset);
+    const cursorMatch = cursorOffset ?? -1;
 
     if (!samePos(editor.getCursor(), cursor) || editor.getSelection() !== selection) {
         // The user moved during the await: insert where they chose, do not teleport the cursor.
         if (selection) {
             replaceCapturedSelection(editor, cleanReplacement, from, to, selection);
-            return;
+            return undefined;
         }
         // B-199: the captured position is only trusted while its line still
         // has the text it had at capture time; otherwise the note changed
         // above it and the live cursor is the best target.
         const target = lineStillThere() ? cursor : editor.getCursor();
         editor.replaceRange(cleanReplacement, target, target);
-        return;
+        return undefined;
     }
 
+    const base = editor.posToOffset(from);
     if (selection) {
         // If there's a selection, replace it
         editor.replaceSelection(cleanReplacement);
-        // Set cursor to the correct position
-        if (cursorMatch >= 0) {
-            try {
-                const newCursor = advancePosition(from, cursorPrefix);
-                editor.setCursor(newCursor);
-            } catch (error) {
-                console.warn('Failed to set cursor position:', error);
-            }
-        }
     } else {
         // Otherwise insert at cursor position
         editor.replaceRange(cleanReplacement, cursor, cursor);
-        // Set cursor to the correct position
-        if (cursorMatch >= 0) {
-            try {
-                const newCursor = advancePosition(from, cursorPrefix);
-                editor.setCursor(newCursor);
-            } catch (error) {
-                console.warn('Failed to set cursor position:', error);
-            }
+    }
+    // Set cursor to the correct position
+    if (cursorMatch >= 0) {
+        try {
+            const newCursor = advancePosition(from, cursorPrefix);
+            editor.setCursor(newCursor);
+        } catch (error) {
+            console.warn('Failed to set cursor position:', error);
         }
     }
+    if (fields.length === 0) return undefined;
+    return toDocStops(base, cleanReplacement, fields, docOrder, scan.cursor ?? cleanReplacement.length);
 }
 
 /**
  * Wraps selection with a snippet. Pipeline (B-197): resolve tabstops on the
- * template (the first `$1` is the selection slot, other tabstops are
- * stripped) -> substitute variables -> locate `$|` -> insert the selection
- * verbatim (never re-scanned, so a selection containing `$date`, `$1` or
- * `$|` stays literal) -> place the cursor.
+ * template (the first `$1` is the selection slot; with two or more tabstops
+ * the others are fields, B-243, else they are stripped) -> substitute
+ * variables -> locate `$|` -> insert the selection verbatim (never re-scanned,
+ * so a selection containing `$date`, `$1` or `$|` stays literal) -> place the
+ * cursor. Returns the field stops (document offsets) when the snippet has
+ * fields left after the selection took `$1`.
  */
 export async function wrapSelectionWithSnippet(
     editor: Editor,
     replacement: string,
     deps: SnippetInsertDeps = {},
-): Promise<void> {
+): Promise<FieldStops | undefined> {
     const selection = editor.getSelection();
 
     if (!selection) {
         // If no selection, just insert
-        await insertSnippetAtCursor(editor, replacement, deps);
-        return;
+        return insertSnippetAtCursor(editor, replacement, deps);
     }
 
     // Capture the target before any await (B-136 / B-147).
@@ -364,51 +466,80 @@ export async function wrapSelectionWithSnippet(
     // `$clipboard$1` / `$date$1` during variable substitution.
     const SELECTION_SLOT = "\uE000SNIPSIDIAN_SELECTION\uE001";
     const hasSelToken = replacement.includes("${SEL}");
+    const withFields = countTabstops(replacement) >= 2;
     let slotUsed = false;
     let template = mapTabstops(replacement, (n) => {
         if (n === 1 && !hasSelToken && !slotUsed) {
             slotUsed = true;
             return SELECTION_SLOT;
         }
-        return "";
+        return withFields ? fieldMarker(n) : "";
     });
 
-    template = await substituteVariables(template, pickerContext(editor, deps));
+    template = await substituteVariables(template, pickerContext(editor, deps), withFields);
 
     const cursorMatch = template.indexOf("$|");
     if (cursorMatch >= 0) {
         template = template.replace("$|", CURSOR_SENTINEL).replace(/\$\|/g, "");
     }
 
-    // The selection goes in LAST, through replacer functions, so it is
-    // inserted verbatim (`$2`, `$&`, `$date`).
     if (hasSelToken) {
-        template = template.replace("${SEL}", () => selection);
-    } else if (slotUsed) {
-        template = template.replace(SELECTION_SLOT, () => selection);
-    } else if (template.includes(CURSOR_SENTINEL)) {
+        template = template.replace("${SEL}", SELECTION_SLOT);
+    } else if (!slotUsed && template.includes(CURSOR_SENTINEL)) {
         // If no selection placeholders exist, insert selection at cursor marker.
-        template = template.replace(CURSOR_SENTINEL, () => `${selection}${CURSOR_SENTINEL}`);
+        template = template.replace(CURSOR_SENTINEL, `${SELECTION_SLOT}${CURSOR_SENTINEL}`);
     }
 
-    const cursorOffset = template.indexOf(CURSOR_SENTINEL);
-    const finalText = template.replace(CURSOR_SENTINEL, "");
+    // One walk over the markers builds the final text. The selection goes in
+    // LAST, as a plain string (never through `$` replacement patterns, never
+    // re-scanned), so it is inserted verbatim (`$2`, `$&`, `$date`, even a
+    // marker lookalike), and every offset below counts its length.
+    const walk = new RegExp(
+        withFields
+            ? `${SELECTION_SLOT}|${CURSOR_SENTINEL}|\\uE002([1-9])\\uE003`
+            : `${SELECTION_SLOT}|${CURSOR_SENTINEL}`,
+        "g",
+    );
+    let finalText = "";
+    let last = 0;
+    let selectionDone = false;
+    let cursorOffset = -1;
+    const hits: Array<{ n: number; offset: number }> = [];
+    for (let m = walk.exec(template); m; m = walk.exec(template)) {
+        finalText += template.slice(last, m.index);
+        last = m.index + m[0].length;
+        if (m[1] !== undefined) {
+            hits.push({ n: Number(m[1]), offset: finalText.length });
+        } else if (m[0] === CURSOR_SENTINEL) {
+            cursorOffset = finalText.length;
+        } else if (!selectionDone) {
+            selectionDone = true;
+            finalText += selection;
+        }
+    }
+    finalText += template.slice(last);
+    const { offsets: fields, docOrder } = orderFieldHits(hits);
 
     if (!samePos(editor.getCursor(), cursor) || editor.getSelection() !== selection) {
         // The user moved during the await: replace the captured range (if it
         // still holds the selection, B-199), leave the cursor.
         replaceCapturedSelection(editor, finalText, from, to, selection);
-        return;
+        return undefined;
     }
 
+    const base = editor.posToOffset(from);
     editor.replaceSelection(finalText);
 
-    if (cursorOffset >= 0) {
+    // Without `$|` the first field is where the caret goes if no session starts.
+    const caretOffset = cursorOffset >= 0 ? cursorOffset : (fields[0] ?? -1);
+    if (caretOffset >= 0) {
         try {
-            const newCursor = advancePosition(from, finalText.slice(0, cursorOffset));
+            const newCursor = advancePosition(from, finalText.slice(0, caretOffset));
             editor.setCursor(newCursor);
         } catch (error) {
             console.warn('Failed to set cursor position:', error);
         }
     }
+    if (fields.length === 0) return undefined;
+    return toDocStops(base, finalText, fields, docOrder, cursorOffset >= 0 ? cursorOffset : finalText.length);
 }

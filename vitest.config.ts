@@ -5,11 +5,12 @@ export default defineUnitConfig({
     // The tests run on Snipsy's own `obsidian` stub.
     obsidian: "./src/test/stubs/obsidian.ts",
     // Only the files that need a DOM start jsdom, with Obsidian's DOM helpers
-    // installed by the kit: every UI test, the clipboard adapter and the jsdom
+    // installed by the kit: every UI test, the clipboard adapter, the field-session render test and the jsdom
     // smoke test. The rest run in node.
     dom: [
         "src/ui/**/*.test.ts",
         "src/adapters/clipboard.test.ts",
+        "src/adapters/field-session.dom.test.ts",
         "src/test/integration/jsdom-env.test.ts",
     ],
     coverage: {

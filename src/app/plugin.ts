@@ -7,6 +7,7 @@ import { getDict, getAllSnippetsFlat } from "../store/snippets";
 import { SnippetPickerService } from "../core/snippet-picker";
 import { openSnippetPickerModal } from "../ui/components/SnippetPickerModal";
 import { openAddSnippetFromSelection } from "../ui/components/AddFromSelection";
+import { expandTriggerAtCursor, jumpToNextField } from "./field-commands";
 
 export default class HotstringsPlugin extends Plugin {
     settings!: SnipSidianSettings;
@@ -24,18 +25,19 @@ export default class HotstringsPlugin extends Plugin {
         // B-137: `getPrefix` resolves the effective prefix char at
         // call time from live settings — `undefined` (mode off)
         // unless the user has opted in via the General tab.
+        const getPrefix = (): string | undefined => {
+            if (!this.settings.expansion?.requirePrefix) return undefined;
+            const char = this.settings.expansion.prefixChar;
+            // Hardening: clamp to the supported set — corrupt or
+            // foreign saved data (anything other than ":" or ";")
+            // must not silently kill all expansion in prefix mode.
+            return char === ":" || char === ";" ? char : ":";
+        };
         this.registerEditorExtension(
             buildExpansionExtension(
                 this.app,
                 () => getDict(this.settings),
-                () => {
-                    if (!this.settings.expansion?.requirePrefix) return undefined;
-                    const char = this.settings.expansion.prefixChar;
-                    // Hardening: clamp to the supported set — corrupt or
-                    // foreign saved data (anything other than ":" or ";")
-                    // must not silently kill all expansion in prefix mode.
-                    return char === ":" || char === ";" ? char : ":";
-                },
+                getPrefix,
                 // B-176: read at use time, so toggling needs no reload.
                 () => this.settings.expansion?.highlight === true,
             ),
@@ -66,6 +68,31 @@ export default class HotstringsPlugin extends Plugin {
                 if (!checking) openAddSnippetFromSelection(this, selection);
                 return true;
             }
+        });
+
+        // B-244: expands the trigger right before the caret without a
+        // separator (same guards as typing); with no trigger, jumps to the
+        // next field of an open B-243 session. No default hotkey.
+        this.addCommand({
+            id: "expand-trigger",
+            name: "Expand trigger at cursor",
+            icon: "zap",
+            editorCallback: (editor) => {
+                expandTriggerAtCursor(this.app, editor, () => getDict(this.settings), getPrefix).catch((err: unknown) => {
+                    console.error("[snipsy] expand-trigger error", err);
+                });
+            },
+        });
+
+        // B-243: the Tab key is the main way; this is for a keyboard-less
+        // device (mobile toolbar) or a custom hotkey. No default hotkey.
+        this.addCommand({
+            id: "next-field",
+            name: "Next field",
+            icon: "arrow-right-to-line",
+            editorCallback: (editor) => {
+                jumpToNextField(editor);
+            },
         });
 
         // Open Settings command

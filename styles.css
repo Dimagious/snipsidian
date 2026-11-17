@@ -1529,6 +1529,32 @@
   }
 }
 
+/* B-243: field sessions (Tab stops). A filled field gets a soft background;
+   an empty one a small underlined slot (a zero-width widget could not show
+   anything). The current field is stronger. Theme variables only, so light
+   and dark both work. Not scoped: it lives in the note editor. */
+.snipsy-field {
+  background-color: var(--background-modifier-hover);
+  border-bottom: 1px dotted var(--text-faint);
+}
+
+.snipsy-field-empty {
+  display: inline-block;
+  width: 1ch;
+  height: 1em;
+  vertical-align: text-bottom;
+  border-bottom: 1px solid var(--text-faint);
+}
+
+.snipsy-field.snipsy-field-current {
+  background-color: var(--text-selection);
+  border-bottom-color: var(--interactive-accent);
+}
+
+.snipsy-field-empty.snipsy-field-current {
+  border-bottom-color: var(--interactive-accent);
+}
+
 /* ---- Reduced motion ---- */
 /* Honour the user's OS preference (B-089 / a11y A-011). Transitions
    and animations are subtle in Snipsy, but vestibular-disorder users

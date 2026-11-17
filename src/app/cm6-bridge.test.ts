@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import type { EditorView, ViewUpdate } from "@codemirror/view";
+import { EditorState } from "@codemirror/state";
 import type { App } from "obsidian";
 import { nth } from "../test/helpers";
 
@@ -8,7 +9,8 @@ vi.mock("../adapters/obsidian-editor", () => ({
     tryExpandAtSeparator: vi.fn().mockResolvedValue(undefined),
 }));
 import { tryExpandAtSeparator } from "../adapters/obsidian-editor";
-import { handleViewUpdate, CompositionRetry } from "./cm6-bridge";
+import { handleViewUpdate, CompositionRetry, buildExpansionExtension } from "./cm6-bridge";
+import { buildFieldSessionExtension, fieldSessionField, startFieldSessionEffect } from "../adapters/field-session";
 
 /**
  * B-149: `handleViewUpdate` is exported separately from the
@@ -515,5 +517,61 @@ describe("cm6-bridge: expansion mark wiring (B-176)", () => {
         retry.runPending();
         await new Promise((r) => setTimeout(r, 0));
         expect(dispatch).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("cm6-bridge: field session wiring (B-243)", () => {
+    const WITH_FIELDS = {
+        from: 0,
+        insert: "[]()",
+        original: "lnk",
+        separator: " ",
+        session: { fields: [1, 3], final: 4 },
+    };
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    type Spec = { selection?: { anchor: number }; effects: { is(e: unknown): boolean; value: unknown } };
+
+    function updateOnRealState(extensions: boolean): { update: ViewUpdate; dispatch: Mock<(spec: Spec) => void> } {
+        const dispatch = vi.fn<(spec: Spec) => void>();
+        const state = EditorState.create({ doc: "[]() ", extensions: extensions ? [buildFieldSessionExtension()] : [] });
+        const view = { composing: false, hasFocus: true, state, dispatch };
+        return { update: makeUpdate({ view }), dispatch };
+    }
+
+    it("a result with fields starts the session and puts the caret in the first field", async () => {
+        vi.mocked(tryExpandAtSeparator).mockResolvedValueOnce(WITH_FIELDS);
+        const { update, dispatch } = updateOnRealState(true);
+        handleViewUpdate(makeApp(), () => ({}), update);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(dispatch).toHaveBeenCalledTimes(1);
+        const spec = nth(dispatch.mock.calls, 0)[0];
+        expect(spec.selection).toEqual({ anchor: 1 });
+        expect(spec.effects.is(startFieldSessionEffect)).toBe(true);
+    });
+
+    it("the highlight mark is skipped when a session starts (the caret move would clear it)", async () => {
+        vi.mocked(tryExpandAtSeparator).mockResolvedValueOnce(WITH_FIELDS);
+        const { update, dispatch } = updateOnRealState(true);
+        handleViewUpdate(makeApp(), () => ({}), update, () => undefined, () => true);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(dispatch).toHaveBeenCalledTimes(1);
+    });
+
+    it("if the session cannot start (extension missing), the mark path still runs", async () => {
+        vi.mocked(tryExpandAtSeparator).mockResolvedValueOnce(WITH_FIELDS);
+        const { update, dispatch } = updateOnRealState(false);
+        handleViewUpdate(makeApp(), () => ({}), update, () => undefined, () => true);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(dispatch).toHaveBeenCalledTimes(1);
+        expect(nth(dispatch.mock.calls, 0)[0].effects.is(startFieldSessionEffect)).toBe(false);
+    });
+
+    it("the extension carries the session field", () => {
+        const state = EditorState.create({ doc: "x", extensions: [buildExpansionExtension(makeApp(), () => ({}))] });
+        expect(() => state.field(fieldSessionField)).not.toThrow();
     });
 });

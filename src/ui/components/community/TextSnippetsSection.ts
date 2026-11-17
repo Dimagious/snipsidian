@@ -24,7 +24,7 @@ const SUMMARY_SHOWN = 3;
 /**
  * One-line, sanitized summary of a parse: imported count, skipped
  * records with reasons, and imported snippets that were changed on the
- * way (tab stops removed, extra cursor markers). Every name and reason
+ * way (a tab stop Snipsy can't read, extra cursor markers). Every name and reason
  * comes from a file on disk (untrusted), so each goes through
  * `sanitizeForNotice` before it reaches a Notice or the DOM (B-034).
  */
@@ -156,7 +156,7 @@ export class TextSnippetsSection {
       ...plan.skippedCollisions.map((c) => ({ trigger: c.trigger, reason: c.reason })),
     ];
     // A trigger left out because another group owns it must not also be
-    // reported as "changed" (its tab stops were never imported anyway).
+    // reported as "changed" (its tab stops were never imported).
     const warningsKept = parsed.warnings.filter((w) =>
       Object.prototype.hasOwnProperty.call(plan.importable, w.trigger),
     );

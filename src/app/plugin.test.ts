@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { App, Command, MarkdownFileInfo, PluginManifest } from "obsidian";
+import type { App, Command, Editor, MarkdownFileInfo, PluginManifest } from "obsidian";
 import { makeMockEditor, asEditor } from "../test/factories/editor";
 import { nth } from "../test/helpers";
 
@@ -42,6 +42,15 @@ vi.mock("obsidian", () => {
 const fakeExtension = { __fakeExtension: true };
 vi.mock("./cm6-bridge", () => ({
     buildExpansionExtension: vi.fn(() => fakeExtension),
+}));
+
+// B-243/B-244 command bodies are covered in field-commands.test.ts.
+type ExpandTriggerArgs = [app: unknown, editor: unknown, getSnippets: () => Record<string, string>, getPrefix: () => string | undefined];
+const expandTrigger = vi.hoisted(() => vi.fn<(...args: ExpandTriggerArgs) => Promise<void>>());
+const jumpNext = vi.hoisted(() => vi.fn<(...args: unknown[]) => boolean>());
+vi.mock("./field-commands", () => ({
+    expandTriggerAtCursor: (...args: ExpandTriggerArgs) => expandTrigger(...args),
+    jumpToNextField: (...args: unknown[]) => jumpNext(...args),
 }));
 
 // Lightweight UI mock
@@ -144,6 +153,67 @@ describe("app/plugin", () => {
             "insert-snippet": "text-cursor-input",
             "add-snippet-from-selection": "text-select",
             "open-settings": "settings",
+            "expand-trigger": "zap",
+            "next-field": "arrow-right-to-line",
+        });
+    });
+
+    describe("expand-trigger command (B-244)", () => {
+        async function getCommand(): Promise<{ plugin: InstanceType<typeof PluginClass>; cmd: Command }> {
+            const plugin = makePlugin(makeApp());
+            await plugin.onload();
+            return { plugin, cmd: commandById("expand-trigger") };
+        }
+
+        function run(cmd: Command, editor = asEditor(makeMockEditor())): Editor {
+            const ctx: MarkdownFileInfo = { app: makeApp(), file: null, hoverPopover: null };
+            if (!cmd.editorCallback) throw new Error("no editorCallback");
+            cmd.editorCallback(editor, ctx);
+            return editor;
+        }
+
+        it("is named in sentence case and ships without a default hotkey", async () => {
+            const { cmd } = await getCommand();
+            expect(cmd.name).toBe("Expand trigger at cursor");
+            expect(cmd.hotkeys).toBeUndefined();
+        });
+
+        it("runs the expansion with the live snippets and prefix", async () => {
+            expandTrigger.mockResolvedValue(undefined);
+            const { plugin, cmd } = await getCommand();
+            plugin.settings.snippets = { brb: "be right back" };
+            const editor = run(cmd);
+            const [, passedEditor, getSnippets, getPrefix] = nth(expandTrigger.mock.calls, 0);
+            expect(passedEditor).toBe(editor);
+            expect(getSnippets?.()).toEqual({ brb: "be right back" });
+            expect(getPrefix?.()).toBeUndefined();
+            plugin.settings.expansion = { requirePrefix: true, prefixChar: ";" };
+            expect(getPrefix?.()).toBe(";");
+        });
+
+        it("logs a failing expansion instead of leaving an unhandled rejection", async () => {
+            const boom = new Error("boom");
+            expandTrigger.mockRejectedValue(boom);
+            const log = vi.spyOn(console, "error").mockImplementation(() => {});
+            const { cmd } = await getCommand();
+            run(cmd);
+            await new Promise((r) => setTimeout(r, 0));
+            expect(log).toHaveBeenCalledWith("[snipsy] expand-trigger error", boom);
+            log.mockRestore();
+        });
+    });
+
+    describe("next-field command (B-243)", () => {
+        it("jumps in the active editor, has the right name and no default hotkey", async () => {
+            const plugin = makePlugin(makeApp());
+            await plugin.onload();
+            const cmd = commandById("next-field");
+            expect(cmd.name).toBe("Next field");
+            expect(cmd.hotkeys).toBeUndefined();
+            const editor = asEditor(makeMockEditor());
+            const ctx: MarkdownFileInfo = { app: makeApp(), file: null, hoverPopover: null };
+            cmd.editorCallback?.(editor, ctx);
+            expect(jumpNext).toHaveBeenCalledWith(editor);
         });
     });
 

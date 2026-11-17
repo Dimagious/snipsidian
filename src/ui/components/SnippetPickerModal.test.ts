@@ -6,6 +6,8 @@ import { SnippetPickerModal } from "./SnippetPickerModal";
 import type { App } from "obsidian";
 import { nth } from "../../test/helpers";
 import type { SnippetItem } from "../../types";
+import { EditorState } from "@codemirror/state";
+import { buildFieldSessionExtension, fieldSessionField } from "../../adapters/field-session";
 
 /**
  * Mount tests for SnippetPickerModal — covers the surface that
@@ -323,5 +325,39 @@ describe("SnippetPickerModal: close after insert is safe (B-199)", () => {
             process.off("unhandledRejection", unhandled);
             errorSpy.mockRestore();
         }
+    });
+});
+
+describe("SnippetPickerModal: B-243 field sessions after insert", () => {
+    async function pressEnter(modal: SnippetPickerModal): Promise<void> {
+        const input = modal.contentEl.querySelector("input[role=\"combobox\"]");
+        input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+        await new Promise((r) => setTimeout(r, 20));
+    }
+
+    it("a snippet with two fields opens a session in the editor's CM6 view", async () => {
+        const { modal, editor } = mount({
+            snippets: [makeSnippet({ trigger: ":lnk", replacement: "[$1]($2)" })],
+        });
+        const state = EditorState.create({ doc: "hello world[]()", extensions: [buildFieldSessionExtension()] });
+        const view = {
+            state,
+            composing: false,
+            dispatch(spec: Parameters<EditorState["update"]>[0]) {
+                this.state = this.state.update(spec).state;
+            },
+        };
+        Object.assign(editor, { cm: view });
+        await pressEnter(modal);
+        expect(editor.value()).toBe("hello world[]()");
+        expect(view.state.field(fieldSessionField)?.stops.map((s) => s.from)).toEqual([12, 14]);
+    });
+
+    it("without a CM6 view the insert still works and nothing throws", async () => {
+        const { modal, editor } = mount({
+            snippets: [makeSnippet({ trigger: ":lnk", replacement: "[$1]($2)" })],
+        });
+        await pressEnter(modal);
+        expect(editor.value()).toBe("hello world[]()");
     });
 });

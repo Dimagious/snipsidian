@@ -114,14 +114,14 @@ describe("TextSnippetsSection", () => {
     it("reports skipped records and warnings in the success Notice", async () => {
         files.set(
             SOURCE,
-            JSON.stringify({ snippets_file: "ok : fine\nbad trigger : x\nform : a$tb$b" }),
+            JSON.stringify({ snippets_file: "ok : fine\nbad trigger : x\nform : a$tb$b $tb$c" }),
         );
         await clickAndSettle(mount());
         await apply();
         expect(plugin.settings.snippets["text-snippets/ok"]).toBe("fine");
         const notice = noticeCalls.find((m) => m.startsWith("Imported 2"));
         expect(notice).toContain("1 skipped: bad trigger");
-        expect(notice).toContain("form (tab stops removed)");
+        expect(notice).toContain("form (tab stop next to text or a backslash removed)");
     });
 
     it("surfaces a parse error as a Notice with no mutation", async () => {
@@ -184,12 +184,12 @@ describe("TextSnippetsSection", () => {
         const info = document.body.querySelector(".modal-content .snipsy-espanso-skip-status");
         expect(info?.textContent).toContain('brb (already used in group "other")');
         expect(info?.textContent).not.toContain("changed");
-        expect(info?.textContent).not.toContain("tab stops removed");
+        expect(info?.textContent).not.toContain("tab stop next to text");
 
         await apply();
         const notice = noticeCalls.find((m) => m.startsWith('Imported 1 snippet into "text-snippets"'));
         expect(notice).toBeDefined();
-        expect(notice).not.toContain("tab stops removed");
+        expect(notice).not.toContain("tab stop next to text");
     });
 
     it("[B-184] when every trigger collides: nothing to import, no preview, no write", async () => {

@@ -2,6 +2,7 @@ import { Modal, App, MarkdownView, Notice, setIcon } from "obsidian";
 import type { SnippetItem, SnippetSearchQuery } from "../../types";
 import type { SnippetPickerAPI } from "../../core/snippet-picker";
 import { insertSnippetAtCursor, wrapSelectionWithSnippet } from "../../adapters/obsidian-editor";
+import { startFieldSessionInEditor } from "../../adapters/field-session";
 import { clock } from "../../adapters/clock";
 import { readClipboardSafe } from "../../adapters/clipboard";
 import { PICKER_HOST_CLASS } from "../utils/style-hooks";
@@ -417,6 +418,7 @@ export class SnippetPickerModal extends Modal {
             ? wrapSelectionWithSnippet(editor, selectedSnippet.replacement, deps)
             : insertSnippetAtCursor(editor, selectedSnippet.replacement, deps);
         void run
+            .then((stops) => startFieldSessionInEditor(editor, stops))
             .catch((error: unknown) => {
                 console.error("Error inserting snippet:", error);
             })
