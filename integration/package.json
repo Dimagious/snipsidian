@@ -21,6 +21,7 @@
         "vitest": "5.1.0"
     },
     "overrides": {
-        "moment": "2.31.0"
+        "moment": "2.31.0",
+        "basic-ftp": "6.2.6"
     }
 }
