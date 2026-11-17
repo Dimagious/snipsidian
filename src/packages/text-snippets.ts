@@ -8,11 +8,13 @@ import { codeRanges, escapeLiteralTabstops } from "../engine/placeholders";
 import {
     SINGLE_STRUCTURAL_TRIGGER_MESSAGE,
     SINGLE_STRUCTURAL_TRIGGER_RE,
-    TRIGGER_CHARSET_DESCRIPTION,
-    TRIGGER_CHARSET_RE,
+    TRIGGER_CHARSET_UNICODE_DESCRIPTION,
+    findInvisibleTriggerChar,
     isBadTrigger,
+    matchesTriggerCharset,
     normalizeTrigger,
 } from "../engine/triggers";
+import { DEFAULT_DELIMITERS } from "../shared/delimiters";
 import { INSTALL_MAX_REPLACEMENT_LEN, INSTALL_MAX_TRIGGER_LEN } from "../services/package-validator";
 
 /** One record that couldn't be imported, and why. */
@@ -34,6 +36,10 @@ export interface TextSnippetsImportResult {
     snippets: Record<string, string>;
     skipped: TextSnippetsSkip[];
     warnings: TextSnippetsWarning[];
+    /** Import-wide remarks that belong to no single snippet (today: the
+     *  source plugin's custom word delimiters). Plain text made here,
+     *  never from the file. */
+    notes: string[];
 }
 
 /** Defaults of the source plugin (`main.ts` v0.1.2). */
@@ -41,6 +47,9 @@ const DEFAULT_END = "$end$";
 const DEFAULT_NEWLINE = "$nl$";
 const DEFAULT_STOP = "$tb$";
 const DEFAULT_PASTE = "$pst$";
+
+/** Default `wordDelimiters` of the source plugin (`main.ts` v0.1.2). */
+const DEFAULT_WORD_DELIMITERS = "$()[]{}<>,.!?;:'\"\\/";
 
 /** Snipsy fields are `$1`..`$9`. */
 const MAX_STOPS = 9;
@@ -219,15 +228,26 @@ function translateReplacement(
 }
 
 /** Returns a skip reason when Snipsy can't take this trigger, else null.
- *  Mirrors what `validatePackageForInstall` rejects per trigger, so one
+ *  Mirrors what `validatePackageForInstall` rejects per trigger with
+ *  `allowUnicodeLetters` on (the import opts in), so one
  *  bad trigger is reported here instead of failing the whole import. */
 function triggerProblem(trigger: string): string | null {
     if (trigger.length === 0) return "empty trigger";
     if (trigger.length > MAX_TRIGGER_LEN) return `trigger is longer than ${MAX_TRIGGER_LEN} characters`;
     if (SINGLE_STRUCTURAL_TRIGGER_RE.test(trigger)) return `trigger not allowed: ${SINGLE_STRUCTURAL_TRIGGER_MESSAGE}`;
     if (isBadTrigger(trigger)) return "trigger contains spaces, separators or characters Snipsy can't use";
-    if (!TRIGGER_CHARSET_RE.test(trigger)) return `trigger can only contain ${TRIGGER_CHARSET_DESCRIPTION}`;
+    const invisible = findInvisibleTriggerChar(trigger);
+    if (invisible) return `trigger contains an invisible character (${invisible})`;
+    if (!matchesTriggerCharset(trigger, true)) return `trigger can only contain ${TRIGGER_CHARSET_UNICODE_DESCRIPTION}`;
     return null;
+}
+
+/** Snipsy's word separators are fixed; say so when the source plugin's
+ *  were customised, so nothing is silently different. */
+function delimiterNotes(wordDelimiters: unknown): string[] {
+    if (typeof wordDelimiters !== "string" || wordDelimiters === DEFAULT_WORD_DELIMITERS) return [];
+    const list = DEFAULT_DELIMITERS.filter((d) => d.trim().length > 0).join(" ");
+    return [`Snipsy uses its own word separators (space, Tab, Enter and ${list}), not the delimiters set in Text Snippets`];
 }
 
 function preview(record: string): string {
@@ -301,7 +321,10 @@ export function textSnippetsDataToSnippets(jsonText: string): TextSnippetsImport
             skipped.push({ trigger: preview(record), reason: "no ' : ' separator" });
             continue;
         }
-        const trigger = normalizeTrigger(record.slice(0, idx));
+        // NFC: one canonical spelling per trigger (the matcher also tries the
+        // composed form of what was typed). Done before validation and the
+        // duplicate check.
+        const trigger = normalizeTrigger(record.slice(0, idx)).normalize("NFC");
         const problem = triggerProblem(trigger);
         if (problem) {
             // An empty trigger has nothing to show: label by the replacement
@@ -340,5 +363,5 @@ export function textSnippetsDataToSnippets(jsonText: string): TextSnippetsImport
     const snippets = Object.fromEntries(
         Array.from(found, ([trigger, { replace }]): [string, string] => [trigger, replace]),
     );
-    return { snippets, skipped, warnings: warningList };
+    return { snippets, skipped, warnings: warningList, notes: delimiterNotes(obj.wordDelimiters) };
 }

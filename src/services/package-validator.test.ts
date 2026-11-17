@@ -1040,6 +1040,75 @@ describe("package-validator", () => {
     });
   });
 
+  describe("validatePackageForInstall: allowUnicodeLetters (Text Snippets import)", () => {
+    const pkg = (trigger: string) => ({ label: "g", snippets: { [trigger]: "x" } });
+    const opt = { allowUnicodeLetters: true };
+
+    it("default call still rejects a Cyrillic trigger (community packs stay ASCII)", () => {
+      const r = validatePackageForInstall(pkg("прив"));
+      expect(r.isValid).toBe(false);
+      expect(r.errors[0]).toMatch(/can only contain letters, numbers/);
+    });
+
+    it("an explicit false behaves like the default", () => {
+      expect(validatePackageForInstall(pkg("прив"), { allowUnicodeLetters: false }).isValid).toBe(false);
+    });
+
+    it.each(["прив", "δ", "café", "日付", "cafe\u0301", ":прив", "a-б", "٣x"])(
+      "accepts %s with the opt-in",
+      (t) => {
+        expect(validatePackageForInstall(pkg(t), opt).isValid).toBe(true);
+      },
+    );
+
+    it.each([
+      ["emoji", "x\u{1F600}"],
+      ["zero-width joiner", "a\u200Db"],
+      ["zero-width space", "a\u200Bb"],
+      ["bidi override", "a\u202Eb"],
+      ["private-use marker", "a\uE002"],
+      ["variation selector", "a\uFE0F"],
+      ["combining grapheme joiner", "a\u034F"],
+      ["Hangul filler U+115F", "a\u115F"],
+      ["Hangul filler U+1160", "a\u1160"],
+      ["Hangul filler U+3164", "a\u3164"],
+      ["Hangul filler U+FFA0", "a\uFFA0"],
+      ["Khmer invisible vowel U+17B4", "a\u17B4"],
+      ["Khmer invisible vowel U+17B5", "a\u17B5"],
+      ["Khitan filler U+16FE4", "a\u{16FE4}"],
+      ["Brahmi number joiner U+1107F", "a\u{1107F}"],
+      ["Duployan thick letter selector U+1BC9D", "a\u{1BC9D}"],
+      ["Egyptian hieroglyph mirror U+13440", "a\u{13440}"],
+      ["Mongolian selector U+180F (range end)", "a\u180F"],
+      ["supplementary selector U+E01EF (range end)", "a\u{E01EF}"],
+      ["Mongolian free variation selector", "a\u180B"],
+      ["supplementary variation selector", "a\u{E0100}"],
+      ["lone combining mark", "\u0301"],
+      ["mark-leading trigger", "\u0301a"],
+      ["enclosing mark", "a\u20DD"],
+      ["space", "a b"],
+      ["no-break space", "a\u00A0b"],
+      ["slash", "a/b"],
+      ["backslash", "a\\b"],
+      ["dollar", "a$b"],
+      ["period", "a.b"],
+      ["control", "a\u0007"],
+    ])("still rejects %s with the opt-in", (_n, t) => {
+      expect(validatePackageForInstall(pkg(t), opt).isValid).toBe(false);
+    });
+
+    it("keeps the length cap and the single structural symbol rule", () => {
+      expect(validatePackageForInstall(pkg("б".repeat(51)), opt).isValid).toBe(false);
+      expect(validatePackageForInstall(pkg("б".repeat(50)), opt).isValid).toBe(true);
+      expect(validatePackageForInstall(pkg("-"), opt).isValid).toBe(false);
+    });
+
+    it("the error for a rejected trigger names the wider charset", () => {
+      const r = validatePackageForInstall(pkg("x\u{1F600}"), opt);
+      expect(r.errors[0]).toContain("letters of any language");
+    });
+  });
+
   describe("catalog compatibility (B-202)", () => {
     const dir = join(__dirname, "__fixtures__", "catalog");
     const files = readdirSync(dir).filter((f) => f.endsWith(".yml"));

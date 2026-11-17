@@ -30,10 +30,11 @@ const SUMMARY_SHOWN = 3;
  */
 export function formatTextSnippetsSummary(
   importedCount: number,
-  parsed: Pick<TextSnippetsImportResult, "skipped" | "warnings">,
+  parsed: Pick<TextSnippetsImportResult, "skipped" | "warnings"> &
+    Partial<Pick<TextSnippetsImportResult, "notes">>,
 ): string {
   const parts = [`${importedCount} imported`];
-  const { skipped, warnings } = parsed;
+  const { skipped, warnings, notes = [] } = parsed;
   if (skipped.length > 0) {
     const shown = skipped
       .slice(0, SUMMARY_SHOWN)
@@ -48,7 +49,12 @@ export function formatTextSnippetsSummary(
     const more = warnings.length > SUMMARY_SHOWN ? ", …" : "";
     parts.push(`${warnings.length} changed: ${shown.join(", ")}${more}`);
   }
+  for (const note of notes) parts.push(sanitizeForNotice(note, 200));
   return parts.join("; ");
+}
+
+function hasReport(parsed: TextSnippetsImportResult): boolean {
+  return parsed.skipped.length > 0 || parsed.warnings.length > 0 || parsed.notes.length > 0;
 }
 
 /**
@@ -138,7 +144,9 @@ export class TextSnippetsSection {
     // S-009: validation (count/size/charset) runs inside the planner,
     // before the diff and before any write. B-184: triggers owned by
     // ANOTHER group are left out (listed as skipped), the rest proceeds.
-    const plan = planGroupedImport(parsed.snippets, GROUP_SLUG, this.plugin.settings);
+    const plan = planGroupedImport(parsed.snippets, GROUP_SLUG, this.plugin.settings, {
+      allowUnicodeLetters: true,
+    });
 
     if (!plan.validation.isValid) {
       const first = plan.validation.errors[0] ?? "Import failed validation";
@@ -194,7 +202,7 @@ export class TextSnippetsSection {
     modal.open();
     // Skipped records and warnings are visible BEFORE the user applies
     // (same injection as the Espanso flow).
-    if (parsed.skipped.length > 0 || parsed.warnings.length > 0) {
+    if (hasReport(parsed)) {
       const infoEl = modal.contentEl.createDiv({
         cls: "snipsy-espanso-skip-status",
         attr: { "aria-live": "polite" },
@@ -214,7 +222,7 @@ export class TextSnippetsSection {
       changedCount === 0
         ? `No changes: "${GROUP_SLUG}" already matches your library`
         : `Imported ${changedCount} snippet${changedCount === 1 ? "" : "s"} into "${GROUP_SLUG}"`;
-    if (parsed.skipped.length > 0 || parsed.warnings.length > 0) {
+    if (hasReport(parsed)) {
       const msg = formatTextSnippetsSummary(parsedCount, parsed);
       statusEl.setText(msg);
       statusEl.show();

@@ -524,3 +524,30 @@ describe("install-plan.planGroupedImport (B-184: collisions skip, not abort)", (
         expect(Object.keys(plan.importable)).toEqual([]);
     });
 });
+
+describe("install-plan: allowUnicodeLetters opt-in", () => {
+    it("planGroupedInstall rejects a Cyrillic trigger by default and accepts it with the opt-in", () => {
+        const s = settingsWith({});
+        const def = planGroupedInstall({ "прив": "Привет!" }, "g", s);
+        expect(def.validation.isValid).toBe(false);
+        const on = planGroupedInstall({ "прив": "Привет!" }, "g", s, { allowUnicodeLetters: true });
+        expect(on.validation.isValid).toBe(true);
+        expect(on.diff.added).toEqual([{ key: "g/прив", value: "Привет!" }]);
+    });
+
+    it("planGroupedImport threads the opt-in; the default stays ASCII (S-009 gate kept)", () => {
+        const s = settingsWith({});
+        expect(planGroupedImport({ "прив": "x" }, "g", s).validation.isValid).toBe(false);
+        const plan = planGroupedImport({ "прив": "x" }, "g", s, { allowUnicodeLetters: true });
+        expect(plan.validation.isValid).toBe(true);
+        expect(plan.importable).toEqual({ "прив": "x" });
+    });
+
+    it("the gate still rejects an emoji trigger with the opt-in, and nothing is importable", () => {
+        const plan = planGroupedImport({ "ok": "1", "x\u{1F600}": "2" }, "g", settingsWith({}), {
+            allowUnicodeLetters: true,
+        });
+        expect(plan.validation.isValid).toBe(false);
+        expect(plan.importable).toEqual({});
+    });
+});
