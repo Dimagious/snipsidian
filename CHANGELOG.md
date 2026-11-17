@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Docs match 1.8.0** (B-252). `docs/wiki/` is removed: its eight pages described the 1.0 settings (four tabs, a Feedback tab), a `CURSOR_PLACEHOLDER` marker, built-in packs and a Google Form that no longer exist, and nothing in the repo or the plugin linked to them. What was still useful moved to `docs/reference.md`: a **Package format** section (the fields and limits `Share a package` checks, the 16 categories, the install caps) and two questions (where snippets live and sync, how to start over). The privacy text in the reference and on the site now says the Packages page fetches every pack file, cached for 24 hours, not only the one you install. The site gets a **Text Snippets import** page, lists all five commands (it said two) with what Add snippet from selection, Expand trigger at cursor and Next field do, suggests Next field for the phone toolbar, adds math to where Snipsy stays quiet, and says `$filename` includes the extension. `llms.txt` lists fields, both imports, the commands and links the reference.
+
 ## [1.8.0] - 2026-11-17
 
 ### Added

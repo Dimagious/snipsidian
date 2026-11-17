@@ -676,6 +676,7 @@ footer.note-foot a { color: var(--muted); }
         <ul>
           <li><a href="#catalog"><svg width="14" height="14"><use href="#i-file"/></svg>Community catalog<span class="ext">.md</span></a></li>
           <li><a href="#espanso"><svg width="14" height="14"><use href="#i-file"/></svg>Espanso import<span class="ext">.md</span></a></li>
+          <li><a href="#text-snippets"><svg width="14" height="14"><use href="#i-file"/></svg>Text Snippets import<span class="ext">.md</span></a></li>
           <li><a href="#backup"><svg width="14" height="14"><use href="#i-file"/></svg>Backup<span class="ext">.md</span></a></li>
         </ul>
       </li>
@@ -761,11 +762,12 @@ footer.note-foot a { color: var(--muted); }
           <a href="#prefix"><b>Prefix mode</b><span>Only <code>:todo</code> expands, plain <code>todo</code> stays a word</span></a>
           <a href="#catalog"><b>Community catalog</b><span>Thirteen packs, one click each, preview before writing</span></a>
           <a href="#espanso"><b>Espanso import</b><span>Paste a <code>.yml</code>, see what came across and what did not</span></a>
+          <a href="#text-snippets"><b>Text Snippets import</b><span>One click, tab stops become fields, triggers in any language</span></a>
         </div>
 
         <div class="callout accent">
           <div class="callout-title"><svg><use href="#i-info"/></svg>Where it stays out of the way</div>
-          <p>Not in fenced code, not in inline code, not in frontmatter, not in the middle of a word. Only real typing expands: a paste, an undo or another plugin's edit never does. <a href="#quiet">The full list</a>.</p>
+          <p>Not in fenced code, not in inline code, not in math, not in frontmatter, not in the middle of a word. Only real typing expands: a paste, an undo or another plugin's edit never does. <a href="#quiet">The full list</a>.</p>
         </div>
       </section>
 
@@ -783,10 +785,13 @@ footer.note-foot a { color: var(--muted); }
         <h3>Insert snippet…</h3>
         <p class="prose">For a snippet whose trigger you do not remember, run <b>Snipsy: Insert snippet…</b> from the command palette (<kbd>Ctrl/Cmd</kbd> <kbd>P</kbd>). It searches your triggers and shows the whole expansion before you pick one. With text selected, the same picker opens as <b>Wrap selection</b>.</p>
 
-        <div class="palette-demo" aria-label="Obsidian's command palette, filtered to Snipsy's two commands">
+        <div class="palette-demo" aria-label="Obsidian's command palette, filtered to Snipsy's five commands">
           <div class="q">snipsy<span class="caret"></span></div>
           <ul>
             <li class="sel"><b>Snipsy: Insert snippet…</b></li>
+            <li><b>Snipsy: Add snippet from selection</b></li>
+            <li><b>Snipsy: Expand trigger at cursor</b></li>
+            <li><b>Snipsy: Next field</b></li>
             <li><b>Snipsy: Open settings</b></li>
           </ul>
         </div>
@@ -814,11 +819,14 @@ footer.note-foot a { color: var(--muted); }
           <figcaption>Insert snippet with da typed. The query matches triggers, replacements and group names, and the preview shows the highlighted snippet.</figcaption>
         </figure>
 
+        <h3>The other commands</h3>
+        <p class="prose"><b>Add snippet from selection</b> turns the selected text into a snippet: you only type the trigger. <b>Expand trigger at cursor</b> expands the trigger right before the caret without a space, with the same rules as typing; with no trigger there and a snippet's fields open, it jumps to the next field, so one key does both. <b>Next field</b> jumps to the next field, for a phone toolbar or a keyboard without Tab. <b>Open settings</b> opens Snipsy's settings. None of them has a default hotkey.</p>
+
         <h3>A hotkey</h3>
-        <p class="prose">The second command, <b>Snipsy: Open settings</b>, opens the plugin's settings tab. To put a key on either one, go to <span class="path">Settings<i>›</i>Hotkeys</span> and search for "snipsy". Or use <b>Set hotkey for Insert snippet</b> in Snipsy's settings: it opens that screen with the search already filled in.</p>
+        <p class="prose">To put a key on any of them, go to <span class="path">Settings<i>›</i>Hotkeys</span> and search for "snipsy". Or use <b>Set hotkey for Insert snippet</b> in Snipsy's settings: it opens that screen with the search already filled in.</p>
 
         <h3 id="phone">On a phone</h3>
-        <p class="prose">The same snippets expand as you type on mobile, and the same picker opens. To reach it with one tap, add <b>Snipsy: Insert snippet…</b> to the editor toolbar under <span class="path">Settings<i>›</i>Toolbar</span>.</p>
+        <p class="prose">The same snippets expand as you type on mobile, and the same picker opens. To reach it with one tap, add <b>Snipsy: Insert snippet…</b> to the editor toolbar under <span class="path">Settings<i>›</i>Toolbar</span>. Add <b>Snipsy: Next field</b> there too to move between a snippet's fields without a Tab key.</p>
         <figure class="shot clip">
           <video data-clip src="img/clip-phone.mp4" poster="img/clip-phone.jpg" width="480" height="600" muted loop playsinline preload="none" aria-label="On a phone, typing todo and a space turns the line into a task. The toolbar button opens Insert snippet, and picking today adds the date after Call Sam."></video>
           <figcaption>A task by trigger, a date from the picker.</figcaption>
@@ -922,7 +930,7 @@ replacement: |
           <div><code>$date</code> today, as <code>YYYY-MM-DD</code>.</div>
           <div><code>$time</code> the time now, as <code>HH:mm</code>.</div>
           <div><code>{{date:FORMAT}}</code>, <code>{{time:FORMAT}}</code> a formatted date or time, the same syntax as core Templates. <code>{{date}}</code> alone is <code>YYYY-MM-DD</code>.</div>
-          <div><code>$filename</code> the name of the note you are typing in.</div>
+          <div><code>$filename</code> the file name of the note you are typing in, with its extension.</div>
           <div><code>$clipboard</code> what is on the clipboard, read at the moment the snippet expands.</div>
           <div><code>$1</code> to <code>$9</code> fields: Tab jumps from one to the next, Shift+Tab goes back, and the last Tab lands on <code>$|</code>, or after the text. A snippet with a single <code>$1</code> just puts the caret there. Over a selection in <b>Insert snippet…</b>, the first <code>$1</code> takes the selected text.</div>
         </div>
@@ -935,7 +943,7 @@ replacement: |
           <div>
             <div class="renders">renders as</div>
             <div class="ed mini" aria-label="The note after expansion: a heading with the note name, date and time, and a list item with the caret in it">
-              <div class="ed-doc" aria-hidden="true"><div class="ed-line"><span class="m-mark">## </span>Standup, <span data-today>2026-09-28</span> <span data-now>09:30</span></div><div class="ed-line"><span class="m-mark">- </span><span class="caret"></span> </div></div>
+              <div class="ed-doc" aria-hidden="true"><div class="ed-line"><span class="m-mark">## </span>Standup.md, <span data-today>2026-09-28</span> <span data-now>09:30</span></div><div class="ed-line"><span class="m-mark">- </span><span class="caret"></span> </div></div>
             </div>
           </div>
         </div>
@@ -993,6 +1001,7 @@ replacement: |
         <ul class="nope">
           <li>inside a fenced code block</li>
           <li>inside inline code</li>
+          <li>inside math, <code>$…$</code> and <code>$$…$$</code></li>
           <li>in YAML frontmatter</li>
           <li>in the middle of a word: <code>photodo</code> is left alone</li>
         </ul>
@@ -1128,6 +1137,36 @@ replacement: |
         </figure>
       </section>
 
+      <!-- ============ Packages/Text Snippets import.md ============ -->
+      <section class="file" id="text-snippets" data-title="Text Snippets import" data-path="Packages / Text Snippets import">
+        <div class="crumb">Packages/Text Snippets import.md</div>
+        <h2>Text Snippets import</h2>
+        <p class="prose">Coming from the Text Snippets plugin? Its last release was in 2022. On the Packages page, press <b>Import</b> under <b>Text Snippets import</b>. Snipsy reads that plugin's saved snippets, shows a preview, and copies them into a <code>text-snippets</code> group. The other plugin's files are only read, never changed.</p>
+        <div class="pair side">
+          <div class="codeblock" data-code>
+            <div class="bar"><span>Text Snippets</span><button class="copy" type="button">Copy</button></div>
+<pre><code class="yaml-plain">sig : Best,$nl$Dmitriy
+lnk : [[$end$]]
+mtg : Meeting with $tb$ at $tb$
+прив : Привет!</code></pre>
+          </div>
+          <div>
+            <div class="renders">imports as</div>
+            <div class="chips" style="flex-direction:column;align-items:flex-start;margin:0">
+              <span class="chip"><code class="tr">sig</code><span class="ar">→</span><span class="rs">Best,<span class="nl">↵</span>Dmitriy</span></span>
+              <span class="chip"><code class="tr">lnk</code><span class="ar">→</span><span class="rs">[[<span class="ph">$|</span>]]</span></span>
+              <span class="chip"><code class="tr">mtg</code><span class="ar">→</span><span class="rs">Meeting with <span class="ph">$1</span> at <span class="ph">$2</span></span></span>
+              <span class="chip"><code class="tr">прив</code><span class="ar">→</span><span class="rs">Привет!</span></span>
+            </div>
+          </div>
+        </div>
+        <p class="prose"><code>$end$</code> becomes the caret <code>$|</code>, <code>$nl$</code> a line break, <code>$pst$</code> becomes <code>$clipboard</code>, and <code>$tb$</code> stops become <a href="#placeholders">fields</a> you walk with Tab. Custom marker symbols are read from that plugin's settings. Triggers in any script come across (<code>прив</code>, <code>δ</code>, <code>café</code>, <code>日付</code>); emoji, spaces and invisible characters are skipped, and the preview says why.</p>
+        <div class="callout note">
+          <div class="callout-title"><svg><use href="#i-info"/></svg>Two differences</div>
+          <p>Snipsy expands as you type, after a space, Tab, Enter or punctuation, instead of waiting for a key. If you prefer a key, bind <b>Expand trigger at cursor</b> to the one you used. Custom word delimiters cannot be carried over: Snipsy has a fixed set, and the import tells you when yours differed.</p>
+        </div>
+      </section>
+
       <!-- ============ Packages/Backup.md ============ -->
       <section class="file" id="backup" data-title="Backup" data-path="Packages / Backup">
         <div class="crumb">Packages/Backup.md</div>
@@ -1139,10 +1178,10 @@ replacement: |
       <section class="file" id="privacy" data-title="Privacy" data-path="Privacy">
         <div class="crumb">Privacy.md</div>
         <h2>Privacy</h2>
-        <p class="prose">Snipsy works offline. Everything it keeps is in one file: <code>.obsidian/plugins/snipsidian/data.json</code>.</p>
+        <p class="prose">Snipsy works offline, apart from the Packages page. Everything it keeps is in one file: <code>.obsidian/plugins/snipsidian/data.json</code>.</p>
         <div class="callout note">
           <div class="callout-title"><svg><use href="#i-lock"/></svg>The only network calls</div>
-          <p>Both happen on the Packages page:<code>api.github.com</code> for the list of packs, <code>raw.githubusercontent.com</code> to download the one you install. No analytics, no telemetry, no account.</p>
+          <p>Both happen on the Packages page:<code>api.github.com</code> for the list of packs, <code>raw.githubusercontent.com</code> for the pack files, kept for 24 hours. No analytics, no telemetry, no account.</p>
         </div>
         <p class="prose"><code>$clipboard</code> reads the clipboard only when a snippet containing it expands. None of the defaults use it.</p>
       </section>
