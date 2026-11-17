@@ -4,6 +4,7 @@ import { Transaction, type Extension, type Text } from "@codemirror/state";
 import type { App } from "obsidian";
 import { tryExpandAtSeparator } from "../adapters/obsidian-editor";
 import { buildExpansionMarkExtension, markExpansion } from "./expansion-mark";
+import { buildFieldSessionExtension, startFieldSession } from "../adapters/field-session";
 import { readClipboardSafe } from "../adapters/clipboard";
 import { clock } from "../adapters/clock";
 import type { Dict } from "../engine/types";
@@ -109,9 +110,14 @@ function runExpansion(
         readClipboard: readClipboardSafe,
         prefix: getPrefix(),
     }).then((result) => {
+        if (!result) return;
+        // B-243: two or more fields open a session (the caret goes to the
+        // first one); the highlight/undo mark would be cleared by that caret
+        // move at once, so it is skipped.
+        if (result.session && startFieldSession(view, result.session)) return;
         // B-176: mark the landed expansion (opt-in). The field validates
         // the range against the live document, so a stale result is dropped.
-        if (result && getHighlight()) markExpansion(view, result);
+        if (getHighlight()) markExpansion(view, result);
     }).catch((err) => {
         console.error(
             "[snipsy] expansion error",
@@ -268,5 +274,6 @@ export function buildExpansionExtension(
             else handleViewUpdate(app, getSnippets, update, getPrefix, getHighlight);
         }),
         buildExpansionMarkExtension(getHighlight),
+        buildFieldSessionExtension(),
     ];
 }

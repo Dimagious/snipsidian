@@ -1,3 +1,4 @@
+import type { EditorView } from "@codemirror/view";
 import type { PackageItem } from "./services/community-packages";
 
 /**
@@ -27,6 +28,11 @@ declare module "obsidian" {
             openTabById(id: string): HotkeysTabHandle | undefined;
         };
         version: string;
+    }
+    // Obsidian's editor wraps a CodeMirror 6 view and exposes it as `cm`
+    // (undocumented, absent on a legacy editor), used to drive field sessions.
+    interface Editor {
+        cm?: EditorView;
     }
 }
 

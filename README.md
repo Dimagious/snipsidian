@@ -49,7 +49,8 @@ Math and more. Each pack gets its own group, so you can mute it or delete it who
 </p>
 
 **Take an expansion back.** Undo removes it in one step. Turn on **Highlight expansions** and
-Backspace restores the trigger too.
+Backspace restores the trigger too (not for a snippet with fields: the caret moves into the first
+field, so there is no highlight and Backspace is a normal Backspace).
 
 **Stop accidental expansions.** Mute a group, or turn on prefix mode so only `:todo` expands and
 `todo` stays a word.
@@ -68,8 +69,10 @@ Backspace restores the trigger too.
 
 **Text Snippets.** Its last release was in May 2022. On the Packages page, press **Import** under
 **Text Snippets import**. Snipsy shows a preview and copies your snippets into their own group,
-without changing anything in Text Snippets. Two differences: Snipsy expands as you type instead of
-waiting for Tab, and it has no tab stops.
+without changing anything in Text Snippets. Its `$tb$` tab stops become fields you walk with Tab
+(a stop glued to a letter or digit cannot be a field, the [reference](https://github.com/Dimagious/snipsidian/blob/HEAD/docs/reference.md) has the details).
+One difference: Snipsy expands as you type instead of waiting for a key. If you prefer to trigger
+expansion yourself, bind **Expand trigger at cursor** to the key you used there.
 
 <img alt="Pressing Import on the Packages page opens a preview of four new snippets. After Apply, typing sig and a space expands into a signature" src="docs/screens/text-snippets-import.gif" width="100%">
 
@@ -100,8 +103,8 @@ Delete any of them. **Settings → Snipsy → Restore default snippets** brings 
 
 | Placeholder | Becomes |
 |---|---|
-| `$\|` | where the cursor lands |
-| `$1` | the selected text, when you insert from the picker |
+| `$\|` | where the cursor lands, or the last stop when Tab walks fields |
+| `$1`, `$2`... | fields: Tab jumps from one to the next, Shift+Tab goes back. With only one `$1` it is the cursor. From the picker over a selection, `$1` takes the selected text |
 | `$date` · `$time` | today · now |
 | `{{date:dddd, D MMMM}}` | your own [Moment.js format](https://momentjs.com/docs/#/displaying/format/) |
 | `$filename` | the note's file name, with its extension |
@@ -115,7 +118,6 @@ The [reference](https://github.com/Dimagious/snipsidian/blob/HEAD/docs/reference
 - **Expansion outside Obsidian:** use [Espanso](https://espanso.org/).
 - **Regex triggers, or replacing text inside a word** (`y^2` into `y²`): use
   [Substitutions](https://github.com/BambusControl/obsidian-substitutions).
-- **Tab stops that jump between fields.**
 
 ## Privacy
 

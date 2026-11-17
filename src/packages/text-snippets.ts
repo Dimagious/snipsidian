@@ -4,6 +4,7 @@
 // Pure: no Obsidian imports, no I/O. The caller reads the file; this
 // module only turns its text into snippets plus honest skip/warning
 // reports, mirroring `espanso.ts` (B-139).
+import { codeRanges, escapeLiteralTabstops } from "../engine/placeholders";
 import {
     SINGLE_STRUCTURAL_TRIGGER_MESSAGE,
     SINGLE_STRUCTURAL_TRIGGER_RE,
@@ -40,6 +41,16 @@ const DEFAULT_END = "$end$";
 const DEFAULT_NEWLINE = "$nl$";
 const DEFAULT_STOP = "$tb$";
 const DEFAULT_PASTE = "$pst$";
+
+/** Snipsy fields are `$1`..`$9`. */
+const MAX_STOPS = 9;
+
+/** Private-use stand-in for a stop marker until its number is known. */
+const STOP_MARK = "\uE004";
+
+/** What follows `$N` when Snipsy would not read it as a field (mirrors the
+ *  lookahead of `TABSTOP_RE` in `engine/placeholders.ts`). */
+const STOP_GLUED_RE = /^(?:[\p{L}\p{N}_]|[.,][0-9])/u;
 
 /** Separator between trigger and replacement in one record. */
 const PAIR_SEPARATOR = " : ";
@@ -98,9 +109,19 @@ interface Markers {
  *   - <newline marker>     -> "\n"
  *   - first <end marker>   -> "$|"; later ones removed (warning)
  *   - <paste marker>       -> "$clipboard"
- *   - <stop marker>        -> removed (warning: no Snipsy tab stops),
- *     except that with no end marker the FIRST one becomes "$|" (the
- *     source plugin puts the cursor at the first tab stop)
+ *   - <stop marker>        -> "$1", "$2", ... in order of appearance
+ *     (B-243: Tab walks them). Snipsy has nine; later ones are removed
+ *     (warning). A stop that Snipsy would not read as a field (glued to
+ *     letters, digits or `_`, `$1.5`, right after a backslash, or inside
+ *     fenced or inline code, where the engine reads `$N` as literal text)
+ *     cannot be a field. With no end marker the FIRST such stop becomes the cursor
+ *     `$|`, as before fields existed (the source plugin puts the cursor at
+ *     its first stop, so `a$tb$b` keeps working); any other one is removed
+ *     with a warning. A single readable stop next to an end marker (or to
+ *     such a cursor) does not open a session in Snipsy (one field is just
+ *     the caret and `$|` wins), so it warns too.
+ *   - a literal `$1`..`$9` in a record that has stop markers would turn
+ *     into a field, so it is escaped (`\$5`) with a warning.
  */
 function translateReplacement(
     raw: string,
@@ -111,13 +132,10 @@ function translateReplacement(
         .map(escapeRegExp)
         .concat("\\n")
         .join("|");
-    // Without an end marker the first stop marker carries the cursor.
-    const hasEnd = raw.includes(markers.end);
     let endSeen = false;
     let extraEnd = false;
-    let stopSeen = false;
-    let stopAsCursor = false;
-    const text = raw.replace(new RegExp(alternation, "g"), (token) => {
+    // The stand-in character itself must not come from the data.
+    let translated = raw.split(STOP_MARK).join("").replace(new RegExp(alternation, "g"), (token) => {
         if (token === "\n") return "";
         if (token === markers.newline) return "\n";
         if (token === markers.end) {
@@ -129,16 +147,73 @@ function translateReplacement(
             return "$|";
         }
         if (token === markers.paste) return "$clipboard";
-        if (!hasEnd && !stopAsCursor) {
-            stopAsCursor = true;
-            stopSeen = true;
-            return "$|";
-        }
-        stopSeen = true;
-        return "";
+        return STOP_MARK;
     });
     const warnings: string[] = [];
-    if (stopSeen) warnings.push("tab stops removed");
+    if (translated.includes(STOP_MARK)) {
+        const escaped = escapeLiteralTabstops(translated);
+        if (escaped !== translated) {
+            translated = escaped;
+            warnings.push("literal $1 to $9 escaped (\\$N) so it stays text next to tab stops");
+        }
+    }
+    // Second pass: what follows each stop is judged against the FINAL text,
+    // so removing a stop (glued, or beyond the ninth) re-judges its
+    // neighbours (`$tb$$tb$abc` must not leave a `$1abc`). Marks only ever
+    // disappear or become `$|`, so the loop ends.
+    let unreadable = false;
+    let inCode = false;
+    let overflow = false;
+    let stopAsCursor = false;
+    let work = translated;
+    for (;;) {
+        const ranges = codeRanges(work);
+        let r = 0;
+        const parts: string[] = [];
+        let last = 0;
+        let kept = 0;
+        let changed = false;
+        for (let at = work.indexOf(STOP_MARK); at !== -1; at = work.indexOf(STOP_MARK, at + 1)) {
+            while (r < ranges.length && (ranges[r]?.[1] ?? 0) <= at) r++;
+            const range = ranges[r];
+            const code = range !== undefined && at >= range[0] && at < range[1];
+            const glued = work[at - 1] === "\\" || STOP_GLUED_RE.test(work.slice(at + 1, at + 3));
+            let replacement = STOP_MARK;
+            if (glued || code) {
+                changed = true;
+                if (!endSeen && !stopAsCursor) {
+                    stopAsCursor = true;
+                    replacement = "$|";
+                } else {
+                    if (code) inCode = true;
+                    else unreadable = true;
+                    replacement = "";
+                }
+            } else if (kept >= MAX_STOPS) {
+                changed = true;
+                overflow = true;
+                replacement = "";
+            } else {
+                kept++;
+            }
+            parts.push(work.slice(last, at), replacement);
+            last = at + 1;
+        }
+        if (!changed) break;
+        parts.push(work.slice(last));
+        work = parts.join("");
+    }
+    const pieces = work.split(STOP_MARK);
+    const stops = pieces.length - 1;
+    const text = pieces.reduce((acc, piece, i) => `${acc}$${i}${piece}`);
+    if (unreadable) {
+        warnings.push("tab stop next to text or a backslash removed");
+    }
+    if (inCode) warnings.push("tab stop inside code removed");
+    if (overflow) warnings.push(`more than ${MAX_STOPS} tab stops, the extra ones removed`);
+    if (stops === 1 && (endSeen || stopAsCursor)) {
+        warnings.push("single tab stop ignored, cursor goes to the end marker");
+    }
     if (extraEnd) warnings.push("extra cursor markers removed, only the first is kept");
     return { text, warnings };
 }
@@ -242,8 +317,8 @@ export function textSnippetsDataToSnippets(jsonText: string): TextSnippetsImport
             skipped.push({ trigger, reason: "sample snippet from the Text Snippets plugin" });
             continue;
         }
-        // A lone cursor marker inserts nothing, same as an empty record.
-        if (text.length === 0 || text === "$|") {
+        // Only cursor markers / stops insert nothing, same as an empty record.
+        if (text.length === 0 || /^(?:\$\||\$[1-9])+$/.test(text)) {
             skipped.push({ trigger, reason: "empty replacement" });
             continue;
         }

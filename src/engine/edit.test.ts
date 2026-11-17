@@ -56,4 +56,30 @@ describe("buildEdit", () => {
         const plan = buildEdit(input, match, applied);
         expect(plan.newCursor).toBeUndefined();
     });
+
+    // B-243
+    it("passes the field offsets and the final stop through", () => {
+        const input = { textBefore: "lnk", textAfter: "", lastTyped: " ", sepCh: 3 };
+        const match = { trigger: "lnk", fromCh: 0, toCh: 3 };
+        const plan = buildEdit(input, match, { text: "[](url)", cursorDelta: 1, fields: [1, 6], docOrder: [0, 1], finalDelta: 7 });
+        expect(plan.fields).toEqual([1, 6]);
+        expect(plan.docOrder).toEqual([0, 1]);
+        expect(plan.final).toBe(7);
+        expect(plan.newCursor).toEqual({ lineDelta: 0, ch: 1 });
+    });
+
+    it("without `$|` the plan has no final stop (the adapter puts it after the separator)", () => {
+        const input = { textBefore: "lnk", textAfter: "", lastTyped: " ", sepCh: 3 };
+        const match = { trigger: "lnk", fromCh: 0, toCh: 3 };
+        const plan = buildEdit(input, match, { text: "[](url)", cursorDelta: 1, fields: [1, 6], docOrder: [0, 1] });
+        expect(plan.fields).toEqual([1, 6]);
+        expect(plan.final).toBeUndefined();
+    });
+
+    it("a plan without fields carries neither fields nor final", () => {
+        const input = { textBefore: "brb", textAfter: "", lastTyped: " ", sepCh: 3 };
+        const plan = buildEdit(input, { trigger: "brb", fromCh: 0, toCh: 3 }, { text: "x" });
+        expect(plan).not.toHaveProperty("fields");
+        expect(plan).not.toHaveProperty("final");
+    });
 });

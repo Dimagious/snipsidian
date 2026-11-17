@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { textSnippetsDataToSnippets } from "./text-snippets";
+import { codeRanges, countTabstops } from "../engine/placeholders";
 
 /** Build a data.json text from a raw `snippets_file` plus overrides. */
 function data(file: string, extra: Record<string, unknown> = {}): string {
@@ -115,37 +116,175 @@ describe("textSnippetsDataToSnippets: markers", () => {
         expect(r.snippets).toEqual({ cp: "[$clipboard](url)" });
     });
 
-    it("with no end marker, maps the FIRST $tb$ to $| and removes the rest (warns)", () => {
+    it("B-243: $tb$ markers become $1, $2, ... in order of appearance", () => {
         const r = textSnippetsDataToSnippets(data("form : Name: $tb$ Age: $tb$ City: $tb$"));
-        expect(r.snippets).toEqual({ form: "Name: $| Age:  City: " });
-        expect(r.warnings).toEqual([{ trigger: "form", message: "tab stops removed" }]);
+        expect(r.snippets).toEqual({ form: "Name: $1 Age: $2 City: $3" });
+        expect(r.warnings).toEqual([]);
     });
 
-    it("a single $tb$ and no end marker becomes the cursor", () => {
+    it("a single $tb$ and no end marker becomes $1 (the caret), no warning", () => {
+        const r = textSnippetsDataToSnippets(data("one : a$tb$ b"));
+        expect(r.snippets).toEqual({ one: "a$1 b" });
+        expect(r.warnings).toEqual([]);
+    });
+
+    it("stops and an end marker: stops are fields, $end$ is the final stop", () => {
+        const r = textSnippetsDataToSnippets(data("both : $tb$ A $tb$ B$end$"));
+        expect(r.snippets).toEqual({ both: "$1 A $2 B$|" });
+        expect(r.warnings).toEqual([]);
+    });
+
+    it("a single stop next to an end marker warns: Snipsy ignores one field", () => {
+        const r = textSnippetsDataToSnippets(data("both : $tb$ A$end$"));
+        expect(r.snippets).toEqual({ both: "$1 A$|" });
+        expect(r.warnings).toEqual([
+            { trigger: "both", message: "single tab stop ignored, cursor goes to the end marker" },
+        ]);
+    });
+
+    it("keeps nine stops and removes the rest with a warning", () => {
+        const record = `n : ${Array.from({ length: 11 }, (_, i) => `s${i} $tb$ `).join("")}`;
+        const r = textSnippetsDataToSnippets(data(record));
+        expect(r.snippets.n).toContain("s8 $9 ");
+        expect(r.snippets.n).toContain("s9  s10  ");
+        expect(r.snippets.n).not.toContain("$10");
+        expect(r.warnings).toEqual([{ trigger: "n", message: "more than 9 tab stops, the extra ones removed" }]);
+    });
+
+    it("a stop Snipsy would not read as a field: the first becomes the cursor, the others are removed, numbering stays gap-free", () => {
+        const r = textSnippetsDataToSnippets(data("g : a$tb$b $tb$ c $tb$.5 \\$tb$ d $tb$"));
+        expect(r.snippets).toEqual({ g: "a$|b $1 c .5 \\ d $2" });
+        expect(r.warnings).toEqual([{ trigger: "g", message: "tab stop next to text or a backslash removed" }]);
+    });
+
+    it("regression: removing a glued stop re-judges its neighbour ($tb$$tb$abc$end$ leaves no `$1abc`)", () => {
+        const r = textSnippetsDataToSnippets(data("a : $tb$$tb$abc$end$"));
+        expect(r.snippets).toEqual({ a: "abc$|" });
+        expect(r.warnings.map((w) => w.message)).toEqual(["tab stop next to text or a backslash removed"]);
+    });
+
+    it("two glued stops: the first is the cursor, the second removed, and the stop before them stays a field", () => {
+        const r = textSnippetsDataToSnippets(data("a : $tb$ x $tb$ab$tb$cd $tb$"));
+        expect(r.snippets).toEqual({ a: "$1 x $|abcd $2" });
+    });
+
+    it("a chain of stops glued to text is removed from the right, with an overflow of ten ahead of it", () => {
+        const stops = "$tb$ ".repeat(9);
+        const r = textSnippetsDataToSnippets(data(`o : ${stops}$tb$$tb$abc$end$`));
+        expect(r.snippets.o).toBe("$1 $2 $3 $4 $5 $6 $7 $8 $9 abc$|");
+    });
+
+    it("never emits a $N that the engine would not read as a field", () => {
+        // [record, literal $N the source itself holds inside code]
+        const records: Array<[string, number]> = [
+            ["$tb$$tb$abc$end$", 0],
+            ["$tb$$tb$abc", 0],
+            ["$tb$$tb$.5 $tb$", 0],
+            ["\\$tb$$tb$ x", 0],
+            ["$tb$ ".repeat(12) + "$tb$z", 0],
+            ["a$tb$b$tb$c$tb$d $tb$ $tb$", 0],
+            ["```js$nl$console.log($tb$)$nl$```", 0],
+            ["```$tb$$nl$$end$$nl$```", 0],
+            ["`$tb$` and $tb$", 0],
+            ["use `git $tb$` then $tb$ and $tb$", 0],
+            ["`$5` $tb$ $tb$ `$tb$`", 1],
+            ["$tb$ $tb$ ```$nl$$tb$$nl$```$nl$$tb$", 0],
+        ];
+        for (const [i, [record, literalInCode]] of records.entries()) {
+            const out = textSnippetsDataToSnippets(data(`t${i} : ${record}`)).snippets[`t${i}`] ?? "";
+            const ranges = codeRanges(out);
+            const inCode = (at: number): boolean => ranges.some(([from, to]) => at >= from && at < to);
+            const hits = [...out.matchAll(/\$[1-9]/g)].map((m) => m.index ?? 0);
+            expect(countTabstops(out), out).toBe(hits.filter((at) => !inCode(at)).length);
+            expect(hits.filter(inCode).length, out).toBe(literalInCode);
+        }
+    });
+
+    it("regression: a stop inside a fenced code block is not numbered (the first is the cursor, as at base)", () => {
+        const r = textSnippetsDataToSnippets(data("f : ```js$nl$console.log($tb$)$nl$```"));
+        expect(r.snippets.f).toBe("```js\nconsole.log($|)\n```");
+        expect(r.warnings).toEqual([]);
+    });
+
+    it("regression: a lone stop in code with an end marker is removed with a code warning, not 'single tab stop ignored'", () => {
+        const r = textSnippetsDataToSnippets(data("f : ```$tb$$nl$$end$$nl$```"));
+        expect(r.snippets.f).toBe("```\n$|\n```");
+        expect(r.warnings.map((w) => w.message)).toEqual(["tab stop inside code removed"]);
+    });
+
+    it("regression: a stop inside inline code is not numbered", () => {
+        const a = textSnippetsDataToSnippets(data("a : `$tb$` and $tb$"));
+        expect(a.snippets.a).toBe("`$|` and $1");
+        const b = textSnippetsDataToSnippets(data("b : use `git $tb$` then $tb$ and $tb$"));
+        expect(b.snippets.b).toBe("use `git $|` then $1 and $2");
+        expect(b.warnings).toEqual([]);
+    });
+
+    it("a second stop in code (cursor already taken) is removed with a code warning", () => {
+        const r = textSnippetsDataToSnippets(data("c : `$tb$` `$tb$` $tb$ $tb$"));
+        expect(r.snippets.c).toBe("`$|` `` $1 $2");
+        expect(r.warnings.map((w) => w.message)).toEqual(["tab stop inside code removed"]);
+    });
+
+    it("with an end marker an unreadable stop is removed (the end marker keeps the cursor)", () => {
+        const r = textSnippetsDataToSnippets(data("g : a$tb$b $tb$ c$end$"));
+        expect(r.snippets).toEqual({ g: "ab $1 c$|" });
+        expect(r.warnings.map((w) => w.message)).toEqual([
+            "tab stop next to text or a backslash removed",
+            "single tab stop ignored, cursor goes to the end marker",
+        ]);
+    });
+
+    it("regression: a lone $tb$ glued to text still becomes the cursor (a$tb$b -> a$|b)", () => {
         const r = textSnippetsDataToSnippets(data("one : a$tb$b"));
         expect(r.snippets).toEqual({ one: "a$|b" });
-        expect(r.warnings).toEqual([{ trigger: "one", message: "tab stops removed" }]);
+        expect(r.warnings).toEqual([]);
     });
 
-    it("with both end and stop markers, the end marker is the cursor and ALL stops are removed", () => {
-        const r = textSnippetsDataToSnippets(data("both : $tb$A$end$B$tb$"));
-        expect(r.snippets).toEqual({ both: "A$|B" });
-        expect(r.warnings).toEqual([{ trigger: "both", message: "tab stops removed" }]);
-    });
-
-    it("a custom stop marker also becomes the cursor when there is no end marker", () => {
+    it("regression: custom stop markers glued to text keep the cursor (x##y##z -> x$|yz)", () => {
         const r = textSnippetsDataToSnippets(data("c : x##y##z", { stopSymbol: "##" }));
         expect(r.snippets).toEqual({ c: "x$|yz" });
+        expect(r.warnings).toEqual([{ trigger: "c", message: "tab stop next to text or a backslash removed" }]);
+    });
+
+    it("a literal $5 next to stop markers is escaped, not turned into a field", () => {
+        const r = textSnippetsDataToSnippets(data("p : Price $5, name $tb$"));
+        expect(r.snippets).toEqual({ p: "Price \\$5, name $1" });
+        expect(r.warnings).toEqual([
+            { trigger: "p", message: "literal $1 to $9 escaped (\\$N) so it stays text next to tab stops" },
+        ]);
+    });
+
+    it("a literal $N is left alone when the record has no stop markers (and an escaped one stays)", () => {
+        expect(textSnippetsDataToSnippets(data("p : Price $5")).snippets).toEqual({ p: "Price $5" });
+        const r = textSnippetsDataToSnippets(data("q : cost \\$5 and $tb$ $tb$"));
+        expect(r.snippets).toEqual({ q: "cost \\$5 and $1 $2" });
+        expect(r.warnings).toEqual([]);
+    });
+
+    it("a stop-marker stand-in character inside the data is not a stop", () => {
+        const r = textSnippetsDataToSnippets(data("s : a\uE004b $tb$ $tb$"));
+        expect(r.snippets).toEqual({ s: "ab $1 $2" });
+    });
+
+    it("adjacent stops are both fields", () => {
+        const r = textSnippetsDataToSnippets(data("adj : [$tb$$tb$]"));
+        expect(r.snippets).toEqual({ adj: "[$1$2]" });
+    });
+
+    it("a custom stop marker also becomes fields", () => {
+        const r = textSnippetsDataToSnippets(data("c : x ## y ## z", { stopSymbol: "##" }));
+        expect(r.snippets).toEqual({ c: "x $1 y $2 z" });
     });
 
     it("applies all markers together in one replacement, order-independent", () => {
         const r = textSnippetsDataToSnippets(
-            data("all : $tb$A$nl$\n$pst$$end$B$end$"),
+            data("all : $tb$ A$nl$\n$pst$$end$B$end$"),
         );
-        expect(r.snippets).toEqual({ all: "A\n$clipboard$|B" });
+        expect(r.snippets).toEqual({ all: "$1 A\n$clipboard$|B" });
         expect(r.warnings.map((w) => w.message).sort()).toEqual([
             "extra cursor markers removed, only the first is kept",
-            "tab stops removed",
+            "single tab stop ignored, cursor goes to the end marker",
         ]);
     });
 
@@ -158,8 +297,10 @@ describe("textSnippetsDataToSnippets: markers", () => {
                 newlineSymbol: "~~",
             }),
         );
-        expect(r.snippets).toEqual({ a: "[[$|]] $clipboard  \n" });
-        expect(r.warnings).toEqual([{ trigger: "a", message: "tab stops removed" }]);
+        expect(r.snippets).toEqual({ a: "[[$|]] $clipboard $1 \n" });
+        expect(r.warnings).toEqual([
+            { trigger: "a", message: "single tab stop ignored, cursor goes to the end marker" },
+        ]);
     });
 
     it("falls back to defaults for empty or wrong-typed markers", () => {
@@ -171,9 +312,9 @@ describe("textSnippetsDataToSnippets: markers", () => {
 
     it("does not re-scan produced text: a custom stop marker equal to a placeholder piece stays safe", () => {
         const r = textSnippetsDataToSnippets(data("a : $pst$|", { stopSymbol: "|" }));
-        // `|` is the stop marker (-> cursor, no end marker); the produced
+        // `|` is the stop marker (-> `$1`, a single field); the produced
         // `$clipboard` is not re-scanned.
-        expect(r.snippets).toEqual({ a: "$clipboard$|" });
+        expect(r.snippets).toEqual({ a: "$clipboard$1" });
     });
 
     it("leaves Snipsy placeholder syntax already in the text untouched", () => {

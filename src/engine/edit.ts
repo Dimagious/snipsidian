@@ -13,8 +13,14 @@ export function buildEdit(
     // AFTER the typed separator, outside the replaced range, so the editor
     // maps it through `replaceRange` onto the right spot on its own. The old
     // "end of insert" position landed BEFORE the separator.
-    if (applied.cursorDelta === undefined) return { fromCh, toCh, insert };
-    return { fromCh, toCh, insert, newCursor: offsetToLineCol(insert, applied.cursorDelta, fromCh) };
+    // B-243: the same holds for the final stop of a field session: without
+    // `$|` it is left undefined and the adapter puts it after the typed
+    // separator, where the caret sits when there are no fields.
+    const stops = applied.fields
+        ? { fields: applied.fields, docOrder: applied.docOrder, final: applied.finalDelta }
+        : {};
+    if (applied.cursorDelta === undefined) return { fromCh, toCh, insert, ...stops };
+    return { fromCh, toCh, insert, newCursor: offsetToLineCol(insert, applied.cursorDelta, fromCh), ...stops };
 }
 
 /** Convert a character offset inside `insert` to a (lineDelta, ch) position

@@ -20,6 +20,16 @@ palette. It searches triggers and replacements, previews the result, and inserts
 Select some text first and `$1` in the snippet receives it. **Settings → Snipsy → Set hotkey
 for Insert snippet** opens the Hotkeys tab already filtered to that command.
 
+**Snipsy: Expand trigger at cursor** expands the trigger that ends right at the caret, without
+typing a separator. It follows the same rules as typing (code, math, frontmatter, prefix mode,
+disabled groups). When there is no trigger at the caret but a field session is open, it jumps to the
+next field, so one hotkey can do both. Otherwise it does nothing and shows nothing. It has no default
+hotkey; assign one in Obsidian's Hotkeys. It expands only when the caret is at the end of the
+trigger: inside a word (`sig|nature`) nothing happens, the next character has to be a separator or the
+end of the line. **Snipsy: Next field** jumps to the next field of an open
+session, for devices without a Tab key (add it to the mobile toolbar); with no session open it does
+nothing. It has no default hotkey either.
+
 To turn text you already wrote into a snippet, select it and run **Snipsy: Add snippet from
 selection**. The Add snippet window opens with the replacement filled in from your selection;
 type a trigger and save. The note is not changed.
@@ -72,7 +82,9 @@ expansion gets a dotted underline (the background flash is brief; the underline 
 expansion back: `be right back·` turns into `brb·` exactly as you typed it (the space or punctuation
 included), and the restored trigger does not expand again. Backspace is a normal Backspace as soon as
 you move the caret, click, type or paste anything, so it never eats a character you meant to delete. Undo is not offered when Enter ends the trigger and
-Obsidian continues a list or indentation on the new line.
+Obsidian continues a list or indentation on the new line. A snippet with fields (two or more of
+`$1`..`$9`) gets no underline and no Backspace-undo: the caret moves into its first field at once,
+which would clear the mark. Undo (Cmd/Ctrl+Z) still takes it back.
 
 ## Your own snippets
 
@@ -102,14 +114,40 @@ and tables.
 
 | Placeholder | Becomes |
 |---|---|
-| `$\|` | where the cursor lands after expanding |
-| `$1` | the selected text, when you insert the snippet from the picker over a selection. Otherwise it is the cursor when the snippet has no `$\|`: `[$1](url)` puts the caret between the brackets. Further `$1`..`$9` are dropped. Not a tabstop: `$1` followed by a letter, digit or `_` (`$10`, `$1x`, `$1é`), by `.` or `,` and a digit (`$1.50`, `$1,000`), or inside a code block or `inline code`. `$5 each` is still a tabstop, so write `\$5` for a literal dollar amount |
+| `$\|` | where the cursor lands after expanding; with fields, the last stop Tab reaches |
+| `$1`..`$9` | fields, see [Fields](#fields-tab-stops). From the picker over a selection, the first `$1` receives the selected text. A snippet with a single `$1` (and no other field) puts the caret there: `[$1](url)` puts the caret between the brackets, no Tab needed. Not a field: `$1` followed by a letter, digit or `_` (`$10`, `$1x`, `$1é`), by `.` or `,` and a digit (`$1.50`, `$1,000`), or inside a code block or `inline code`. `$5 each` is still a tabstop, so write `\$5` for a literal dollar amount |
 | `$date` | today, `YYYY-MM-DD` |
 | `$time` | now, `HH:mm` |
 | `{{date}}`, `{{time}}` | today / now in `YYYY-MM-DD` / `HH:mm`, the same tokens as core Templates |
 | `{{date:FORMAT}}`, `{{time:FORMAT}}` | your own [Moment.js format](https://momentjs.com/docs/#/displaying/format/), e.g. `{{date:dddd, D MMMM}}` gives `Tuesday, 2 September`; wrap literal text in `[ ]`. An empty format (`{{date:}}`) uses the default |
 | `$filename` | the current note's file name, with its extension (`Meeting.md`) |
 | `$clipboard` | what is on your clipboard at that moment |
+
+### Fields (Tab stops)
+
+Give a snippet two or more fields, `$1` to `$9`, and Tab walks through them: `[$1]($2)` expands
+to `[]()` with the caret between the brackets; type the text, press Tab, type the address, press
+Tab again and the caret leaves the snippet.
+
+- **Order:** ascending number, and left to right for equal numbers. Each `$N` is its own stop: the
+  same number twice is two stops, not one mirrored field.
+- **Last stop:** the `$|` of the snippet. Without one, the caret ends up where it would be with no
+  fields at all: right after the inserted text for **Expand trigger at cursor** and the picker, and
+  after the separator you typed (the space, or the start of the next line after Enter) when the
+  snippet expanded as you typed. Tab from the last field goes there and ends the session.
+- **Keys:** Tab next, Shift+Tab previous (it stays on the first), Escape ends the session. These
+  keys are taken only while a session is open, so a list item still indents on Tab and other plugins
+  keep their Tab. Clicking or arrowing out of the fields ends the session too, and
+  expanding a snippet with fields replaces it (a plain or one-field snippet expanded inside the
+  current field keeps it); switching to the Command Palette or another app does not. Typing inside a field makes it longer; going back to a field you filled selects its
+  text.
+- **Look:** an empty field shows as a small underlined slot, a filled one with a soft background.
+  Nothing is written into the note, and nothing is left behind when the session ends.
+- **One field is not a session:** a snippet with a single `$1` behaves as before, the caret lands
+  there and Tab is not involved. Combine it with `$|` and `$|` wins.
+- **Picker:** inserting over a selection puts the selection into the first `$1`; the session starts
+  at the next field.
+- **No keyboard:** run **Snipsy: Next field** from the toolbar or a hotkey.
 
 ### Groups
 
@@ -176,13 +214,19 @@ Coming from the Text Snippets plugin (`text-snippets-obsidian`)? Press **Import*
 **Text Snippets import** on the Packages page. Snipsy reads that plugin's saved snippets, shows
 what it cannot take, shows a preview, and installs the rest into a `text-snippets` group once you
 press **Apply**. Nothing in the other plugin is changed. `$end$` becomes `$|`, `$pst$` becomes
-`$clipboard`, `$nl$` becomes a line break, and `$tb$` tab stops are dropped (Snipsy has none; with
-no `$end$`, the first one becomes the cursor). Your custom marker symbols are honored. If a trigger
+`$clipboard`, `$nl$` becomes a line break, and `$tb$` tab stops become fields `$1`, `$2`... in the order they appear (Tab walks
+them, see [Fields](#fields-tab-stops); up to nine, the rest are removed and named). Your custom marker symbols are honored. If a trigger
 appears twice, the later one wins, like it does there, and the plugin's default sample snippet is
 skipped. A few small deviations are deliberate: a second `$end$` is removed (the original left it as
 text), every `$pst$` is replaced, triggers are trimmed and a leading or trailing `:` is stripped, text after
-a second ` : ` is kept, and a snippet with both `$end$` and `$tb$` puts the cursor at `$end$` (the
-original jumped to the first tab stop). Triggers with spaces or characters Snipsy does not allow are
+a second ` : ` is kept, and a snippet with `$end$` and tab stops ends at `$end$` after the last field.
+A tab stop glued to a letter, digit or backslash (`a$tb$b`) cannot be a field in Snipsy. With no
+`$end$` the first such stop becomes the cursor, as before fields existed (`a$tb$b` becomes `a$|b`);
+any other one is removed with a warning, so a snippet that relies on several glued stops loses all
+but the first. A single tab stop next to `$end$` is ignored because one field is only the caret.
+A literal `$1`..`$9` in a snippet that also has tab stops is escaped (`\$5`) and reported, so it
+stays text. Tab stops inside fenced code or inline code are literal in Snipsy, so they are treated
+like glued ones (the first becomes the cursor, any other is removed with a warning). Triggers with spaces or characters Snipsy does not allow are
 skipped and named. Snipsy expands these automatically as you type (Text Snippets waited for Tab),
 so disable the group or turn on prefix mode if a trigger fires too often.
 
@@ -248,8 +292,10 @@ Yes. The plugin is not desktop-only, and the picker fits a phone screen.
 <details>
 <summary>Are <code>$1</code> and <code>$2</code> Tab-stops?</summary>
 
-No. `$1` takes the selected text when you insert from the picker. There is no jumping between
-fields with Tab, by design.
+Yes, when a snippet has two or more of them: Tab jumps from one to the next, then to `$|` or the
+end of the snippet. A snippet with a single `$1` just puts the caret there. `$1` also takes the
+selected text when you insert from the picker over a selection. See
+[Fields](#fields-tab-stops).
 
 </details>
 

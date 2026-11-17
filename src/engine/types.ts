@@ -43,6 +43,26 @@ export type TriggerMatch = {
 export type AppliedReplacement = {
     text: string;
     cursorDelta?: number; // cursor position change after replacement
+    /** B-243: offsets in `text` of the fields, in visit order (ascending
+     *  number, ties by position). Absent unless the snippet has 2+ tabstops. */
+    fields?: number[];
+    /** B-243: document index of each field in `fields` (breaks ties between
+     *  fields at one offset: `$2$1`). */
+    docOrder?: number[];
+    /** B-243: offset in `text` of the final stop. Present only when the
+     *  replacement has `$|`; absent = the end of the insert (plus the typed
+     *  separator on the trigger path). */
+    finalDelta?: number;
+};
+
+/** B-243: where a field session starts, as document offsets. */
+export type FieldStops = {
+    /** Field positions in visit order. */
+    fields: number[];
+    /** Document index of each field in `fields` (tie-break for equal offsets). */
+    docOrder?: number[];
+    /** Where the last Tab lands. */
+    final: number;
 };
 
 export type EditPlan = {
@@ -55,4 +75,10 @@ export type EditPlan = {
      *  (when `lineDelta` > 0, `ch` is the column from the start of that line;
      *  when `lineDelta` === 0, `ch` is `fromCh + offset`). */
     newCursor?: { lineDelta: number; ch: number };
+    /** B-243: offsets inside `insert` (visit order) and of the final stop. */
+    fields?: number[];
+    docOrder?: number[];
+    /** Offset inside `insert` of the final stop (`$|`); absent = the end of
+     *  the insert plus the typed separator. */
+    final?: number;
 };

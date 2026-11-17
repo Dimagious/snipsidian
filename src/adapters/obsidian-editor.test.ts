@@ -12,7 +12,7 @@ vi.mock("obsidian", async () => {
     };
 });
 
-import { makeExpandInput, makeContext, applyEditPlan, tryExpandAtSeparator, insertSnippetAtCursor, wrapSelectionWithSnippet } from "./obsidian-editor";
+import { makeExpandInput, makeContext, applyEditPlan, tryExpandAtSeparator, tryExpandAtCursor, insertSnippetAtCursor, wrapSelectionWithSnippet } from "./obsidian-editor";
 import type { Dict } from "../engine/types";
 import { MockEditor, asEditor } from "../test/factories/editor";
 
@@ -706,5 +706,370 @@ describe("adapters/obsidian-editor: B-199 target validated after the $clipboard 
             },
         });
         expect(ed.lines).toEqual(["aXC"]);
+    });
+});
+
+describe("adapters/obsidian-editor: B-243 field sessions from trigger expansion", () => {
+    const deps = { now: new Date("2025-09-02T10:11:12Z") };
+
+    it("two fields: the text has no markers and the result carries document offsets", async () => {
+        const ed = new MockEditor("see lnk ");
+        ed.setCursor({ line: 0, ch: 8 });
+        const result = await tryExpandAtSeparator(asEditor(ed), { lnk: "[$1]($2)" }, deps);
+        expect(ed.getLine(0)).toBe("see []() ");
+        expect(result?.session).toEqual({ fields: [5, 7], docOrder: [0, 1], final: 9 });
+    });
+
+    it("offsets follow earlier lines and a multi-line insert", async () => {
+        const ed = new MockEditor("first\nfn ");
+        ed.setCursor({ line: 1, ch: 3 });
+        const result = await tryExpandAtSeparator(asEditor(ed), { fn: "a\n$2\nb $1\n$|end" }, deps);
+        expect(ed.value()).toBe("first\na\n\nb \nend ");
+        // $1 after "first\na\n\nb " (11), $2 after "first\na\n" (8); `$|` before "end" (12)
+        expect(result?.session).toEqual({ fields: [11, 8], docOrder: [1, 0], final: 12 });
+    });
+
+    it("final stop without `$|` is after the typed separator (same spot as with no fields, B-182)", async () => {
+        const ed = new MockEditor("lnk,");
+        ed.setCursor({ line: 0, ch: 4 });
+        const result = await tryExpandAtSeparator(asEditor(ed), { lnk: "[$1]($2)" }, deps);
+        expect(ed.getLine(0)).toBe("[](),");
+        expect(result?.session?.final).toBe(5);
+    });
+
+    it("Enter as the separator: the session starts on the previous line, the final stop is the start of the new line", async () => {
+        const ed = new MockEditor("lnk\n");
+        ed.setCursor({ line: 1, ch: 0 });
+        const result = await tryExpandAtSeparator(asEditor(ed), { lnk: "[$1]($2)" }, deps);
+        expect(ed.value()).toBe("[]()\n");
+        expect(result?.session).toEqual({ fields: [1, 3], docOrder: [0, 1], final: 5 });
+        // the engine's fallback caret is set only when the user is still on that line (B-148)
+        expect(ed.getCursor()).toEqual({ line: 1, ch: 0 });
+    });
+
+    // The final stop must be exactly where the caret lands when the same
+    // expansion has no fields (B-182 parity): the field plan and the plain plan
+    // are run on identical documents and compared. MockEditor does not
+    // auto-continue list markers, so these cases prove the separator and
+    // indentation arithmetic only (the real-Obsidian list case is in e2e).
+    const parityCases: Array<[string, string, { line: number; ch: number }]> = [
+        ["Enter after a list item line (no marker continued by the mock)", "- lnk\n", { line: 1, ch: 0 }],
+        ["Enter on an indented line", "  lnk\n", { line: 1, ch: 0 }],
+        ["Enter after a nested list item with text before the trigger (no marker continued by the mock)", "    - see lnk\n", { line: 1, ch: 0 }],
+        ["a space after an indented trigger", "  lnk more", { line: 0, ch: 6 }],
+    ];
+    it.each(parityCases)("%s: the final stop is where the caret lands with no fields", async (_name, doc, caret) => {
+        const withFields = new MockEditor(doc);
+        withFields.setCursor(caret);
+        const result = await tryExpandAtSeparator(asEditor(withFields), { lnk: "[$1]($2)" }, deps);
+        const plain = new MockEditor(doc);
+        plain.setCursor(caret);
+        await tryExpandAtSeparator(asEditor(plain), { lnk: "[]()" }, deps);
+        expect(result?.session?.final).toBe(plain.posToOffset(plain.getCursor()));
+        expect(withFields.value()).toBe(plain.value());
+    });
+
+    it("B-147: the user moved during the clipboard await, so no session opens and the caret is not pulled back", async () => {
+        const ed = new MockEditor("lnk more");
+        ed.setCursor({ line: 0, ch: 4 });
+        const result = await tryExpandAtSeparator(asEditor(ed), { lnk: "[$1]($2)$clipboard" }, {
+            ...deps,
+            readClipboard: async () => {
+                ed.setCursor({ line: 0, ch: 8 });
+                return "C";
+            },
+        });
+        expect(ed.getLine(0)).toBe("[]()C more");
+        expect(result).toMatchObject({ original: "lnk" });
+        expect(result?.session).toBeUndefined();
+        // the user's caret moved with the text, not back into the first field (ch 1)
+        expect(ed.getCursor()).toEqual({ line: 0, ch: "[]()C more".length });
+    });
+
+    it("a clipboard value with marker characters cannot open a phantom session (one field stays byte-identical)", async () => {
+        const clip = "a\uE0021\uE003b";
+        const two = new MockEditor("cb ");
+        two.setCursor({ line: 0, ch: 3 });
+        const r2 = await tryExpandAtSeparator(asEditor(two), { cb: "$clipboard $1 $2" }, {
+            ...deps,
+            readClipboard: async () => clip,
+        });
+        expect(two.getLine(0)).toBe("a1b   ");
+        expect(r2?.session?.fields).toEqual([4, 5]);
+
+        const one = new MockEditor("cb ");
+        one.setCursor({ line: 0, ch: 3 });
+        const r1 = await tryExpandAtSeparator(asEditor(one), { cb: "$clipboard $1" }, {
+            ...deps,
+            readClipboard: async () => clip,
+        });
+        expect(one.getLine(0)).toBe(`${clip}  `);
+        expect(r1?.session).toBeUndefined();
+    });
+
+    it("`$2$1`: the result carries the document order of fields at one offset", async () => {
+        const ed = new MockEditor("sw ");
+        ed.setCursor({ line: 0, ch: 3 });
+        const result = await tryExpandAtSeparator(asEditor(ed), { sw: "<$2$1>" }, deps);
+        expect(result?.session).toEqual({ fields: [1, 1], docOrder: [1, 0], final: 3 });
+    });
+
+    it("a single field is the caret, with no session (B-192 unchanged)", async () => {
+        const ed = new MockEditor("lnk ");
+        ed.setCursor({ line: 0, ch: 4 });
+        const result = await tryExpandAtSeparator(asEditor(ed), { lnk: "[$1](url)" }, deps);
+        expect(result?.session).toBeUndefined();
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 1 });
+    });
+
+    it("with $| the caret falls back to it and the session's final stop is there", async () => {
+        const ed = new MockEditor("fn ");
+        ed.setCursor({ line: 0, ch: 3 });
+        const result = await tryExpandAtSeparator(asEditor(ed), { fn: "f($1, $2) { $| }" }, deps);
+        expect(ed.getLine(0)).toBe("f(, ) {  } ");
+        expect(result?.session).toEqual({ fields: [2, 4], docOrder: [0, 1], final: "f(, ) { ".length });
+        expect(ed.getCursor()).toEqual({ line: 0, ch: "f(, ) { ".length });
+    });
+});
+
+describe("adapters/obsidian-editor: B-244 tryExpandAtCursor", () => {
+    const deps = { now: new Date("2025-09-02T10:11:12Z") };
+    const dict: Dict = { brb: "be right back", fn: "function $|()", lnk: "[$1]($2)" };
+
+    function at(text: string, ch = text.length): MockEditor {
+        const ed = new MockEditor(text);
+        ed.setCursor({ line: 0, ch });
+        return ed;
+    }
+
+    it("expands the trigger that ends at the caret, no separator needed, caret after it", async () => {
+        const ed = at("say brb");
+        const result = await tryExpandAtCursor(asEditor(ed), dict, deps);
+        // (the real editor maps the caret to the end of the insert; the mock does not model that)
+        expect(ed.getLine(0)).toBe("say be right back");
+        expect(result).toEqual({ from: 4, insert: "be right back", original: "brb", separator: "" });
+    });
+
+    it("works at the very start of a line", async () => {
+        const ed = at("brb");
+        await tryExpandAtCursor(asEditor(ed), dict, deps);
+        expect(ed.getLine(0)).toBe("be right back");
+    });
+
+    it("works right after punctuation", async () => {
+        const ed = at("(brb");
+        await tryExpandAtCursor(asEditor(ed), dict, deps);
+        expect(ed.getLine(0)).toBe("(be right back");
+    });
+
+    it("text after the caret stays untouched", async () => {
+        const ed = at("brb tail", 3);
+        await tryExpandAtCursor(asEditor(ed), dict, deps);
+        expect(ed.getLine(0)).toBe("be right back tail");
+    });
+
+    it("positions the caret at $|", async () => {
+        const ed = at("fn");
+        await tryExpandAtCursor(asEditor(ed), dict, deps);
+        expect(ed.getLine(0)).toBe("function ()");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: "function ".length });
+    });
+
+    it("returns the field session for a snippet with fields", async () => {
+        const ed = at("x lnk");
+        const result = await tryExpandAtCursor(asEditor(ed), dict, deps);
+        expect(ed.getLine(0)).toBe("x []()");
+        expect(result?.session).toEqual({ fields: [3, 5], docOrder: [0, 1], final: 6 });
+    });
+
+    it("no trigger at the caret: undefined and the note is untouched", async () => {
+        const ed = at("nothing here");
+        expect(await tryExpandAtCursor(asEditor(ed), dict, deps)).toBeUndefined();
+        expect(ed.getLine(0)).toBe("nothing here");
+    });
+
+    it("column 0 and a caret in the middle of a word do nothing", async () => {
+        expect(await tryExpandAtCursor(asEditor(at("brb", 0)), dict, deps)).toBeUndefined();
+        const inside = at("xbrb y", 5);
+        expect(await tryExpandAtCursor(asEditor(inside), dict, deps)).toBeUndefined();
+    });
+
+    it("inside a word (`brb|x`) nothing expands, the note stays as it was", async () => {
+        const mid = at("brbx", 3);
+        expect(await tryExpandAtCursor(asEditor(mid), dict, deps)).toBeUndefined();
+        expect(mid.getLine(0)).toBe("brbx");
+    });
+
+    it("expands when the next character is a separator or the line ends", async () => {
+        const space = at("brb tail", 3);
+        expect(await tryExpandAtCursor(asEditor(space), dict, deps)).toMatchObject({ original: "brb" });
+        const bracket = at("(brb)", 4);
+        expect(await tryExpandAtCursor(asEditor(bracket), dict, deps)).toMatchObject({ original: "brb" });
+        const end = at("brb");
+        expect(await tryExpandAtCursor(asEditor(end), dict, deps)).toMatchObject({ original: "brb" });
+    });
+
+    it("does nothing while text is selected", async () => {
+        const ed = at("brb");
+        ed.selection = "brb";
+        expect(await tryExpandAtCursor(asEditor(ed), dict, deps)).toBeUndefined();
+        expect(ed.getLine(0)).toBe("brb");
+    });
+
+    it("does nothing inside inline code, a fenced block, frontmatter and math", async () => {
+        const inline = at("`brb", 4);
+        expect(await tryExpandAtCursor(asEditor(inline), dict, deps)).toBeUndefined();
+        expect(inline.getLine(0)).toBe("`brb");
+
+        const fenced = new MockEditor("```\nbrb\n```");
+        fenced.setCursor({ line: 1, ch: 3 });
+        expect(await tryExpandAtCursor(asEditor(fenced), dict, deps)).toBeUndefined();
+
+        const front = new MockEditor("---\ntitle: brb\n---\n");
+        front.setCursor({ line: 1, ch: 10 });
+        expect(await tryExpandAtCursor(asEditor(front), dict, deps)).toBeUndefined();
+
+        const math = at("$x brb", 6);
+        expect(await tryExpandAtCursor(asEditor(math), dict, deps)).toBeUndefined();
+    });
+
+    it("prefix mode: needs the prefix char, consumes it", async () => {
+        const without = at("brb");
+        expect(await tryExpandAtCursor(asEditor(without), dict, { ...deps, prefix: ":" })).toBeUndefined();
+        expect(without.getLine(0)).toBe("brb");
+        const withPrefix = at("x :brb");
+        const result = await tryExpandAtCursor(asEditor(withPrefix), dict, { ...deps, prefix: ":" });
+        expect(withPrefix.getLine(0)).toBe("x be right back");
+        expect(result?.original).toBe(":brb");
+    });
+
+    it("an inherited key such as `constructor` is not a trigger (S-008)", async () => {
+        const ed = at("constructor");
+        expect(await tryExpandAtCursor(asEditor(ed), dict, deps)).toBeUndefined();
+    });
+});
+
+describe("adapters/obsidian-editor: B-243 field stops from the picker paths", () => {
+    it("insert: two fields return document offsets and the caret falls back to the first field", async () => {
+        const ed = new MockEditor("ab\nHello world");
+        ed.setCursor({ line: 1, ch: 6 });
+        const stops = await insertSnippetAtCursor(asEditor(ed), "<$1 / $2>");
+        expect(ed.getLine(1)).toBe("Hello < / >world");
+        expect(stops).toEqual({ fields: [10, 13], docOrder: [0, 1], final: 14 });
+        expect(ed.getCursor()).toEqual({ line: 1, ch: 7 });
+    });
+
+    it("insert: $| is the final stop", async () => {
+        const ed = new MockEditor("");
+        const stops = await insertSnippetAtCursor(asEditor(ed), "$2 $1 $| end");
+        expect(ed.getLine(0)).toBe("   end");
+        expect(stops).toEqual({ fields: [1, 0], docOrder: [1, 0], final: 2 });
+    });
+
+    it("insert: one field, or none, returns no stops", async () => {
+        const ed = new MockEditor("");
+        expect(await insertSnippetAtCursor(asEditor(ed), "[$1](x)")).toBeUndefined();
+        expect(await insertSnippetAtCursor(asEditor(new MockEditor("")), "plain")).toBeUndefined();
+    });
+
+    it("insert: when the user moved during the await, the text lands but no session starts", async () => {
+        const ed = new MockEditor("a");
+        ed.setCursor({ line: 0, ch: 1 });
+        const stops = await insertSnippetAtCursor(asEditor(ed), "$1 $2$clipboard", {
+            readClipboard: async () => {
+                ed.setCursor({ line: 0, ch: 0 });
+                return "C";
+            },
+        });
+        expect(stops).toBeUndefined();
+        expect(ed.getLine(0)).toBe("a C");
+    });
+
+    it("wrap: $1 takes the selection and the remaining fields start the session at the next one", async () => {
+        const ed = new MockEditor("see word");
+        ed.setCursor({ line: 0, ch: 8 });
+        ed.selection = "word";
+        const stops = await wrapSelectionWithSnippet(asEditor(ed), "[$1]($2)");
+        expect(ed.getLine(0)).toBe("see [word]()");
+        expect(stops).toEqual({ fields: [11], docOrder: [0], final: 12 });
+    });
+
+    it("wrap: the selection length shifts fields that follow it, not those before it", async () => {
+        const ed = new MockEditor("xx LONGER");
+        ed.setCursor({ line: 0, ch: 9 });
+        ed.selection = "LONGER";
+        const stops = await wrapSelectionWithSnippet(asEditor(ed), "$2<$1>$3");
+        expect(ed.getLine(0)).toBe("xx <LONGER>");
+        expect(stops).toEqual({ fields: [3, 11], docOrder: [0, 1], final: 11 });
+    });
+
+    it("wrap: ${SEL} plus two fields: every $N is a field", async () => {
+        const ed = new MockEditor("w");
+        ed.setCursor({ line: 0, ch: 1 });
+        ed.selection = "w";
+        const stops = await wrapSelectionWithSnippet(asEditor(ed), "<${SEL}|$1|$2>");
+        expect(ed.getLine(0)).toBe("<w||>");
+        expect(stops).toEqual({ fields: [3, 4], docOrder: [0, 1], final: 5 });
+    });
+
+    it("wrap: a selection that looks like a field marker or the cursor sentinel is inserted verbatim", async () => {
+        const ed = new MockEditor("q");
+        ed.setCursor({ line: 0, ch: 1 });
+        ed.selection = "q";
+        const lookalike = "a\uE0021\uE003b__SNIPSIDIAN_CURSOR__";
+        ed.selection = lookalike;
+        ed.lines = [lookalike];
+        ed.setCursor({ line: 0, ch: lookalike.length });
+        const stops = await wrapSelectionWithSnippet(asEditor(ed), "[$1] $2");
+        expect(ed.getLine(0)).toBe(`[${lookalike}] `);
+        expect(stops).toEqual({ fields: [lookalike.length + 3], docOrder: [0], final: lookalike.length + 3 });
+    });
+
+    it("insert: a clipboard value with marker characters is stripped with fields, kept verbatim with one field", async () => {
+        const clip = "a\uE0021\uE003b";
+        const two = new MockEditor("");
+        const stops = await insertSnippetAtCursor(asEditor(two), "$clipboard|$1|$2", { readClipboard: async () => clip });
+        expect(two.getLine(0)).toBe("a1b||");
+        expect(stops?.fields).toEqual([4, 5]);
+
+        const one = new MockEditor("");
+        expect(await insertSnippetAtCursor(asEditor(one), "$clipboard|$1", { readClipboard: async () => clip })).toBeUndefined();
+        expect(one.getLine(0)).toBe(`${clip}|`);
+    });
+
+    it("wrap: a clipboard value with marker characters is stripped with fields, kept verbatim with one field", async () => {
+        const clip = "a\uE0021\uE003b";
+        const two = new MockEditor("w");
+        two.setCursor({ line: 0, ch: 1 });
+        two.selection = "w";
+        const stops = await wrapSelectionWithSnippet(asEditor(two), "$clipboard<$1>$2$3", { readClipboard: async () => clip });
+        expect(two.getLine(0)).toBe("a1b<w>");
+        expect(stops?.fields).toEqual(["a1b<w>".length, "a1b<w>".length]);
+
+        const one = new MockEditor("w");
+        one.setCursor({ line: 0, ch: 1 });
+        one.selection = "w";
+        expect(await wrapSelectionWithSnippet(asEditor(one), "$clipboard<$1>", { readClipboard: async () => clip })).toBeUndefined();
+        expect(one.getLine(0)).toBe(`${clip}<w>`);
+    });
+
+    it("wrap: one tabstop that is the selection slot leaves no session", async () => {
+        const ed = new MockEditor("w");
+        ed.setCursor({ line: 0, ch: 1 });
+        ed.selection = "w";
+        expect(await wrapSelectionWithSnippet(asEditor(ed), "**$1**")).toBeUndefined();
+    });
+
+    it("wrap: moved during the await, no session and the captured range is replaced", async () => {
+        const ed = new MockEditor("Hello world");
+        ed.setCursor({ line: 0, ch: 11 });
+        ed.selection = "world";
+        const stops = await wrapSelectionWithSnippet(asEditor(ed), "[$1] $2$clipboard", {
+            readClipboard: async () => {
+                ed.selection = "";
+                return "";
+            },
+        });
+        expect(stops).toBeUndefined();
     });
 });

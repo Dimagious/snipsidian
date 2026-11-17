@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { applyPlaceholders, resolveTabstops } from "./placeholders";
+import {
+    applyPlaceholders,
+    countTabstops,
+    escapeLiteralTabstops,
+    mapTabstops,
+    orderFieldHits,
+    orderFields,
+    prepareTabstops,
+    resolveTabstops,
+    scanMarkers,
+} from "./placeholders";
 import { expand } from "./expand";
 
 describe("applyPlaceholders", () => {
@@ -103,7 +113,7 @@ describe("applyPlaceholders: B-192 tabstops outside wrap", () => {
         expect((await run("### $date $1")).text).toBe("### 2025-09-02 ");
     });
 
-    it("first $N is the cursor, remaining tabstops are stripped", async () => {
+    it("with 2+ tabstops the text is the same and the first field is the fallback caret", async () => {
         const r = await run("a $1 b $2 c $1");
         expect(r.text).toBe("a  b  c ");
         expect(r.cursorDelta).toBe(2);
@@ -148,6 +158,149 @@ describe("applyPlaceholders: B-192 tabstops outside wrap", () => {
 
     it("no tabstop: cursorDelta stays undefined", async () => {
         expect((await run("plain")).cursorDelta).toBeUndefined();
+    });
+});
+
+describe("applyPlaceholders: B-243 fields", () => {
+    const base = { isInCode: false, isInMath: false, isInFrontmatter: false, now: new Date("2025-09-02T10:11:12") };
+    const run = (s: string, extra: object = {}) => applyPlaceholders(s, { ...base, ...extra });
+
+    it("two fields: offsets in visit order, no explicit final stop without `$|`", async () => {
+        const r = await run("[$1](url$2)");
+        expect(r.text).toBe("[](url)");
+        expect(r.fields).toEqual([1, 6]);
+        expect(r.docOrder).toEqual([0, 1]);
+        expect(r.finalDelta).toBeUndefined();
+    });
+
+    it("`$2$1`: both fields sit at one offset, the document index tells them apart", async () => {
+        const r = await run("[$2$1]");
+        expect(r.fields).toEqual([1, 1]);
+        expect(r.docOrder).toEqual([1, 0]);
+    });
+
+    it("order is ascending number, not position; ties keep position order", async () => {
+        const r = await run("$2 a $1 b $2 c $1");
+        expect(r.text).toBe(" a  b  c ");
+        // $1 at 3 and 9, then $2 at 0 and 6
+        expect(r.fields).toEqual([3, 9, 0, 6]);
+    });
+
+    it("$| is the final stop and wins the fallback caret", async () => {
+        const r = await run("a $1 b $2 c $| d");
+        expect(r.text).toBe("a  b  c  d");
+        expect(r.fields).toEqual([2, 5]);
+        expect(r.finalDelta).toBe("a  b  c ".length);
+        expect(r.cursorDelta).toBe("a  b  c ".length);
+    });
+
+    it("a single field is NOT a session (B-192 unchanged): no fields, caret only", async () => {
+        const r = await run("[$1](url)");
+        expect(r.fields).toBeUndefined();
+        expect(r.finalDelta).toBeUndefined();
+        expect(r.cursorDelta).toBe(1);
+    });
+
+    it("one field next to $| is not a session either", async () => {
+        const r = await run("x $1 y $| z");
+        expect(r.fields).toBeUndefined();
+        expect(r.cursorDelta).toBe("x  y ".length);
+    });
+
+    it("escapes, $10, $1x, prices and code do not count as fields", async () => {
+        const r = await run("\\$1 $10 $1x $1.50 `$1` $2");
+        // only `$2` is real: a single field, not a session
+        expect(r.fields).toBeUndefined();
+        expect(r.text).toBe("$1 $10 $1x $1.50 `$1` ");
+        expect((await run("```\n$1 $2\n```\n$1 $2")).fields).toHaveLength(2);
+    });
+
+    it("offsets are located after variable substitution (length-changing $date before a field)", async () => {
+        const r = await run("$date $1 / $2");
+        expect(r.text).toBe("2025-09-02  / ");
+        expect(r.fields).toEqual(["2025-09-02 ".length, "2025-09-02  / ".length]);
+    });
+
+    it("a $1 inside clipboard content is not a field", async () => {
+        const r = await run("$clipboard $1 $2", { readClipboard: async () => "pay $1 $2" });
+        expect(r.text).toBe("pay $1 $2  ");
+        expect(r.fields).toEqual(["pay $1 $2 ".length, "pay $1 $2  ".length]);
+    });
+
+    it("a clipboard value with marker characters cannot forge or remove a field", async () => {
+        const clip = "x\uE0021\uE003y\uE004";
+        const r = await run("$clipboard $1 $2", { readClipboard: async () => clip });
+        expect(r.text).toBe("x1y  ");
+        expect(r.fields).toEqual(["x1y ".length, "x1y  ".length]);
+    });
+
+    it("with ONE field the same clipboard value is inserted byte for byte (no stripping)", async () => {
+        const clip = "x\uE0021\uE003y";
+        const r = await run("$clipboard $1", { readClipboard: async () => clip });
+        expect(r.text).toBe(`${clip} `);
+        expect(r.fields).toBeUndefined();
+    });
+
+    it("marker characters from $filename and a custom date format are stripped when fields exist", async () => {
+        const r = await run("$filename {{date:X}} $1 $2", {
+            filename: "a\uE002b",
+            formatDate: () => "d\uE003e",
+        });
+        expect(r.text).toBe("ab de  ");
+    });
+
+    it("no markers leak into the text", async () => {
+        const r = await run("$1$2$3");
+        expect(r.text).toBe("");
+        expect(r.fields).toEqual([0, 0, 0]);
+    });
+});
+
+describe("B-243 helpers", () => {
+    it("countTabstops counts only real tabstops", () => {
+        expect(countTabstops("plain")).toBe(0);
+        expect(countTabstops("$1 \\$2 $3x `$4` $5")).toBe(2);
+    });
+
+    it("prepareTabstops: 0 or 1 tabstop keeps B-192, 2+ makes fields", () => {
+        expect(prepareTabstops("a $1 b")).toEqual({ text: "a $| b", fields: false });
+        expect(prepareTabstops("a b")).toEqual({ text: "a b", fields: false });
+        const two = prepareTabstops("$1 $2");
+        expect(two.fields).toBe(true);
+        expect(two.text).not.toContain("$1");
+    });
+
+    it("scanMarkers: without fields a stray marker lookalike is left alone", () => {
+        const stray = "a\uE0021\uE003b";
+        expect(scanMarkers(stray, false).text).toBe(stray);
+        expect(scanMarkers(stray, true).fields).toEqual([{ n: 1, offset: 1 }]);
+    });
+
+    it("scanMarkers: only the first $| is consumed unless extras are dropped", () => {
+        expect(scanMarkers("a$|b$|c", false)).toEqual({ text: "ab$|c", cursor: 1, fields: [] });
+        expect(scanMarkers("a$|b$|c", false, true)).toEqual({ text: "abc", cursor: 1, fields: [] });
+    });
+
+    it("orderFieldHits reports the document index of each visited field", () => {
+        expect(orderFieldHits([{ n: 2, offset: 1 }, { n: 1, offset: 1 }])).toEqual({
+            offsets: [1, 1],
+            docOrder: [1, 0],
+        });
+    });
+
+    it("escapeLiteralTabstops escapes live tabstops only, idempotently", () => {
+        expect(escapeLiteralTabstops("Price $5, $10, \\$3, `$4`, $1.50, $2")).toBe(
+            "Price \\$5, $10, \\$3, `$4`, $1.50, \\$2",
+        );
+        expect(escapeLiteralTabstops("no dollar")).toBe("no dollar");
+        const once = escapeLiteralTabstops("a $7 b");
+        expect(escapeLiteralTabstops(once)).toBe(once);
+        // the escape is read back as the literal text
+        expect(mapTabstops(once, () => "FIELD")).toBe("a $7 b");
+    });
+
+    it("orderFields is stable for equal numbers", () => {
+        expect(orderFields([{ n: 2, offset: 1 }, { n: 1, offset: 5 }, { n: 1, offset: 3 }])).toEqual([5, 3, 1]);
     });
 });
 
