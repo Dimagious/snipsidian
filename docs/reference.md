@@ -195,6 +195,36 @@ worth sharing? The Packages page opens a GitHub issue with it already filled in.
   <img alt="Reinstalling Daily Journal after editing one of its snippets: the preview shows current and incoming text and asks Keep current or Overwrite" src="../site/img/conflict-light.png" width="520">
 </picture>
 
+### Package format
+
+A pack is one YAML file. This is what **Share a package** on the Packages page checks before it
+opens the GitHub issue:
+
+```yaml
+name: "Typography"            # 3 to 50 characters
+version: "1.0.0"              # semantic version
+author: "your-name"           # 3 to 50 characters
+description: "Arrows and dashes from the characters you already type."  # 10 to 200
+category: "symbols"           # optional, see below
+tags: ["symbols", "arrows"]   # optional
+snippets:                     # a list, not a map
+  - trigger: "->"
+    replace: "→"
+  - trigger: "mtg"
+    replace: "Meeting with $1 at $2$|"
+    description: "Meeting line"   # optional
+```
+
+- `name` takes letters, digits, spaces, `-`, `_` and `&`; `author` the same without `&`.
+- `category` is one of `markdown`, `programming`, `academic`, `business`, `creative`, `productivity`,
+  `language`, `other`, `development`, `emojis`, `journaling`, `obsidian`, `research`, `symbols`,
+  `utility`, `work`.
+- Triggers follow the [trigger rules](#trigger-characters) and are 1 to 50 characters; a
+  replacement is up to 10,000 characters and can use every [placeholder](#placeholders). For a
+  line break, write the text on several lines with `|-`, as in the
+  [approved packs](https://github.com/Dimagious/snipsidian-community/tree/main/community-packages/approved).
+- An install takes at most 500 snippets and 2 MiB of text.
+
 ### Espanso import
 
 Paste the YAML of any package from [hub.espanso.org](https://hub.espanso.org/), name a group,
@@ -252,8 +282,9 @@ a phone, where browsers cannot download, the export lands in the vault root as
 ## Privacy
 
 Snipsy reads and writes one file: `.obsidian/plugins/snipsidian/data.json`. It goes online
-only when you open the Packages page, to `api.github.com` for the list and
-`raw.githubusercontent.com` for the pack you install. No analytics, no telemetry, no account.
+only when you open the Packages page: `api.github.com` for the list and
+`raw.githubusercontent.com` for the pack files, all of them, kept for 24 hours. No analytics, no
+telemetry, no account.
 
 `$clipboard` reads your clipboard when a snippet with it expands. None of the defaults use it;
 the install preview shows it when a third-party pack does.
@@ -308,6 +339,24 @@ Yes, when a snippet has two or more of them: Tab jumps from one to the next, the
 end of the snippet. A snippet with a single `$1` just puts the caret there. `$1` also takes the
 selected text when you insert from the picker over a selection. See
 [Fields](#fields-tab-stops).
+
+</details>
+
+<details>
+<summary>Where are my snippets, and do they sync?</summary>
+
+In `.obsidian/plugins/snipsidian/data.json` inside the vault. iCloud, Syncthing or git carry it with
+the rest of the vault; Obsidian Sync carries it when syncing of community plugin settings is on.
+**Export snippets** saves a copy you can keep elsewhere.
+
+</details>
+
+<details>
+<summary>How do I start over?</summary>
+
+Export your snippets first. Then **Settings → Snipsy → Restore default snippets** brings back the
+sixteen defaults you deleted, without touching your own. For a full reset, close Obsidian, delete
+`data.json` and import the export again where you need it.
 
 </details>
 
