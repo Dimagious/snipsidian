@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { findTrigger } from "./match";
 import type { Dict } from "./types";
 
@@ -343,5 +343,75 @@ describe("findTrigger", () => {
             expect(m?.trigger).toBe(exactTrigger);
             expect(m?.fromCh).toBe(0);
         });
+    });
+});
+
+describe("findTrigger: composed-form fallback", () => {
+    const NFC_E = "\u1EBF"; // ế
+    const dict: Dict = { [NFC_E]: "vn", "café": "coffee", ab: "AB" };
+    const at = (text: string, prefix?: string) =>
+        ({ textBefore: text, textAfter: "", lastTyped: " ", sepCh: text.length, prefix });
+
+    it("raw match is unchanged and returns the typed text", () => {
+        const m = findTrigger(at(`x ${NFC_E}`), dict, delims);
+        expect(m).toEqual({ trigger: NFC_E, fromCh: 2, toCh: 3 });
+    });
+
+    it("`ê` + U+0301 typed matches the NFC key, range covers both raw code units", () => {
+        const typed = "\u00EA\u0301";
+        expect(typed.length).toBe(2);
+        const m = findTrigger(at(`x ${typed}`), dict, delims);
+        expect(m).toEqual({ trigger: NFC_E, fromCh: 2, toCh: 4 });
+    });
+
+    it("NFD `café` typed matches the NFC key", () => {
+        const typed = "cafe\u0301";
+        const m = findTrigger(at(typed), dict, delims);
+        expect(m).toEqual({ trigger: "caf\u00E9", fromCh: 0, toCh: 5 });
+    });
+
+    it("pure-ASCII candidates never call normalize", () => {
+        const spy = vi.spyOn(String.prototype, "normalize");
+        try {
+            expect(findTrigger(at("zz"), dict, delims)).toBeNull();
+            expect(findTrigger(at("ab"), dict, delims)?.trigger).toBe("ab");
+            expect(spy).not.toHaveBeenCalled();
+            expect(findTrigger(at("cafe\u0301"), dict, delims)).not.toBeNull();
+            expect(spy).toHaveBeenCalled();
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it("a hand-added non-NFC key still matches its exact raw spelling", () => {
+        const nfd = "cafe\u0301x";
+        const m = findTrigger(at(nfd), { [nfd]: "raw" }, delims);
+        expect(m).toEqual({ trigger: nfd, fromCh: 0, toCh: nfd.length });
+    });
+
+    it("an already-NFC miss does not match anything else", () => {
+        expect(findTrigger(at("na\u00EFve"), dict, delims)).toBeNull();
+    });
+
+    it("astral-only composition matches (Kaithi U+11099 + U+110BA)", () => {
+        const typed = "\u{11099}\u{110BA}";
+        expect(typed.normalize("NFC")).toBe("\u{1109A}");
+        const m = findTrigger(at(typed), { "\u{1109A}": "k" }, delims);
+        expect(m).toEqual({ trigger: "\u{1109A}", fromCh: 0, toCh: typed.length });
+    });
+
+    it("S-008: the fallback only accepts OWN keys of the dict", () => {
+        // KELVIN SIGN normalises to `K`; the dict only INHERITS `K`.
+        const inherited: Dict = Object.create({ K: "inherited" }) as Dict;
+        expect("K" in inherited).toBe(true);
+        expect(findTrigger(at("\u212A"), inherited, delims)).toBeNull();
+        expect(findTrigger(at("\u212A"), { K: "own" }, delims)?.trigger).toBe("K");
+    });
+
+    it("prefix mode: fallback consumes the prefix and keeps the raw range", () => {
+        const typed = "\u00EA\u0301";
+        const m = findTrigger(at(`;${typed}`, ";"), dict, delims);
+        expect(m).toEqual({ trigger: NFC_E, fromCh: 0, toCh: 3 });
+        expect(findTrigger(at(`x ${typed}`, ";"), dict, delims)).toBeNull();
     });
 });

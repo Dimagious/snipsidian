@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { normalizeTrigger, isBadTrigger, TRIGGER_CHARSET_RE } from "./triggers";
+import {
+    findInvisibleTriggerChar,
+    isBadTrigger,
+    matchesTriggerCharset,
+    normalizeTrigger,
+    TRIGGER_CHARSET_RE,
+} from "./triggers";
 
 describe("triggers.normalizeTrigger", () => {
     it("trims whitespace", () => {
@@ -83,5 +89,50 @@ describe("triggers.TRIGGER_CHARSET_RE", () => {
         for (const bad of ["a/b", "a\\b", "$x", "a b", "a.b", "a,b", "(", "a'b", "пр", "", "a\n"]) {
             expect(TRIGGER_CHARSET_RE.test(bad), JSON.stringify(bad)).toBe(false);
         }
+    });
+});
+
+describe("triggers.matchesTriggerCharset", () => {
+    it("defaults to the ASCII allowlist (allowUnicodeLetters is off)", () => {
+        expect(matchesTriggerCharset("abc")).toBe(true);
+        expect(matchesTriggerCharset("прив")).toBe(false);
+        expect(matchesTriggerCharset("café")).toBe(false);
+        expect(matchesTriggerCharset("прив", false)).toBe(false);
+    });
+
+    it("accepts Unicode letters, marks and digits when opted in", () => {
+        expect(matchesTriggerCharset("прив", true)).toBe(true);
+        expect(matchesTriggerCharset("cafe\u0301", true)).toBe(true);
+        expect(matchesTriggerCharset("a\u0903", true)).toBe(true); // spacing mark
+    });
+
+    it.each([
+        "\u115F", "\u1160", "\u3164", "\uFFA0", "\u17B4", "\u17B5", "\u{16FE4}",
+        "\u0301", "\u0301a", "a\u20DD", "a\u034F", "a\uFE0F", "a\u180B", "a\u{E0100}",
+        "a\u180F", "a\u{E01EF}", "a\u{1107F}", "a\u{1BC9D}", "a\u{13440}",
+    ])("rejects invisible or mark-led %j when opted in", (t) => {
+        expect(matchesTriggerCharset(t, true)).toBe(false);
+    });
+});
+
+describe("triggers.findInvisibleTriggerChar", () => {
+    it("names the first invisible code point", () => {
+        expect(findInvisibleTriggerChar("a\u200Cb")).toBe("U+200C");
+        expect(findInvisibleTriggerChar("a\u200Db")).toBe("U+200D");
+        expect(findInvisibleTriggerChar("a\u3164")).toBe("U+3164");
+        expect(findInvisibleTriggerChar("a\u{16FE4}")).toBe("U+16FE4");
+        expect(findInvisibleTriggerChar("a\u{1107F}")).toBe("U+1107F");
+    });
+
+    it("falls back to any format character", () => {
+        expect(findInvisibleTriggerChar("при\u00ADвет")).toBe("U+00AD");
+        expect(findInvisibleTriggerChar("a\u200Bb")).toBe("U+200B");
+        expect(findInvisibleTriggerChar("a\u2060")).toBe("U+2060");
+        expect(findInvisibleTriggerChar("a\u202E")).toBe("U+202E");
+    });
+
+    it("returns null for visible triggers", () => {
+        expect(findInvisibleTriggerChar("прив")).toBeNull();
+        expect(findInvisibleTriggerChar("cafe\u0301")).toBeNull();
     });
 });

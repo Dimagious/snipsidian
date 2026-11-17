@@ -222,13 +222,16 @@ export interface GroupedInstallPlan {
  * @param groupSlug     the already-slugified group this install writes
  *                       under (package label / Espanso group slug).
  * @param settings      live settings — read-only, never mutated.
+ * @param options       `allowUnicodeLetters` widens the trigger charset
+ *                       (Text Snippets import only; default ASCII).
  */
 export function planGroupedInstall(
     bareSnippets: Record<string, string>,
     groupSlug: string,
     settings: SnipSidianSettings,
+    options: { allowUnicodeLetters?: boolean } = {},
 ): GroupedInstallPlan {
-    const validation = validatePackageForInstall({ label: groupSlug, snippets: bareSnippets });
+    const validation = validatePackageForInstall({ label: groupSlug, snippets: bareSnippets }, options);
     if (!validation.isValid) {
         return { validation, collisions: [], diff: { added: [], conflicts: [] } };
     }
@@ -290,8 +293,9 @@ export function planGroupedImport(
     bareSnippets: Record<string, string>,
     groupSlug: string,
     settings: SnipSidianSettings,
+    options: { allowUnicodeLetters?: boolean } = {},
 ): GroupedImportPlan {
-    const plan = planGroupedInstall(bareSnippets, groupSlug, settings);
+    const plan = planGroupedInstall(bareSnippets, groupSlug, settings, options);
     if (!plan.validation.isValid) {
         return {
             validation: plan.validation,

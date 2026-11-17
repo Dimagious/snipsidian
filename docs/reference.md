@@ -226,9 +226,21 @@ any other one is removed with a warning, so a snippet that relies on several glu
 but the first. A single tab stop next to `$end$` is ignored because one field is only the caret.
 A literal `$1`..`$9` in a snippet that also has tab stops is escaped (`\$5`) and reported, so it
 stays text. Tab stops inside fenced code or inline code are literal in Snipsy, so they are treated
-like glued ones (the first becomes the cursor, any other is removed with a warning). Triggers with spaces or characters Snipsy does not allow are
-skipped and named. Snipsy expands these automatically as you type (Text Snippets waited for Tab),
-so disable the group or turn on prefix mode if a trigger fires too often.
+like glued ones (the first becomes the cursor, any other is removed with a warning).
+Triggers in any language are kept (`прив`, `δ`, `café`, `日付`), normalised so an accent typed in the
+editor matches whichever way the keyboard composes it. Triggers with spaces, `/`, `$`, emoji, other
+symbols (besides `< > = + ~ * ^ | &`) or other characters Snipsy does not allow are skipped and named. That includes triggers with
+an invisible character (a joiner such as ZWNJ U+200C or ZWJ U+200D, as in Persian `می‌خواهم` or Indic
+conjuncts, a soft hyphen, a zero-width space); the reason names the character.
+Snipsy ends a word at its own fixed separators (space, Tab, Enter, `. , ! ? ; : ( ) [ ] { } " '`; the
+ideographic space U+3000 does not count), so a trigger expands only after one of them, and it must start at the line start or right after a
+separator. CJK or Arabic punctuation such as `。` or `،` does not end a trigger, same as for
+hand-added triggers, and a trigger inside unspaced CJK text does not fire (`今日の 日付` works,
+`今日の日付` does not). The "Expand trigger at cursor" command expands a trigger with no separator
+typed after it, when the caret is at the end of the line or before one of Snipsy's separators; it
+follows the same start rule. If you changed the word delimiters in Text Snippets, the import says so.
+Snipsy expands these automatically as you type (Text Snippets waited for Tab), so disable the group
+or turn on prefix mode if a trigger fires too often.
 
 ### Backup
 

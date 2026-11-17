@@ -21,6 +21,8 @@ import type { Dict, ExpandInput, TriggerMatch } from "./types";
  */
 const MAX_LOOKBACK = 64;
 
+const NON_ASCII_RE = /[\u0080-\uffff]/;
+
 export function findTrigger(
   input: ExpandInput,
   dict: Dict,
@@ -50,8 +52,8 @@ export function findTrigger(
   const toCh = sepCh;
   if (fromCh >= toCh) return null;
 
-  const trigger = line.slice(fromCh, toCh);
-  if (!trigger) return null;
+  const typed = line.slice(fromCh, toCh);
+  if (!typed) return null;
 
   // Use hasOwnProperty.call, NOT `dict[trigger] === undefined`: a bare
   // property access resolves inherited `Object.prototype` members, so
@@ -61,7 +63,17 @@ export function findTrigger(
   // `expand` would then call `.replace` on a non-string and throw on the
   // per-keystroke hot path. This is the read-side counterpart to the
   // write-side defence in `ui/utils/group-utils.ts`. See security S-008.
-  if (!Object.prototype.hasOwnProperty.call(dict, trigger)) return null;
+  let trigger = typed;
+  if (!Object.prototype.hasOwnProperty.call(dict, trigger)) {
+    // Some keyboards type text that is neither NFC nor NFD (Windows
+    // Vietnamese: `ê` + U+0301). Imported triggers are stored in NFC, so on
+    // a raw miss retry with the composed form. Pure-ASCII candidates (the hot
+    // path) never reach `normalize`. The returned `trigger` is the dict key;
+    // `fromCh`/`toCh` stay the raw typed range, which is what gets replaced.
+    if (!NON_ASCII_RE.test(typed)) return null;
+    trigger = typed.normalize("NFC");
+    if (trigger === typed || !Object.prototype.hasOwnProperty.call(dict, trigger)) return null;
+  }
 
   // B-137: opt-in trigger-prefix mode. `prefix` is unset for the
   // overwhelming majority of calls (mode off) — this block is a

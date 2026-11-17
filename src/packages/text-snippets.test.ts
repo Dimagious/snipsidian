@@ -48,7 +48,7 @@ describe("textSnippetsDataToSnippets: basics", () => {
 
     it("returns an empty result when neither snippets_file nor snippets exist", () => {
         const r = textSnippetsDataToSnippets("{}");
-        expect(r).toEqual({ snippets: {}, skipped: [], warnings: [] });
+        expect(r).toEqual({ snippets: {}, skipped: [], warnings: [], notes: [] });
     });
 
     it("normalizes the trigger (trim + colon strip)", () => {
@@ -364,12 +364,10 @@ describe("textSnippetsDataToSnippets: skips", () => {
         expect(r.skipped[0]?.reason).toContain("spaces");
     });
 
-    it("skips separators, '/', '$' and non-ASCII triggers", () => {
-        const r = textSnippetsDataToSnippets(
-            data("a.b : 1\na/b : 2\n$x : 3\nпривет : 4\ncafé : 5\nok : 6"),
-        );
+    it("skips separators, '/' and '$' triggers", () => {
+        const r = textSnippetsDataToSnippets(data("a.b : 1\na/b : 2\n$x : 3\nok : 6"));
         expect(r.snippets).toEqual({ ok: "6" });
-        expect(r.skipped.map((s) => s.trigger)).toEqual(["a.b", "a/b", "$x", "привет", "café"]);
+        expect(r.skipped.map((s) => s.trigger)).toEqual(["a.b", "a/b", "$x"]);
     });
 
     it("skips a lone structural symbol but accepts multi-char symbol triggers", () => {
@@ -493,5 +491,135 @@ describe("textSnippetsDataToSnippets: malformed input", () => {
     it("throws when the snippets cache is not a list of strings", () => {
         expect(() => textSnippetsDataToSnippets(JSON.stringify({ snippets: "a : b" }))).toThrow(/'snippets'/);
         expect(() => textSnippetsDataToSnippets(JSON.stringify({ snippets: ["a : b", 3] }))).toThrow(/'snippets'/);
+    });
+});
+
+describe("textSnippetsDataToSnippets: Unicode triggers", () => {
+    const keep = (trigger: string): boolean => {
+        const r = textSnippetsDataToSnippets(data(`${trigger} : x`));
+        return Object.prototype.hasOwnProperty.call(r.snippets, trigger.normalize("NFC"));
+    };
+
+    it("keeps Cyrillic, Greek, CJK and accented triggers", () => {
+        const r = textSnippetsDataToSnippets(
+            data("прив : Привет!\nδ : delta\n日付 : today\ncafé : coffee\nok : fine"),
+        );
+        expect(r.snippets).toEqual({
+            "прив": "Привет!",
+            "δ": "delta",
+            "日付": "today",
+            "café": "coffee",
+            ok: "fine",
+        });
+        expect(r.skipped).toEqual([]);
+    });
+
+    it("keeps digits of other scripts and mixes with the ASCII symbols", () => {
+        expect(keep("٣x")).toBe(true); // Arabic-Indic digit
+        expect(keep("прив=б")).toBe(true);
+        expect(keep("привет_1")).toBe(true);
+        expect(keep("→x")).toBe(false); // arrow is a symbol
+    });
+
+    it("turns an NFD trigger into the NFC one the editor types", () => {
+        const nfd = "cafe\u0301";
+        const r = textSnippetsDataToSnippets(data(`${nfd} : coffee`));
+        expect(Object.keys(r.snippets)).toEqual(["caf\u00e9"]);
+    });
+
+    it("collapses NFD and NFC duplicates into one trigger, later kept", () => {
+        const r = textSnippetsDataToSnippets(data("cafe\u0301 : first\ncaf\u00e9 : second"));
+        expect(r.snippets).toEqual({ "caf\u00e9": "second" });
+        expect(r.skipped).toEqual([{ trigger: "caf\u00e9", reason: "duplicate trigger, later one kept" }]);
+    });
+
+    it.each([
+        ["emoji", "x\u{1F600}"],
+        ["zero-width joiner", "a\u200Db"],
+        ["zero-width space", "a\u200Bb"],
+        ["right-to-left override", "a\u202Eb"],
+        ["private-use marker U+E002", "a\uE002"],
+        ["variation selector", "a\uFE0F"],
+        ["Hangul filler U+115F", "a\u115F"],
+        ["Hangul filler U+1160", "a\u1160"],
+        ["Hangul filler U+3164", "a\u3164"],
+        ["Hangul filler U+FFA0", "a\uFFA0"],
+        ["Khmer invisible vowel U+17B4", "a\u17B4"],
+        ["Khmer invisible vowel U+17B5", "a\u17B5"],
+        ["Khitan filler U+16FE4", "a\u{16FE4}"],
+        ["Brahmi number joiner U+1107F", "a\u{1107F}"],
+        ["Duployan thick letter selector U+1BC9D", "a\u{1BC9D}"],
+        ["Egyptian hieroglyph mirror U+13440", "a\u{13440}"],
+        ["Mongolian selector U+180F (range end)", "a\u180F"],
+        ["variation selector U+FE0F (range end)", "a\uFE0F"],
+        ["supplementary selector U+E01EF (range end)", "a\u{E01EF}"],
+        ["Mongolian free variation selector", "a\u180B"],
+        ["supplementary variation selector", "a\u{E0100}"],
+        ["combining grapheme joiner", "a\u034F"],
+        ["lone combining mark", "\u0301"],
+        ["mark-leading trigger", "\u0301a"],
+        ["enclosing mark", "a\u20DD"],
+        ["no-break space", "a\u00A0b"],
+        ["space", "a b"],
+        ["slash", "a/b"],
+        ["dollar", "a$b"],
+        ["backslash", "a\\b"],
+        ["control character", "a\u0007b"],
+    ])("still skips a trigger with %s", (_name, trigger) => {
+        const r = textSnippetsDataToSnippets(data(`${trigger} : x\nok : y`));
+        expect(r.snippets).toEqual({ ok: "y" });
+        expect(r.skipped).toHaveLength(1);
+    });
+
+    it("names the invisible character when a trigger holds a joiner or filler", () => {
+        const zwnj = textSnippetsDataToSnippets(data("\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645 : x"));
+        expect(zwnj.skipped[0]?.reason).toBe("trigger contains an invisible character (U+200C)");
+        const zwj = textSnippetsDataToSnippets(data("a\u200Db : x"));
+        expect(zwj.skipped[0]?.reason).toBe("trigger contains an invisible character (U+200D)");
+        const filler = textSnippetsDataToSnippets(data("a\u3164 : x"));
+        expect(filler.skipped[0]?.reason).toBe("trigger contains an invisible character (U+3164)");
+        const supp = textSnippetsDataToSnippets(data("a\u{E0100} : x"));
+        expect(supp.skipped[0]?.reason).toBe("trigger contains an invisible character (U+E0100)");
+        const soft = textSnippetsDataToSnippets(data("при\u00ADвет : x"));
+        expect(soft.skipped[0]?.reason).toBe("trigger contains an invisible character (U+00AD)");
+        const zwsp = textSnippetsDataToSnippets(data("a\u200Bb : x"));
+        expect(zwsp.skipped[0]?.reason).toBe("trigger contains an invisible character (U+200B)");
+    });
+
+    it("names what is allowed when a trigger has a symbol or emoji", () => {
+        const r = textSnippetsDataToSnippets(data("x\u{1F600} : smile"));
+        expect(r.skipped[0]?.reason).toContain("letters of any language");
+    });
+
+    it("keeps an own-property key `__proto__`-like trigger safe with Unicode neighbours", () => {
+        const r = textSnippetsDataToSnippets(data("__proto__ : a\nприв : b"));
+        expect(Object.keys(r.snippets)).toEqual(["__proto__", "прив"]);
+    });
+});
+
+describe("textSnippetsDataToSnippets: word delimiters note", () => {
+    const DEFAULT = "$()[]{}<>,.!?;:'\"\\/";
+
+    it("adds no note when wordDelimiters is absent", () => {
+        expect(textSnippetsDataToSnippets(data("a : b")).notes).toEqual([]);
+    });
+
+    it("adds no note for the default delimiters", () => {
+        expect(textSnippetsDataToSnippets(data("a : b", { wordDelimiters: DEFAULT })).notes).toEqual([]);
+    });
+
+    it("adds no note for a non-string value", () => {
+        expect(textSnippetsDataToSnippets(data("a : b", { wordDelimiters: 5 })).notes).toEqual([]);
+    });
+
+    it("adds one note, naming Snipsy's separators, when they differ", () => {
+        const r = textSnippetsDataToSnippets(data("a : b", { wordDelimiters: " .,-" }));
+        expect(r.notes).toHaveLength(1);
+        expect(r.notes[0]).toContain("own word separators");
+        expect(r.notes[0]).toContain(". , ! ? ;");
+    });
+
+    it("adds the note for an empty custom value too", () => {
+        expect(textSnippetsDataToSnippets(data("a : b", { wordDelimiters: "" })).notes).toHaveLength(1);
     });
 });

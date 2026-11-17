@@ -11,6 +11,9 @@ vi.mock("obsidian", async () => {
     };
 });
 
+import { findTrigger } from "../../../engine/match";
+import { getDict } from "../../../store/snippets";
+import { splitKey } from "../../../store/keys";
 import { makeMockPlugin } from "../../../test/factories/plugin";
 import { TextSnippetsSection, formatTextSnippetsSummary } from "./TextSnippetsSection";
 import type { App } from "obsidian";
@@ -319,6 +322,71 @@ describe("TextSnippetsSection: preview and write path", () => {
     });
 });
 
+describe("TextSnippetsSection: Unicode triggers", () => {
+    const expandInput = (textBefore: string, prefix?: string) => ({
+        textBefore,
+        textAfter: "",
+        lastTyped: " ",
+        sepCh: textBefore.length,
+        prefix,
+    });
+
+    it("imports `прив : Привет!` end to end, round-trips the key and expands it", async () => {
+        files.set(SOURCE, JSON.stringify({ snippets_file: "прив : Привет!\ncafe\u0301 : coffee" }));
+        await clickAndSettle(mount());
+        await apply();
+        expect(plugin.settings.snippets["text-snippets/прив"]).toBe("Привет!");
+        expect(plugin.settings.snippets["text-snippets/caf\u00e9"]).toBe("coffee");
+        expect(splitKey("text-snippets/прив")).toEqual({ group: "text-snippets", name: "прив" });
+
+        const dict = getDict(plugin.settings);
+        const hit = findTrigger(expandInput("прив"), dict);
+        expect(hit?.trigger).toBe("прив");
+        expect(dict[hit?.trigger ?? ""]).toBe("Привет!");
+        // Word-bound: no match inside a longer word.
+        expect(findTrigger(expandInput("приветик"), dict)).toBeNull();
+        // NFC `café` typed in the editor matches the imported NFD record.
+        expect(findTrigger(expandInput("caf\u00e9"), dict)?.trigger).toBe("caf\u00e9");
+    });
+
+    it("expands in prefix mode too (`:прив`), and not without the prefix", async () => {
+        files.set(SOURCE, JSON.stringify({ snippets_file: "прив : Привет!" }));
+        await clickAndSettle(mount());
+        await apply();
+        const dict = getDict(plugin.settings);
+        expect(findTrigger(expandInput(":прив", ":"), dict)?.trigger).toBe("прив");
+        expect(findTrigger(expandInput("прив", ":"), dict)).toBeNull();
+    });
+
+    it("skips an emoji trigger (named) while importing the Cyrillic one", async () => {
+        files.set(SOURCE, JSON.stringify({ snippets_file: "прив : Привет!\nx\u{1F600} : smile" }));
+        await clickAndSettle(mount());
+        const info = document.body.querySelector(".modal-content .snipsy-espanso-skip-status");
+        expect(info?.textContent).toContain("1 skipped");
+        expect(info?.textContent).toContain("letters of any language");
+        await apply();
+        expect(Object.keys(plugin.settings.snippets)).toEqual(["text-snippets/прив"]);
+    });
+
+    it("shows the word-separator note in the preview and the Notice", async () => {
+        files.set(SOURCE, JSON.stringify({ snippets_file: "прив : Привет!", wordDelimiters: " ." }));
+        await clickAndSettle(mount());
+        const info = document.body.querySelector(".modal-content .snipsy-espanso-skip-status");
+        expect(info?.textContent).toContain("own word separators");
+        await apply();
+        expect(noticeCalls.some((m) => m.startsWith("Imported 1") && m.includes("own word separators"))).toBe(true);
+    });
+
+    it("shows no note for the default delimiters", async () => {
+        files.set(
+            SOURCE,
+            JSON.stringify({ snippets_file: "прив : Привет!", wordDelimiters: "$()[]{}<>,.!?;:'\"\\/" }),
+        );
+        await clickAndSettle(mount());
+        expect(document.body.querySelector(".modal-content .snipsy-espanso-skip-status")).toBeNull();
+    });
+});
+
 describe("formatTextSnippetsSummary", () => {
     it("is just the count when nothing was skipped or changed", () => {
         expect(formatTextSnippetsSummary(3, { skipped: [], warnings: [] })).toBe("3 imported");
@@ -328,5 +396,10 @@ describe("formatTextSnippetsSummary", () => {
         const skipped = ["a", "b", "c", "d"].map((t) => ({ trigger: `${t}\n`, reason: "r" }));
         const out = formatTextSnippetsSummary(1, { skipped, warnings: [] });
         expect(out).toBe("1 imported; 4 skipped: a (r), b (r), c (r), …");
+    });
+
+    it("appends import-wide notes, sanitized", () => {
+        const out = formatTextSnippetsSummary(1, { skipped: [], warnings: [], notes: ["own\nseparators"] });
+        expect(out).toBe("1 imported; own separators");
     });
 });

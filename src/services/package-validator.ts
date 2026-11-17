@@ -3,6 +3,8 @@ import {
   SINGLE_STRUCTURAL_TRIGGER_RE,
   TRIGGER_CHARSET_DESCRIPTION,
   TRIGGER_CHARSET_RE,
+  TRIGGER_CHARSET_UNICODE_DESCRIPTION,
+  matchesTriggerCharset,
 } from "../engine/triggers";
 import type { PackageData } from "./package-types";
 
@@ -407,10 +409,16 @@ export const INSTALL_MAX_TOTAL_BYTES = 2 * 1024 * 1024; // 2 MiB
  *   - security S-006: reject `/` in label + trigger to keep `splitKey` honest
  *     (trigger charset = `TRIGGER_CHARSET_RE`, shared with `validateSnippets`;
  *     excludes `/` `\\` `$` and separators, allows `- < > = + ~ * ^ | &`, B-171)
+ *
+ *  `options.allowUnicodeLetters` widens the trigger charset to Unicode
+ *  letters, marks and numbers. Only the Text Snippets import opts in;
+ *  community packs and every other caller keep the ASCII allowlist.
  */
 export function validatePackageForInstall(
-  pkg: { label: string; snippets?: { [trigger: string]: string } }
+  pkg: { label: string; snippets?: { [trigger: string]: string } },
+  options: { allowUnicodeLetters?: boolean } = {}
 ): ValidationResult {
+  const allowUnicode = options.allowUnicodeLetters === true;
   const errors: string[] = [];
   const warnings: string[] = [];
 
@@ -455,9 +463,11 @@ export function validatePackageForInstall(
       errors.push(`Trigger "${trigger}" is not allowed: ${SINGLE_STRUCTURAL_TRIGGER_MESSAGE}`);
       continue;
     }
-    if (!TRIGGER_CHARSET_RE.test(trigger)) {
+    if (!matchesTriggerCharset(trigger, allowUnicode)) {
       errors.push(
-        `Trigger "${truncate(trigger)}" can only contain ${TRIGGER_CHARSET_DESCRIPTION}`
+        `Trigger "${truncate(trigger)}" can only contain ${
+          allowUnicode ? TRIGGER_CHARSET_UNICODE_DESCRIPTION : TRIGGER_CHARSET_DESCRIPTION
+        }`
       );
       continue;
     }
