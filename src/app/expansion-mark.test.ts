@@ -95,6 +95,7 @@ class Harness {
         separator: string;
         original: string;
         cursor?: number;
+        restoreCaret?: number;
     }): void {
         this.dispatch({
             changes: { from: opts.from, to: opts.to, insert: opts.insert },
@@ -105,6 +106,7 @@ class Harness {
             insert: opts.insert,
             original: opts.original,
             separator: opts.separator,
+            ...(opts.restoreCaret !== undefined ? { restoreCaret: opts.restoreCaret } : {}),
         });
     }
 
@@ -118,6 +120,41 @@ function brb(): Harness {
     h.expand({ from: 0, to: 3, insert: "be right back", separator: " ", original: "brb" });
     return h;
 }
+
+describe("expansion-mark: an auto-paired closer went with the opener (ADR-0008)", () => {
+    // `x :(` with auto-pair is `x :()`, caret between; the rule replaced the whole pair with one character.
+    function sad(restoreCaret?: number): Harness {
+        const h = new Harness("x :()", 4);
+        h.expand({ from: 2, to: 5, insert: "\u2639", separator: "", original: ":()", cursor: 3, restoreCaret });
+        return h;
+    }
+
+    it("Backspace puts the caret between the restored pair, so the next character lands inside it", () => {
+        const h = sad(2);
+        expect(h.backspace()).toBe(true);
+        expect(h.text).toBe("x :()");
+        expect(h.head).toBe(4);
+        h.dispatch({ changes: { from: h.head, insert: "a" }, userEvent: "input.type" });
+        expect(h.text).toBe("x :(a)");
+    });
+
+    it("a restore caret outside the restored text is ignored: the caret goes after it", () => {
+        for (const bad of [-1, 4, 99, 1.5, Number.NaN]) {
+            const h = sad(bad);
+            expect(h.mark?.restoreCaret).toBeUndefined();
+            h.backspace();
+            expect(h.text).toBe("x :()");
+            expect(h.head).toBe(5);
+        }
+    });
+
+    it("without a restore caret the caret still goes after the restored text (every other expansion)", () => {
+        const h = sad();
+        h.backspace();
+        expect(h.text).toBe("x :()");
+        expect(h.head).toBe(5);
+    });
+});
 
 describe("expansion-mark: mark creation", () => {
     it("records the range, the caret and the text to restore", () => {

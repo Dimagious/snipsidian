@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, setHighlight } from "./fixtures";
 import type { SnipsyApp } from "./fixtures";
 
 /**
@@ -56,6 +56,81 @@ test.describe("[ADR-0008] patterns", () => {
         // not expanded again a moment later. Fixed wait on purpose: the expected result is "nothing happens".
         await win.waitForTimeout(300);
         expect(await obsidian.editor().text()).toContain("a ->");
+    });
+
+    // Obsidian's "Auto pair brackets" is on by default and the vault keeps it: `(` inserts `()`, and the typed `)` only
+    // steps over the closer (no document change, no userEvent). The rule has to fire on that step.
+    test("an instant rule ending in a closer fires with auto-paired brackets, and one Cmd+Z gives back what was typed", async ({ win, obsidian }) => {
+        await setPatterns(obsidian, [{ id: "copyright", source: String.raw`/\(c\)$/i`, replacement: "\u00a9", mode: "instant" }]);
+        await obsidian.editor().type("anchor line");
+        await win.keyboard.press("Enter");
+        // Fixed wait on purpose: CM6 groups undo events by the time between edits.
+        await win.waitForTimeout(700);
+
+        await obsidian.editor().type("x (c)");
+        await expect.poll(() => obsidian.editor().text()).toContain("x \u00a9");
+        // nothing is left behind: the typed closer was the last character of the match
+        expect(await obsidian.editor().text()).not.toContain("(");
+
+        await obsidian.press("Mod+Z");
+        await expect.poll(() => obsidian.editor().text()).toContain("x (c)");
+        // not expanded again a moment later. Fixed wait on purpose: the expected result is "nothing happens".
+        await win.waitForTimeout(300);
+        expect(await obsidian.editor().text()).toContain("x (c)");
+    });
+
+    test("a typo fixed inside the auto-paired brackets keeps the rule", async ({ win, obsidian }) => {
+        await setPatterns(obsidian, [{ id: "copyright", source: String.raw`/\(c\)$/i`, replacement: "\u00a9", mode: "instant" }]);
+        await obsidian.editor().type("anchor line");
+        await win.keyboard.press("Enter");
+        await obsidian.editor().type("x (v");
+        await win.keyboard.press("Backspace"); // inside the pair: only the typo goes, the editor's `)` stays
+        await obsidian.editor().type("c)");
+        await expect.poll(() => obsidian.editor().text()).toContain("x \u00a9");
+        expect(await obsidian.editor().text()).not.toContain("(");
+    });
+
+    // The editor wrote `()` for the typed `(`. A rule that replaces the opener takes the closer too, so the result is
+    // what the same typing gives with auto-pair off, and one Cmd+Z gives back the pair with the caret between.
+    test("an instant rule ending in the opener leaves no stray closer, and one Cmd+Z restores the pair", async ({ win, obsidian }) => {
+        await setPatterns(obsidian, [{ id: "sad", source: String.raw`/:\($/`, replacement: "\u2639", mode: "instant" }]);
+        await obsidian.editor().type("anchor line");
+        await win.keyboard.press("Enter");
+        // Fixed wait on purpose: CM6 groups undo events by the time between edits.
+        await win.waitForTimeout(700);
+
+        await obsidian.editor().type("x :(");
+        await expect.poll(() => obsidian.editor().text()).toContain("x \u2639");
+        expect(await obsidian.editor().text()).not.toContain("\u2639)");
+
+        await obsidian.press("Mod+Z");
+        await expect.poll(() => obsidian.editor().text()).toContain("x :()");
+        // the caret is back between the brackets: the next character lands inside the pair
+        await win.waitForTimeout(300);
+        await obsidian.editor().type("a");
+        await expect.poll(() => obsidian.editor().text()).toContain("x :(a)");
+    });
+
+    // Same pair, undone with Highlight + Backspace instead of Cmd+Z: the caret has to come back between the brackets too.
+    test("with highlight on, Backspace after a rule that took the closer restores the pair with the caret inside", async ({ win, obsidian }) => {
+        await setHighlight(obsidian, true);
+        try {
+            await setPatterns(obsidian, [{ id: "sad", source: String.raw`/:\($/`, replacement: "\u2639", mode: "instant" }]);
+            await obsidian.editor().type("anchor line");
+            await win.keyboard.press("Enter");
+
+            await obsidian.editor().type("x :(");
+            await expect.poll(() => obsidian.editor().text()).toContain("x \u2639");
+            await win.keyboard.press("Backspace");
+            await expect.poll(() => obsidian.editor().text()).toContain("x :()");
+            // not expanded again a moment later. Fixed wait on purpose: the expected result is "nothing happens".
+            await win.waitForTimeout(300);
+            expect(await obsidian.editor().text()).toContain("x :()");
+            await obsidian.editor().type("a");
+            await expect.poll(() => obsidian.editor().text()).toContain("x :(a)");
+        } finally {
+            await setHighlight(obsidian, false);
+        }
     });
 
     test("a separator rule waits for the separator and keeps it", async ({ obsidian }) => {

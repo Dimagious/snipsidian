@@ -128,6 +128,8 @@ export type ChangeInfo = {
     lines: number;
     /** Where the inserted text ends, in the new document. */
     end: number;
+    /** The inserted text. Read only for two-character insertions (an auto-paired bracket), else left out. */
+    text?: string;
 };
 
 /**

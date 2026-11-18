@@ -1,6 +1,6 @@
 // src/app/cm6-bridge.ts
 import { EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
-import { Transaction, type Extension, type Text } from "@codemirror/state";
+import { MapMode, Transaction, type Extension, type Text } from "@codemirror/state";
 import type { App } from "obsidian";
 import { tryExpandAtSeparator, tryExpandInstant } from "../adapters/obsidian-editor";
 import { buildExpansionMarkExtension, markExpansion } from "./expansion-mark";
@@ -9,9 +9,11 @@ import { readClipboardSafe } from "../adapters/clipboard";
 import { clock } from "../adapters/clock";
 import type { Dict } from "../engine/types";
 import { NO_PATTERNS, type CompiledPatterns } from "../engine/patterns";
+import { isCloserStepOver, isDeleteUserEvent, PairedCloserTracker, pairInsertCloser } from "./auto-pair";
 import {
     isDeferredByComposition,
     isSingleCharTyping,
+    isTypingUserEvent,
     shouldAttemptExpansion,
     type ChangeInfo,
     shouldRunDeferredExpansion,
@@ -54,23 +56,30 @@ export function handleViewUpdate(
     getHighlight: () => boolean = () => false,
     /** ADR-0008: the compiled pattern rules, resolved at call time. */
     getPatterns: () => CompiledPatterns = () => NO_PATTERNS,
+    /** ADR-0008: the closer Obsidian's auto-pair inserted last in this view (per-view state owned by the caller).
+     *  Without one nothing is tracked (a caret step over a closer is then never read as typing). */
+    pairs?: PairedCloserTracker,
 ): UpdateOutcome {
     // Cheap short-circuit: no point building the userEvent list (or
     // resolving the active editor) for selection-only updates —
     // typing always changes the document, so a no-op-for-the-doc
-    // update can never be a typing event anyway.
-    if (!update.docChanged) return "ignored";
+    // update can never be a typing event anyway. The one exception is the
+    // caret stepping over an auto-inserted closer (typing `)` after `(c`).
+    if (!update.docChanged) {
+        return handleSelectionOnly(app, getSnippets, update, getPrefix, getHighlight, getPatterns, pairs);
+    }
 
     // Obsidian can have multiple CM6 `EditorView` instances alive at
     // once (split panes, popout windows). `app.workspace.activeEditor`
     // tracks whichever one is actually focused — restrict to that so
     // an edit in a background pane never gets bridged to the wrong
-    // (unrelated) `Editor` wrapper below.
-    if (!update.view.hasFocus) return "ignored";
-
+    // (unrelated) `Editor` wrapper below (the `hasFocus` check further down).
     const userEvents = update.transactions.map((tr) =>
         tr.annotation(Transaction.userEvent),
     );
+    // Tracked before the focus check: the closer moves with the text whichever pane it is typed in.
+    const typing = followPairedCloser(update, userEvents, getPatterns, pairs);
+    if (!update.view.hasFocus) return "ignored";
     const composing = update.view.composing;
     if (!shouldAttemptExpansion(userEvents, composing)) {
         // B-191: tell the caller when composition was the only thing
@@ -81,8 +90,108 @@ export function handleViewUpdate(
             : "ignored";
     }
 
-    runExpansion(update.view, app, getSnippets, getPrefix, getHighlight, getPatterns, isInstantCandidate(update, getPatterns));
+    runExpansion(update.view, app, getSnippets, getPrefix, getHighlight, getPatterns, typing.instant, {
+        pairCloser: typing.pairCloser,
+    });
     return "expanded";
+}
+
+/**
+ * ADR-0008 + Obsidian "Auto pair brackets": a selection-only update that moves
+ * the caret one character over a closer the editor inserted is the user typing
+ * that closer. Instant pattern rules only: literal snippets and separator
+ * rules keep their behaviour (a step-over never expanded them, and the closer
+ * is not newly typed text). Anything else that moves the caret ends the tracking.
+ */
+function handleSelectionOnly(
+    app: App,
+    getSnippets: () => Dict,
+    update: ViewUpdate,
+    getPrefix: () => string | undefined,
+    getHighlight: () => boolean,
+    getPatterns: () => CompiledPatterns,
+    pairs: PairedCloserTracker | undefined,
+): UpdateOutcome {
+    // Nothing is inspected unless a closer is being tracked (so an instant rule exists, and a pair was just typed).
+    if (pairs === undefined || !pairs.tracked) return "ignored";
+    const before = update.startState.selection;
+    const after = update.state.selection;
+    // A focus or geometry update that leaves the caret where it was says nothing.
+    if (before.main.head === after.main.head) return "ignored";
+    const stepOver = isCloserStepOver(
+        {
+            userEvents: update.transactions.map((tr) => tr.annotation(Transaction.userEvent)),
+            before: { ranges: before.ranges.length, empty: before.main.empty, head: before.main.head },
+            after: { ranges: after.ranges.length, empty: after.main.empty, head: after.main.head },
+            passed:
+                after.main.head === before.main.head + 1
+                    ? update.state.doc.sliceString(before.main.head, after.main.head)
+                    : "",
+        },
+        pairs,
+    );
+    pairs.clear(); // consumed, or the caret went somewhere else
+    if (!stepOver || !getPatterns().hasInstant) return "ignored";
+    if (!update.view.hasFocus || update.view.composing) return "ignored";
+    runExpansion(update.view, app, getSnippets, getPrefix, getHighlight, getPatterns, true, { closerStepOver: true });
+    return "expanded";
+}
+
+/**
+ * Keeps the auto-inserted closer's position in step with a document change.
+ * Typing and deleting carry it along (a typo fixed inside the pair keeps the
+ * closer, and so the rule); it is dropped when the closer itself is deleted or
+ * on any other write (undo, paste, a programmatic edit, Snipsy's own), and a
+ * new auto-pair replaces it. Returns what the update means for instant rules.
+ * Cheap first: with no instant rule, or no typing in the update, nothing is
+ * inspected at all.
+ */
+function followPairedCloser(
+    update: ViewUpdate,
+    userEvents: ReadonlyArray<string | undefined>,
+    getPatterns: () => CompiledPatterns,
+    pairs: PairedCloserTracker | undefined,
+): TypingShape {
+    if (!getPatterns().hasInstant) {
+        pairs?.clear();
+        return NOT_INSTANT;
+    }
+    const followable = userEvents.length > 0 && userEvents.every((event) => isTypingUserEvent(event) || isDeleteUserEvent(event));
+    if (followable) pairs?.map((pos) => update.changes.mapPos(pos, 1, MapMode.TrackAfter));
+    else pairs?.clear();
+    if (!userEvents.some(isTypingUserEvent)) return NOT_INSTANT;
+    const shape = inspectTyping(update);
+    if (!followable) return { instant: shape.instant, pairCloser: undefined };
+    if (shape.pairCloser !== undefined) pairs?.track(update.state.selection.main.head, shape.pairCloser);
+    return shape;
+}
+
+/** What one update means for instant rules. */
+type TypingShape = {
+    /** One typed character, or an auto-paired opener (two characters, caret between). */
+    instant: boolean;
+    /** The closer an auto-pair just inserted after the caret. */
+    pairCloser: string | undefined;
+};
+const NOT_INSTANT: TypingShape = { instant: false, pairCloser: undefined };
+
+/** Reads the change list and selection of an update (only called when an instant rule exists). */
+function inspectTyping(update: ViewUpdate): TypingShape {
+    const changes: ChangeInfo[] = [];
+    update.changes.iterChanges((fromA, toA, _fromB, toB, text) => {
+        // The inserted text is read only for the two-character shape (an auto-pair).
+        changes.push({
+            deleted: toA - fromA,
+            inserted: text.length,
+            lines: text.lines,
+            end: toB,
+            text: text.length === 2 ? text.toString() : undefined,
+        });
+    });
+    const { ranges, main } = update.state.selection;
+    const selection = { ranges: ranges.length, empty: main.empty, head: main.head };
+    const pairCloser = pairInsertCloser(changes, selection);
+    return { instant: pairCloser !== undefined || isSingleCharTyping(changes, selection), pairCloser };
 }
 
 /**
@@ -90,13 +199,7 @@ export function handleViewUpdate(
  * first: nothing is inspected unless an instant rule exists.
  */
 function isInstantCandidate(update: ViewUpdate, getPatterns: () => CompiledPatterns): boolean {
-    if (!getPatterns().hasInstant) return false;
-    const changes: ChangeInfo[] = [];
-    update.changes.iterChanges((fromA, toA, _fromB, toB, text) => {
-        changes.push({ deleted: toA - fromA, inserted: text.length, lines: text.lines, end: toB });
-    });
-    const { ranges, main } = update.state.selection;
-    return isSingleCharTyping(changes, { ranges: ranges.length, empty: main.empty, head: main.head });
+    return getPatterns().hasInstant && inspectTyping(update).instant;
 }
 
 /**
@@ -111,6 +214,12 @@ function runExpansion(
     getHighlight: () => boolean,
     getPatterns: () => CompiledPatterns,
     instant: boolean,
+    opts: {
+        /** The caret stepped over an auto-inserted closer: only instant rules, never literal snippets. */
+        closerStepOver?: boolean;
+        /** The update inserted an auto-pair: an instant rule that consumes its opener takes the closer too. */
+        pairCloser?: string;
+    } = {},
 ): void {
     const fileInfo = app.workspace.activeEditor;
     const editor = fileInfo?.editor;
@@ -126,17 +235,28 @@ function runExpansion(
     // never thrown back into CM6's update-listener callback — an
     // uncaught rejection there risks breaking other view plugins.
     const patterns = getPatterns();
-    const deps = { filename, now: clock.now(), readClipboard: readClipboardSafe };
+    const { closerStepOver = false } = opts;
+    // The closer is tied to the caret and line of THIS update (read now, before any await): a fallback attempt that
+    // re-reads the live caret later must not take a `)` the user typed or clicked next to meanwhile.
+    const caret = opts.pairCloser === undefined ? undefined : editor.getCursor();
+    const pairCloser =
+        opts.pairCloser === undefined || caret === undefined
+            ? undefined
+            : { closer: opts.pairCloser, caret, lineText: editor.getLine(caret.line) ?? "" };
+    const deps = { filename, now: clock.now(), readClipboard: readClipboardSafe, pairCloser };
     // Literal triggers first, then the pattern rules strictly top to bottom
     // whatever their mode (ADR-0008, one order): on a typed separator that is
     // all inside `tryExpandAtSeparator` (a separator rule reads the line before
     // the separator, an instant rule the line through it). Any other typed
     // character only has instant rules, tried by `tryExpandInstant`. One
     // keystroke expands at most once.
-    const separator = tryExpandAtSeparator(editor, getSnippets(), {
+    // A closer step-over was never a typed separator for literal snippets or separator rules: an empty dictionary
+    // and the instant rules alone keep it that way.
+    const rules = closerStepOver ? patterns.rules.filter((rule) => rule.mode === "instant") : patterns.rules;
+    const separator = tryExpandAtSeparator(editor, closerStepOver ? {} : getSnippets(), {
         ...deps,
         prefix: getPrefix(),
-        patterns: patterns.rules.length > 0 ? patterns.rules : undefined,
+        patterns: rules.length > 0 ? rules : undefined,
         instant,
     });
     const expanded = instant
@@ -189,6 +309,8 @@ export class CompositionRetry {
     private frame: number | undefined;
     private frameWin: Window | undefined;
     private timer: number | undefined;
+    /** ADR-0008: the closer the editor's auto-pair inserted last, in this view. */
+    private readonly pairs = new PairedCloserTracker();
 
     constructor(
         private readonly view: EditorView,
@@ -203,8 +325,13 @@ export class CompositionRetry {
      *  runs mid-update where dispatching is forbidden). */
     record(update: ViewUpdate): void {
         // Load-bearing: selection-only updates (common mid-composition)
-        // must NOT clear `pending`; only a document change may.
-        if (!update.docChanged) return;
+        // must NOT clear `pending`; only a document change may. They still
+        // reach `handleViewUpdate` for the auto-pair closer step-over, which
+        // never touches `pending` (its expansion is a document change of its own).
+        if (!update.docChanged) {
+            handleViewUpdate(this.app, this.getSnippets, update, this.getPrefix, this.getHighlight, this.getPatterns, this.pairs);
+            return;
+        }
         const outcome = handleViewUpdate(
             this.app,
             this.getSnippets,
@@ -212,6 +339,7 @@ export class CompositionRetry {
             this.getPrefix,
             this.getHighlight,
             this.getPatterns,
+            this.pairs,
         );
         this.pending = outcome === "deferred" && insertsText(update);
         if (this.pending) {

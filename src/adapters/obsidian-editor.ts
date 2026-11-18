@@ -123,7 +123,14 @@ export function makeContext(
  */
 export const PATTERN_USER_EVENT = "snipsy.expand";
 
-export function applyEditPlan(editor: Editor, plan: EditPlan, line: number) {
+export function applyEditPlan(
+    editor: Editor,
+    plan: EditPlan,
+    line: number,
+    /** The replaced range reaches past the caret (an auto-paired closer went with the opener): the caret would
+     *  map to the start of the insert, so it is put after it explicitly. */
+    caretAfterInsert = false,
+) {
     const userStillOnTargetLine = editor.getCursor().line === line;
 
     const from: EditorPosition = { line, ch: plan.fromCh };
@@ -132,6 +139,9 @@ export function applyEditPlan(editor: Editor, plan: EditPlan, line: number) {
     if (plan.kind === "pattern" && editor.cm) {
         editor.cm.dispatch({
             changes: { from: editor.posToOffset(from), to: editor.posToOffset(to), insert: plan.insert },
+            ...(caretAfterInsert
+                ? { selection: { anchor: editor.posToOffset(from) + normalizedLength(plan.insert) } }
+                : {}),
             userEvent: PATTERN_USER_EVENT,
         });
     } else {
@@ -174,6 +184,20 @@ export type ExpansionResult = {
     /** B-243: the fields of the inserted text (document offsets), when the
      *  snippet has two or more. The caller opens the field session. */
     session?: FieldStops;
+    /** An auto-paired closer went with the replaced opener (`original` includes it): where the caret goes when the
+     *  expansion is undone, as an offset into `original` (between the pair, not after it). */
+    restoreCaret?: number;
+};
+
+/**
+ * ADR-0008: the closer the editor's auto-pair inserted in one update, tied to where it sits: the caret right after
+ * the opener and the line as it read then. A fallback attempt that re-reads the live caret after an await must not
+ * take a closer that is not this one (a `)` the user typed or clicked next to).
+ */
+export type PairedCloser = {
+    closer: string;
+    caret: EditorPosition;
+    lineText: string;
 };
 
 /** CM6 turns `\r\n` / `\r` in inserted text into `\n`; offsets must follow. */
@@ -207,6 +231,9 @@ export async function tryExpandAtSeparator(
         /** ADR-0008: the update was a single typed character: instant rules may match through the typed
          *  separator. Ignored for Enter (the caret is on the next line). */
         instant?: boolean;
+        /** ADR-0008: the closer the editor's auto-pair inserted right after the caret in this update. An instant
+         *  rule that replaces the opener removes it too (see `expandAndApply`). */
+        pairCloser?: PairedCloser;
     }
 ): Promise<ExpansionResult | undefined> {
     const cursor = editor.getCursor();
@@ -256,6 +283,7 @@ export async function tryExpandAtSeparator(
         lineText,
         lastTyped,
         cursor,
+        deps.pairCloser,
     );
 }
 
@@ -271,9 +299,39 @@ async function expandAndApply(
     separator: string,
     /** The live caret when the expansion started. */
     cursorAtStart: EditorPosition,
+    /** The auto-paired closer right after the caret, when the update that started this inserted a pair. */
+    pairCloser?: PairedCloser,
 ): Promise<ExpansionResult | undefined> {
-    const plan = await resolvePlan();
-    if (!plan) return undefined;
+    const resolved = await resolvePlan();
+    if (!resolved) return undefined;
+    // ADR-0008: an instant rule that replaced the opener of a just-inserted pair (`:(` to a sad face) would leave
+    // the editor's closer behind (`face)`): the result must equal what the same typing gives with auto-pair off, so
+    // the closer goes in the same write (one undo step restores the pair). Only the closer that update inserted,
+    // still directly after the caret, and only for a plan that replaced text ending exactly at the caret. That is a
+    // pattern rule (a literal trigger ends before its separator, and a pattern match is never empty), so no further
+    // check on the plan's kind or length is needed. The Expand-at-cursor path (`tryExpandAtCursor`) also produces a
+    // literal plan ending at the caret; it is safe only because it passes no `pairCloser`.
+    const closerAtStart =
+        pairCloser !== undefined &&
+        editor.cm !== undefined &&
+        resolved.toCh === cursorAtStart.ch &&
+        // The closer belongs to this exact spot: the caret is where the update left it and the line is as it was
+        // (a stale attempt, the user typing or clicking elsewhere, never takes a closer of theirs).
+        samePos(cursorAtStart, pairCloser.caret) &&
+        lineText === pairCloser.lineText &&
+        lineText.charAt(resolved.toCh) === pairCloser.closer;
+    // B-147: the user may have moved during the (clipboard) await. A field session pulls the caret into the first
+    // field, so it opens only when the caret is still where the expansion started (same rule as the pickers).
+    const stayed = samePos(editor.getCursor(), cursorAtStart) && !editor.getSelection();
+    // Fail closed: after an await the closer may have been stepped over or typed past (a selection-only change that
+    // leaves the line intact), so it is taken only when the caret has not moved at all.
+    // The two pre-await snapshots (`lineText`, the pair's line) say nothing about the closer NOW: a forward Delete
+    // on it during the await, with an identical character behind it, would make the slice check pass and eat the
+    // next one. So the closer goes only when the live line is still exactly the snapshot; a caret that has not
+    // moved over a changed line means the note changed under us, and nothing is written.
+    if (closerAtStart && stayed && (editor.getLine(targetLine) ?? "") !== lineText) return undefined;
+    const takesCloser = closerAtStart && stayed;
+    const plan = takesCloser ? { ...resolved, toCh: resolved.toCh + 1 } : resolved;
 
     // Cheap staleness guard: if the text the plan expects to replace
     // (the trigger + separator, as it read before the await) no
@@ -286,13 +344,14 @@ async function expandAndApply(
     if (actualSlice !== expectedSlice) return undefined;
 
     const from = editor.posToOffset({ line: targetLine, ch: plan.fromCh });
-    // B-147: the user may have moved during the (clipboard) await. A field
-    // session pulls the caret into the first field, so it opens only when the
-    // caret is still where the expansion started (same rule as the pickers).
-    const stayed = samePos(editor.getCursor(), cursorAtStart) && !editor.getSelection();
     // A field plan carries a fallback caret (the first field); when the user
     // moved, that must not pull the caret back either.
-    applyEditPlan(editor, plan.fields && !stayed ? { ...plan, newCursor: undefined } : plan, targetLine);
+    applyEditPlan(
+        editor,
+        plan.fields && !stayed ? { ...plan, newCursor: undefined } : plan,
+        targetLine,
+        takesCloser,
+    );
     // An instant rule that matched through the typed separator replaced it: nothing of it follows the insert.
     const keptSeparator = plan.consumesSeparator ? "" : separator;
     const result: ExpansionResult = {
@@ -301,6 +360,8 @@ async function expandAndApply(
         original: expectedSlice,
         separator: keptSeparator,
     };
+    // Backspace undo puts the caret between the restored pair, as Cmd+Z does.
+    if (takesCloser) result.restoreCaret = expectedSlice.length - 1;
     if (plan.fields && stayed) {
         // Without `$|` the last Tab lands right after the inserted text plus the
         // separator, where the caret sits with no fields (B-182). A session opens
@@ -381,6 +442,8 @@ export async function tryExpandInstant(
         filename?: string;
         now: Date;
         readClipboard?: () => Promise<string>;
+        /** The closer the editor's auto-pair inserted right after the caret in this update. */
+        pairCloser?: PairedCloser;
     },
 ): Promise<ExpansionResult | undefined> {
     if (editor.getSelection()) return undefined;
@@ -397,7 +460,15 @@ export async function tryExpandInstant(
     const hit = matchPatterns(textBefore, patterns, "instant");
     if (!hit) return undefined;
     const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, cursor.line, cursor.ch);
-    return expandAndApply(editor, () => expandInstant(textBefore, ctx, hit), cursor.line, lineText, "", cursor);
+    return expandAndApply(
+        editor,
+        () => expandInstant(textBefore, ctx, hit),
+        cursor.line,
+        lineText,
+        "",
+        cursor,
+        deps.pairCloser,
+    );
 }
 
 /** B-197: what the picker paths need to run the full placeholder pipeline. */

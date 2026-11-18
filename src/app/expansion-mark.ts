@@ -72,6 +72,9 @@ export interface ExpansionMarkInfo {
     original: string;
     /** The separator typed after the trigger (`"\n"` for Enter). */
     separator: string;
+    /** Where Backspace puts the caret, as an offset into `original` (an auto-paired closer went with the opener:
+     *  between the pair, as Cmd+Z leaves it). Default: after the restored text. */
+    restoreCaret?: number;
 }
 
 export interface ExpansionMark {
@@ -84,6 +87,8 @@ export interface ExpansionMark {
     restore: string;
     /** `insert + separator` as it must still read in `[from, end)`. */
     expected: string;
+    /** Caret offset into `restore` after Backspace-undo; the end of it when absent. */
+    restoreCaret?: number;
 }
 
 export const markExpansionEffect = StateEffect.define<ExpansionMarkInfo>();
@@ -114,13 +119,17 @@ function buildMark(
     if (ranges.length > 1 || !sel.empty || sel.head < from || sel.head > end) {
         return null;
     }
+    const restoreText = info.original + separator;
     return {
         from,
         to,
         end,
         cursor: sel.head,
-        restore: info.original + separator,
+        restore: restoreText,
         expected,
+        ...(info.restoreCaret !== undefined && Number.isInteger(info.restoreCaret) && info.restoreCaret >= 0 && info.restoreCaret <= restoreText.length
+            ? { restoreCaret: info.restoreCaret }
+            : {}),
     };
 }
 
@@ -211,7 +220,7 @@ export function undoExpansion(
     }
     view.dispatch({
         changes: { from: mark.from, to: mark.end, insert: mark.restore },
-        selection: { anchor: mark.from + mark.restore.length },
+        selection: { anchor: mark.from + (mark.restoreCaret ?? mark.restore.length) },
         effects: clearExpansionEffect.of(null),
         userEvent: SNIPSY_UNDO_EVENT,
         scrollIntoView: true,
