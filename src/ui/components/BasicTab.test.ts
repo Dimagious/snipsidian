@@ -390,6 +390,54 @@ describe("BasicTab — Expansion section (B-137/B-150)", () => {
         });
     });
 
+    describe("Manual expansion rows (B-255)", () => {
+        const typeRow = (root: HTMLElement): HTMLElement => rowByTitle(root, "Expand while typing");
+        const tabRow = (root: HTMLElement): HTMLElement => rowByTitle(root, "Expand on Tab");
+        const box = (row: HTMLElement): HTMLInputElement => row.querySelector("input[type=checkbox]") as HTMLInputElement;
+
+        it("render in the Expansion group: typing on, Tab off by default", () => {
+            const { root } = mount();
+            expect(groupBody(root, "Expansion").contains(typeRow(root))).toBe(true);
+            expect(groupBody(root, "Expansion").contains(tabRow(root))).toBe(true);
+            expect(box(typeRow(root)).checked).toBe(true);
+            expect(box(tabRow(root)).checked).toBe(false);
+        });
+
+        it("are never dimmed by the prefix toggle", () => {
+            const { root } = mount();
+            expect(typeRow(root).classList.contains("is-disabled")).toBe(false);
+            expect(tabRow(root).classList.contains("is-disabled")).toBe(false);
+        });
+
+        it("reflect stored values (manual mode)", () => {
+            plugin.settings.expansion = { onType: false, onTab: true };
+            const { root } = mount();
+            expect(box(typeRow(root)).checked).toBe(false);
+            expect(box(tabRow(root)).checked).toBe(true);
+        });
+
+        it("turning typing off writes onType:false and keeps the other expansion settings", async () => {
+            plugin.settings.expansion = { requirePrefix: true, prefixChar: ";" };
+            const { root } = mount();
+            const b = box(typeRow(root));
+            b.checked = false;
+            b.dispatchEvent(new Event("change"));
+            await flush();
+            expect(plugin.settings.expansion).toEqual({ requirePrefix: true, prefixChar: ";", onType: false });
+            expect(plugin._saveCalls.length).toBe(1);
+        });
+
+        it("turning Tab on writes onTab:true and persists", async () => {
+            const { root } = mount();
+            const b = box(tabRow(root));
+            b.checked = true;
+            b.dispatchEvent(new Event("change"));
+            await flush();
+            expect(plugin.settings.expansion).toEqual({ onTab: true });
+            expect(plugin._saveCalls.length).toBe(1);
+        });
+    });
+
     it("changing the dropdown writes prefixChar and persists", async () => {
         plugin.settings.expansion = { requirePrefix: true, prefixChar: ":" };
         const { root } = mount();
@@ -569,6 +617,28 @@ describe("BasicTab — Set hotkey prefills the Hotkeys search box", () => {
         expect(setQuery).toHaveBeenCalledWith("Insert snippet…");
     });
 
+    // The same build ships under two ids; Obsidian's command id is `<manifest id>:<command>`.
+    it("targets the command of the manifest id the plugin runs under", () => {
+        const compat = makeMockPlugin({ pluginId: "text-snippets-obsidian" });
+        const compatApp = compat.app as unknown as App;
+        const host = document.createElement("div");
+        const target = host.createDiv({ cls: "setting-item", attr: { "data-id": "text-snippets-obsidian:insert-snippet" } });
+        document.body.appendChild(host);
+        const scroll = vi.fn();
+        target.scrollIntoView = scroll;
+        vi.useFakeTimers();
+        try {
+            const root = document.createElement("div");
+            document.body.appendChild(root);
+            new BasicTab(compatApp, compat as unknown as SnipSidianPlugin).render(root);
+            setHotkeyButton(root, "Set hotkey for Insert snippet").click();
+            vi.advanceTimersByTime(150);
+            expect(scroll).toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it("falls back to searchComponent.setValue + onChanged when setQuery isn't present", () => {
         const setValue = vi.fn();
         const onChanged = vi.fn();
@@ -653,6 +723,23 @@ describe("BasicTab — Reveal data file (B-047)", () => {
             // path button.
             expect(frag.textContent).not.toContain("Data file:");
             expect(frag.querySelector("button")).toBeNull();
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it("the data file path follows the manifest dir (the build also ships as text-snippets-obsidian)", () => {
+        Platform.isDesktop = true;
+        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        try {
+            const compat = makeMockPlugin({ pluginId: "text-snippets-obsidian" });
+            const root = document.createElement("div");
+            document.body.appendChild(root);
+            new BasicTab(compat.app as unknown as App, compat as unknown as SnipSidianPlugin).render(root);
+            buttonInRow(rowByTitle(root, "Reveal data file"), "Show in folder").click();
+            const frag = noticeCalls[0] as DocumentFragment;
+            expect(frag.textContent).toContain("/test-vault/.obsidian/plugins/text-snippets-obsidian/data.json");
+            expect(frag.textContent).not.toContain("plugins/snipsidian/");
         } finally {
             errorSpy.mockRestore();
         }

@@ -44,6 +44,18 @@ describe("createControlHost — expansion.* allowlist (finding #10)", () => {
         expect(h.getControlValue("expansion.highlight")).toBe(true);
     });
 
+    it("reads and writes the allowed onType and onTab fields (B-255)", async () => {
+        const { plugin, host: h } = host({ settings: { snippets: {} } });
+        expect(h.getControlValue("expansion.onType")).toBeUndefined();
+        expect(h.getControlValue("expansion.onTab")).toBeUndefined();
+
+        await h.setControlValue("expansion.onType", false);
+        await h.setControlValue("expansion.onTab", true);
+        expect(plugin.settings.expansion).toEqual({ onType: false, onTab: true });
+        expect(h.getControlValue("expansion.onType")).toBe(false);
+        expect(h.getControlValue("expansion.onTab")).toBe(true);
+    });
+
     it("an unrecognised field under expansion.* reads undefined and writes as a no-op", async () => {
         const { plugin, host: h } = host({
             settings: { snippets: {}, expansion: { requirePrefix: true } },

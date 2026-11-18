@@ -312,7 +312,9 @@ export class BasicTab {
             }
             const base: string = adapter.getBasePath();
             const configDir: string = this.app.vault.configDir;
-            path = `${base}/${configDir}/plugins/snipsidian/data.json`;
+            // The same build ships under two ids: never hard-code the folder.
+            const dir = this.plugin.manifest.dir ?? `${configDir}/plugins/${this.plugin.manifest.id}`;
+            path = `${base}/${dir}/data.json`;
             const electron = (
                 window as {
                     require?: (m: string) => {

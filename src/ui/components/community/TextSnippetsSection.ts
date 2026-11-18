@@ -1,6 +1,8 @@
 import { App, Notice } from "obsidian";
 import type SnipSidianPlugin from "../../../main";
 import {
+  TEXT_SNIPPETS_GROUP_SLUG,
+  TEXT_SNIPPETS_PLUGIN_ID,
   textSnippetsDataToSnippets,
   type TextSnippetsImportResult,
 } from "../../../packages/text-snippets";
@@ -9,14 +11,13 @@ import { countAppliedChanges, planGroupedImport } from "../../../core/install-pl
 import { commitSnippets } from "../../../core/commit-snippets";
 import { renderSettingGroup } from "../../utils/setting-group";
 import { sanitizeForNotice } from "../../../shared/notice-text";
+import { findLatestTextSnippetsBackup } from "../../../shared/text-snippets-backup";
 
-/** Id of the abandoned "Text Snippets" community plugin (B-174). */
-const SOURCE_PLUGIN_ID = "text-snippets-obsidian";
-
-/** Group the imported snippets land in (already a valid slug). */
-const GROUP_SLUG = "text-snippets";
+const SOURCE_PLUGIN_ID = TEXT_SNIPPETS_PLUGIN_ID;
+const GROUP_SLUG = TEXT_SNIPPETS_GROUP_SLUG;
 
 const NOT_FOUND_MESSAGE = "Text Snippets settings not found in this vault";
+const BACKUP_NOT_FOUND_MESSAGE = "No backup of the Text Snippets file found";
 
 /** How many names a one-line summary lists before "…". */
 const SUMMARY_SHOWN = 3;
@@ -70,7 +71,27 @@ export class TextSnippetsSection {
     private plugin: SnipSidianPlugin,
   ) {}
 
-  render(root: HTMLElement): void {
+  /**
+   * Under the Text Snippets id this plugin's own data.json IS the migrated
+   * file, so the section is for recovery only: it appears when a backup of the
+   * original exists (a conversion that failed, see the migration) and reads
+   * that backup. Under `snipsidian` it reads the other plugin's data.json.
+   * Async because finding a backup lists a folder; the `snipsidian` path
+   * renders before the first await.
+   */
+  async render(root: HTMLElement): Promise<void> {
+    const compat = this.isCompatId();
+    if (compat) {
+      let backup: string | null;
+      try {
+        backup = await findLatestTextSnippetsBackup(this.app.vault.adapter, this.pluginDir());
+      } catch (err) {
+        console.error("[snipsy] could not look for a Text Snippets backup", err);
+        return;
+      }
+      if (backup === null) return;
+    }
+
     const group = renderSettingGroup(root, "Text Snippets import");
     group.bodyEl.addClass("snipsy-text-snippets-section");
 
@@ -78,7 +99,9 @@ export class TextSnippetsSection {
     group.addSetting((s) => {
       s.setName("Import snippets");
       s.setDesc(
-        `Copies the snippets of the Text Snippets plugin into the "${GROUP_SLUG}" group. Its own files are not changed. Snipsy expands them automatically as you type (Text Snippets waited for Tab): disable the group or turn on prefix mode if a trigger fires too often.`,
+        compat
+          ? `Copies the snippets from the backup of the original Text Snippets file (text-snippets-backup*.json, the newest one) into the "${GROUP_SLUG}" group. The backup is not changed. Use it to recover snippets the automatic conversion did not bring over. The 500 snippet limit of imports applies here.`
+          : `Copies the snippets of the Text Snippets plugin into the "${GROUP_SLUG}" group. Its own files are not changed. By default Snipsy expands a trigger as you type; turn off "Expand while typing" and turn on "Expand on Tab" in General to work the way Text Snippets did. Disable the group or turn on prefix mode if a trigger fires too often.`,
       );
       statusEl = s.controlEl.createDiv({
         cls: "snipsy-espanso-skip-status",
@@ -95,9 +118,25 @@ export class TextSnippetsSection {
     });
   }
 
-  /** Reads the other plugin's data.json. `null` = not installed/never saved. */
+  private isCompatId(): boolean {
+    return this.plugin.manifest.id === SOURCE_PLUGIN_ID;
+  }
+
+  private pluginDir(): string {
+    return this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`;
+  }
+
+  /**
+   * The text to import. Under `snipsidian`: the other plugin's data.json;
+   * under the Text Snippets id: the newest backup of the original file.
+   * `null` = not installed/never saved/no backup.
+   */
   private async readSourceFile(): Promise<string | null> {
     const adapter = this.app.vault.adapter;
+    if (this.isCompatId()) {
+      const backup = await findLatestTextSnippetsBackup(adapter, this.pluginDir());
+      return backup === null ? null : adapter.read(backup);
+    }
     const path = `${this.app.vault.configDir}/plugins/${SOURCE_PLUGIN_ID}/data.json`;
     if (!(await adapter.exists(path))) return null;
     return adapter.read(path);
@@ -115,7 +154,7 @@ export class TextSnippetsSection {
       return;
     }
     if (raw === null) {
-      new Notice(NOT_FOUND_MESSAGE);
+      new Notice(this.isCompatId() ? BACKUP_NOT_FOUND_MESSAGE : NOT_FOUND_MESSAGE);
       return;
     }
 

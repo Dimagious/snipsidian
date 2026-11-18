@@ -12,7 +12,7 @@ vi.mock("obsidian", async () => {
     };
 });
 
-import { makeExpandInput, makeContext, applyEditPlan, tryExpandAtSeparator, tryExpandAtCursor, tryExpandInstant, insertSnippetAtCursor, wrapSelectionWithSnippet, PATTERN_USER_EVENT, type PairedCloser } from "./obsidian-editor";
+import { makeExpandInput, makeContext, applyEditPlan, tryExpandAtSeparator, tryExpandAtCursor, tryExpandInstant, canExpandAtCursor, insertSnippetAtCursor, wrapSelectionWithSnippet, PATTERN_USER_EVENT, type PairedCloser } from "./obsidian-editor";
 import { compilePatternRules } from "../engine/patterns";
 import type { Dict, PatternRule } from "../engine/types";
 import { MockEditor, asEditor } from "../test/factories/editor";
@@ -1639,5 +1639,244 @@ describe("adapters/obsidian-editor: an instant rule that replaces the opener of 
         });
         expect(result).toBeUndefined();
         expect(ed.getLine(0)).toBe("x :(a");
+    });
+});
+
+describe("adapters/obsidian-editor: B-255 canExpandAtCursor", () => {
+    const dict: Dict = { brb: "be right back", fn: "function $|()" };
+
+    function at(text: string, ch = text.length, selection = ""): MockEditor {
+        const ed = new MockEditor(text);
+        ed.setCursor({ line: 0, ch });
+        ed.selection = selection;
+        return ed;
+    }
+
+    it("is true for a trigger right before the caret", () => {
+        expect(canExpandAtCursor(asEditor(at("say brb")), dict)).toBe(true);
+        expect(canExpandAtCursor(asEditor(at("brb tail", 3)), dict)).toBe(true);
+    });
+
+    it("is false with no trigger, an unknown word, or a caret at column 0", () => {
+        expect(canExpandAtCursor(asEditor(at("say hello")), dict)).toBe(false);
+        expect(canExpandAtCursor(asEditor(at("")), dict)).toBe(false);
+        expect(canExpandAtCursor(asEditor(at("brb", 0)), dict)).toBe(false);
+    });
+
+    it("is false inside a word that is no trigger, with a selection that is no trigger, and in code", () => {
+        expect(canExpandAtCursor(asEditor(at("brbx", 3)), dict)).toBe(false);
+        expect(canExpandAtCursor(asEditor(at("hello world", 5, "hello")), dict)).toBe(false);
+        expect(canExpandAtCursor(asEditor(at("`brb")), dict)).toBe(false);
+    });
+
+    // Parity with the original plugin: both inputs agree with the expand path.
+    it("is true for a selection that is exactly a trigger, and for a caret inside a trigger word", () => {
+        expect(canExpandAtCursor(asEditor(at("say brb", 7, "brb")), dict)).toBe(true);
+        expect(canExpandAtCursor(asEditor(at("say brb now", 6)), dict)).toBe(true);
+    });
+
+    it("is false for a caret at the START of a word (Tab keeps indenting there)", () => {
+        expect(canExpandAtCursor(asEditor(at("say brb", 4)), dict)).toBe(false);
+    });
+
+    it("honours prefix mode like the command does", () => {
+        expect(canExpandAtCursor(asEditor(at("brb")), dict, ":")).toBe(false);
+        expect(canExpandAtCursor(asEditor(at(":brb")), dict, ":")).toBe(true);
+    });
+
+    it("does not resolve or write anything", () => {
+        const ed = at("say brb");
+        canExpandAtCursor(asEditor(ed), dict);
+        expect(ed.getLine(0)).toBe("say brb");
+    });
+
+    it("never matches an inherited Object.prototype key (S-008)", () => {
+        expect(canExpandAtCursor(asEditor(at("constructor")), {})).toBe(false);
+    });
+
+    describe("with pattern rules (ADR-0008)", () => {
+        const date = rules({ source: String.raw`/\bdd(\d+)$/`, mode: "separator" });
+
+        it("is true for a rule that matches the line before the caret, false without the rules", () => {
+            expect(canExpandAtCursor(asEditor(at("on dd5")), dict, undefined, date)).toBe(true);
+            expect(canExpandAtCursor(asEditor(at("on dd5")), dict)).toBe(false);
+        });
+
+        it("is false when no rule matches, and for the empty rule list", () => {
+            expect(canExpandAtCursor(asEditor(at("on hello")), dict, undefined, date)).toBe(false);
+            expect(canExpandAtCursor(asEditor(at("on dd5")), dict, undefined, [])).toBe(false);
+        });
+
+        it("a caret inside the word is judged on the word up to its end, as the expand path does", () => {
+            expect(canExpandAtCursor(asEditor(at("on dd5 now", 5)), dict, undefined, date)).toBe(true);
+        });
+
+        it("a selection is never matched against rules, only literal triggers count", () => {
+            expect(canExpandAtCursor(asEditor(at("on dd5", 6, "dd5")), dict, undefined, date)).toBe(false);
+            expect(canExpandAtCursor(asEditor(at("say brb", 7, "brb")), dict, undefined, date)).toBe(true);
+        });
+
+        it("the guards still apply: no match in inline code", () => {
+            expect(canExpandAtCursor(asEditor(at("`on dd5")), dict, undefined, date)).toBe(false);
+        });
+
+        it("does not write anything", () => {
+            const ed = at("on dd5");
+            canExpandAtCursor(asEditor(ed), dict, undefined, date);
+            expect(ed.getLine(0)).toBe("on dd5");
+        });
+    });
+});
+
+describe("adapters/obsidian-editor: manual expansion with pattern rules (B-255 + ADR-0008)", () => {
+    const now = new Date("2025-09-02T10:11:12Z");
+    const date = rules({ source: String.raw`/\bdd(\d+)$/`, replacement: "day {{1}}", mode: "separator" });
+    const dict: Dict = { brb: "be right back" };
+
+    function at(text: string, ch = text.length, selection = ""): MockEditor {
+        const ed = new MockEditor(text);
+        ed.setCursor({ line: 0, ch });
+        ed.selection = selection;
+        return ed;
+    }
+
+    it("a rule expands at the caret on the manual path", async () => {
+        const ed = at("on dd5");
+        const result = await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: date });
+        expect(ed.getLine(0)).toBe("on day 5");
+        expect(result).toMatchObject({ original: "dd5", insert: "day 5", separator: "" });
+    });
+
+    it("a caret inside the word takes the whole word and parks after the new text", async () => {
+        const ed = at("on dd5 now", 5);
+        await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: date });
+        expect(ed.getLine(0)).toBe("on day 5 now");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 8 });
+    });
+
+    it("a literal trigger wins over a rule that matches the same text", async () => {
+        const both = rules({ source: "/brb$/", replacement: "PATTERN", mode: "separator" });
+        const ed = at("say brb");
+        await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: both });
+        expect(ed.getLine(0)).toBe("say be right back");
+    });
+
+    it("a selection is replaced only as a literal trigger, rules do not see it", async () => {
+        const ed = at("on dd5", 6, "dd5");
+        expect(await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: date })).toBeUndefined();
+        expect(ed.getLine(0)).toBe("on dd5");
+    });
+
+    // The command and Tab never know about an auto-paired closer: with the same rule an instant typing path would take
+    // the `)`; here it stays.
+    it("never takes the bracket after the caret (no pairCloser on this path)", async () => {
+        const opener = rules({ source: String.raw`/\(c$/`, replacement: "\u00a9", mode: "separator" });
+        const ed = at("x (c)", 4);
+        await tryExpandAtCursor(asEditor(ed), dict, { now, patterns: opener });
+        expect(ed.getLine(0)).toBe("x \u00a9)");
+    });
+
+    it("without `manual` a rule inside a word does nothing, as before", async () => {
+        const ed = at("on dd5 now", 5);
+        expect(await tryExpandAtCursor(asEditor(ed), dict, { now, patterns: date })).toBeUndefined();
+    });
+});
+
+describe("adapters/obsidian-editor: B-255 manual expansion (selection, caret inside a word)", () => {
+    const deps = { now: new Date("2025-09-02T10:11:12Z"), manual: true };
+    const dict: Dict = { brb: "be right back", fn: "function $|()", lnk: "[$1]($2)" };
+
+    function at(text: string, ch = text.length, selection = ""): MockEditor {
+        const ed = new MockEditor(text);
+        ed.setCursor({ line: 0, ch });
+        ed.selection = selection;
+        return ed;
+    }
+
+    it("a selection that is exactly a trigger is replaced and the caret lands after the new text", async () => {
+        const ed = at("say brb now", 7, "brb");
+        const result = await tryExpandAtCursor(asEditor(ed), dict, deps);
+        expect(ed.getLine(0)).toBe("say be right back now");
+        expect(result).toEqual({ from: 4, insert: "be right back", original: "brb", separator: "" });
+        expect(ed.getCursor()).toEqual({ line: 0, ch: "say be right back".length });
+    });
+
+    it("a selection that is only the tail of a longer word is left alone", async () => {
+        const ed = at("xbrb", 4, "brb");
+        expect(await tryExpandAtCursor(asEditor(ed), dict, deps)).toBeUndefined();
+        expect(ed.getLine(0)).toBe("xbrb");
+    });
+
+    it("a selection that is no trigger is left alone", async () => {
+        const ed = at("hello", 5, "hello");
+        expect(await tryExpandAtCursor(asEditor(ed), dict, deps)).toBeUndefined();
+    });
+
+    it("a selection spanning a separator is never a trigger", async () => {
+        const ed = at("a brb", 5, "a brb");
+        expect(await tryExpandAtCursor(asEditor(ed), dict, deps)).toBeUndefined();
+    });
+
+    it("a selected trigger inside code is not expanded", async () => {
+        const ed = at("`brb`", 4, "brb");
+        expect(await tryExpandAtCursor(asEditor(ed), dict, deps)).toBeUndefined();
+        expect(ed.getLine(0)).toBe("`brb`");
+    });
+
+    it("prefix mode: a selection of the trigger alone is taken and the unselected prefix char is consumed", async () => {
+        const ed = at("x :brb y", 6, "brb");
+        const result = await tryExpandAtCursor(asEditor(ed), dict, { ...deps, prefix: ":" });
+        expect(ed.getLine(0)).toBe("x be right back y");
+        expect(result?.original).toBe(":brb");
+    });
+
+    it("prefix mode: a selection of prefix char + trigger is taken", async () => {
+        const ed = at("x :brb y", 6, ":brb");
+        const result = await tryExpandAtCursor(asEditor(ed), dict, { ...deps, prefix: ":" });
+        expect(ed.getLine(0)).toBe("x be right back y");
+        expect(result?.original).toBe(":brb");
+    });
+
+    it("prefix mode: a selected trigger with no prefix char before it is not taken", async () => {
+        const ed = at("x brb y", 5, "brb");
+        expect(await tryExpandAtCursor(asEditor(ed), dict, { ...deps, prefix: ":" })).toBeUndefined();
+        expect(ed.getLine(0)).toBe("x brb y");
+    });
+
+    it("a caret inside a trigger word expands the WHOLE word and parks the caret after it", async () => {
+        const ed = at("say brb now", 6);
+        const result = await tryExpandAtCursor(asEditor(ed), dict, deps);
+        expect(ed.getLine(0)).toBe("say be right back now");
+        expect(result?.original).toBe("brb");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: "say be right back".length });
+    });
+
+    it("a caret inside a word that is no trigger does nothing", async () => {
+        const ed = at("say brbx now", 6);
+        expect(await tryExpandAtCursor(asEditor(ed), dict, deps)).toBeUndefined();
+        expect(ed.getLine(0)).toBe("say brbx now");
+    });
+
+    it("a caret at the start of a word does nothing", async () => {
+        const ed = at("say brb", 4);
+        expect(await tryExpandAtCursor(asEditor(ed), dict, deps)).toBeUndefined();
+    });
+
+    it("a mid-word trigger with fields opens a session instead of parking the caret", async () => {
+        const ed = at("x lnk", 4);
+        const result = await tryExpandAtCursor(asEditor(ed), dict, deps);
+        expect(ed.getLine(0)).toBe("x []()");
+        expect(result?.session).toBeDefined();
+    });
+
+    it("never matches an inherited Object.prototype key mid-word (S-008)", async () => {
+        const ed = at("constructor", 4);
+        expect(await tryExpandAtCursor(asEditor(ed), {}, deps)).toBeUndefined();
+    });
+
+    it("without `manual` the command keeps its old rules (selection and mid-word do nothing)", async () => {
+        const plain = { now: deps.now };
+        expect(await tryExpandAtCursor(asEditor(at("say brb", 7, "brb")), dict, plain)).toBeUndefined();
+        expect(await tryExpandAtCursor(asEditor(at("say brb now", 6)), dict, plain)).toBeUndefined();
     });
 });

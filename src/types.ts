@@ -52,6 +52,12 @@ export interface SnipSidianSettings {
          *  right after an expansion restore `trigger + separator`.
          *  Unset/`false` = off (default). */
         highlight?: boolean;
+        /** B-255: expand a trigger as it is typed (on a separator).
+         *  Unset = `true` (the behavior before this setting existed). */
+        onType?: boolean;
+        /** B-255: Tab expands the trigger before the caret. Unset =
+         *  `false`. Tab keeps field-session behavior (B-243) first. */
+        onTab?: boolean;
     };
     /**
      * B-138: per-group enable/disable. Top-level (not under `ui`) —

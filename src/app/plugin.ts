@@ -1,4 +1,4 @@
-import { Plugin } from "obsidian";
+import { Notice, Plugin, type Editor } from "obsidian";
 import { buildExpansionExtension } from "./cm6-bridge";
 import { SnipSidianSettingTab } from "../ui/settings";
 import { defaultSnippetsAsGroup } from "../store/presets";
@@ -6,6 +6,11 @@ import type { SnipSidianSettings } from "../types";
 import { getDict, getAllSnippetsFlat } from "../store/snippets";
 import { getCompiledPatterns, patternsSignature } from "../store/patterns";
 import { patternHealth, type CompiledPatterns, type PatternHealth } from "../engine/patterns";
+import { expandsOnTab, expandsOnType } from "../store/expansion-mode";
+import { isTextSnippetsData } from "../store/migrations";
+import { TEXT_SNIPPETS_PLUGIN_ID } from "../packages/text-snippets";
+import { backupOriginalData, migrateTextSnippetsData, protectUnknownData } from "./text-snippets-migration";
+import { sanitizeForNotice } from "../shared/notice-text";
 import { SnippetPickerService } from "../core/snippet-picker";
 import { openSnippetPickerModal } from "../ui/components/SnippetPickerModal";
 import { openAddSnippetFromSelection } from "../ui/components/AddFromSelection";
@@ -33,6 +38,11 @@ export default class HotstringsPlugin extends Plugin {
     patternHealth(): PatternHealth {
         return patternHealth(this.getPatterns());
     }
+
+    /** B-254: original Text Snippets file text while it has no backup yet. */
+    private unsavedOriginal: string | null = null;
+    /** One "changes are not being saved" Notice per session (backup failing). */
+    private backupFailureShown = false;
 
     async onload() {
         await this.loadSettings();
@@ -65,6 +75,9 @@ export default class HotstringsPlugin extends Plugin {
                 () => this.settings.expansion?.highlight === true,
                 // ADR-0008: rebuilt only when settings are saved, not per keystroke.
                 () => this.getPatterns(),
+                // B-255: both read at use time, so toggling needs no reload.
+                () => expandsOnType(this.settings),
+                () => expandsOnTab(this.settings),
             ),
         );
 
@@ -95,6 +108,19 @@ export default class HotstringsPlugin extends Plugin {
             }
         });
 
+        const runExpandTrigger = (editor: Editor, manual = false): void => {
+            expandTriggerAtCursor(
+                this.app,
+                editor,
+                () => getDict(this.settings),
+                getPrefix,
+                () => this.getPatterns(),
+                { manual },
+            ).catch((err: unknown) => {
+                console.error("[snipsy] expand-trigger error", err);
+            });
+        };
+
         // B-244: expands the trigger right before the caret without a
         // separator (same guards as typing); with no trigger, jumps to the
         // next field of an open B-243 session. No default hotkey.
@@ -102,18 +128,24 @@ export default class HotstringsPlugin extends Plugin {
             id: "expand-trigger",
             name: "Expand trigger at cursor",
             icon: "zap",
-            editorCallback: (editor) => {
-                expandTriggerAtCursor(
-                    this.app,
-                    editor,
-                    () => getDict(this.settings),
-                    getPrefix,
-                    () => this.getPatterns(),
-                ).catch((err: unknown) => {
-                    console.error("[snipsy] expand-trigger error", err);
-                });
-            },
+            editorCallback: (editor) => runExpandTrigger(editor),
         });
+
+        // B-256: the compatibility build (this plugin shipped under the id of
+        // "Text Snippets") keeps that plugin's command id and name, so hotkeys
+        // users bound to it keep working. No default hotkey (the original's
+        // Mod+Tab never worked reliably: Cmd+Tab belongs to macOS, Ctrl+Tab
+        // switches tabs); plain Tab is the main path. Acts like the original:
+        // a selection is the trigger, a caret inside a word takes the whole
+        // word. Under `snipsidian` nothing is added.
+        if (this.manifest.id === TEXT_SNIPPETS_PLUGIN_ID) {
+            this.addCommand({
+                id: "text-snippets",
+                name: "Run snippet replacement",
+                icon: "zap",
+                editorCallback: (editor) => runExpandTrigger(editor, true),
+            });
+        }
 
         // B-243: the Tab key is the main way; this is for a keyboard-less
         // device (mobile toolbar) or a custom hotkey. No default hotkey.
@@ -142,12 +174,45 @@ export default class HotstringsPlugin extends Plugin {
 
     async loadSettings() {
         this.compiledPatterns = undefined;
-        const saved = (await this.loadData()) as Partial<SnipSidianSettings> | null;
+        const loaded: unknown = await this.loadData();
+        if (isTextSnippetsData(loaded)) {
+            // B-254: a Text Snippets data.json (`snippets` is a string list,
+            // not Snipsy's map). Convert it, keeping a copy of the original.
+            const outcome = await migrateTextSnippetsData({
+                adapter: this.app.vault.adapter,
+                dir: this.pluginDir(),
+                saved: loaded,
+            });
+            this.settings = outcome.settings;
+            this.unsavedOriginal = outcome.unsavedOriginal;
+            if (outcome.save) await this.saveSettings();
+            return;
+        }
+        const saved = loaded as Partial<SnipSidianSettings> | null;
+        const compat = this.manifest.id === TEXT_SNIPPETS_PLUGIN_ID;
+        // A file under the compat id that is neither shape would fall into the
+        // fresh-install branch and be overwritten: back it up first.
+        const unknown = compat && loaded !== null && loaded !== undefined && !saved?.snippets;
         if (saved?.snippets) {
             // Existing install: the stored map is the source of truth. Never
             // re-merge DEFAULT_SNIPPETS here — doing so resurrected deleted or
             // renamed defaults on every launch (B-130, issues #55/#56).
             this.settings = { ...saved, snippets: saved.snippets };
+        } else if (compat) {
+            // B-255: fresh install of the compatibility build. Its users never
+            // had Snipsy's defaults, so nothing is seeded, and it behaves like
+            // Text Snippets did: Tab / command only, no expansion while typing.
+            const guard = unknown
+                ? await protectUnknownData({ adapter: this.app.vault.adapter, dir: this.pluginDir(), loaded })
+                : { save: true, unsavedOriginal: null };
+            const base = typeof saved === "object" && saved !== null && !Array.isArray(saved) ? saved : {};
+            this.settings = {
+                ...base,
+                snippets: {},
+                expansion: { onType: false, onTab: true, ...base.expansion },
+            };
+            this.unsavedOriginal = guard.unsavedOriginal;
+            if (guard.save) await this.saveSettings();
         } else {
             // First install (no data.json, or one without a snippets map):
             // seed the shipped defaults once and persist immediately, so a
@@ -171,7 +236,32 @@ export default class HotstringsPlugin extends Plugin {
         }
     }
 
+    /** The plugin's own folder (where `data.json` lives). */
+    private pluginDir(): string {
+        return this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`;
+    }
+
     async saveSettings() {
+        // B-254: never overwrite the Text Snippets file while its backup is
+        // missing: retry the backup first; a failure refuses the save.
+        if (this.unsavedOriginal !== null) {
+            try {
+                await backupOriginalData(this.app.vault.adapter, this.pluginDir(), this.unsavedOriginal);
+            } catch (err) {
+                // Callers often drop a rejected save silently (toggles, delete):
+                // say once per session why nothing sticks, then still refuse.
+                if (!this.backupFailureShown) {
+                    this.backupFailureShown = true;
+                    const reason = sanitizeForNotice(err instanceof Error ? err.message : String(err));
+                    new Notice(
+                        `Changes are not being saved: the backup of your Text Snippets file failed (${reason}). Fix the problem and change a setting again.`,
+                        15000,
+                    );
+                }
+                throw err;
+            }
+            this.unsavedOriginal = null;
+        }
         // Every settings change goes through here (the UI saves after each edit, the community cache saves after
         // each fetch). Recompile on the next keystroke only when the rules or the muted groups changed: an unrelated
         // save must not reset what the runtime guard learned (strikes, switch-offs).

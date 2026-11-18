@@ -2,7 +2,8 @@
 import { EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import { MapMode, Transaction, type Extension, type Text } from "@codemirror/state";
 import type { App } from "obsidian";
-import { tryExpandAtSeparator, tryExpandInstant } from "../adapters/obsidian-editor";
+import { canExpandAtCursor, tryExpandAtSeparator, tryExpandInstant } from "../adapters/obsidian-editor";
+import { expandTriggerAtCursor } from "./field-commands";
 import { buildExpansionMarkExtension, markExpansion } from "./expansion-mark";
 import { buildFieldSessionExtension, startFieldSession } from "../adapters/field-session";
 import { readClipboardSafe } from "../adapters/clipboard";
@@ -59,7 +60,17 @@ export function handleViewUpdate(
     /** ADR-0008: the closer Obsidian's auto-pair inserted last in this view (per-view state owned by the caller).
      *  Without one nothing is tracked (a caret step over a closer is then never read as typing). */
     pairs?: PairedCloserTracker,
+    /** B-255: "Expand while typing" setting, resolved at call time
+     *  (default on). Off = typing never expands (Tab / command only). */
+    getOnType: () => boolean = () => true,
 ): UpdateOutcome {
+    // B-255: manual mode. Typing never expands, patterns included (the caret
+    // step over a closer is typing too). Also keeps the composition retry
+    // idle: it only arms itself from a "deferred" outcome.
+    if (!getOnType()) {
+        pairs?.clear();
+        return "ignored";
+    }
     // Cheap short-circuit: no point building the userEvent list (or
     // resolving the active editor) for selection-only updates —
     // typing always changes the document, so a no-op-for-the-doc
@@ -319,6 +330,7 @@ export class CompositionRetry {
         private readonly getPrefix: () => string | undefined,
         private readonly getHighlight: () => boolean = () => false,
         private readonly getPatterns: () => CompiledPatterns = () => NO_PATTERNS,
+        private readonly getOnType: () => boolean = () => true,
     ) {}
 
     /** Fed from the update listener (not a plugin `update()`, which
@@ -329,7 +341,16 @@ export class CompositionRetry {
         // reach `handleViewUpdate` for the auto-pair closer step-over, which
         // never touches `pending` (its expansion is a document change of its own).
         if (!update.docChanged) {
-            handleViewUpdate(this.app, this.getSnippets, update, this.getPrefix, this.getHighlight, this.getPatterns, this.pairs);
+            handleViewUpdate(
+                this.app,
+                this.getSnippets,
+                update,
+                this.getPrefix,
+                this.getHighlight,
+                this.getPatterns,
+                this.pairs,
+                this.getOnType,
+            );
             return;
         }
         const outcome = handleViewUpdate(
@@ -340,6 +361,7 @@ export class CompositionRetry {
             this.getHighlight,
             this.getPatterns,
             this.pairs,
+            this.getOnType,
         );
         this.pending = outcome === "deferred" && insertsText(update);
         if (this.pending) {
@@ -429,10 +451,15 @@ export function buildExpansionExtension(
     getSnippets: () => Dict,
     getPrefix: () => string | undefined = () => undefined,
     getHighlight: () => boolean = () => false,
+    /** ADR-0008: the compiled pattern rules, resolved at call time. */
     getPatterns: () => CompiledPatterns = () => NO_PATTERNS,
+    /** B-255: "Expand while typing" (default on). */
+    getOnType: () => boolean = () => true,
+    /** B-255: "Expand on Tab" (default off). */
+    getOnTab: () => boolean = () => false,
 ): Extension {
     const retry = ViewPlugin.define(
-        (view) => new CompositionRetry(view, app, getSnippets, getPrefix, getHighlight, getPatterns),
+        (view) => new CompositionRetry(view, app, getSnippets, getPrefix, getHighlight, getPatterns, getOnType),
         {
             eventHandlers: {
                 compositionend(this: CompositionRetry) {
@@ -446,9 +473,47 @@ export function buildExpansionExtension(
         EditorView.updateListener.of((update) => {
             const state = update.view.plugin(retry);
             if (state) state.record(update);
-            else handleViewUpdate(app, getSnippets, update, getPrefix, getHighlight, getPatterns);
+            else handleViewUpdate(app, getSnippets, update, getPrefix, getHighlight, getPatterns, undefined, getOnType);
         }),
         buildExpansionMarkExtension(getHighlight),
-        buildFieldSessionExtension(),
+        // B-255: the one Tab keymap lives in the field-session extension
+        // (a session keeps Tab first); this is its "no session" fallback.
+        buildFieldSessionExtension((view) => handleTab(view, app, getSnippets, getPrefix, getOnTab, getHighlight, getPatterns)),
     ];
+}
+
+/**
+ * B-255: Tab with no field session open. Takes the key only when "Expand on
+ * Tab" is on and there is a trigger to expand (before the caret, the word
+ * around it, or the selection: the original plugin's rules, with the guards of
+ * the "Expand trigger at cursor" command, decided synchronously); otherwise
+ * returns `false` so Tab indents or does whatever it did before.
+ */
+export function handleTab(
+    view: EditorView,
+    app: App,
+    getSnippets: () => Dict,
+    getPrefix: () => string | undefined,
+    getOnTab: () => boolean,
+    getHighlight: () => boolean = () => false,
+    /** ADR-0008: pattern rules count like a literal trigger; Tab never takes an auto-pair closer. */
+    getPatterns: () => CompiledPatterns = () => NO_PATTERNS,
+): boolean {
+    if (!getOnTab() || view.composing || view.state.readOnly) return false;
+    const editor = app.workspace.activeEditor?.editor;
+    // Only the focused editor's own view: never act on another pane's caret.
+    if (!editor || editor.cm !== view) return false;
+    const dict = getSnippets();
+    const patterns = getPatterns();
+    if (!canExpandAtCursor(editor, dict, getPrefix(), patterns.rules)) return false;
+    expandTriggerAtCursor(app, editor, () => dict, getPrefix, () => patterns, { manual: true })
+        .then((result) => {
+            // Same as typing (B-176): a field session clears the mark at once,
+            // so only a plain expansion is marked (highlight / Backspace undo).
+            if (result && !result.session && getHighlight()) markExpansion(view, result);
+        })
+        .catch((err: unknown) => {
+            console.error("[snipsy] Tab expansion error", err);
+        });
+    return true;
 }

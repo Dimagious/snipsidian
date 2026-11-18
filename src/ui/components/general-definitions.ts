@@ -59,6 +59,19 @@ export function buildGeneralDefinitions(
 
     const expansionItems = [
         {
+            // B-255: off = manual mode (Tab or the command expand; typing never does).
+            name: "Expand while typing",
+            desc: "Expand a trigger when you type a space, punctuation or Enter after it. Off: only Tab or the command expands.",
+            aliases: ["auto", "automatic", "manual", "hotstring"],
+            control: { type: "toggle", key: "expansion.onType", defaultValue: true },
+        } satisfies SettingDefinitionControl,
+        {
+            name: "Expand on Tab",
+            desc: "Tab expands the trigger before the cursor. Without a trigger, Tab works as usual.",
+            aliases: ["tab", "manual", "hotstring"],
+            control: { type: "toggle", key: "expansion.onTab", defaultValue: false },
+        } satisfies SettingDefinitionControl,
+        {
             name: "Require a prefix before triggers",
             desc: "With this on, todo stays text; :todo expands.",
             aliases: ["trigger", "hotstring"],
@@ -96,13 +109,13 @@ export function buildGeneralDefinitions(
             desc: "Opens the Hotkeys tab filtered to this command.",
             aliases: ["snippet", "hotstring", "trigger", "text expansion"],
             buttonText: "Set hotkey",
-            action: () => handlers.setHotkey("snipsidian:insert-snippet", "Insert snippet…"),
+            action: () => handlers.setHotkey(`${plugin.manifest.id}:insert-snippet`, "Insert snippet…"),
         } satisfies SnipsyActionDef,
         {
             name: "Set hotkey for Open settings",
             desc: "Opens the Hotkeys tab filtered to this command.",
             buttonText: "Set hotkey",
-            action: () => handlers.setHotkey("snipsidian:open-settings", "Open settings"),
+            action: () => handlers.setHotkey(`${plugin.manifest.id}:open-settings`, "Open settings"),
         } satisfies SnipsyActionDef,
     ];
 

@@ -126,6 +126,27 @@ describe("field-commands: expandTriggerAtCursor (B-244)", () => {
         await expandTriggerAtCursor(app, asEditor(named), () => ({ fname: "$filename" }), spy);
         expect(named.getLine(0)).toBe("note.md");
     });
+
+    it("returns what it expanded (the Tab path marks it), undefined when nothing was", async () => {
+        const hit = await expandTriggerAtCursor(app, asEditor(editorWith("say brb", 7)), () => dict, noPrefix);
+        expect(hit).toMatchObject({ from: 4, original: "brb", insert: "be right back" });
+        expect(await expandTriggerAtCursor(app, asEditor(editorWith("plain", 5)), () => dict, noPrefix)).toBeUndefined();
+    });
+
+    it("manual mode takes a selected trigger and a caret inside a word; the default does not", async () => {
+        const selected = editorWith("say brb", 7);
+        selected.selection = "brb";
+        await expandTriggerAtCursor(app, asEditor(selected), () => dict, noPrefix, undefined, { manual: true });
+        expect(selected.getLine(0)).toBe("say be right back");
+
+        const inside = editorWith("say brb now", 6);
+        await expandTriggerAtCursor(app, asEditor(inside), () => dict, noPrefix, undefined, { manual: true });
+        expect(inside.getLine(0)).toBe("say be right back now");
+
+        const plain = editorWith("say brb now", 6);
+        await expandTriggerAtCursor(app, asEditor(plain), () => dict, noPrefix);
+        expect(plain.getLine(0)).toBe("say brb now");
+    });
 });
 
 describe("field-commands: expandTriggerAtCursor with patterns (ADR-0008)", () => {
@@ -144,6 +165,21 @@ describe("field-commands: expandTriggerAtCursor with patterns (ADR-0008)", () =>
         const mock = editorWith("a cat", 5);
         await expandTriggerAtCursor(app, asEditor(mock), () => ({}), noPrefix, () => set);
         expect(mock.getLine(0)).toBe("a cat");
+    });
+
+    it("manual mode (Tab, alias) tries the rules too, and still jumps to the next field when nothing matches", async () => {
+        const hit = editorWith("take 3/4", 8);
+        const result = await expandTriggerAtCursor(app, asEditor(hit), () => ({}), noPrefix, () => set, { manual: true });
+        expect(hit.getLine(0)).toBe("take 3\u20444");
+        expect(result).toMatchObject({ original: "3/4" });
+        expect(await expandTriggerAtCursor(app, asEditor(editorWith("plain", 5)), () => ({}), noPrefix, () => set, { manual: true })).toBeUndefined();
+    });
+
+    it("manual mode with a selection ignores the rules", async () => {
+        const mock = editorWith("take 3/4", 8);
+        mock.selection = "3/4";
+        await expandTriggerAtCursor(app, asEditor(mock), () => ({}), noPrefix, () => set, { manual: true });
+        expect(mock.getLine(0)).toBe("take 3/4");
     });
 
     it("without patterns the command behaves as before", async () => {
