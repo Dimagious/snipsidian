@@ -42,7 +42,7 @@ export const LOOKBEHIND_ATOM_LIMIT = 8;
 const LOOKBEHIND_CONTEXT = LOOKBEHIND_ATOM_LIMIT * 2;
 /**
  * Runtime guard (S-015, round 2): an `exec` over this many ms is slow. An accepted pattern takes microseconds; the
- * slowest polynomial cases measured (`\w*\w*\w{0,3}x$` under `iu`) take about 4 ms, so 5 would never fire on them.
+ * polynomial case `\w*\w*\w{0,3}x$` under `iu` measured 0.05 ms on a 64-character line (2026-11-18, Node), so a sample over 2 ms is not a normal exec.
  */
 export const RULE_SLOW_MS = 2;
 /**
@@ -58,6 +58,27 @@ export const RULE_SLOW_STRIKES = 3;
 export const RULE_STRIKE_WINDOW = 50;
 /** One call (one keystroke) stops trying further rules once its rules have spent this long. */
 export const KEYSTROKE_BUDGET_MS = 8;
+/**
+ * S-015, round 6. Under `u`, the astral members and range ends of all classes of a pattern may span this many distinct
+ * lead surrogates (one per 1024 code points: a "block" in the message). V8 compiles such a class into one branch per
+ * lead, so the first exec after non-Latin-1 text grows with the count: measured 2026-11-18 (Node, fresh process,
+ * `[^...]{1,4}-\d{2}-\d{2}zq` under `iu`) 0.8 ms for 4 leads, 12 ms for 16, 38 ms for 24, 0.9 s for 64, 2.6 s for 85.
+ * Real emoji classes span 1-3 leads. Without `u` an astral literal is two code units and none of this happens.
+ */
+export const MAX_ASTRAL_BLOCKS = 4;
+/**
+ * Backstop for V8 compile hotspots the static checks do not know (S-015, round 6; round 5 and 6 each found one after the
+ * fact). A rule's regex is compiled lazily, so the compile cost lands inside one `exec`: the 1st, the 2nd (tier-up) or
+ * the first on text beyond Latin-1. Re-running cannot see it (the code is compiled by then), so the guard looks at the
+ * first sample of such a COLD exec only. One over this many ms switches the rule off for the session: an unknown
+ * hotspot costs one pause per rule, not a pause per keystroke. A normal rule's later spike (a GC pause on a warm
+ * exec) never counts, because only cold execs are looked at; one GC pause this long on a cold exec still would, and
+ * the rule comes back when the rules are edited or Obsidian restarts. Measured compile costs: under 2 ms up to 8 lead
+ * surrogates, 12 ms at 16 and 38 ms at 24; the limit is above anything the structural caps accept.
+ */
+export const RULE_COMPILE_LIMIT_MS = 50;
+/** The first this-many execs of a rule are cold: V8 compiles on the 1st and again on the 2nd (tier-up). */
+const RULE_COLD_RUNS = 2;
 /** Group names that placeholders already use (or will: B-204, B-218). */
 const RESERVED_GROUP_NAMES: ReadonlySet<string> = new Set(["date", "time", "title", "notedate"]);
 /**
@@ -117,6 +138,8 @@ function unsupportedEscape(src: string, backslashAt: number, length?: number): R
 class Parser {
     pos = 0;
     readonly names: string[] = [];
+    /** Under `u`: the distinct lead surrogates of the astral members and range ends of every class (S-015, round 6). */
+    readonly leads = new Set<number>();
     /** `unicode`: the `u` flag. Escapes mean different things with and without it (`\u{1,}`). */
     constructor(
         private readonly src: string,
@@ -266,12 +289,58 @@ class Parser {
 
     /** `this.pos` is just after the `[`. */
     private skipClass(): void {
+        if (this.src[this.pos] === "^") this.pos++;
+        let prev: number | null | undefined;
+        let rangeFrom: number | null | undefined;
         while (this.pos < this.src.length) {
-            const c = this.src[this.pos++];
-            if (c === "\\") this.skipEscape(true);
-            else if (c === "]") return;
+            const c = this.src[this.pos];
+            if (c === "]") {
+                this.pos++;
+                return;
+            }
+            if (c === "-" && prev !== undefined && rangeFrom === undefined && this.src[this.pos + 1] !== "]") {
+                // A range: the next member is its upper end.
+                this.pos++;
+                rangeFrom = prev;
+                prev = undefined;
+                continue;
+            }
+            const member = this.classMember();
+            if (rangeFrom !== undefined) {
+                this.countLeads(rangeFrom, member);
+                rangeFrom = undefined;
+            } else {
+                this.countLeads(member, member);
+                prev = member;
+            }
         }
         throw new Refusal("A character class is not closed.");
+    }
+
+    /**
+     * Reads one class member at `this.pos` and returns its code point, or `null` for a class escape (`\d`, `\s`) that is
+     * no single character. Under `u` a surrogate pair is one member.
+     */
+    private classMember(): number | null {
+        const start = this.pos;
+        const c = this.src[this.pos++];
+        if (c === "\\") {
+            this.skipEscape(true);
+            const e = this.src[start + 1];
+            if (e === "u" && this.src[start + 2] === "{") return Number.parseInt(this.src.slice(start + 3, this.pos - 1), 16);
+            if (e === "u" || e === "x") return Number.parseInt(this.src.slice(start + 2, this.pos), 16);
+            return null;
+        }
+        const code = this.src.codePointAt(start) ?? 0;
+        if (this.unicode && code > 0xffff) this.pos++;
+        return code;
+    }
+
+    /** Under `u`, adds the lead surrogate of every astral code point of `lo..hi` (a `null` end is no single character). */
+    private countLeads(lo: number | null, hi: number | null): void {
+        if (!this.unicode || lo === null || hi === null || hi <= 0xffff) return;
+        // At most 1024 leads exist, so the loop is bounded; an out-of-range end is refused by `new RegExp` before this runs.
+        for (let lead = (Math.max(lo, 0x10000) - 0x10000) >> 10; lead <= (hi - 0x10000) >> 10; lead++) this.leads.add(lead);
     }
 
     /** `this.pos` is just after the `(`. */
@@ -508,11 +577,19 @@ function buildCore(source: string): CompiledCore {
     try {
         new RegExp(body, flags);
     } catch (err) {
-        throw new Refusal(err instanceof Error ? err.message : "The pattern does not compile.");
+        const message = err instanceof Error ? err.message : "The pattern does not compile.";
+        // A malformed `\pL` or `\p{RGI_Emoji}` under `u` is still a property escape: same hint, not V8's wording.
+        throw new Refusal(message.includes("Invalid property name") ? REASON_PROPERTY : message);
     }
     const parser = new Parser(body, flags.includes("u"));
     const alts = parser.parseAlternatives();
     if (parser.pos < body.length) throw new Refusal("The pattern has an unbalanced parenthesis.");
+    if (parser.leads.size > MAX_ASTRAL_BLOCKS) {
+        throw new Refusal(
+            `This class mixes characters from too many Unicode blocks (${parser.leads.size}); the limit is ${MAX_ASTRAL_BLOCKS}. ` +
+                "Keep to a few related symbols, such as emoji, or use a range like [а-яё].",
+        );
+    }
     const { usesBol, unbounded } = analyze(alts, parser.names);
     // `$` only binds the last alternative of `cat|dog$`: wrap the body so every alternative ends at the caret.
     // `g` is only there for `lastIndex`: the matcher starts at the second character of a cut window, so `\b` and
@@ -592,6 +669,8 @@ export type RuleHealth = {
     deadlineCuts: number;
     /** Set when the rule was switched off for the session: the reason a person can read. */
     switchedOff?: string;
+    /** An exec of this rule has already run on text beyond Latin-1 (V8 compiles again for the first such text). */
+    sawWide: boolean;
 };
 
 /**
@@ -639,7 +718,7 @@ export function compileRule(raw: unknown): CompileResult {
             re: entry.core.re,
             usesBol: entry.core.usesBol,
             endTest: entry.core.endTest,
-            health: { runs: 0, strikes: [], deadlineCuts: 0 },
+            health: { runs: 0, strikes: [], deadlineCuts: 0, sawWide: false },
         },
     };
 }
@@ -746,8 +825,18 @@ function strikeRule(rule: CompiledRule, text: string): void {
     // Decay: a strike `RULE_STRIKE_WINDOW` runs back or more is outside "the last N runs".
     while (health.strikes.length > 0 && health.runs - (health.strikes[0] ?? 0) >= RULE_STRIKE_WINDOW) health.strikes.shift();
     if (health.strikes.length < RULE_SLOW_STRIKES) return;
-    health.switchedOff = `Switched off: slow on this note (${health.strikes.length} times over ${RULE_SLOW_MS} ms).`;
-    console.warn("[snipsy] pattern rule switched off", { id: rule.id, reason: health.switchedOff });
+    switchOff(rule, `Switched off: slow on this note (${health.strikes.length} times over ${RULE_SLOW_MS} ms).`);
+}
+
+function switchOff(rule: CompiledRule, reason: string): void {
+    rule.health.switchedOff = reason;
+    console.warn("[snipsy] pattern rule switched off", { id: rule.id, reason });
+}
+
+/** Text beyond Latin-1: the first such exec makes V8 compile the regex for two-byte input. */
+function isWide(text: string): boolean {
+    for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) > 0xff) return true;
+    return false;
 }
 
 /** Where the 64-character window of `text` starts: never between the halves of a surrogate pair. */
@@ -788,13 +877,21 @@ function tryRule(rule: CompiledRule, text: string, timing: Timing): PatternMatch
     const from = windowStart - contextStart;
     rule.re.lastIndex = from;
     rule.health.runs++;
+    const health = rule.health;
+    // Cold exec: V8 may compile inside it (see `RULE_COMPILE_LIMIT_MS`). Decided before the run, flagged after it.
+    const wide = !health.sawWide && isWide(context);
+    const cold = health.runs <= RULE_COLD_RUNS || wide;
     let started = timing.clock();
     const m = rule.re.exec(context);
     let fastest = timing.clock() - started;
     timing.spent += fastest;
+    if (wide) health.sawWide = true;
+    if (cold && fastest > RULE_COMPILE_LIMIT_MS) {
+        switchOff(rule, `Switched off: too expensive to compile (${Math.round(fastest)} ms).`);
+    }
     // A slow sample may be V8 compiling the regex lazily: run the same exec again before calling it slow. The
     // extra time counts against the keystroke budget; the result is the same each time, the first one is used.
-    for (let retry = 0; retry < RULE_SLOW_RETRIES && fastest > RULE_SLOW_MS; retry++) {
+    for (let retry = 0; retry < RULE_SLOW_RETRIES && fastest > RULE_SLOW_MS && health.switchedOff === undefined; retry++) {
         rule.re.lastIndex = from;
         started = timing.clock();
         rule.re.exec(context);

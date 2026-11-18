@@ -9,11 +9,13 @@ import {
     compileRule,
     matchPatterns,
     KEYSTROKE_BUDGET_MS,
+    MAX_ASTRAL_BLOCKS,
     LOOKBEHIND_ATOM_LIMIT,
     MAX_PATTERN_REPLACEMENT,
     NO_PATTERNS,
     PATTERN_TAIL_LIMIT,
     patternHealth,
+    RULE_COMPILE_LIMIT_MS,
     RULE_SLOW_MS,
     RULE_SLOW_RETRIES,
     RULE_SLOW_STRIKES,
@@ -884,7 +886,7 @@ describe("patterns: alternation is a choice point (S-015)", () => {
 describe("patterns: Unicode property escapes are refused (S-015, round 5)", () => {
     // V8 compiles a property class on the first non-Latin-1 `exec`, during typing, and one `\p{L}{1,4}` next to a short
     // tail took 90-430 ms there, non-monotonically in the quantifier, the tail and the property: a count cannot bound
-    // it (round 4 tried), so none is accepted. The cheap constructs (\w, ., [^a], [а-яё], astral ranges) stay.
+    // it (round 4 tried), so none is accepted. The cheap constructs (\w, ., [^a], [а-яё], small astral classes) stay.
     const REASON =
         "Unicode property classes like \\p{L} aren't supported in patterns yet. Use \\w or a range such as [а-яё] instead.";
     const u = (body: string, flags = "u"): string => src(body + "$", flags);
@@ -915,6 +917,12 @@ describe("patterns: Unicode property escapes are refused (S-015, round 5)", () =
         ["round 4: a repeated group x3", String.raw`(?:\P{L}\P{L}\P{L}){3}z`],
         ["round 4: a quantified atom written out 3 times", String.raw`\p{L}{3}\p{N}z`],
         ["round 4: three positive (was accepted)", String.raw`\p{L}\p{N}\p{Lu}z`],
+        // V8's own "Invalid property name" must not reach the person: it is the same mistake.
+        ["a property written without braces", String.raw`\pLx`],
+        ["a lone backslash-p in a class", String.raw`[\p]x`],
+        ["a property of strings (RGI_Emoji)", String.raw`\p{RGI_Emoji}x`],
+        ["an unknown property", String.raw`\p{NoSuchProperty}x`],
+        ["an unclosed property", String.raw`\P{Lx`],
     ])("refuses %s under u and iu, in both modes", (_label, body) => {
         for (const flags of ["u", "iu"]) {
             for (const mode of ["separator", "instant"] as const) {
@@ -951,7 +959,7 @@ describe("patterns: Unicode property escapes are refused (S-015, round 5)", () =
         expect(compilePatternRules([rule(u(String.raw`\p{L}x`))]).rules).toEqual([]);
     });
 
-    it("the cheap constructs stay accepted: \\w, ., [^a], [а-яё], astral ranges and escapes", () => {
+    it("the cheap constructs stay accepted: \\w, ., [^a], [а-яё], small astral classes and escapes", () => {
         for (const body of [
             String.raw`\w{1,4}-\d{2}-\d{2}`,
             String.raw`[а-яё]{2,4}\d{4}`,
@@ -965,13 +973,13 @@ describe("patterns: Unicode property escapes are refused (S-015, round 5)", () =
     });
 
     // Why this replaces round 4's "first exec at the limit" test: that test existed because property classes could still
-    // be accepted. None can now, and the construct sweep shows the rest stay under ~4 ms. What is left is a cheap
-    // smoke guard: the constructs the checker swept, with a ranged quantifier and a 6-character tail, run their first
+    // be accepted. None can now, and an astral class is capped by lead surrogates (see the round 6 block below). What is
+    // left is a cheap smoke guard: the constructs the checker swept, with a ranged quantifier and a 6-character tail, run their first
     // two-byte exec under the 1.5 s watchdog. It cannot measure V8's compile cost in a fresh process (the process
     // shares compiled code and nothing here is timed), so it catches only a blow-up of seconds, not a regression of
     // milliseconds; that is what the refusal above and the runtime guard are for.
     it("the first two-byte exec of the non-property constructs the checker swept stays under the watchdog", () => {
-        const atoms = [String.raw`\w`, ".", "[^a]", "[а-яё]", "[😀-😅]", String.raw`\u{1F600}`, String.raw`\W`, String.raw`\S`];
+        const atoms = [String.raw`\w`, ".", "[^a]", "[а-яё]", "[😀-😅]", String.raw`\u{1F600}`, String.raw`\W`, String.raw`\S`, "[^😀𐀀𠀀𰀀]"];
         const lines = ["я1", "я".repeat(63) + "1", "я1".repeat(32), "😀".repeat(31) + "я1"];
         let n = 0;
         for (const atom of atoms) {
@@ -1007,6 +1015,94 @@ describe("patterns: Unicode property escapes are refused (S-015, round 5)", () =
         } finally {
             exec.mockRestore();
         }
+    });
+});
+
+describe("patterns: an astral class is capped by lead surrogates (S-015, round 6)", () => {
+    // Round 6: the hotspot was never `\p` itself but a big astral set under `u` next to a short ranged quantifier and a
+    // tail. V8 builds one branch per lead surrogate (one per 1024 code points), so the first two-byte exec grew with
+    // their count (measured: 0.8 ms at 4, 12 ms at 16, 38 ms at 24, 0.9 s at 64, 2.6 s at 85). Counted: the
+    // distinct leads of every astral class member and range end, across the whole pattern.
+    const u = (body: string, flags = "u"): string => src(body + "$", flags);
+    /** One astral code point per lead surrogate: U+10007, U+10407, ... */
+    const leadChar = (i: number): string => String.fromCodePoint(0x10000 + i * 0x400 + 7);
+    const leadEscape = (i: number): string => `\\u{${(0x10000 + i * 0x400 + 7).toString(16)}}`;
+    const members = (n: number, as: (i: number) => string = leadChar): string => Array.from({ length: n }, (_, i) => as(i)).join("");
+    const reason = (n: number): string =>
+        `This class mixes characters from too many Unicode blocks (${n}); the limit is ${MAX_ASTRAL_BLOCKS}. ` +
+        "Keep to a few related symbols, such as emoji, or use a range like [а-яё].";
+
+    it("the limit is small, and the reason is sentence case with no dash", () => {
+        expect(MAX_ASTRAL_BLOCKS).toBe(4);
+        expect(reason(5)).toMatch(/^[A-Z]/);
+        expect(reason(5)).not.toMatch(/[\u2013\u2014]/);
+    });
+
+    it.each([
+        ["the checker's repro (negated, iu), 24 leads", `[^${members(24)}]{1,4}-\\d{2}-\\d{2}zq`, "iu", 24],
+        ["85 leads, which took 2.6 s", `[^${members(85)}]{1,4}-\\d{2}-\\d{2}zq`, "iu", 85],
+        ["64 leads, positive class, u", `[${members(64)}]{2,4}\\d{4}zq`, "u", 64],
+        ["the escaped form (the 200 character body limit allows about 15)", `[^${members(14, leadEscape)}]{1,4}-\\d{2}-\\d{2}zq`, "iu", 14],
+        ["one lead over the limit", `[${members(MAX_ASTRAL_BLOCKS + 1)}]{1,3}zq`, "u", MAX_ASTRAL_BLOCKS + 1],
+        ["a range spanning all 1024 leads", String.raw`[\u{10000}-\u{10FFFF}]{1,4}zq`, "u", 1024],
+        ["a range spanning 64 leads (U+10000 to U+1FFFF)", String.raw`[\u{10000}-\u{1FFFF}]{1,4}zq`, "u", 64],
+        ["a range spanning 5 leads", String.raw`[\u{10000}-\u{113FF}]{1,4}zq`, "u", 5],
+        ["a literal range over many leads", "[𐀀-𰀀]{1,4}zq", "iu", 129],
+        ["a range from a BMP character into the astral planes counts only the astral leads", String.raw`[\u{FFFF}-\u{113FF}]zq`, "u", 5],
+    ])("refuses %s", (_label, body, flags, count) => {
+        for (const mode of ["separator", "instant"] as const) {
+            const result = check(u(body, flags), mode);
+            expect(result, `${flags} ${mode}`).toEqual({ ok: false, reason: reason(count) });
+        }
+    });
+
+    it("counts distinct leads across the classes of the whole pattern, lookbehinds included", () => {
+        // Three classes with two leads each: 6 in all.
+        const spread = `[${members(2)}]x[${members(2).replace(/./gu, (c) => String.fromCodePoint((c.codePointAt(0) ?? 0) + 0x4000))}]y`;
+        expect(check(u(spread + "[" + leadChar(40) + leadChar(41) + "]z"))).toEqual({ ok: false, reason: reason(6) });
+        // In a lookbehind too (a class counts as one term there).
+        expect(check(u(`(?<=[${members(5)}])zq`))).toEqual({ ok: false, reason: reason(5) });
+        expect(check(u(`(?<![${members(3)}])[${members(5).slice(-6)}]zq`))).toEqual({ ok: false, reason: reason(5) });
+    });
+
+    it("the same leads in many classes are counted once", () => {
+        const cls = `[^${members(MAX_ASTRAL_BLOCKS)}]{1,4}`;
+        expect(check(u(`${cls}-${cls}-${cls}zq`, "iu"))).toEqual({ ok: true });
+    });
+
+    it("accepts what people write: emoji classes (1-3 leads), exactly the limit, many characters in one lead", () => {
+        const emoji = "😀😁😂🤣😃😄😅😆😉😊😋😎😍😘🥰🙂🤗🤔😐🙄😴😷🤒🤕🥳😭😱😡🤯🥺👍👎👏🙏💪🎉🔥✨❤️⭐🌟";
+        expect(check(u(`[${emoji}]{1,4}-\\d{2}-\\d{2}zq`, "iu"))).toEqual({ ok: true });
+        expect(check(u(`[^${emoji}]{1,4}-\\d{2}zq`, "iu"))).toEqual({ ok: true });
+        expect(check(u(`[${members(MAX_ASTRAL_BLOCKS)}]{1,4}zq`, "iu"))).toEqual({ ok: true });
+        // U+1F300-U+1FAFF is 3 leads, every character of it inside.
+        expect(check(u(String.raw`[\u{1F300}-\u{1FAFF}]{1,4}zq`))).toEqual({ ok: true });
+        expect(check(u(String.raw`[\u{10000}-\u{103FF}]{1,4}zq`))).toEqual({ ok: true });
+        expect(check(u(String.raw`[\u{1F000}-\u{1FFFF}]{1,4}zq`))).toEqual({ ok: true }); // 4 leads
+    });
+
+    it("BMP members, class escapes, a leading ^ and a literal dash are not counted", () => {
+        expect(check(u(String.raw`[\u{FFFF}\d\w\s\u00e9\xe9а-яё-]{1,4}zq`))).toEqual({ ok: true });
+        expect(check(u(`[-${members(MAX_ASTRAL_BLOCKS)}]zq`))).toEqual({ ok: true });
+        expect(check(u(`[${members(MAX_ASTRAL_BLOCKS)}-]zq`))).toEqual({ ok: true });
+        // The last member before a closing bracket is not the start of a range.
+        expect(check(u(`[${members(MAX_ASTRAL_BLOCKS)}-]x[${leadChar(30)}]zq`))).toEqual({ ok: false, reason: reason(MAX_ASTRAL_BLOCKS + 1) });
+    });
+
+    it("an astral character outside a class is not a class member", () => {
+        expect(check(u(`${members(30)}zq`))).toEqual({ ok: true });
+    });
+
+    it("without u an astral literal is two code units and costs nothing: no cap", () => {
+        // Measured 2026-11-18, Node, fresh process: 0.3 ms or less for 85 leads without u.
+        expect(check(u(`[^${members(85)}]{1,4}-\\d{2}-\\d{2}zq`, "i"))).toEqual({ ok: true });
+        expect(check(u(`[${members(85)}]{1,4}zq`, ""))).toEqual({ ok: true });
+    });
+
+    it("a refused rule never compiles, whichever way it gets in", () => {
+        const result = compileRule(rule(u(`[^${members(24)}]{1,4}-\\d{2}-\\d{2}zq`, "iu")));
+        expect(result).toEqual({ ok: false, reason: reason(24) });
+        expect(compilePatternRules([rule(u(`[${members(9)}]zq`))]).rules).toEqual([]);
     });
 });
 
@@ -1628,6 +1724,93 @@ describe("patterns: runtime guard (fake clock)", () => {
 
     it("NO_PATTERNS has a clean bill of health", () => {
         expect(patternHealth(NO_PATTERNS)).toEqual({ switchedOff: [], deadlineHits: 0 });
+    });
+
+    // -- Round 6: compile-scale cost on a cold exec switches the rule off at once ----------------------------------------
+
+    describe("compile backstop", () => {
+        const reasonOf = (id: string, rules: CompiledRule[]): string | undefined =>
+            patternHealth(set(...rules)).switchedOff.find((r) => r.id === id)?.reason;
+
+        it("a first exec over RULE_COMPILE_LIMIT_MS switches the rule off, without a re-run, and says why", () => {
+            vi.spyOn(console, "warn").mockImplementation(() => undefined);
+            expect(RULE_COMPILE_LIMIT_MS).toBe(50);
+            const { rule, exec } = fresh("/(\\d+)$/");
+            const hit = matchPatterns("a1", [rule], "separator", scriptedClock([2600, 0.01]));
+            // The exec itself was right, so this keystroke still expands.
+            expect(hit?.captures[1]).toBe("1");
+            expect(exec).toHaveBeenCalledTimes(1);
+            expect(reasonOf("r", [rule])).toBe("Switched off: too expensive to compile (2600 ms).");
+            expect(patternHealth(set(rule)).switchedOff).toEqual([{ id: "r", reason: "Switched off: too expensive to compile (2600 ms)." }]);
+            // From now on the rule is skipped, so it cannot cost another pause.
+            matchPatterns("a2", [rule], "separator", scriptedClock([0.01]));
+            expect(exec).toHaveBeenCalledTimes(1);
+            vi.restoreAllMocks();
+        });
+
+        it("a first exec at or under the limit does not switch the rule off", () => {
+            const { rule } = fresh("/(\\d+)$/");
+            matchPatterns("a1", [rule], "separator", scriptedClock([RULE_COMPILE_LIMIT_MS]));
+            expect(switchedOffRules(set(rule))).toEqual([]);
+        });
+
+        it("the second exec (tier-up compile) counts as cold too", () => {
+            vi.spyOn(console, "warn").mockImplementation(() => undefined);
+            const { rule } = fresh("/(\\d+)$/");
+            matchPatterns("a1", [rule], "separator", scriptedClock([0.01, 80, 0.01]));
+            matchPatterns("a2", [rule], "separator", scriptedClock([80]));
+            expect(reasonOf("r", [rule])).toBe("Switched off: too expensive to compile (80 ms).");
+            vi.restoreAllMocks();
+        });
+
+        it("the first exec on text beyond Latin-1 counts as cold, once", () => {
+            vi.spyOn(console, "warn").mockImplementation(() => undefined);
+            const { rule } = fresh("/(\\d+)$/");
+            const cheap = scriptedClock([0.01]);
+            for (const text of ["a1", "b2", "c3"]) matchPatterns(text, [rule], "separator", cheap);
+            expect(switchedOffRules(set(rule))).toEqual([]);
+            matchPatterns("я1", [rule], "separator", scriptedClock([120, 0.01]));
+            expect(reasonOf("r", [rule])).toBe("Switched off: too expensive to compile (120 ms).");
+            vi.restoreAllMocks();
+        });
+
+        it("a compile pause is paid once: later Cyrillic execs are not cold", () => {
+            const { rule } = fresh("/(\\d+)$/");
+            matchPatterns("я1", [rule], "separator", scriptedClock([30, 0.01]));
+            matchPatterns("я2", [rule], "separator", scriptedClock([0.01]));
+            matchPatterns("я3", [rule], "separator", scriptedClock([0.01]));
+            // A warm 60 ms spike (a GC pause) on a normal rule, long after its compiles: the rule stays on.
+            matchPatterns("я4", [rule], "separator", scriptedClock([60, 0.01]));
+            matchPatterns("я5", [rule], "separator", scriptedClock([60, 0.01]));
+            expect(switchedOffRules(set(rule))).toEqual([]);
+        });
+
+        it("a normal rule with one 60 ms spike on a later exec stays on (and strikes only the slow-sample rule)", () => {
+            const { rule } = fresh("/(\\d+)$/");
+            const keystrokes = 10;
+            // Exec 7 spikes to 60 ms, re-runs are fast: one slow keystroke is no strike set, let alone a compile cost.
+            const costs = Array.from({ length: keystrokes }, (_, i) => (i === 6 ? [60, 0.01] : [0.01])).flat();
+            const clock = scriptedClock(costs);
+            for (let i = 0; i < keystrokes; i++) matchPatterns("a" + String(i), [rule], "separator", clock);
+            expect(switchedOffRules(set(rule))).toEqual([]);
+        });
+
+        it("only the rule whose own exec was expensive is switched off", () => {
+            vi.spyOn(console, "warn").mockImplementation(() => undefined);
+            const a = fresh("/a(\\d+)$/", "separator", "a");
+            const b = fresh("/b(\\d+)$/", "separator", "b");
+            // Rule a's first exec is cheap, rule b's is the 90 ms one.
+            expect(matchPatterns("b9", [a.rule, b.rule], "separator", scriptedClock([0.01, 90, 0.01]))?.rule.id).toBe("b");
+            expect(patternHealth(set(a.rule, b.rule)).switchedOff.map((r) => r.id)).toEqual(["b"]);
+            vi.restoreAllMocks();
+        });
+
+        it("a rule skipped by its end-character test is not run, so it cannot be cold", () => {
+            const { rule, exec } = fresh("/(\\d+)$/", "instant");
+            matchPatterns("ab", [rule], "instant", scriptedClock([5000]));
+            expect(exec).not.toHaveBeenCalled();
+            expect(switchedOffRules(set(rule))).toEqual([]);
+        });
     });
 
     it("the default clock is the real one: a normal match works without injecting anything", () => {
