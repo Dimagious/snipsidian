@@ -5,7 +5,7 @@ import {
     Transaction,
     type TransactionSpec,
 } from "@codemirror/state";
-import { keymap } from "@codemirror/view";
+import { keymap, type EditorView } from "@codemirror/view";
 import {
     buildFieldSessionExtension,
     endFieldSessionEffect,
@@ -213,6 +213,34 @@ describe("field-session: keys are ours only while a session is open", () => {
         const h = new Harness("x");
         const keys = h.state.facet(keymap).flat().map((b) => b.key);
         expect(keys).toEqual(expect.arrayContaining(["Tab", "Shift-Tab", "Escape"]));
+    });
+});
+
+describe("field-session: Tab outside a session (B-255)", () => {
+    function tabRun(fallback?: (view: EditorView) => boolean): ((view: Harness) => boolean) | undefined {
+        const state = EditorState.create({ doc: "x", extensions: [buildFieldSessionExtension(fallback)] });
+        const binding = state.facet(keymap).flat().find((b) => b.key === "Tab");
+        const run = binding?.run;
+        return run ? (h) => run(h as never) : undefined;
+    }
+
+    it("a session keeps Tab: next field wins, the fallback is not consulted", () => {
+        const fallback = vi.fn(() => true);
+        const run = tabRun(fallback);
+        const h = open("a  b", [1, 3]);
+        expect(run?.(h)).toBe(true);
+        expect(h.state.selection.main.head).toBe(3);
+        expect(fallback).not.toHaveBeenCalled();
+    });
+
+    it("without a session the fallback decides: taken -> true, declined -> false", () => {
+        const h = new Harness("brb");
+        expect(tabRun(() => true)?.(h)).toBe(true);
+        expect(tabRun(() => false)?.(h)).toBe(false);
+    });
+
+    it("without a fallback Tab is not taken (unchanged behavior)", () => {
+        expect(tabRun()?.(new Harness("brb"))).toBe(false);
     });
 });
 

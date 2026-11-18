@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Manual expansion mode** (B-255). Two new switches in Settings, General, Expansion: **Expand while typing** (on by default, nothing changes for existing installs) and **Expand on Tab** (off by default). With typing off, a trigger is never expanded as you type; with Tab on, Tab expands the trigger right before the cursor, with the same guards as the "Expand trigger at cursor" command (code, math, frontmatter, prefix mode, disabled groups). Like the Text Snippets plugin, Tab also takes a selection that is exactly a trigger, and with the caret inside a word it expands the whole word around the caret (a caret at the start of a word does not count, so Tab keeps indenting there). Without a trigger, Tab works as before (list indent, other plugins), and inside a field session Tab still jumps to the next field.
+- **First-run migration of Text Snippets data** (B-254). When the plugin finds the saved data of the Text Snippets plugin (`snippets_file` or a `snippets` list), it converts the snippets into the `text-snippets` group, maps `useTab` to Expand on Tab and `useSpace` to Expand while typing, and shows a one-time notice with the counts and the backup path. The original file is first copied to `text-snippets-backup.json` next to `data.json` (an existing backup is never overwritten); if the copy fails, nothing is saved and the original stays untouched, and one notice per session says why changes are not being saved. A file that cannot be converted is also backed up before any later save writes over it, and so is an unrecognised `data.json` under the Text Snippets id. The 500-snippet limit of community packages does not apply to your own migrated library (the per-snippet limits and the 2 MiB total still do; a snippet over a limit is skipped and reported). The Snipsy default snippets are not added for such an install.
+- **Command alias for the Text Snippets build** (B-256). Builds that carry the plugin id `text-snippets-obsidian` add the command "Run snippet replacement" (id `text-snippets`) so hotkeys you bound to it keep working. It has no default hotkey (the original Mod+Tab never worked reliably: Cmd+Tab belongs to macOS and Ctrl+Tab switches tabs in Obsidian); plain Tab is the main path. It acts like Tab (selection or the word around the caret). In the `snipsidian` build nothing changes, and there are still no default hotkeys. Remaining differences from the original: Space expanded only on Space and swallowed it, while "Expand while typing" fires on any separator (space, punctuation, Enter) and keeps it; the command needs an active editor. Under this id the plugin's own data is the migrated file, so the Text Snippets import (Settings, Packages) appears only when a `text-snippets-backup*.json` exists, and then imports from the newest backup instead of another plugin's data (a way back when the automatic conversion failed). The conversion failure notice names this path.
+
+### Fixed
+
+- A `data.json` saved by the Text Snippets plugin was read as a Snipsy snippet map (its `snippets` list became the entries `0`, `1`, ...) and saved back over the original. Such a file is now recognized by its shape and migrated, with a backup (B-254). A Snipsy library that merely carries a stray `snippets_file` key is no longer taken for Text Snippets data.
+- The "Set hotkey" rows and "Reveal data file" used the `snipsidian` plugin id even in the build that ships as `text-snippets-obsidian`; they follow the manifest now.
+- The empty-field marker of a tab-stop session is created with Obsidian's `createSpan` helper instead of `document.createElement` (public scorecard warning).
+- Tab expansions get the highlight and Backspace-undo mark like typed ones, when "Highlight expansions" is on.
+
 ## [1.8.0] - 2026-11-17
 
 ### Added

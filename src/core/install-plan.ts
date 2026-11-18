@@ -29,6 +29,7 @@ import { hasReplacementCollision } from "../store/snippets";
 import type { SnipSidianSettings } from "../types";
 import {
     validatePackageForInstall,
+    type InstallValidationOptions,
     type ValidationResult,
 } from "../services/package-validator";
 
@@ -229,7 +230,7 @@ export function planGroupedInstall(
     bareSnippets: Record<string, string>,
     groupSlug: string,
     settings: SnipSidianSettings,
-    options: { allowUnicodeLetters?: boolean } = {},
+    options: InstallValidationOptions = {},
 ): GroupedInstallPlan {
     const validation = validatePackageForInstall({ label: groupSlug, snippets: bareSnippets }, options);
     if (!validation.isValid) {
@@ -293,7 +294,7 @@ export function planGroupedImport(
     bareSnippets: Record<string, string>,
     groupSlug: string,
     settings: SnipSidianSettings,
-    options: { allowUnicodeLetters?: boolean } = {},
+    options: InstallValidationOptions = {},
 ): GroupedImportPlan {
     const plan = planGroupedInstall(bareSnippets, groupSlug, settings, options);
     if (!plan.validation.isValid) {

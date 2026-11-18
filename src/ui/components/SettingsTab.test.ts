@@ -188,7 +188,7 @@ describe("SnipSidianSettingTab — declarative definition tree shape (1.13+)", (
     it("the Prefix character control is disabled while Require-a-prefix is off, and enabled when it's on", () => {
         const itemsOff = defs({ settings: { snippets: {}, expansion: { requirePrefix: false } } });
         const expansionOff = findGroup(itemsOff, "Expansion");
-        const prefixCharOff = expansionOff.items?.[1];
+        const prefixCharOff = expansionOff.items?.[3];
         if (!prefixCharOff || !isControlItem(prefixCharOff) || typeof prefixCharOff.control.disabled !== "function") {
             throw new Error("Prefix character control.disabled() not found");
         }
@@ -196,7 +196,7 @@ describe("SnipSidianSettingTab — declarative definition tree shape (1.13+)", (
 
         const itemsOn = defs({ settings: { snippets: {}, expansion: { requirePrefix: true } } });
         const expansionOn = findGroup(itemsOn, "Expansion");
-        const prefixCharOn = expansionOn.items?.[1];
+        const prefixCharOn = expansionOn.items?.[3];
         if (!prefixCharOn || !isControlItem(prefixCharOn) || typeof prefixCharOn.control.disabled !== "function") {
             throw new Error("Prefix character control.disabled() not found");
         }

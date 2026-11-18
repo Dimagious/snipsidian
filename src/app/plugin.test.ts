@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type MockInstance } from "vitest";
 import type { App, Command, Editor, MarkdownFileInfo, PluginManifest } from "obsidian";
 import { makeMockEditor, asEditor } from "../test/factories/editor";
 import { nth } from "../test/helpers";
@@ -10,16 +10,19 @@ interface PluginRecord {
     registerEditorExtensionCalls: unknown[][];
 }
 const recorded = vi.hoisted((): PluginRecord[] => []);
+const noticeMessages = vi.hoisted((): string[] => []);
 
 // Virtual mock for 'obsidian' (no real package resolution)
 vi.mock("obsidian", () => {
     class Plugin {
         app: unknown;
+        manifest: unknown;
         addCommandCalls: Command[][] = [];
         addSettingTabCalls: unknown[][] = [];
         registerEditorExtensionCalls: unknown[][] = [];
-        constructor(app?: unknown) {
+        constructor(app?: unknown, manifest?: unknown) {
             this.app = app ?? { workspace: { on: vi.fn(), offref: vi.fn() } };
+            this.manifest = manifest;
             recorded.push(this);
         }
         addCommand = (...args: Command[]) => { this.addCommandCalls.push(args); };
@@ -32,7 +35,12 @@ vi.mock("obsidian", () => {
         open() { }
         close() { }
     }
-    return { Plugin, Modal };
+    class Notice {
+        constructor(msg: string) {
+            noticeMessages.push(msg);
+        }
+    }
+    return { Plugin, Modal, Notice };
 });
 
 // Bridge mock — B-149 replaced `registerEditorChange` with
@@ -45,7 +53,7 @@ vi.mock("./cm6-bridge", () => ({
 }));
 
 // B-243/B-244 command bodies are covered in field-commands.test.ts.
-type ExpandTriggerArgs = [app: unknown, editor: unknown, getSnippets: () => Record<string, string>, getPrefix: () => string | undefined];
+type ExpandTriggerArgs = [app: unknown, editor: unknown, getSnippets: () => Record<string, string>, getPrefix: () => string | undefined, options?: { manual?: boolean }];
 const expandTrigger = vi.hoisted(() => vi.fn<(...args: ExpandTriggerArgs) => Promise<void>>());
 const jumpNext = vi.hoisted(() => vi.fn<(...args: unknown[]) => boolean>());
 vi.mock("./field-commands", () => ({
@@ -121,6 +129,7 @@ describe("app/plugin", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         recorded.length = 0;
+        noticeMessages.length = 0;
     });
 
     it("loads with defaults, registers the CM6 expansion extension, adds command and settings tab", async () => {
@@ -131,6 +140,8 @@ describe("app/plugin", () => {
 
         expect(buildExpansionExtension).toHaveBeenCalledWith(
             app,
+            expect.any(Function),
+            expect.any(Function),
             expect.any(Function),
             expect.any(Function),
             expect.any(Function),
@@ -422,5 +433,287 @@ describe("app/plugin", () => {
         await plugin.loadSettings();
         expect(plugin.settings.ui?.activeTab).toBe("community");
         expect(plugin.settings.ui?.groupOpen).toEqual({ g: true });
+    });
+
+    describe("Text Snippets compatibility (B-254, B-255, B-256)", () => {
+        const COMPAT_DIR = ".obsidian/plugins/text-snippets-obsidian";
+        const COMPAT_MANIFEST: PluginManifest = { ...MANIFEST, id: "text-snippets-obsidian", dir: COMPAT_DIR };
+        const ORIGINAL = '{"snippets":["brb : be right back"],"snippets_file":"brb : be right back","useTab":true,"useSpace":false}';
+
+        class FakeAdapter {
+            files = new Map<string, string>([[`${COMPAT_DIR}/data.json`, ORIGINAL]]);
+            failWrite = false;
+            exists = (path: string): Promise<boolean> => Promise.resolve(this.files.has(path));
+            read = (path: string): Promise<string> => Promise.resolve(this.files.get(path) ?? "");
+            write = (path: string, data: string): Promise<void> => {
+                if (this.failWrite) return Promise.reject(new Error("disk full"));
+                this.files.set(path, data);
+                return Promise.resolve();
+            };
+        }
+
+        function compatPlugin(
+            manifest: PluginManifest,
+            adapter = new FakeAdapter(),
+        ): { plugin: InstanceType<typeof PluginClass>; adapter: FakeAdapter } {
+            const app = makeApp({ vault: { adapter, configDir: ".obsidian" } });
+            return { plugin: new PluginClass(app, manifest), adapter };
+        }
+
+        function load(plugin: InstanceType<typeof PluginClass>, data: unknown): MockInstance<InstanceType<typeof PluginClass>["saveData"]> {
+            vi.spyOn(plugin, "loadData").mockResolvedValue(data);
+            return vi.spyOn(plugin, "saveData");
+        }
+
+        // Regression: B-254 — `snippets: string[]` used to be taken as the
+        // Snipsy map ({ "0": "brb : be right back" }) and saved back, so the
+        // snippets were lost and the user's file overwritten.
+        it("a Text Snippets data.json is converted, not read as a map", async () => {
+            const { plugin } = compatPlugin(COMPAT_MANIFEST);
+            const saveData = load(plugin, JSON.parse(ORIGINAL));
+            await plugin.loadSettings();
+            expect(plugin.settings.snippets).toEqual({ "text-snippets/brb": "be right back" });
+            expect(plugin.settings.snippets["0"]).toBeUndefined();
+            expect(plugin.settings.expansion).toEqual({ onType: false, onTab: true });
+            expect(saveData).toHaveBeenCalledWith(plugin.settings);
+        });
+
+        it("backs the original up BEFORE the first save and seeds no Snipsy defaults", async () => {
+            const { plugin, adapter } = compatPlugin(COMPAT_MANIFEST);
+            const saveData = load(plugin, JSON.parse(ORIGINAL));
+            saveData.mockImplementation(() => {
+                // At save time the backup must already hold the original file.
+                expect(adapter.files.get(`${COMPAT_DIR}/text-snippets-backup.json`)).toBe(ORIGINAL);
+                return Promise.resolve();
+            });
+            await plugin.loadSettings();
+            expect(saveData).toHaveBeenCalledTimes(1);
+            expect(Object.keys(plugin.settings.snippets).some((k) => k.startsWith("defaults/"))).toBe(false);
+            expect(noticeMessages[0]).toContain("text-snippets-backup.json");
+        });
+
+        it("detects the shape under the snipsidian id too (protects any install)", async () => {
+            const adapter = new FakeAdapter();
+            const file = '{"snippets_file":"a : b"}';
+            adapter.files.set(".obsidian/plugins/snipsidian/data.json", file);
+            const { plugin } = compatPlugin({ ...MANIFEST, dir: ".obsidian/plugins/snipsidian" }, adapter);
+            const saveData = load(plugin, JSON.parse(file));
+            await plugin.loadSettings();
+            expect(plugin.settings.snippets).toEqual({ "text-snippets/a": "b" });
+            expect(saveData).toHaveBeenCalledTimes(1);
+        });
+
+        it("backup failure: nothing is saved and the original stays untouched", async () => {
+            const adapter = new FakeAdapter();
+            adapter.failWrite = true;
+            const { plugin } = compatPlugin(COMPAT_MANIFEST, adapter);
+            const saveData = load(plugin, JSON.parse(ORIGINAL));
+            await plugin.loadSettings();
+            expect(saveData).not.toHaveBeenCalled();
+            expect(plugin.settings.snippets).toEqual({ "text-snippets/brb": "be right back" });
+            expect(adapter.files.get(`${COMPAT_DIR}/data.json`)).toBe(ORIGINAL);
+            expect(noticeMessages[0]).toContain("left untouched");
+        });
+
+        it("a later save retries the backup first and refuses while it still fails", async () => {
+            const adapter = new FakeAdapter();
+            adapter.failWrite = true;
+            const { plugin } = compatPlugin(COMPAT_MANIFEST, adapter);
+            const saveData = load(plugin, JSON.parse(ORIGINAL));
+            await plugin.loadSettings();
+
+            await expect(plugin.saveSettings()).rejects.toThrow("disk full");
+            expect(saveData).not.toHaveBeenCalled();
+
+            adapter.failWrite = false;
+            await plugin.saveSettings();
+            expect(adapter.files.get(`${COMPAT_DIR}/text-snippets-backup.json`)).toBe(ORIGINAL);
+            expect(saveData).toHaveBeenCalledTimes(1);
+
+            // Backed up once: the next save is a plain save.
+            await plugin.saveSettings();
+            expect(saveData).toHaveBeenCalledTimes(2);
+        });
+
+        // Regression (data loss): a failed conversion returned no guard, so the
+        // next save of ANY setting overwrote the original with `{snippets:{}}`.
+        it("an unconvertible file is not touched at load; the first later save backs it up BEFORE writing", async () => {
+            const { plugin, adapter } = compatPlugin(COMPAT_MANIFEST);
+            const original = '{"snippets":[1,2]}';
+            adapter.files.set(`${COMPAT_DIR}/data.json`, original);
+            const saveData = load(plugin, { snippets: [1, 2] });
+            await plugin.loadSettings();
+            expect(saveData).not.toHaveBeenCalled();
+            expect(adapter.files.has(`${COMPAT_DIR}/text-snippets-backup.json`)).toBe(false);
+            expect(plugin.settings.snippets).toEqual({});
+
+            saveData.mockImplementation(() => {
+                expect(adapter.files.get(`${COMPAT_DIR}/text-snippets-backup.json`)).toBe(original);
+                return Promise.resolve();
+            });
+            await plugin.saveSettings();
+            expect(saveData).toHaveBeenCalledTimes(1);
+        });
+
+        it("a library of 501 records is migrated whole and its original backed up", async () => {
+            const file = Array.from({ length: 501 }, (_, i) => `t${i} : v`).join("\n");
+            const raw = JSON.stringify({ snippets_file: file });
+            const { plugin, adapter } = compatPlugin(COMPAT_MANIFEST);
+            adapter.files.set(`${COMPAT_DIR}/data.json`, raw);
+            const saveData = load(plugin, JSON.parse(raw));
+            await plugin.loadSettings();
+            expect(Object.keys(plugin.settings.snippets)).toHaveLength(501);
+            expect(adapter.files.get(`${COMPAT_DIR}/text-snippets-backup.json`)).toBe(raw);
+            expect(saveData).toHaveBeenCalledTimes(1);
+        });
+
+        it("while the backup keeps failing, ONE session Notice explains why nothing is saved, and every save still rejects", async () => {
+            const adapter = new FakeAdapter();
+            adapter.failWrite = true;
+            const { plugin } = compatPlugin(COMPAT_MANIFEST, adapter);
+            load(plugin, JSON.parse(ORIGINAL));
+            await plugin.loadSettings();
+            noticeMessages.length = 0;
+
+            await expect(plugin.saveSettings()).rejects.toThrow("disk full");
+            await expect(plugin.saveSettings()).rejects.toThrow("disk full");
+            expect(noticeMessages).toHaveLength(1);
+            expect(noticeMessages[0]).toContain("Changes are not being saved");
+            expect(noticeMessages[0]).toContain("disk full");
+        });
+
+        // Regression: a Snipsy map with a stray `snippets_file` was taken for Text
+        // Snippets data and the whole library was moved into the backup.
+        it.each([
+            ["the compat id", COMPAT_MANIFEST, COMPAT_DIR],
+            ["the snipsidian id", { ...MANIFEST, dir: ".obsidian/plugins/snipsidian" }, ".obsidian/plugins/snipsidian"],
+        ])("a Snipsy library with a stray snippets_file stays a Snipsy library under %s", async (_label, manifest, dir) => {
+            const adapter = new FakeAdapter();
+            const { plugin } = compatPlugin(manifest, adapter);
+            const saveData = load(plugin, { snippets: { todo: "- [ ]" }, snippets_file: "" });
+            await plugin.loadSettings();
+            expect(plugin.settings.snippets).toEqual({ todo: "- [ ]" });
+            expect(saveData).not.toHaveBeenCalled();
+            expect(adapter.files.has(`${dir}/text-snippets-backup.json`)).toBe(false);
+        });
+
+        // Regression: an unrecognised non-null file fell into the fresh-install
+        // branch and was overwritten without a copy.
+        it("an unrecognised data.json under the compat id is backed up before the first save", async () => {
+            const { plugin, adapter } = compatPlugin(COMPAT_MANIFEST);
+            const original = '{"foo":"bar"}';
+            adapter.files.set(`${COMPAT_DIR}/data.json`, original);
+            const saveData = load(plugin, { foo: "bar" });
+            saveData.mockImplementation(() => {
+                expect(adapter.files.get(`${COMPAT_DIR}/text-snippets-backup.json`)).toBe(original);
+                return Promise.resolve();
+            });
+            await plugin.loadSettings();
+            expect(saveData).toHaveBeenCalledTimes(1);
+            expect(plugin.settings.snippets).toEqual({});
+        });
+
+        it("an unrecognised file whose backup fails is not saved over; a later save retries the backup", async () => {
+            const adapter = new FakeAdapter();
+            adapter.failWrite = true;
+            adapter.files.set(`${COMPAT_DIR}/data.json`, '{"foo":"bar"}');
+            const { plugin } = compatPlugin(COMPAT_MANIFEST, adapter);
+            const saveData = load(plugin, { foo: "bar" });
+            await plugin.loadSettings();
+            expect(saveData).not.toHaveBeenCalled();
+            await expect(plugin.saveSettings()).rejects.toThrow("disk full");
+        });
+
+        it("under snipsidian an unrecognised file is not backed up (compat-only behaviour)", async () => {
+            const adapter = new FakeAdapter();
+            const plugin = new PluginClass(makeApp({ vault: { adapter, configDir: ".obsidian" } }), MANIFEST);
+            load(plugin, { foo: "bar" });
+            await plugin.loadSettings();
+            expect([...adapter.files.keys()].some((k) => k.includes("backup"))).toBe(false);
+        });
+
+        it("a null data.json under the compat id needs no backup", async () => {
+            const { plugin, adapter } = compatPlugin(COMPAT_MANIFEST);
+            load(plugin, null);
+            await plugin.loadSettings();
+            expect([...adapter.files.keys()].some((k) => k.includes("backup"))).toBe(false);
+        });
+
+        it("a fresh install of the compat build seeds nothing and turns on manual mode", async () => {
+            const { plugin } = compatPlugin(COMPAT_MANIFEST);
+            const saveData = load(plugin, null);
+            await plugin.loadSettings();
+            expect(plugin.settings.snippets).toEqual({});
+            expect(plugin.settings.expansion).toEqual({ onType: false, onTab: true });
+            expect(saveData).toHaveBeenCalledWith(plugin.settings);
+        });
+
+        it("a fresh compat install keeps expansion values that data.json already carried", async () => {
+            const { plugin } = compatPlugin(COMPAT_MANIFEST);
+            load(plugin, { expansion: { onType: true } });
+            await plugin.loadSettings();
+            expect(plugin.settings.expansion).toEqual({ onType: true, onTab: true });
+        });
+
+        it("a Snipsy data.json under the compat id is left exactly as saved", async () => {
+            const { plugin } = compatPlugin(COMPAT_MANIFEST);
+            const saveData = load(plugin, { snippets: { todo: "- [ ]" } });
+            await plugin.loadSettings();
+            expect(plugin.settings).toEqual({ snippets: { todo: "- [ ]" } });
+            expect(saveData).not.toHaveBeenCalled();
+        });
+
+        it("a fresh install under snipsidian is unchanged: defaults seeded, typing on, Tab off", async () => {
+            const plugin = makePlugin(makeApp());
+            load(plugin, null);
+            await plugin.loadSettings();
+            expect(plugin.settings.snippets).toEqual(defaultSnippetsAsGroup());
+            expect(plugin.settings.expansion).toBeUndefined();
+        });
+
+        it("onType / onTab are read live from settings (default: typing on, Tab off)", async () => {
+            const plugin = makePlugin(makeApp());
+            await plugin.onload();
+            const [, , , , getOnType, getOnTab] = lastBuildArgs();
+            expect(getOnType?.()).toBe(true);
+            expect(getOnTab?.()).toBe(false);
+            plugin.settings.expansion = { onType: false, onTab: true };
+            expect(getOnType?.()).toBe(false);
+            expect(getOnTab?.()).toBe(true);
+        });
+
+        it("registers the text-snippets command only in the compat build, with NO default hotkey", async () => {
+            const { plugin } = compatPlugin(COMPAT_MANIFEST);
+            load(plugin, { snippets: {} });
+            await plugin.onload();
+            const cmd = commandById("text-snippets");
+            expect(cmd.name).toBe("Run snippet replacement");
+            expect(cmd.hotkeys).toBeUndefined();
+            expect(cmd.icon).toBe("zap");
+            expect(commands().filter((c) => c.hotkeys !== undefined)).toEqual([]);
+        });
+
+        it("the alias expands in manual mode (selection, mid-word); expand-trigger keeps its old rules", async () => {
+            expandTrigger.mockResolvedValue(undefined);
+            const { plugin } = compatPlugin(COMPAT_MANIFEST);
+            load(plugin, { snippets: { brb: "be right back" } });
+            await plugin.onload();
+            const editor = asEditor(makeMockEditor());
+            const ctx: MarkdownFileInfo = { app: makeApp(), file: null, hoverPopover: null };
+            commandById("text-snippets").editorCallback?.(editor, ctx);
+            expect(expandTrigger).toHaveBeenCalledTimes(1);
+            expect(nth(expandTrigger.mock.calls, 0)[1]).toBe(editor);
+            expect(nth(expandTrigger.mock.calls, 0)[4]).toEqual({ manual: true });
+
+            commandById("expand-trigger").editorCallback?.(editor, ctx);
+            expect(nth(expandTrigger.mock.calls, 1)[4]).toEqual({ manual: false });
+        });
+
+        it("under snipsidian there is no text-snippets command and no default hotkeys", async () => {
+            const plugin = makePlugin(makeApp());
+            await plugin.onload();
+            expect(commands().some((c) => c.id === "text-snippets")).toBe(false);
+            expect(commands().filter((c) => c.hotkeys !== undefined)).toEqual([]);
+        });
     });
 });

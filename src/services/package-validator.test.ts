@@ -870,6 +870,18 @@ describe("package-validator", () => {
       expect(r.isValid).toBe(true);
     });
 
+    it("options.maxSnippets lifts ONLY the count cap (per-entry limits still hold)", () => {
+      const snippets: Record<string, string> = {};
+      for (let i = 0; i <= INSTALL_MAX_SNIPPETS; i++) snippets[`t${i}`] = "x";
+      expect(validatePackageForInstall({ label: "Mine", snippets }, { maxSnippets: Infinity }).isValid).toBe(true);
+      expect(validatePackageForInstall({ label: "Mine", snippets }, { maxSnippets: 10 }).errors.join(" ")).toMatch(/exceeds limit of 10/);
+      const bad = validatePackageForInstall(
+        { label: "Mine", snippets: { ...snippets, bad: "a".repeat(INSTALL_MAX_REPLACEMENT_LEN + 1) } },
+        { maxSnippets: Infinity },
+      );
+      expect(bad.isValid).toBe(false);
+    });
+
     it("rejects replacement over INSTALL_MAX_REPLACEMENT_LEN", () => {
       const r = validatePackageForInstall({
         label: "Big-replace",
