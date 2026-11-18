@@ -104,7 +104,7 @@ function buildMark(
     const insert = info.insert.replace(/\r\n?/g, "\n");
     const to = from + insert.length;
     const end = to + separator.length;
-    if (separator.length === 0 || from < 0) return null;
+    if (from < 0) return null;
     const doc = tr.newDoc;
     if (end > doc.length) return null;
     const expected = insert + separator;

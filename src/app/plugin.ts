@@ -4,6 +4,8 @@ import { SnipSidianSettingTab } from "../ui/settings";
 import { defaultSnippetsAsGroup } from "../store/presets";
 import type { SnipSidianSettings } from "../types";
 import { getDict, getAllSnippetsFlat } from "../store/snippets";
+import { getCompiledPatterns } from "../store/patterns";
+import type { CompiledPatterns } from "../engine/patterns";
 import { SnippetPickerService } from "../core/snippet-picker";
 import { openSnippetPickerModal } from "../ui/components/SnippetPickerModal";
 import { openAddSnippetFromSelection } from "../ui/components/AddFromSelection";
@@ -11,9 +13,17 @@ import { expandTriggerAtCursor, jumpToNextField } from "./field-commands";
 
 export default class HotstringsPlugin extends Plugin {
     settings!: SnipSidianSettings;
+    /** ADR-0008: compiled pattern rules of the current settings; dropped whenever settings are loaded or saved. */
+    private compiledPatterns: CompiledPatterns | undefined;
+
+    private getPatterns(): CompiledPatterns {
+        this.compiledPatterns ??= getCompiledPatterns(this.settings);
+        return this.compiledPatterns;
+    }
 
     async onload() {
         await this.loadSettings();
+        this.reportRefusedPatterns();
 
         // B-149: registered as a CM6 editor extension (gated on
         // genuine-typing `userEvent`s — see `change-source-gate.ts`)
@@ -40,6 +50,8 @@ export default class HotstringsPlugin extends Plugin {
                 getPrefix,
                 // B-176: read at use time, so toggling needs no reload.
                 () => this.settings.expansion?.highlight === true,
+                // ADR-0008: rebuilt only when settings are saved, not per keystroke.
+                () => this.getPatterns(),
             ),
         );
 
@@ -78,7 +90,13 @@ export default class HotstringsPlugin extends Plugin {
             name: "Expand trigger at cursor",
             icon: "zap",
             editorCallback: (editor) => {
-                expandTriggerAtCursor(this.app, editor, () => getDict(this.settings), getPrefix).catch((err: unknown) => {
+                expandTriggerAtCursor(
+                    this.app,
+                    editor,
+                    () => getDict(this.settings),
+                    getPrefix,
+                    () => this.getPatterns(),
+                ).catch((err: unknown) => {
                     console.error("[snipsy] expand-trigger error", err);
                 });
             },
@@ -110,6 +128,7 @@ export default class HotstringsPlugin extends Plugin {
     }
 
     async loadSettings() {
+        this.compiledPatterns = undefined;
         const saved = (await this.loadData()) as Partial<SnipSidianSettings> | null;
         if (saved?.snippets) {
             // Existing install: the stored map is the source of truth. Never
@@ -127,7 +146,21 @@ export default class HotstringsPlugin extends Plugin {
         }
     }
 
+    /**
+     * ADR-0008: runs the saved pattern rules through the S-015 gate once at
+     * load and reports each refused rule, so a bad rule from a synced or
+     * hand-edited data.json is visible in the console. The rule is disabled
+     * alone; the others keep working.
+     */
+    private reportRefusedPatterns(): void {
+        for (const { id, reason } of this.getPatterns().errors) {
+            console.warn("[snipsy] pattern rule disabled", { id, reason });
+        }
+    }
+
     async saveSettings() {
+        // Every settings change goes through here (the UI saves after each edit): the next keystroke recompiles.
+        this.compiledPatterns = undefined;
         await this.saveData(this.settings);
     }
 }

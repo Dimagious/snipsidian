@@ -65,7 +65,26 @@ export type FieldStops = {
     final: number;
 };
 
+/** ADR-0008: when a pattern rule fires. */
+export type PatternMode = "instant" | "separator";
+
+/** ADR-0008: a regex trigger, as stored in `settings.patterns`. */
+export type PatternRule = {
+    /** Stable, generated. */
+    id: string;
+    /** `/body$/flags` as typed (Substitutions-style). */
+    source: string;
+    replacement: string;
+    enabled: boolean;
+    mode: PatternMode;
+    /** Shown in the list; `disabledGroups` applies. */
+    group?: string;
+};
+
 export type EditPlan = {
+    /** ADR-0008: set for pattern expansions, so the adapter writes them as
+     *  their own undo step. Absent for literal triggers. */
+    kind?: "pattern";
     fromCh: number;
     toCh: number;
     insert: string;

@@ -7,8 +7,10 @@ import { nth } from "../test/helpers";
 // mock the engine adapter call
 vi.mock("../adapters/obsidian-editor", () => ({
     tryExpandAtSeparator: vi.fn().mockResolvedValue(undefined),
+    tryExpandInstant: vi.fn().mockResolvedValue(undefined),
 }));
-import { tryExpandAtSeparator } from "../adapters/obsidian-editor";
+import { tryExpandAtSeparator, tryExpandInstant } from "../adapters/obsidian-editor";
+import { compilePatternRules, NO_PATTERNS, type CompiledPatterns } from "../engine/patterns";
 import { handleViewUpdate, CompositionRetry, buildExpansionExtension } from "./cm6-bridge";
 import { buildFieldSessionExtension, fieldSessionField, startFieldSessionEffect } from "../adapters/field-session";
 
@@ -49,6 +51,10 @@ function makeUpdate(opts: {
     /** Replaces the default view, e.g. one a `CompositionRetry` also holds. */
     view?: FakeView;
     dispatch?: unknown;
+    /** What the update inserts (default: one character, no line break). */
+    inserted?: { length: number; lines: number; deleted?: number };
+    /** The selection after the update. */
+    selection?: { ranges: number; empty: boolean; head: number };
 }): ViewUpdate {
     const transactions = (opts.transactions ?? [{ userEvent: "input.type" }]).map((tx) => ({
         annotation: (_type: unknown) => tx.userEvent,
@@ -63,10 +69,23 @@ function makeUpdate(opts: {
         transactions,
         changes: {
             iterChanges: (
-                f: (a: number, b: number, c: number, d: number, t: { length: number }) => void,
-            ) => f(0, 0, 0, 0, { length: opts.inserts === false ? 0 : 1 }),
+                f: (a: number, b: number, c: number, d: number, t: { length: number; lines: number }) => void,
+            ) => {
+                const ins = opts.inserted ?? { length: opts.inserts === false ? 0 : 1, lines: 1 };
+                const head = opts.selection?.head ?? opts.head ?? 3;
+                f(head - ins.length, head - ins.length + (ins.deleted ?? 0), head - ins.length, head, {
+                    length: ins.length,
+                    lines: ins.lines,
+                });
+            },
         },
-        state: { doc: opts.doc ?? DOC, selection: { main: { head: opts.head ?? 3 } } },
+        state: {
+            doc: opts.doc ?? DOC,
+            selection: {
+                ranges: new Array<unknown>(opts.selection?.ranges ?? 1).fill({}),
+                main: { head: opts.selection?.head ?? opts.head ?? 3, empty: opts.selection?.empty ?? true },
+            },
+        },
     } as unknown as ViewUpdate;
 }
 
@@ -573,5 +592,130 @@ describe("cm6-bridge: field session wiring (B-243)", () => {
     it("the extension carries the session field", () => {
         const state = EditorState.create({ doc: "x", extensions: [buildExpansionExtension(makeApp(), () => ({}))] });
         expect(() => state.field(fieldSessionField)).not.toThrow();
+    });
+});
+
+
+describe("cm6-bridge: instant patterns (ADR-0008)", () => {
+    const instant = compilePatternRules([
+        { id: "i", source: "/<<$/", replacement: "\u226a", enabled: true, mode: "instant" },
+    ]);
+    const separatorOnly = compilePatternRules([
+        { id: "s", source: "/<<$/", replacement: "\u226a", enabled: true, mode: "separator" },
+    ]);
+    const getInstant = (): CompiledPatterns => instant;
+    const run = (update: ViewUpdate, getPatterns: () => CompiledPatterns = getInstant) =>
+        handleViewUpdate(makeApp({ filename: "n.md" }), () => ({ brb: "x" }), update, () => undefined, () => false, getPatterns);
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it("after a typed character with nothing expanded, tries the instant rules", async () => {
+        run(makeUpdate({}));
+        await new Promise((r) => setTimeout(r, 0));
+        expect(tryExpandInstant).toHaveBeenCalledTimes(1);
+        expect(tryExpandInstant).toHaveBeenCalledWith(
+            { mock: "editor" },
+            instant.rules,
+            expect.objectContaining({ filename: "n.md" }),
+        );
+    });
+
+    it("passes the separator-mode rules to the separator path only when there are some", async () => {
+        run(makeUpdate({}), () => separatorOnly);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(tryExpandAtSeparator).toHaveBeenCalledWith(
+            { mock: "editor" },
+            { brb: "x" },
+            expect.objectContaining({ patterns: separatorOnly.rules }),
+        );
+        expect(tryExpandInstant).not.toHaveBeenCalled();
+        run(makeUpdate({}));
+        await new Promise((r) => setTimeout(r, 0));
+        expect(vi.mocked(tryExpandAtSeparator).mock.calls[1]?.[2].patterns).toBeUndefined();
+    });
+
+    it("a literal or separator expansion wins: the instant rules are not tried", async () => {
+        vi.mocked(tryExpandAtSeparator).mockResolvedValueOnce({ from: 0, insert: "x", original: "brb", separator: " " });
+        run(makeUpdate({}));
+        await new Promise((r) => setTimeout(r, 0));
+        expect(tryExpandInstant).not.toHaveBeenCalled();
+    });
+
+    it("an instant expansion is reported to the highlight mark like any other", async () => {
+        const result = { from: 0, insert: "\u226a", original: "<<", separator: "" };
+        vi.mocked(tryExpandInstant).mockResolvedValueOnce(result);
+        const dispatch = vi.fn();
+        handleViewUpdate(
+            makeApp(),
+            () => ({}),
+            makeUpdate({ view: { hasFocus: true, composing: false, dispatch } }),
+            () => undefined,
+            () => true,
+            getInstant,
+        );
+        await new Promise((r) => setTimeout(r, 0));
+        expect(dispatch).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+        ["paste-sized text", { inserted: { length: 30, lines: 1 } }],
+        ["two characters (auto-paired bracket)", { inserted: { length: 2, lines: 1 } }],
+        ["Enter", { inserted: { length: 1, lines: 2 } }],
+        ["typing over a selection", { inserted: { length: 1, lines: 1, deleted: 3 } }],
+        ["multiple cursors", { selection: { ranges: 2, empty: true, head: 3 } }],
+        ["a selection", { selection: { ranges: 1, empty: false, head: 3 } }],
+    ])("does not try instant rules for %s", async (_name, opts) => {
+        run(makeUpdate(opts));
+        await new Promise((r) => setTimeout(r, 0));
+        expect(tryExpandAtSeparator).toHaveBeenCalledTimes(1); // the literal path still runs
+        expect(tryExpandInstant).not.toHaveBeenCalled();
+    });
+
+    it("does not try instant rules when the change is not typing, or while composing", async () => {
+        for (const update of [
+            makeUpdate({ transactions: [{ userEvent: "input.paste" }] }),
+            makeUpdate({ transactions: [{ userEvent: "undo" }] }),
+            makeUpdate({ transactions: [{ userEvent: undefined }] }),
+            makeUpdate({ composing: true }),
+        ]) run(update);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(tryExpandInstant).not.toHaveBeenCalled();
+    });
+
+    it("never inspects the update when no instant rule exists (the hot path stays as it was)", () => {
+        const update = makeUpdate({});
+        const spy = vi.spyOn(update.changes, "iterChanges");
+        run(update, () => NO_PATTERNS);
+        run(update, () => separatorOnly);
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("the composition retry remembers that the deferred update was a single typed character", async () => {
+        const win = { requestAnimationFrame: (fn: () => void) => { fn(); return 1; }, cancelAnimationFrame: () => {} };
+        vi.stubGlobal("window", { ...win, setTimeout: (fn: () => void) => { fn(); return 1; }, clearTimeout: () => {} });
+        try {
+            const view = { composing: true, hasFocus: true, state: { doc: DOC, selection: { main: { head: 3 } } }, dom: { ownerDocument: { defaultView: win } } };
+            const retry = new CompositionRetry(asView(view), makeApp(), () => ({}), () => undefined, () => false, getInstant);
+            retry.record(makeUpdate({ composing: true }));
+            expect(retry.pending).toBe(true);
+            view.composing = false;
+            retry.runPending();
+            await new Promise((r) => setTimeout(r, 0));
+            expect(tryExpandInstant).toHaveBeenCalledTimes(1);
+
+            // a deferred multi-character commit does not qualify
+            vi.clearAllMocks();
+            view.composing = true;
+            retry.record(makeUpdate({ composing: true, inserted: { length: 3, lines: 1 } }));
+            view.composing = false;
+            retry.runPending();
+            await new Promise((r) => setTimeout(r, 0));
+            expect(tryExpandAtSeparator).toHaveBeenCalledTimes(1);
+            expect(tryExpandInstant).not.toHaveBeenCalled();
+        } finally {
+            vi.unstubAllGlobals();
+        }
     });
 });

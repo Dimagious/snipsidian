@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { EditorState, type TransactionSpec } from "@codemirror/state";
 import type { App } from "obsidian";
 import { MockEditor, asEditor } from "../test/factories/editor";
+import { compilePatternRules, NO_PATTERNS } from "../engine/patterns";
 import { expandTriggerAtCursor, jumpToNextField } from "./field-commands";
 import {
     buildFieldSessionExtension,
@@ -124,5 +125,31 @@ describe("field-commands: expandTriggerAtCursor (B-244)", () => {
         const named = editorWith(":fname", 6);
         await expandTriggerAtCursor(app, asEditor(named), () => ({ fname: "$filename" }), spy);
         expect(named.getLine(0)).toBe("note.md");
+    });
+});
+
+describe("field-commands: expandTriggerAtCursor with patterns (ADR-0008)", () => {
+    const set = compilePatternRules([
+        { id: "s", source: "/(\\d+)\\/(\\d+)$/", replacement: "{{1}}\u2044{{2}}", enabled: true, mode: "separator" },
+        { id: "i", source: "/cat$/", replacement: "INSTANT", enabled: true, mode: "instant" },
+    ]);
+
+    it("expands a separator-mode pattern at the caret", async () => {
+        const mock = editorWith("take 3/4", 8);
+        await expandTriggerAtCursor(app, asEditor(mock), () => ({}), noPrefix, () => set);
+        expect(mock.getLine(0)).toBe("take 3\u20444");
+    });
+
+    it("does not run instant-mode rules", async () => {
+        const mock = editorWith("a cat", 5);
+        await expandTriggerAtCursor(app, asEditor(mock), () => ({}), noPrefix, () => set);
+        expect(mock.getLine(0)).toBe("a cat");
+    });
+
+    it("without patterns the command behaves as before", async () => {
+        const mock = editorWith("take 3/4", 8);
+        await expandTriggerAtCursor(app, asEditor(mock), () => ({}), noPrefix);
+        await expandTriggerAtCursor(app, asEditor(mock), () => ({}), noPrefix, () => NO_PATTERNS);
+        expect(mock.getLine(0)).toBe("take 3/4");
     });
 });

@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
     isDeferredByComposition,
+    isSingleCharTyping,
+    type ChangeInfo,
     isTypingUserEvent,
     shouldAttemptExpansion,
     shouldRunDeferredExpansion,
@@ -165,5 +167,43 @@ describe("shouldRunDeferredExpansion [B-191]", () => {
 
     it("does not run when nothing is pending", () => {
         expect(shouldRunDeferredExpansion(false, false, true)).toBe(false);
+    });
+});
+
+describe("isSingleCharTyping (ADR-0008 instant mode)", () => {
+    const typed: ChangeInfo = { deleted: 0, inserted: 1, lines: 1, end: 5 };
+    const caret = { ranges: 1, empty: true, head: 5 };
+
+    it("one character inserted right before a single caret qualifies", () => {
+        expect(isSingleCharTyping([typed], caret)).toBe(true);
+    });
+
+    it("no change, or two changes in one update, does not", () => {
+        expect(isSingleCharTyping([], caret)).toBe(false);
+        expect(isSingleCharTyping([typed, { ...typed, end: 9 }], caret)).toBe(false);
+    });
+
+    it("a paste-sized or multi-char insertion does not (auto-paired brackets arrive as two chars)", () => {
+        expect(isSingleCharTyping([{ ...typed, inserted: 2 }], caret)).toBe(false);
+        expect(isSingleCharTyping([{ ...typed, inserted: 40 }], caret)).toBe(false);
+        expect(isSingleCharTyping([{ ...typed, inserted: 0 }], caret)).toBe(false);
+    });
+
+    it("a line break does not (Enter is the separator path)", () => {
+        expect(isSingleCharTyping([{ ...typed, lines: 2 }], caret)).toBe(false);
+    });
+
+    it("typing over a selection (a replacement) does not", () => {
+        expect(isSingleCharTyping([{ ...typed, deleted: 3 }], caret)).toBe(false);
+    });
+
+    it("multiple cursors never expand, nor does a non-empty selection", () => {
+        expect(isSingleCharTyping([typed], { ...caret, ranges: 2 })).toBe(false);
+        expect(isSingleCharTyping([typed], { ...caret, empty: false })).toBe(false);
+    });
+
+    it("the caret must sit right after the typed character", () => {
+        expect(isSingleCharTyping([typed], { ...caret, head: 4 })).toBe(false);
+        expect(isSingleCharTyping([typed], { ...caret, head: 6 })).toBe(false);
     });
 });

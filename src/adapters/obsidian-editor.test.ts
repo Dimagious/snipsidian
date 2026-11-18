@@ -12,8 +12,9 @@ vi.mock("obsidian", async () => {
     };
 });
 
-import { makeExpandInput, makeContext, applyEditPlan, tryExpandAtSeparator, tryExpandAtCursor, insertSnippetAtCursor, wrapSelectionWithSnippet } from "./obsidian-editor";
-import type { Dict } from "../engine/types";
+import { makeExpandInput, makeContext, applyEditPlan, tryExpandAtSeparator, tryExpandAtCursor, tryExpandInstant, insertSnippetAtCursor, wrapSelectionWithSnippet, PATTERN_USER_EVENT } from "./obsidian-editor";
+import { compilePatternRules } from "../engine/patterns";
+import type { Dict, PatternRule } from "../engine/types";
 import { MockEditor, asEditor } from "../test/factories/editor";
 
 describe("adapters/obsidian-editor: makeExpandInput", () => {
@@ -1071,5 +1072,240 @@ describe("adapters/obsidian-editor: B-243 field stops from the picker paths", ()
             },
         });
         expect(stops).toBeUndefined();
+    });
+});
+
+
+// ADR-0008 patterns ---------------------------------------------------------
+
+function rules(...list: Array<Partial<PatternRule> & { source: string }>) {
+    const set = compilePatternRules(list.map((r, i) => ({ id: `r${i}`, replacement: "x", enabled: true, mode: "instant", ...r })));
+    expect(set.errors).toEqual([]);
+    return set.rules;
+}
+
+/** A stand-in for the CM6 view behind `editor.cm`: it records the specs and applies them to the mock. */
+function withView(ed: MockEditor) {
+    const specs: Array<{ changes: { from: number; to: number; insert: string }; userEvent?: string }> = [];
+    const view = {
+        dispatch: (spec: { changes: { from: number; to: number; insert: string }; userEvent?: string }) => {
+            specs.push(spec);
+            const caretAtEnd = ed.getCursor().ch === spec.changes.to;
+            ed.replaceRange(spec.changes.insert, { line: 0, ch: spec.changes.from }, { line: 0, ch: spec.changes.to });
+            // CM6 maps a caret at the end of a replaced range to the end of the insert.
+            if (caretAtEnd) ed.setCursor({ line: 0, ch: spec.changes.from + spec.changes.insert.length });
+        },
+    };
+    return { editor: Object.assign(ed, { cm: view }), specs };
+}
+
+const pdeps = { filename: "note.md", now: new Date("2025-09-02T10:11:12") };
+
+describe("adapters/obsidian-editor: applyEditPlan, pattern plans (own undo step)", () => {
+    const plan = { kind: "pattern" as const, fromCh: 2, toCh: 5, insert: "X" };
+
+    it("writes through the CM6 view with a non-typing, non-joinable userEvent", () => {
+        const ed = new MockEditor("a 1/2");
+        const { editor, specs } = withView(ed);
+        applyEditPlan(asEditor(editor), plan, 0);
+        expect(ed.getLine(0)).toBe("a X");
+        expect(specs).toEqual([{ changes: { from: 2, to: 5, insert: "X" }, userEvent: PATTERN_USER_EVENT }]);
+        // not typing (the bridge must not re-scan it) and not joined into CM6's typing group
+        expect(PATTERN_USER_EVENT).not.toMatch(/^(input|delete)/);
+        expect(PATTERN_USER_EVENT).not.toMatch(/^(input\.type|delete)($|\.)/);
+    });
+
+    it("falls back to replaceRange on a legacy editor without a CM6 view", () => {
+        const ed = new MockEditor("a 1/2");
+        applyEditPlan(asEditor(ed), plan, 0);
+        expect(ed.getLine(0)).toBe("a X");
+    });
+
+    it("a literal plan stays on replaceRange, byte for byte as before", () => {
+        const ed = new MockEditor("a 1/2");
+        const { editor, specs } = withView(ed);
+        applyEditPlan(asEditor(editor), { fromCh: 2, toCh: 5, insert: "X" }, 0);
+        expect(ed.getLine(0)).toBe("a X");
+        expect(specs).toEqual([]);
+    });
+});
+
+describe("adapters/obsidian-editor: separator-mode patterns", () => {
+    const fraction = rules({ source: String.raw`/(\d+)\/(\d+)$/`, replacement: "{{1}}\u2044{{2}}", mode: "separator" });
+
+    function typedSpace(text: string): MockEditor {
+        const ed = new MockEditor(text);
+        ed.setCursor({ line: 0, ch: text.length });
+        return ed;
+    }
+
+    it("expands on the separator, keeps it, and reports what was typed", async () => {
+        const ed = typedSpace("take 3/4 ");
+        const { editor, specs } = withView(ed);
+        const result = await tryExpandAtSeparator(asEditor(editor), {}, { ...pdeps, patterns: fraction });
+        expect(ed.getLine(0)).toBe("take 3\u20444 ");
+        expect(result).toEqual({ from: 5, insert: "3\u20444", original: "3/4", separator: " " });
+        expect(specs[0]?.userEvent).toBe(PATTERN_USER_EVENT);
+    });
+
+    it("a literal trigger wins and is still written untagged", async () => {
+        const ed = typedSpace("brb ");
+        const { editor, specs } = withView(ed);
+        const result = await tryExpandAtSeparator(asEditor(editor), { brb: "be right back" }, { ...pdeps, patterns: rules({ source: "/brb$/", replacement: "PATTERN", mode: "separator" }) });
+        expect(ed.getLine(0)).toBe("be right back ");
+        expect(result?.original).toBe("brb");
+        expect(specs).toEqual([]);
+    });
+
+    it("without patterns nothing changes", async () => {
+        const ed = typedSpace("take 3/4 ");
+        expect(await tryExpandAtSeparator(asEditor(ed), {}, pdeps)).toBeUndefined();
+        expect(ed.getLine(0)).toBe("take 3/4 ");
+    });
+
+    it("the Enter separator works for patterns too", async () => {
+        const ed = new MockEditor("mtg Bob\n");
+        ed.setCursor({ line: 1, ch: 0 });
+        const result = await tryExpandAtSeparator(asEditor(ed), {}, {
+            ...pdeps,
+            patterns: rules({ source: String.raw`/mtg (\w+)$/`, replacement: "With {{1}}", mode: "separator" }),
+        });
+        expect(ed.getLine(0)).toBe("With Bob");
+        expect(result).toMatchObject({ original: "mtg Bob", separator: "\n" });
+    });
+
+    it("a pattern in a code span does not expand", async () => {
+        const ed = typedSpace("`take 3/4 ");
+        expect(await tryExpandAtSeparator(asEditor(ed), {}, { ...pdeps, patterns: fraction })).toBeUndefined();
+    });
+
+    it("the staleness guard still protects a pattern edit (the note changed while it was resolved)", async () => {
+        const ed = typedSpace("take 3/4 ");
+        const rulesWithClipboard = rules({ source: String.raw`/(\d+)\/(\d+)$/`, replacement: "$clipboard", mode: "separator" });
+        const result = await tryExpandAtSeparator(asEditor(ed), {}, {
+            ...pdeps,
+            patterns: rulesWithClipboard,
+            readClipboard: async () => {
+                ed.lines[0] = "take 9/9 ";
+                return "CLIP";
+            },
+        });
+        expect(result).toBeUndefined();
+        expect(ed.getLine(0)).toBe("take 9/9 ");
+    });
+
+    it("\"Expand trigger at cursor\" runs separator-mode patterns, not instant ones", async () => {
+        const ed = new MockEditor("take 3/4");
+        ed.setCursor({ line: 0, ch: 8 });
+        const both = rules(
+            { source: String.raw`/(\d+)\/(\d+)$/`, replacement: "INSTANT", mode: "instant" },
+            { source: String.raw`/(\d+)\/(\d+)$/`, replacement: "{{1}}\u2044{{2}}", mode: "separator" },
+        );
+        const result = await tryExpandAtCursor(asEditor(ed), {}, { ...pdeps, patterns: both });
+        expect(ed.getLine(0)).toBe("take 3\u20444");
+        expect(result).toMatchObject({ from: 5, original: "3/4", separator: "" });
+    });
+});
+
+describe("adapters/obsidian-editor: tryExpandInstant", () => {
+    const arrow = rules({ source: "/->$/", replacement: "\u2192" });
+
+    function at(text: string, ch = text.length): MockEditor {
+        const ed = new MockEditor(text);
+        ed.setCursor({ line: 0, ch });
+        return ed;
+    }
+
+    it("replaces the match that ends at the caret and puts the caret after it", async () => {
+        const ed = at("a ->");
+        const { editor, specs } = withView(ed);
+        const result = await tryExpandInstant(asEditor(editor), arrow, pdeps);
+        expect(ed.getLine(0)).toBe("a \u2192");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 3 });
+        expect(result).toEqual({ from: 2, insert: "\u2192", original: "->", separator: "" });
+        expect(specs).toEqual([{ changes: { from: 2, to: 4, insert: "\u2192" }, userEvent: PATTERN_USER_EVENT }]);
+    });
+
+    it("text after the caret stays", async () => {
+        const ed = at("a -> b", 4);
+        await tryExpandInstant(asEditor(ed), arrow, pdeps);
+        expect(ed.getLine(0)).toBe("a \u2192 b");
+    });
+
+    it("nothing happens at the start of a line, with a selection, or with no match", async () => {
+        expect(await tryExpandInstant(asEditor(at("->", 0)), arrow, pdeps)).toBeUndefined();
+        const selected = at("a ->");
+        selected.selection = "->";
+        expect(await tryExpandInstant(asEditor(selected), arrow, pdeps)).toBeUndefined();
+        expect(selected.getLine(0)).toBe("a ->");
+        const plain = at("a -");
+        expect(await tryExpandInstant(asEditor(plain), arrow, pdeps)).toBeUndefined();
+        expect(plain.getLine(0)).toBe("a -");
+    });
+
+    it("guards: not in inline code, a fenced block, math or frontmatter", async () => {
+        const inline = at("`a ->` b", 5);
+        expect(await tryExpandInstant(asEditor(inline), arrow, pdeps)).toBeUndefined();
+        expect(inline.getLine(0)).toBe("`a ->` b");
+        const fence = new MockEditor("```\na ->\n```");
+        fence.setCursor({ line: 1, ch: 4 });
+        expect(await tryExpandInstant(asEditor(fence), arrow, pdeps)).toBeUndefined();
+        const front = new MockEditor("---\ntitle: ->\n---\n");
+        front.setCursor({ line: 1, ch: 10 });
+        expect(await tryExpandInstant(asEditor(front), arrow, pdeps)).toBeUndefined();
+        const math = at("$a ->", 5);
+        expect(await tryExpandInstant(asEditor(math), arrow, pdeps)).toBeUndefined();
+    });
+
+    it("$| puts the caret inside the insert", async () => {
+        const ed = at("box");
+        await tryExpandInstant(asEditor(ed), rules({ source: "/box$/", replacement: "[ $| ]" }), pdeps);
+        expect(ed.getLine(0)).toBe("[  ]");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 2 });
+    });
+
+    it("fields: the caret goes to the first field and the session starts with document offsets", async () => {
+        const ed = at("x lnk");
+        const result = await tryExpandInstant(asEditor(ed), rules({ source: "/lnk$/", replacement: "[$1]($2)" }), pdeps);
+        expect(ed.getLine(0)).toBe("x []()");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 3 });
+        // no `$|`: the last Tab lands after the insert (there is no separator)
+        expect(result?.session).toEqual({ fields: [3, 5], docOrder: [0, 1], final: 6 });
+    });
+
+    it("a captured $1 is not a field", async () => {
+        const ed = at("x v$1");
+        const result = await tryExpandInstant(asEditor(ed), rules({ source: String.raw`/v(\S+)$/`, replacement: "<{{1}}>" }), pdeps);
+        expect(ed.getLine(0)).toBe("x <$1>");
+        expect(result?.session).toBeUndefined();
+    });
+
+    it("a field session does not pull the caret when the user moved during an async clipboard read (B-147)", async () => {
+        const ed = at("x clip y z", 6);
+        const { editor } = withView(ed);
+        const result = await tryExpandInstant(asEditor(editor), rules({ source: "/clip$/", replacement: "$clipboard $1 $2" }), {
+            ...pdeps,
+            readClipboard: async () => {
+                ed.setCursor({ line: 0, ch: 10 }); // the user clicked elsewhere
+                return "CLIP";
+            },
+        });
+        expect(ed.getLine(0)).toBe("x CLIP   y z");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 10 + "CLIP  ".length - "clip".length });
+        expect(result?.session).toBeUndefined();
+        expect(result?.original).toBe("clip");
+    });
+
+    it("refuses to overwrite when the line changed under it", async () => {
+        const ed = at("x clip");
+        const result = await tryExpandInstant(asEditor(ed), rules({ source: "/clip$/", replacement: "$clipboard" }), {
+            ...pdeps,
+            readClipboard: async () => {
+                ed.lines[0] = "x CHANGED";
+                return "CLIP";
+            },
+        });
+        expect(result).toBeUndefined();
+        expect(ed.getLine(0)).toBe("x CHANGED");
     });
 });

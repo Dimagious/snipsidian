@@ -306,6 +306,54 @@ describe("expansion-mark: Backspace restores trigger + separator", () => {
     });
 });
 
+describe("expansion-mark: instant pattern expansions (empty separator, ADR-0008)", () => {
+    // `1/2` typed, the pattern replaced it at once: no separator, the caret sits right after the insert.
+    function half(): Harness {
+        const h = new Harness("x 1/2", 5);
+        h.expand({ from: 2, to: 5, insert: "\u00bd", separator: "", original: "1/2", cursor: 3 });
+        return h;
+    }
+
+    it("marks the inserted text and keeps the window open at the caret", () => {
+        const h = half();
+        expect(h.text).toBe("x \u00bd");
+        expect(h.mark).toMatchObject({ from: 2, to: 3, end: 3, cursor: 3, restore: "1/2" });
+    });
+
+    it("Backspace puts back exactly what was typed and does not re-expand it", () => {
+        const h = half();
+        expect(h.backspace()).toBe(true);
+        expect(h.text).toBe("x 1/2");
+        expect(h.head).toBe(5);
+        expect(h.mark).toBeNull();
+        const event = h.transactions[h.transactions.length - 1]?.annotation(Transaction.userEvent);
+        expect(isTypingUserEvent(event)).toBe(false);
+    });
+
+    it("typing the next character closes the window", () => {
+        const h = half();
+        h.dispatch({ changes: { from: 3, insert: "x" }, selection: { anchor: 4 }, userEvent: "input.type" });
+        expect(h.mark).toBeNull();
+        expect(h.backspace()).toBe(false);
+    });
+
+    it("no mark when the document does not hold the insert any more", () => {
+        const h = new Harness("x 1/2", 5);
+        h.dispatch({ changes: { from: 2, to: 5, insert: "\u00bd" }, selection: { anchor: 3 } });
+        markExpansion(h, { from: 2, insert: "something else", original: "1/2", separator: "" });
+        expect(h.mark).toBeNull();
+    });
+
+    it("$| inside the insert: the window is open at the caret and Backspace restores the typed text", () => {
+        const h = new Harness("box", 3);
+        h.expand({ from: 0, to: 3, insert: "[  ]", separator: "", original: "box", cursor: 2 });
+        expect(h.mark?.cursor).toBe(2);
+        h.backspace();
+        expect(h.text).toBe("box");
+        expect(h.head).toBe(3);
+    });
+});
+
 describe("expansion-mark: mapping through other edits (Substitutions #22 class)", () => {
     it("text inserted ABOVE shifts the mark and Backspace still restores the right text", () => {
         const h = new Harness("line one\nbrb ", 13);

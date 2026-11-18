@@ -4,6 +4,7 @@ import { tryExpandAtCursor } from "../adapters/obsidian-editor";
 import { readClipboardSafe } from "../adapters/clipboard";
 import { clock } from "../adapters/clock";
 import type { Dict } from "../engine/types";
+import { NO_PATTERNS, type CompiledPatterns } from "../engine/patterns";
 import { nextField, startFieldSessionInEditor } from "../adapters/field-session";
 
 /**
@@ -27,6 +28,8 @@ export async function expandTriggerAtCursor(
     editor: Editor,
     getSnippets: () => Dict,
     getPrefix: () => string | undefined,
+    /** ADR-0008: separator-mode pattern rules are tried too. */
+    getPatterns: () => CompiledPatterns = () => NO_PATTERNS,
 ): Promise<void> {
     const filename = app.workspace.activeEditor?.file?.name;
     const result = await tryExpandAtCursor(editor, getSnippets(), {
@@ -34,6 +37,7 @@ export async function expandTriggerAtCursor(
         now: clock.now(),
         readClipboard: readClipboardSafe,
         prefix: getPrefix(),
+        patterns: getPatterns().rules,
     });
     if (result) {
         startFieldSessionInEditor(editor, result.session);

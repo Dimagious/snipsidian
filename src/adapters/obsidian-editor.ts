@@ -12,8 +12,10 @@ import {
 import { clock } from "./clock";
 import { readClipboardSafe } from "./clipboard";
 import { expand } from "../engine";
+import { expandInstant } from "../engine/expand";
+import { matchPatterns, type CompiledRule } from "../engine/patterns";
 import type { Dict, EditPlan, ExpandContext, ExpandInput, FieldStops } from "../engine/types";
-import { isSeparator } from "../shared/delimiters";
+import { DEFAULT_DELIMITERS, isSeparator } from "../shared/delimiters";
 import { isInFencedCode, isInInlineCode, isInMath, isInYamlFrontmatter } from "../shared/markdown";
 
 /** The part of moment Snipsy uses. */
@@ -112,12 +114,29 @@ export function makeContext(
  * might do in response to `replaceRange`) and skip the reposition —
  * not the text edit — when it isn't on `line`.
  */
+/**
+ * `userEvent` of a pattern expansion (ADR-0008). Not typing (the B-149 gate
+ * rejects it, so the inserted text is never re-scanned) and not matched by
+ * CM6 history's `/^(input\.type|delete)($|\.)/` join rule, so it is its own
+ * undo step: Cmd/Ctrl+Z gives back exactly what was typed. Literal expansions
+ * are written untagged and CM6 joins them into the typing group (B-132).
+ */
+export const PATTERN_USER_EVENT = "snipsy.expand";
+
 export function applyEditPlan(editor: Editor, plan: EditPlan, line: number) {
     const userStillOnTargetLine = editor.getCursor().line === line;
 
     const from: EditorPosition = { line, ch: plan.fromCh };
     const to: EditorPosition = { line, ch: plan.toCh };
-    editor.replaceRange(plan.insert, from, to);
+    // `editor.cm` is absent on a legacy editor: the plain write is the fallback.
+    if (plan.kind === "pattern" && editor.cm) {
+        editor.cm.dispatch({
+            changes: { from: editor.posToOffset(from), to: editor.posToOffset(to), insert: plan.insert },
+            userEvent: PATTERN_USER_EVENT,
+        });
+    } else {
+        editor.replaceRange(plan.insert, from, to);
+    }
     if (plan.newCursor !== undefined && userStillOnTargetLine) {
         editor.setCursor({
             line: line + plan.newCursor.lineDelta,
@@ -183,6 +202,8 @@ export async function tryExpandAtSeparator(
         readClipboard?: () => Promise<string>;
         /** B-137: see `ExpandInput.prefix`. `undefined` = mode off. */
         prefix?: string;
+        /** ADR-0008: compiled pattern rules (separator mode is tried here). */
+        patterns?: readonly CompiledRule[];
     }
 ): Promise<ExpansionResult | undefined> {
     const cursor = editor.getCursor();
@@ -224,7 +245,15 @@ export async function tryExpandAtSeparator(
     const input = makeExpandInput(editor, sepCh, lastTyped, targetLine, deps.prefix);
     const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, targetLine, ctxCh);
 
-    return expandAndApply(editor, dict, input, ctx, targetLine, lineText, lastTyped, cursor);
+    const patterns = deps.patterns ?? [];
+    return expandAndApply(
+        editor,
+        () => expand(input, dict, ctx, DEFAULT_DELIMITERS, patterns),
+        targetLine,
+        lineText,
+        lastTyped,
+        cursor,
+    );
 }
 
 /**
@@ -233,16 +262,14 @@ export async function tryExpandAtSeparator(
  */
 async function expandAndApply(
     editor: Editor,
-    dict: Dict,
-    input: ExpandInput,
-    ctx: ExpandContext,
+    resolvePlan: () => Promise<EditPlan | null>,
     targetLine: number,
     lineText: string,
     separator: string,
     /** The live caret when the expansion started. */
     cursorAtStart: EditorPosition,
 ): Promise<ExpansionResult | undefined> {
-    const plan = await expand(input, dict, ctx);
+    const plan = await resolvePlan();
     if (!plan) return undefined;
 
     // Cheap staleness guard: if the text the plan expects to replace
@@ -302,6 +329,8 @@ export async function tryExpandAtCursor(
         now: Date;
         readClipboard?: () => Promise<string>;
         prefix?: string;
+        /** ADR-0008: compiled pattern rules (separator mode is tried). */
+        patterns?: readonly CompiledRule[];
     },
 ): Promise<ExpansionResult | undefined> {
     if (editor.getSelection()) return undefined;
@@ -322,7 +351,43 @@ export async function tryExpandAtCursor(
         prefix: deps.prefix,
     };
     const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, cursor.line, cursor.ch);
-    return expandAndApply(editor, dict, input, ctx, cursor.line, lineText, "", cursor);
+    const patterns = deps.patterns ?? [];
+    return expandAndApply(
+        editor,
+        () => expand(input, dict, ctx, DEFAULT_DELIMITERS, patterns),
+        cursor.line,
+        lineText,
+        "",
+        cursor,
+    );
+}
+
+/**
+ * ADR-0008, instant mode: tries the `instant` pattern rules on the line up to
+ * the caret, right after a typed character (the caller has checked the change
+ * source: typing only, one character, one caret). Nothing happens with a
+ * selection or at the start of a line. Same guards as typing; the match has to
+ * end exactly at the caret.
+ */
+export async function tryExpandInstant(
+    editor: Editor,
+    patterns: readonly CompiledRule[],
+    deps: {
+        filename?: string;
+        now: Date;
+        readClipboard?: () => Promise<string>;
+    },
+): Promise<ExpansionResult | undefined> {
+    if (editor.getSelection()) return undefined;
+    const cursor = editor.getCursor();
+    if (cursor.ch === 0) return undefined;
+    const lineText = editor.getLine(cursor.line) ?? "";
+    const textBefore = lineText.slice(0, cursor.ch);
+    // This runs after EVERY typed character: look at the tail first and build the context (it scans the note for
+    // frontmatter, fences and math) only for a match.
+    if (!matchPatterns(textBefore, patterns, "instant")) return undefined;
+    const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, cursor.line, cursor.ch);
+    return expandAndApply(editor, () => expandInstant(textBefore, ctx, patterns), cursor.line, lineText, "", cursor);
 }
 
 /** B-197: what the picker paths need to run the full placeholder pipeline. */

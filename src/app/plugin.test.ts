@@ -45,7 +45,13 @@ vi.mock("./cm6-bridge", () => ({
 }));
 
 // B-243/B-244 command bodies are covered in field-commands.test.ts.
-type ExpandTriggerArgs = [app: unknown, editor: unknown, getSnippets: () => Record<string, string>, getPrefix: () => string | undefined];
+type ExpandTriggerArgs = [
+    app: unknown,
+    editor: unknown,
+    getSnippets: () => Record<string, string>,
+    getPrefix: () => string | undefined,
+    getPatterns?: () => { rules: ReadonlyArray<{ id: string }> },
+];
 const expandTrigger = vi.hoisted(() => vi.fn<(...args: ExpandTriggerArgs) => Promise<void>>());
 const jumpNext = vi.hoisted(() => vi.fn<(...args: unknown[]) => boolean>());
 vi.mock("./field-commands", () => ({
@@ -131,6 +137,7 @@ describe("app/plugin", () => {
 
         expect(buildExpansionExtension).toHaveBeenCalledWith(
             app,
+            expect.any(Function),
             expect.any(Function),
             expect.any(Function),
             expect.any(Function),
@@ -351,6 +358,78 @@ describe("app/plugin", () => {
             expect(getHighlight()).toBe(false);
             plugin.settings.expansion = { highlight: true };
             expect(getHighlight()).toBe(true);
+        });
+    });
+
+    describe("patterns wiring (ADR-0008)", () => {
+        async function getPatternsArg(saved: object | undefined): Promise<{ plugin: InstanceType<typeof PluginClass>; get: () => ReturnType<NonNullable<Parameters<typeof buildExpansionExtension>[4]>> }> {
+            const plugin = makePlugin(makeApp());
+            vi.spyOn(plugin, "loadData").mockResolvedValue(saved);
+            await plugin.onload();
+            const get = lastBuildArgs()[4];
+            if (!get) throw new Error("buildExpansionExtension was called without getPatterns");
+            return { plugin, get };
+        }
+
+        it("hands the bridge the compiled rules of the live settings", async () => {
+            const { plugin, get } = await getPatternsArg({ snippets: { a: "b" } });
+            expect(get().rules).toEqual([]);
+            plugin.settings.patterns = [{ id: "p", source: "/a$/", replacement: "x", enabled: true, mode: "instant" }];
+            await plugin.saveSettings();
+            expect(get().rules.map((r) => r.id)).toEqual(["p"]);
+        });
+
+        it("compiles once per settings change, not once per call", async () => {
+            const { plugin, get } = await getPatternsArg({
+                snippets: { a: "b" },
+                patterns: [{ id: "p", source: "/a$/", replacement: "x", enabled: true, mode: "instant" }],
+            });
+            const first = get();
+            expect(get()).toBe(first);
+            expect(get()).toBe(first);
+            await plugin.saveSettings();
+            expect(get()).not.toBe(first);
+            expect(get().rules.map((r) => r.id)).toEqual(["p"]);
+        });
+
+        it("a refused rule in data.json is reported once at load and does not stop the others", async () => {
+            const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+            try {
+                const { get } = await getPatternsArg({
+                    snippets: { a: "b" },
+                    patterns: [
+                        { id: "bad", source: "/(a+)+$/", replacement: "x", enabled: true, mode: "instant" },
+                        { id: "good", source: "/b$/", replacement: "y", enabled: true, mode: "separator" },
+                    ],
+                });
+                expect(get().rules.map((r) => r.id)).toEqual(["good"]);
+                expect(warn).toHaveBeenCalledTimes(1);
+                const call: unknown[] = nth(warn.mock.calls, 0);
+                expect(call[0]).toBe("[snipsy] pattern rule disabled");
+                expect(call[1]).toMatchObject({ id: "bad" });
+                expect(JSON.stringify(call[1])).toMatch(/repeated group/i);
+            } finally {
+                warn.mockRestore();
+            }
+        });
+
+        it("saved patterns survive a settings round trip untouched", async () => {
+            const patterns = [{ id: "p", source: "/a$/", replacement: "x", enabled: true, mode: "instant" }];
+            const { plugin } = await getPatternsArg({ snippets: { a: "b" }, patterns });
+            expect(plugin.settings.patterns).toEqual(patterns);
+        });
+
+        it("the expand-trigger command passes the patterns on", async () => {
+            const plugin = makePlugin(makeApp());
+            vi.spyOn(plugin, "loadData").mockResolvedValue({
+                snippets: { a: "b" },
+                patterns: [{ id: "p", source: "/a$/", replacement: "x", enabled: true, mode: "separator" }],
+            });
+            await plugin.onload();
+            const cmd = commandById("expand-trigger");
+            cmd.editorCallback?.(asEditor(makeMockEditor({ text: "a" })), { app: makeApp(), file: null, hoverPopover: null });
+            const getPatterns = nth(expandTrigger.mock.calls, 0)[4];
+            expect(getPatterns?.().rules.map((r) => r.id)).toEqual(["p"]);
         });
     });
 

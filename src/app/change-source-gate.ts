@@ -117,3 +117,36 @@ export function shouldRunDeferredExpansion(
 ): boolean {
     return pending && !composing && hasFocus;
 }
+
+/** What `isSingleCharTyping` needs to know about one change of an update. */
+export type ChangeInfo = {
+    /** Characters removed. */
+    deleted: number;
+    /** Characters inserted. */
+    inserted: number;
+    /** Lines of the inserted text (1 = no line break). */
+    lines: number;
+    /** Where the inserted text ends, in the new document. */
+    end: number;
+};
+
+/**
+ * ADR-0008: instant patterns run only after ONE typed character: a single
+ * pure insertion of one character, no line break, ending exactly at the caret,
+ * with a single empty selection range (multiple cursors never expand). Whether
+ * the update is typing at all, and not composing, is `shouldAttemptExpansion`.
+ */
+export function isSingleCharTyping(
+    changes: ReadonlyArray<ChangeInfo>,
+    selection: { ranges: number; empty: boolean; head: number },
+): boolean {
+    if (changes.length !== 1 || selection.ranges !== 1 || !selection.empty) return false;
+    const change = changes[0];
+    return (
+        change !== undefined &&
+        change.deleted === 0 &&
+        change.inserted === 1 &&
+        change.lines === 1 &&
+        change.end === selection.head
+    );
+}

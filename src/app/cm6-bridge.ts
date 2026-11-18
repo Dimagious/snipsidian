@@ -2,15 +2,18 @@
 import { EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import { Transaction, type Extension, type Text } from "@codemirror/state";
 import type { App } from "obsidian";
-import { tryExpandAtSeparator } from "../adapters/obsidian-editor";
+import { tryExpandAtSeparator, tryExpandInstant } from "../adapters/obsidian-editor";
 import { buildExpansionMarkExtension, markExpansion } from "./expansion-mark";
 import { buildFieldSessionExtension, startFieldSession } from "../adapters/field-session";
 import { readClipboardSafe } from "../adapters/clipboard";
 import { clock } from "../adapters/clock";
 import type { Dict } from "../engine/types";
+import { NO_PATTERNS, type CompiledPatterns } from "../engine/patterns";
 import {
     isDeferredByComposition,
+    isSingleCharTyping,
     shouldAttemptExpansion,
+    type ChangeInfo,
     shouldRunDeferredExpansion,
 } from "./change-source-gate";
 
@@ -49,6 +52,8 @@ export function handleViewUpdate(
     /** B-176: resolves the "Highlight expansions" setting at call time
      *  (default off: nothing extra happens on the hot path). */
     getHighlight: () => boolean = () => false,
+    /** ADR-0008: the compiled pattern rules, resolved at call time. */
+    getPatterns: () => CompiledPatterns = () => NO_PATTERNS,
 ): UpdateOutcome {
     // Cheap short-circuit: no point building the userEvent list (or
     // resolving the active editor) for selection-only updates —
@@ -76,8 +81,22 @@ export function handleViewUpdate(
             : "ignored";
     }
 
-    runExpansion(update.view, app, getSnippets, getPrefix, getHighlight);
+    runExpansion(update.view, app, getSnippets, getPrefix, getHighlight, getPatterns, isInstantCandidate(update, getPatterns));
     return "expanded";
+}
+
+/**
+ * ADR-0008: whether instant pattern rules may run for this update. Cheap
+ * first: nothing is inspected unless an instant rule exists.
+ */
+function isInstantCandidate(update: ViewUpdate, getPatterns: () => CompiledPatterns): boolean {
+    if (!getPatterns().hasInstant) return false;
+    const changes: ChangeInfo[] = [];
+    update.changes.iterChanges((fromA, toA, _fromB, toB, text) => {
+        changes.push({ deleted: toA - fromA, inserted: text.length, lines: text.lines, end: toB });
+    });
+    const { ranges, main } = update.state.selection;
+    return isSingleCharTyping(changes, { ranges: ranges.length, empty: main.empty, head: main.head });
 }
 
 /**
@@ -90,6 +109,8 @@ function runExpansion(
     getSnippets: () => Dict,
     getPrefix: () => string | undefined,
     getHighlight: () => boolean,
+    getPatterns: () => CompiledPatterns,
+    instant: boolean,
 ): void {
     const fileInfo = app.workspace.activeEditor;
     const editor = fileInfo?.editor;
@@ -104,12 +125,20 @@ function runExpansion(
     // the active filename so the user / maintainer can correlate, and
     // never thrown back into CM6's update-listener callback — an
     // uncaught rejection there risks breaking other view plugins.
-    tryExpandAtSeparator(editor, getSnippets(), {
-        filename,
-        now: clock.now(),
-        readClipboard: readClipboardSafe,
+    const patterns = getPatterns();
+    const deps = { filename, now: clock.now(), readClipboard: readClipboardSafe };
+    // Literal triggers first, then separator-mode patterns (inside
+    // `tryExpandAtSeparator`), then instant patterns: the first to expand wins,
+    // and one keystroke expands at most once.
+    const separator = tryExpandAtSeparator(editor, getSnippets(), {
+        ...deps,
         prefix: getPrefix(),
-    }).then((result) => {
+        patterns: patterns.hasSeparator ? patterns.rules : undefined,
+    });
+    const expanded = instant
+        ? separator.then((first) => first ?? tryExpandInstant(editor, patterns.rules, deps))
+        : separator;
+    expanded.then((result) => {
         if (!result) return;
         // B-243: two or more fields open a session (the caret goes to the
         // first one); the highlight/undo mark would be cleared by that caret
@@ -148,6 +177,8 @@ function insertsText(update: ViewUpdate): boolean {
  */
 export class CompositionRetry {
     pending = false;
+    /** ADR-0008: the pending update was a single typed character. */
+    private instant = false;
     private doc: Text | undefined;
     private head = -1;
     /** Pending animation-frame handle and the window that owns it. */
@@ -161,6 +192,7 @@ export class CompositionRetry {
         private readonly getSnippets: () => Dict,
         private readonly getPrefix: () => string | undefined,
         private readonly getHighlight: () => boolean = () => false,
+        private readonly getPatterns: () => CompiledPatterns = () => NO_PATTERNS,
     ) {}
 
     /** Fed from the update listener (not a plugin `update()`, which
@@ -175,9 +207,11 @@ export class CompositionRetry {
             update,
             this.getPrefix,
             this.getHighlight,
+            this.getPatterns,
         );
         this.pending = outcome === "deferred" && insertsText(update);
         if (this.pending) {
+            this.instant = isInstantCandidate(update, this.getPatterns);
             this.doc = update.state.doc;
             this.head = update.state.selection.main.head;
         }
@@ -227,7 +261,15 @@ export class CompositionRetry {
             state.doc === this.doc && state.selection.main.head === this.head;
         this.pending = false;
         if (!unchanged) return;
-        runExpansion(this.view, this.app, this.getSnippets, this.getPrefix, this.getHighlight);
+        runExpansion(
+            this.view,
+            this.app,
+            this.getSnippets,
+            this.getPrefix,
+            this.getHighlight,
+            this.getPatterns,
+            this.instant,
+        );
     }
 
     private cancel(): void {
@@ -255,9 +297,10 @@ export function buildExpansionExtension(
     getSnippets: () => Dict,
     getPrefix: () => string | undefined = () => undefined,
     getHighlight: () => boolean = () => false,
+    getPatterns: () => CompiledPatterns = () => NO_PATTERNS,
 ): Extension {
     const retry = ViewPlugin.define(
-        (view) => new CompositionRetry(view, app, getSnippets, getPrefix, getHighlight),
+        (view) => new CompositionRetry(view, app, getSnippets, getPrefix, getHighlight, getPatterns),
         {
             eventHandlers: {
                 compositionend(this: CompositionRetry) {
@@ -271,7 +314,7 @@ export function buildExpansionExtension(
         EditorView.updateListener.of((update) => {
             const state = update.view.plugin(retry);
             if (state) state.record(update);
-            else handleViewUpdate(app, getSnippets, update, getPrefix, getHighlight);
+            else handleViewUpdate(app, getSnippets, update, getPrefix, getHighlight, getPatterns);
         }),
         buildExpansionMarkExtension(getHighlight),
         buildFieldSessionExtension(),

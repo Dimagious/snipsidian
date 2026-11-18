@@ -1,5 +1,6 @@
 import type { EditorView } from "@codemirror/view";
 import type { PackageItem } from "./services/community-packages";
+import type { PatternRule } from "./engine/types";
 
 /**
  * Shape of the object `app.setting.openTabById("hotkeys")` returns —
@@ -61,6 +62,13 @@ export interface SnipSidianSettings {
      * UI has no affordance to disable "Ungrouped".
      */
     disabledGroups?: string[];
+    /**
+     * ADR-0008: regex triggers. Local only, additive (absent = none). Every
+     * rule goes through the S-015 gate (`engine/patterns.ts`) before it can
+     * reach the hot path, whichever way it got in; a rule that fails is
+     * disabled alone. `group` follows `disabledGroups`.
+     */
+    patterns?: PatternRule[];
     ui?: {
         groupOpen?: Record<string, boolean>;
         /** Stored as a string for forward-compatibility — runtime narrowing
