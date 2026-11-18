@@ -2,7 +2,7 @@ import type { Dict, EditPlan, ExpandContext, ExpandInput } from "./types";
 import { shouldExpandHere } from "./guards";
 import { findTrigger } from "./match";
 import { applyPlaceholders } from "./placeholders";
-import { applyPatternReplacement, matchPatterns, type CompiledRule } from "./patterns";
+import { applyPatternReplacement, matchPatterns, matchPatternsInOrder, type CompiledRule } from "./patterns";
 import { buildEdit } from "./edit";
 import { DEFAULT_DELIMITERS } from "../shared/delimiters";
 
@@ -11,13 +11,16 @@ export async function expand(
     dict: Dict,
     ctx: ExpandContext,
     delimiters = DEFAULT_DELIMITERS,
-    /** ADR-0008: compiled pattern rules; only `separator` ones are tried here. */
-    patterns: readonly CompiledRule[] = []
+    /** ADR-0008: compiled pattern rules, tried after a literal miss. */
+    patterns: readonly CompiledRule[] = [],
+    /** ADR-0008: the keystroke was a typed character (not the Enter key, not the command), so instant rules may
+     *  read the line up to and including the typed separator. */
+    instant = false,
 ): Promise<EditPlan | null> {
     if (!shouldExpandHere(ctx)) return null;
 
     const m = findTrigger(input, dict, delimiters);
-    if (!m) return expandPatternAtSeparator(input, ctx, delimiters, patterns);
+    if (!m) return expandPatternAtSeparator(input, ctx, delimiters, patterns, instant);
 
     const raw = dict[m.trigger] ?? "";
     const applied = await applyPlaceholders(raw, ctx);
@@ -25,21 +28,34 @@ export async function expand(
 }
 
 /**
- * ADR-0008, separator mode. Reached whenever no literal snippet expanded,
- * whatever the reason `findTrigger` said no (unknown word, empty candidate
- * between two separators as in `:smile:` + space, lookback cap, prefix
- * mismatch): literal triggers always win. Prefix mode does not apply here.
+ * ADR-0008, patterns on a separator. Reached whenever no literal snippet
+ * expanded, whatever the reason `findTrigger` said no (unknown word, empty
+ * candidate between two separators as in `:smile:` + space, lookback cap,
+ * prefix mismatch): literal triggers always win. Prefix mode does not apply
+ * here. The rules are tried top to bottom whatever their mode: a separator rule
+ * reads the line before the separator, an instant rule (only when `instant`)
+ * the line up to and including it.
  */
 async function expandPatternAtSeparator(
     input: ExpandInput,
     ctx: ExpandContext,
     delimiters: string[],
     patterns: readonly CompiledRule[],
+    instant: boolean,
 ): Promise<EditPlan | null> {
     if (patterns.length === 0 || !delimiters.includes(input.lastTyped)) return null;
-    const hit = matchPatterns(input.textBefore, patterns, "separator");
+    const throughCaret = input.textBefore + input.lastTyped;
+    const hit = matchPatternsInOrder(
+        { beforeSeparator: input.textBefore, atCaret: instant ? throughCaret : undefined },
+        patterns,
+    );
     if (!hit) return null;
     const applied = await applyPatternReplacement(hit, ctx);
+    if (hit.rule.mode === "instant") {
+        // The match ends with the typed separator: it is replaced with the rest.
+        const plan = buildEdit(input, { trigger: hit.rule.id, fromCh: hit.index, toCh: throughCaret.length }, applied);
+        return { ...plan, kind: "pattern", consumesSeparator: true };
+    }
     const plan = buildEdit(input, { trigger: hit.rule.id, fromCh: hit.index, toCh: input.textBefore.length }, applied);
     return { ...plan, kind: "pattern" };
 }

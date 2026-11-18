@@ -1198,12 +1198,70 @@ describe("adapters/obsidian-editor: separator-mode patterns", () => {
         const ed = new MockEditor("take 3/4");
         ed.setCursor({ line: 0, ch: 8 });
         const both = rules(
-            { source: String.raw`/(\d+)\/(\d+)$/`, replacement: "INSTANT", mode: "instant" },
+            { source: String.raw`/(\d{1,2})\/(\d{1,2})$/`, replacement: "INSTANT", mode: "instant" },
             { source: String.raw`/(\d+)\/(\d+)$/`, replacement: "{{1}}\u2044{{2}}", mode: "separator" },
         );
         const result = await tryExpandAtCursor(asEditor(ed), {}, { ...pdeps, patterns: both });
         expect(ed.getLine(0)).toBe("take 3\u20444");
         expect(result).toMatchObject({ from: 5, original: "3/4", separator: "" });
+    });
+});
+
+describe("adapters/obsidian-editor: instant rules on a typed separator (one order for all rules)", () => {
+    const dots = { source: String.raw`/\.\.\.$/`, replacement: "\u2026", mode: "instant" } as const;
+    const bracket = { source: String.raw`/(\w+)\.\.$/`, replacement: "[{{1}}]", mode: "separator" } as const;
+
+    function typed(text: string): MockEditor {
+        const ed = new MockEditor(text);
+        ed.setCursor({ line: 0, ch: text.length });
+        return ed;
+    }
+
+    it("foo... types foo\u2026 when the instant rule is listed first, and the result carries no separator", async () => {
+        const ed = typed("foo...");
+        const { editor, specs } = withView(ed);
+        const result = await tryExpandAtSeparator(asEditor(editor), {}, { ...pdeps, patterns: rules(dots, bracket), instant: true });
+        expect(ed.getLine(0)).toBe("foo\u2026");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 4 });
+        expect(result).toEqual({ from: 3, insert: "\u2026", original: "...", separator: "" });
+        expect(specs).toEqual([{ changes: { from: 3, to: 6, insert: "\u2026" }, userEvent: PATTERN_USER_EVENT }]);
+    });
+
+    it("the separator rule listed first takes it, and the separator stays", async () => {
+        const ed = typed("foo...");
+        const result = await tryExpandAtSeparator(asEditor(ed), {}, { ...pdeps, patterns: rules(bracket, dots), instant: true });
+        expect(ed.getLine(0)).toBe("[foo].");
+        expect(result).toMatchObject({ original: "foo..", separator: "." });
+    });
+
+    it("without the instant flag (not a single typed character) instant rules stay out", async () => {
+        const ed = typed("foo...");
+        expect(await tryExpandAtSeparator(asEditor(ed), {}, { ...pdeps, patterns: rules(dots) })).toBeUndefined();
+        expect(ed.getLine(0)).toBe("foo...");
+    });
+
+    it("Enter never runs an instant rule, whatever the flag says", async () => {
+        const ed = new MockEditor("foo...\n");
+        ed.setCursor({ line: 1, ch: 0 });
+        expect(await tryExpandAtSeparator(asEditor(ed), {}, { ...pdeps, patterns: rules(dots), instant: true })).toBeUndefined();
+        expect(ed.getLine(0)).toBe("foo...");
+    });
+
+    it("a field session after an instant expansion on a separator ends right after the insert", async () => {
+        const ed = typed("a...");
+        const result = await tryExpandAtSeparator(asEditor(ed), {}, {
+            ...pdeps,
+            patterns: rules({ source: String.raw`/\.\.\.$/`, replacement: "[$1][$2]", mode: "instant" }),
+            instant: true,
+        });
+        expect(ed.getLine(0)).toBe("a[][]");
+        expect(result?.session).toEqual({ fields: [2, 4], docOrder: [0, 1], final: 5 });
+    });
+
+    it("tryExpandInstant leaves a typed separator to the separator path", async () => {
+        const ed = typed("foo...");
+        expect(await tryExpandInstant(asEditor(ed), rules(dots), pdeps)).toBeUndefined();
+        expect(ed.getLine(0)).toBe("foo...");
     });
 });
 

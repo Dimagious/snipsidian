@@ -151,9 +151,10 @@ describe("expand: separator-mode patterns (ADR-0008)", () => {
         }
     });
 
-    it("instant rules are not tried at a separator", async () => {
-        const rules = patterns({ source: String.raw`/(\d+)\/(\d+)$/`, mode: "instant" });
-        await expect(expand(sepInput("1/2 "), dict, pctx, undefined, rules)).resolves.toBeNull();
+    it("instant rules are not tried at a separator unless the keystroke is a typed character (instant = true)", async () => {
+        const rules = patterns({ source: String.raw`/\.\.\.$/`, replacement: "\u2026", mode: "instant" });
+        await expect(expand(sepInput("foo..."), dict, pctx, undefined, rules)).resolves.toBeNull();
+        await expect(expand(sepInput("foo..."), dict, pctx, undefined, rules, false)).resolves.toBeNull();
     });
 
     it("the first matching rule in list order wins", async () => {
@@ -175,6 +176,52 @@ describe("expand: separator-mode patterns (ADR-0008)", () => {
     it("a literal snippet keeps {{1}} as text", async () => {
         const plan = await expand(sepInput("lit "), { lit: "{{1}} stays" }, pctx, undefined, patterns({ source: "/zzz$/" }));
         expect(plan?.insert).toBe("{{1}} stays");
+    });
+});
+
+describe("expand: one order for instant and separator rules (ADR-0008, owner 2026-11-18)", () => {
+    const dots = { source: String.raw`/\.\.\.$/`, replacement: "\u2026", mode: "instant" } as const;
+    const bracket = { source: String.raw`/(\w+)\.\.$/`, replacement: "[{{1}}]", mode: "separator" } as const;
+
+    it("an instant rule that ends with the typed separator fires on it and takes it along", async () => {
+        const plan = await expand(sepInput("foo..."), dict, pctx, undefined, patterns(dots), true);
+        expect(plan).toMatchObject({ kind: "pattern", fromCh: 3, toCh: 6, insert: "\u2026", consumesSeparator: true });
+    });
+
+    it("the list order decides, not the mode: [instant, separator] types foo... as foo\u2026", async () => {
+        const plan = await expand(sepInput("foo..."), dict, pctx, undefined, patterns(dots, bracket), true);
+        expect(plan).toMatchObject({ fromCh: 3, toCh: 6, insert: "\u2026" });
+    });
+
+    it("and [separator, instant] gives the separator rule the first go", async () => {
+        const plan = await expand(sepInput("foo..."), dict, pctx, undefined, patterns(bracket, dots), true);
+        // The separator rule reads the text BEFORE the typed dot (`foo..`) and keeps the separator.
+        expect(plan).toMatchObject({ fromCh: 0, toCh: 5, insert: "[foo]" });
+        expect(plan?.consumesSeparator).toBeUndefined();
+    });
+
+    it("an instant rule that does not match falls through to a later separator rule", async () => {
+        const plan = await expand(sepInput("foo.. "), dict, pctx, undefined, patterns(dots, bracket), true);
+        expect(plan).toMatchObject({ fromCh: 0, toCh: 5, insert: "[foo]" });
+    });
+
+    it("a literal snippet still wins over every pattern, instant ones included", async () => {
+        const rules = patterns({ source: "/b $/", replacement: "PATTERN", mode: "instant" });
+        const plan = await expand(sepInput("brb "), dict, pctx, undefined, rules, true);
+        expect(plan?.insert).toBe("be right back");
+        expect(plan?.kind).toBeUndefined();
+    });
+
+    it("a field plan from an instant rule keeps its final stop inside the insert", async () => {
+        const rules = patterns({ source: String.raw`/\.\.\.$/`, replacement: "[$1] [$2]", mode: "instant" });
+        const plan = await expand(sepInput("a..."), dict, pctx, undefined, rules, true);
+        expect(plan).toMatchObject({ fromCh: 1, toCh: 4, insert: "[] []", fields: [1, 4], consumesSeparator: true });
+    });
+
+    it("guards apply to the instant branch too", async () => {
+        for (const flag of ["isInCode", "isInMath", "isInFrontmatter"] as const) {
+            await expect(expand(sepInput("foo..."), dict, { ...pctx, [flag]: true }, undefined, patterns(dots), true), flag).resolves.toBeNull();
+        }
     });
 });
 
@@ -229,7 +276,7 @@ describe("expandInstant (ADR-0008)", () => {
     });
 
     it("a capture sits where the typed text was: 1/2 -> half", async () => {
-        const rules = patterns({ source: String.raw`/(\d+)\/(\d+)$/`, replacement: "{{1}}\u2044{{2}}", mode: "instant" });
+        const rules = patterns({ source: String.raw`/(\d{1,2})\/(\d{1,2})$/`, replacement: "{{1}}\u2044{{2}}", mode: "instant" });
         const plan = await expandInstant("take 3/4", pctx, rules);
         expect(plan).toMatchObject({ fromCh: 5, toCh: 8, insert: "3\u20444" });
     });

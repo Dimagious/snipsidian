@@ -85,6 +85,9 @@ export type EditPlan = {
     /** ADR-0008: set for pattern expansions, so the adapter writes them as
      *  their own undo step. Absent for literal triggers. */
     kind?: "pattern";
+    /** ADR-0008: an instant rule that fired on a typed separator replaced it too: nothing of the typed text
+     *  follows the insert. Absent for plans that keep the separator after the insert. */
+    consumesSeparator?: true;
     fromCh: number;
     toCh: number;
     insert: string;

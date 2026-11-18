@@ -622,18 +622,40 @@ describe("cm6-bridge: instant patterns (ADR-0008)", () => {
         );
     });
 
-    it("passes the separator-mode rules to the separator path only when there are some", async () => {
-        run(makeUpdate({}), () => separatorOnly);
-        await new Promise((r) => setTimeout(r, 0));
-        expect(tryExpandAtSeparator).toHaveBeenCalledWith(
-            { mock: "editor" },
-            { brb: "x" },
-            expect.objectContaining({ patterns: separatorOnly.rules }),
-        );
-        expect(tryExpandInstant).not.toHaveBeenCalled();
+    // ADR-0008, one order: the separator path gets EVERY rule (it tries them top to bottom, a separator rule before
+    // the separator and an instant rule through it) plus the typed-character flag. The old "separator rules first,
+    // instant rules after" split is gone.
+    it("hands all rules and the instant flag to the separator path, which decides the order", async () => {
         run(makeUpdate({}));
         await new Promise((r) => setTimeout(r, 0));
-        expect(vi.mocked(tryExpandAtSeparator).mock.calls[1]?.[2].patterns).toBeUndefined();
+        expect(tryExpandAtSeparator).toHaveBeenLastCalledWith(
+            { mock: "editor" },
+            { brb: "x" },
+            expect.objectContaining({ patterns: instant.rules, instant: true }),
+        );
+        run(makeUpdate({}), () => separatorOnly);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(tryExpandAtSeparator).toHaveBeenLastCalledWith(
+            { mock: "editor" },
+            { brb: "x" },
+            expect.objectContaining({ patterns: separatorOnly.rules, instant: false }),
+        );
+        expect(tryExpandInstant).toHaveBeenCalledTimes(1); // only for the first run, which has an instant rule
+        run(makeUpdate({}), () => NO_PATTERNS);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(vi.mocked(tryExpandAtSeparator).mock.calls[2]?.[2].patterns).toBeUndefined();
+    });
+
+    it("a mixed list is passed whole, in list order (the order is the user's)", async () => {
+        const mixed = compilePatternRules([
+            { id: "a", source: String.raw`/\.\.\.$/`, replacement: "\u2026", enabled: true, mode: "instant" },
+            { id: "b", source: String.raw`/(\w+)\.\.$/`, replacement: "[{{1}}]", enabled: true, mode: "separator" },
+        ]);
+        run(makeUpdate({}), () => mixed);
+        await new Promise((r) => setTimeout(r, 0));
+        const deps = vi.mocked(tryExpandAtSeparator).mock.calls[0]?.[2];
+        expect(deps?.patterns?.map((r) => r.id)).toEqual(["a", "b"]);
+        expect(deps?.instant).toBe(true);
     });
 
     it("a literal or separator expansion wins: the instant rules are not tried", async () => {

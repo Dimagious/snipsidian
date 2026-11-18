@@ -202,8 +202,11 @@ export async function tryExpandAtSeparator(
         readClipboard?: () => Promise<string>;
         /** B-137: see `ExpandInput.prefix`. `undefined` = mode off. */
         prefix?: string;
-        /** ADR-0008: compiled pattern rules (separator mode is tried here). */
+        /** ADR-0008: compiled pattern rules, tried after a literal miss, top to bottom. */
         patterns?: readonly CompiledRule[];
+        /** ADR-0008: the update was a single typed character: instant rules may match through the typed
+         *  separator. Ignored for Enter (the caret is on the next line). */
+        instant?: boolean;
     }
 ): Promise<ExpansionResult | undefined> {
     const cursor = editor.getCursor();
@@ -248,7 +251,7 @@ export async function tryExpandAtSeparator(
     const patterns = deps.patterns ?? [];
     return expandAndApply(
         editor,
-        () => expand(input, dict, ctx, DEFAULT_DELIMITERS, patterns),
+        () => expand(input, dict, ctx, DEFAULT_DELIMITERS, patterns, deps.instant === true && !isNewlineSeparator),
         targetLine,
         lineText,
         lastTyped,
@@ -290,11 +293,13 @@ async function expandAndApply(
     // A field plan carries a fallback caret (the first field); when the user
     // moved, that must not pull the caret back either.
     applyEditPlan(editor, plan.fields && !stayed ? { ...plan, newCursor: undefined } : plan, targetLine);
+    // An instant rule that matched through the typed separator replaced it: nothing of it follows the insert.
+    const keptSeparator = plan.consumesSeparator ? "" : separator;
     const result: ExpansionResult = {
         from,
         insert: plan.insert,
         original: expectedSlice,
-        separator,
+        separator: keptSeparator,
     };
     if (plan.fields && stayed) {
         // Without `$|` the last Tab lands right after the inserted text plus the
@@ -307,7 +312,7 @@ async function expandAndApply(
         const final =
             plan.final !== undefined
                 ? from + normalizedLength(plan.insert.slice(0, plan.final))
-                : from + normalizedLength(plan.insert) + normalizedLength(separator);
+                : from + normalizedLength(plan.insert) + normalizedLength(keptSeparator);
         const stops = toDocStops(from, plan.insert, plan.fields, plan.docOrder, 0);
         result.session = { ...stops, final };
     }
@@ -383,6 +388,9 @@ export async function tryExpandInstant(
     if (cursor.ch === 0) return undefined;
     const lineText = editor.getLine(cursor.line) ?? "";
     const textBefore = lineText.slice(0, cursor.ch);
+    // A typed separator is `tryExpandAtSeparator`'s: it tries literal triggers, then every rule in list order
+    // (instant ones through the separator), so the order stays one order.
+    if (DEFAULT_DELIMITERS.includes(textBefore.charAt(textBefore.length - 1))) return undefined;
     // This runs after EVERY typed character: look at the tail first and build the context (it scans the note for
     // frontmatter, fences and math) only for a match.
     if (!matchPatterns(textBefore, patterns, "instant")) return undefined;

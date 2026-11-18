@@ -24,6 +24,11 @@ export const MAX_PATTERN_BODY = 200;
 export const MAX_PATTERN_REPLACEMENT = 10_000;
 /** Three overlapping unbounded quantifiers take ~4 ms per test, two ~0.1 ms (ADR-0008, measured). */
 const MAX_UNBOUNDED_QUANTIFIERS = 2;
+/**
+ * Instant rules run after every typed character, so they get one less (owner, 2026-11-18): a rule that needs
+ * two unbounded quantifiers belongs to "After a separator", which is tried once per separator.
+ */
+const MAX_INSTANT_UNBOUNDED_QUANTIFIERS = 1;
 /** Group names that placeholders already use (or will: B-204, B-218). */
 const RESERVED_GROUP_NAMES: ReadonlySet<string> = new Set(["date", "time", "title", "notedate"]);
 /**
@@ -37,7 +42,15 @@ const MAX_BOUNDED_CHOICES: readonly number[] = [1024, 16, 4];
 const MAX_CACHE_ENTRIES = 500;
 
 /** A refusal with a reason a person can read (sentence case, shown by the editor later). */
-class Refusal extends Error {}
+class Refusal extends Error {
+    /** Set when the refusal is the unbounded-quantifier cap: an instant rule words it differently. */
+    constructor(
+        message: string,
+        readonly unbounded?: number,
+    ) {
+        super(message);
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Pattern parser (just enough regex syntax to run the S-015 checks)
@@ -45,7 +58,8 @@ class Refusal extends Error {}
 
 type Anchor = "bol" | "eol" | "word";
 type Node =
-    | { kind: "atom" }
+    /** `text` is the atom as written (`a`, `\w`, `[a-z]`): the end-character test is built from it. */
+    | { kind: "atom"; text: string }
     | { kind: "assert"; anchor: Anchor }
     | { kind: "group"; behind: boolean; alts: Term[][] };
 /** `max` is `Infinity` for `*`, `+`, `{n,}`. */
@@ -58,7 +72,11 @@ class Parser {
     pos = 0;
     readonly names: string[] = [];
 
-    constructor(private readonly src: string) {}
+    /** `unicode`: the `u` flag. Escapes mean different things with and without it (`\u{1,}`, `\p{1,}`). */
+    constructor(
+        private readonly src: string,
+        private readonly unicode: boolean,
+    ) {}
 
     parseAlternatives(): Term[][] {
         let current: Term[] = [];
@@ -111,13 +129,14 @@ class Parser {
     }
 
     private parseAtom(): Node {
+        const start = this.pos;
         const c = this.src[this.pos++];
         switch (c) {
             case "\\":
                 return this.parseEscape();
             case "[":
                 this.skipClass();
-                return { kind: "atom" };
+                return { kind: "atom", text: this.src.slice(start, this.pos) };
             case "(":
                 return this.parseGroup();
             case "^":
@@ -130,17 +149,24 @@ class Parser {
                 throw new Refusal("A quantifier has nothing to repeat.");
             default:
                 // Literal, `.`, or a `{` that is not a quantifier.
-                return { kind: "atom" };
+                return { kind: "atom", text: this.src.slice(start, this.pos) };
         }
     }
 
+    /**
+     * `this.pos` is just after the backslash. Follows the engine, which reads escapes by flags: the brace forms
+     * `\u{...}`, `\p{...}`, `\P{...}` exist only under `u`; without it they are a letter and a quantifier
+     * (`\u{1,}` is `u{1,}`). `\uHHHH` and `\xHH` need all their digits, and `\c` needs an ASCII letter (before
+     * anything else it is a literal backslash and the `c` is read on its own).
+     */
     private parseEscape(): Node {
+        const start = this.pos - 1;
         const e = this.src[this.pos++];
         if (e === undefined) throw new Refusal("The pattern ends with a lone backslash.");
         if (e >= "1" && e <= "9") throw new Refusal(REASON_BACKREF);
         if (e === "k" && this.src[this.pos] === "<") throw new Refusal(REASON_BACKREF);
         if (e === "b" || e === "B") return { kind: "assert", anchor: "word" };
-        if ((e === "p" || e === "P" || e === "u") && this.src[this.pos] === "{") {
+        if (this.unicode && (e === "p" || e === "P" || e === "u") && this.src[this.pos] === "{") {
             const end = this.src.indexOf("}", this.pos);
             if (end < 0) throw new Refusal("An escape is missing its closing brace.");
             this.pos = end + 1;
@@ -149,13 +175,20 @@ class Parser {
         } else if (e === "x") {
             this.skipHex(2);
         } else if (e === "c") {
-            this.pos++;
+            if (/[A-Za-z]/.test(this.src[this.pos] ?? "")) this.pos++;
+            else {
+                this.pos--; // the `c` is not part of this escape
+                return { kind: "atom", text: "\\\\" };
+            }
         }
-        return { kind: "atom" };
+        return { kind: "atom", text: this.src.slice(start, this.pos) };
     }
 
+    /** Skips `count` hex digits, but only when all of them are there (else the escape is just its letter). */
     private skipHex(count: number): void {
-        for (let i = 0; i < count && /[0-9a-fA-F]/.test(this.src[this.pos] ?? ""); i++) this.pos++;
+        if (/^[0-9a-fA-F]+$/.test(this.src.slice(this.pos, this.pos + count)) && this.pos + count <= this.src.length) {
+            this.pos += count;
+        }
     }
 
     /** `this.pos` is just after the `[`. */
@@ -185,7 +218,10 @@ class Parser {
                 } else {
                     const end = this.src.indexOf(">", this.pos + 2);
                     if (end < 0) throw new Refusal("A group name is not closed.");
-                    this.names.push(this.src.slice(this.pos + 2, end));
+                    const name = this.src.slice(this.pos + 2, end);
+                    // An escape in a name (`\u0064ate`) would hide a reserved name from the check below.
+                    if (name.includes("\\")) throw new Refusal("A group name can't contain a backslash.");
+                    this.names.push(name);
                     this.pos = end + 1;
                 }
             } else {
@@ -232,7 +268,7 @@ function hasQuantifier(alts: readonly Term[][]): boolean {
 }
 
 /** What the static check learned about an accepted pattern. */
-type Analysis = { usesBol: boolean };
+type Analysis = { usesBol: boolean; unbounded: number };
 
 function analyze(alts: readonly Term[][], names: readonly string[]): Analysis {
     // The pattern must end in an unescaped `$` (the match has to end at the caret).
@@ -253,6 +289,8 @@ function analyze(alts: readonly Term[][], names: readonly string[]): Analysis {
         if (t.quantified && (t.max === Infinity || t.max >= PATTERN_TAIL_LIMIT)) unbounded++;
         else if (t.quantified && t.min !== t.max) boundedChoices = Math.min(boundedChoices * (t.max - t.min + 1), 1e9);
         if (t.node.kind !== "group") return false;
+        // Alternation is a choice point as well: `(?:a|)` x30 hung `exec` (S-015, checker round 1).
+        if (t.node.alts.length > 1) boundedChoices = Math.min(boundedChoices * t.node.alts.length, 1e9);
         if (t.node.behind && hasQuantifier(t.node.alts)) {
             throw new Refusal("A lookbehind can't contain a quantifier (*, +, ?, {n,m}). Keep it a fixed length.");
         }
@@ -269,6 +307,7 @@ function analyze(alts: readonly Term[][], names: readonly string[]): Analysis {
     if (unbounded > MAX_UNBOUNDED_QUANTIFIERS) {
         throw new Refusal(
             `At most ${MAX_UNBOUNDED_QUANTIFIERS} unbounded quantifiers (*, +, {n,}) are allowed; this pattern has ${unbounded}.`,
+            unbounded,
         );
     }
     if (boundedChoices > (MAX_BOUNDED_CHOICES[unbounded] ?? 1)) {
@@ -280,15 +319,73 @@ function analyze(alts: readonly Term[][], names: readonly string[]): Analysis {
     if (minLength(alts) === 0) {
         throw new Refusal("The pattern can match an empty string, so it would fire on every keystroke.");
     }
-    return { usesBol: someTerm(alts, (t) => t.node.kind === "assert" && t.node.anchor === "bol") };
+    return { usesBol: someTerm(alts, (t) => t.node.kind === "assert" && t.node.anchor === "bol"), unbounded };
+}
+
+// ---------------------------------------------------------------------------
+// Which characters can end a match (instant rules skip the others)
+// ---------------------------------------------------------------------------
+
+type EndInfo = {
+    /** The atoms (as written) that can be the last character consumed. */
+    atoms: string[];
+    /** The alternatives can match without consuming: whatever precedes them can end the match too. */
+    nullable: boolean;
+};
+
+function endOfAlternatives(alts: readonly Term[][]): EndInfo {
+    const atoms: string[] = [];
+    let nullable = false;
+    for (const alt of alts) {
+        const end = endOfSequence(alt);
+        atoms.push(...end.atoms);
+        nullable ||= end.nullable;
+    }
+    return { atoms, nullable };
+}
+
+/** Walks the terms from the end: an optional term lets the one before it end the match as well. */
+function endOfSequence(seq: readonly Term[]): EndInfo {
+    const atoms: string[] = [];
+    for (let i = seq.length - 1; i >= 0; i--) {
+        const term = seq[i];
+        if (!term) continue;
+        const node = term.node;
+        // Anchors and lookbehind consume nothing.
+        if (node.kind === "assert" || (node.kind === "group" && node.behind)) continue;
+        if (node.kind === "atom") {
+            atoms.push(node.text);
+            if (term.min > 0) return { atoms, nullable: false };
+            continue;
+        }
+        const inner = endOfAlternatives(node.alts);
+        atoms.push(...inner.atoms);
+        if (term.min > 0 && !inner.nullable) return { atoms, nullable: false };
+    }
+    return { atoms, nullable: true };
+}
+
+/**
+ * A test for the character a match can end with, or `null` when that is not known (anything goes). It is a
+ * superset on purpose: the atoms are tested with the rule's own flags, so `i` folds case and `u` reads `\p{...}`.
+ */
+function buildEndTest(alts: readonly Term[][], flags: string): RegExp | null {
+    const end = endOfAlternatives(alts);
+    if (end.nullable || end.atoms.length === 0) return null;
+    try {
+        return new RegExp(`^(?:${[...new Set(end.atoms)].join("|")})$`, flags);
+    } catch {
+        // An atom that does not stand alone: "any character" is always a safe answer.
+        return null;
+    }
 }
 
 // ---------------------------------------------------------------------------
 // The one gate: source -> RegExp
 // ---------------------------------------------------------------------------
 
-type CompiledCore = { re: RegExp; usesBol: boolean };
-type CacheEntry = { core: CompiledCore } | { reason: string };
+type CompiledCore = { re: RegExp; usesBol: boolean; unbounded: number; endTest: RegExp | null };
+type CacheEntry = { core: CompiledCore } | { reason: string; unbounded?: number };
 
 const cache = new Map<string, CacheEntry>();
 
@@ -322,13 +419,15 @@ function buildCore(source: string): CompiledCore {
     } catch (err) {
         throw new Refusal(err instanceof Error ? err.message : "The pattern does not compile.");
     }
-    const parser = new Parser(body);
+    const parser = new Parser(body, flags.includes("u"));
     const alts = parser.parseAlternatives();
     if (parser.pos < body.length) throw new Refusal("The pattern has an unbalanced parenthesis.");
-    const { usesBol } = analyze(alts, parser.names);
+    const { usesBol, unbounded } = analyze(alts, parser.names);
     // `$` only binds the last alternative of `cat|dog$`: wrap the body so every alternative ends at the caret.
-    const re = new RegExp(`(?:${body.slice(0, -1)})$`, flags);
-    return { re, usesBol };
+    // `g` is only there for `lastIndex`: the matcher starts at the second character of a cut window, so `\b` and
+    // lookbehind can still see the character before it.
+    const re = new RegExp(`(?:${body.slice(0, -1)})$`, `${flags}g`);
+    return { re, usesBol, unbounded, endTest: buildEndTest(alts, flags) };
 }
 
 function compileSource(source: string): CacheEntry {
@@ -339,18 +438,39 @@ function compileSource(source: string): CacheEntry {
         entry = { core: buildCore(source) };
     } catch (err) {
         if (!(err instanceof Refusal)) throw err;
-        entry = { reason: err.message };
+        entry = { reason: err.message, unbounded: err.unbounded };
     }
     if (cache.size >= MAX_CACHE_ENTRIES) cache.clear();
     cache.set(source, entry);
     return entry;
 }
 
+function instantRefusal(unbounded: number): string {
+    return (
+        `An instant rule can have at most ${MAX_INSTANT_UNBOUNDED_QUANTIFIERS} unbounded quantifier (*, +, {n,}); ` +
+        `this pattern has ${unbounded}. Switch the rule to "After a separator" to use up to ${MAX_UNBOUNDED_QUANTIFIERS}.`
+    );
+}
+
+/** The cached source check plus the limit of the rule's mode (the cache is by source, so the mode is applied on top). */
+function resolveSource(source: string, mode: PatternMode): CacheEntry {
+    const entry = compileSource(source);
+    if (mode !== "instant") return entry;
+    if ("core" in entry) {
+        return entry.core.unbounded > MAX_INSTANT_UNBOUNDED_QUANTIFIERS ? { reason: instantRefusal(entry.core.unbounded) } : entry;
+    }
+    // Too many for either mode: say what the instant limit is, not the separator one.
+    return entry.unbounded === undefined ? entry : { reason: instantRefusal(entry.unbounded) };
+}
+
 export type PatternCheck = { ok: true } | { ok: false; reason: string };
 
-/** Runs the full S-015 check on a `/body$/flags` source (for editors and import paths that show errors early). */
-export function checkPattern(source: string): PatternCheck {
-    const entry = compileSource(source);
+/**
+ * Runs the full S-015 check on a `/body$/flags` source for a rule of `mode` (for editors and import paths that
+ * show errors early; `compileRule` runs the same check).
+ */
+export function checkPattern(source: string, mode: PatternMode): PatternCheck {
+    const entry = resolveSource(source, mode);
     return "core" in entry ? { ok: true } : { ok: false, reason: entry.reason };
 }
 
@@ -363,7 +483,14 @@ export type CompiledRule = {
     readonly re: RegExp;
     /** The pattern uses `^`: skipped when the window does not start at the line start. */
     readonly usesBol: boolean;
+    /** Tests the last character of a possible match; `null` = not known, any character. */
+    readonly endTest: RegExp | null;
 };
+
+/** Whether a match of the rule can end with `ch` (the character just typed, for an instant rule). */
+export function canEndWith(rule: CompiledRule, ch: string): boolean {
+    return rule.endTest === null || rule.endTest.test(ch);
+}
 
 export type CompileResult = { ok: true; rule: CompiledRule } | { ok: false; reason: string };
 
@@ -390,11 +517,11 @@ export function compileRule(raw: unknown): CompileResult {
     if (replacement.length > MAX_PATTERN_REPLACEMENT) {
         return { ok: false, reason: `The replacement is longer than ${MAX_PATTERN_REPLACEMENT} characters.` };
     }
-    const entry = compileSource(source);
+    const entry = resolveSource(source, mode);
     if (!("core" in entry)) return { ok: false, reason: entry.reason };
     return {
         ok: true,
-        rule: { id, mode, replacement, group, re: entry.core.re, usesBol: entry.core.usesBol },
+        rule: { id, mode, replacement, group, re: entry.core.re, usesBol: entry.core.usesBol, endTest: entry.core.endTest },
     };
 }
 
@@ -456,33 +583,60 @@ export function compilePatternRules(rules: unknown, disabledGroups?: readonly st
 
 export type PatternMatch = {
     readonly rule: CompiledRule;
-    /** Where the match starts, in the text passed to `matchPatterns`. */
+    /** Where the match starts, in the text it was run on. */
     readonly index: number;
+    /** Where it ends: always the end of that text (the match must end at the caret / the separator). */
+    readonly end: number;
     /** `captures[0]` is the whole match; a group that did not take part is `undefined`. */
     readonly captures: ReadonlyArray<string | undefined>;
     readonly named: ReadonlyMap<string, string | undefined>;
 };
 
+/** One rule on one text. Only the last 64 characters can be matched; one more is kept for `\b` and lookbehind. */
+function tryRule(rule: CompiledRule, text: string): PatternMatch | null {
+    // An instant rule is tried after every keystroke: skip it unless the typed character can end it.
+    if (rule.mode === "instant" && !canEndWith(rule, text.charAt(text.length - 1))) return null;
+    const windowStart = Math.max(0, text.length - PATTERN_TAIL_LIMIT);
+    // `^` means "line start": a window that cut the line cannot say.
+    if (rule.usesBol && windowStart > 0) return null;
+    // One character before the window is context only (`\b`, lookbehind): without it the cut would look like a line
+    // start. The match itself must start inside the window, which `lastIndex` makes the engine do.
+    const contextStart = Math.max(0, windowStart - 1);
+    const context = contextStart > 0 ? text.slice(contextStart) : text;
+    rule.re.lastIndex = windowStart - contextStart;
+    const m = rule.re.exec(context);
+    if (!m || m[0].length === 0 || m.index + m[0].length !== context.length) return null;
+    const named = new Map<string, string | undefined>();
+    if (m.groups) for (const [name, value] of Object.entries(m.groups)) named.set(name, value);
+    return { rule, index: contextStart + m.index, end: text.length, captures: Array.from(m), named };
+}
+
+/** The line as each kind of rule reads it (a text that is `undefined` means that kind has nothing to run on). */
+export type PatternTexts = {
+    /** The line up to the caret, after a typed character: what instant rules read. */
+    readonly atCaret?: string;
+    /** The line up to a typed separator, without it: what separator rules read. */
+    readonly beforeSeparator?: string;
+};
+
 /**
- * Tries the rules of `mode`, in list order, on the end of `text` (the line
- * before the caret/separator): the first that matches wins. Only the last 64
- * characters are looked at. The match must END at the end of the text: that is
- * checked here, not trusted from the `$` in the source.
+ * Tries the rules strictly top to bottom, whatever their mode (ADR-0008, one order for all rules): the first that
+ * matches wins. The match must END at the end of its text: that is checked here, not trusted from the `$` in the
+ * source.
  */
-export function matchPatterns(text: string, rules: readonly CompiledRule[], mode: PatternMode): PatternMatch | null {
-    const dropped = Math.max(0, text.length - PATTERN_TAIL_LIMIT);
-    const tail = dropped > 0 ? text.slice(dropped) : text;
+export function matchPatternsInOrder(texts: PatternTexts, rules: readonly CompiledRule[]): PatternMatch | null {
     for (const rule of rules) {
-        if (rule.mode !== mode) continue;
-        // `^` means "line start": a window that cut the line cannot say.
-        if (rule.usesBol && dropped > 0) continue;
-        const m = rule.re.exec(tail);
-        if (!m || m[0].length === 0 || m.index + m[0].length !== tail.length) continue;
-        const named = new Map<string, string | undefined>();
-        if (m.groups) for (const [name, value] of Object.entries(m.groups)) named.set(name, value);
-        return { rule, index: dropped + m.index, captures: Array.from(m), named };
+        const text = rule.mode === "instant" ? texts.atCaret : texts.beforeSeparator;
+        if (text === undefined) continue;
+        const hit = tryRule(rule, text);
+        if (hit) return hit;
     }
     return null;
+}
+
+/** Rules of one `mode` on `text`, in list order. */
+export function matchPatterns(text: string, rules: readonly CompiledRule[], mode: PatternMode): PatternMatch | null {
+    return matchPatternsInOrder(mode === "instant" ? { atCaret: text } : { beforeSeparator: text }, rules);
 }
 
 // ---------------------------------------------------------------------------

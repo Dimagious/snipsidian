@@ -127,13 +127,17 @@ function runExpansion(
     // uncaught rejection there risks breaking other view plugins.
     const patterns = getPatterns();
     const deps = { filename, now: clock.now(), readClipboard: readClipboardSafe };
-    // Literal triggers first, then separator-mode patterns (inside
-    // `tryExpandAtSeparator`), then instant patterns: the first to expand wins,
-    // and one keystroke expands at most once.
+    // Literal triggers first, then the pattern rules strictly top to bottom
+    // whatever their mode (ADR-0008, one order): on a typed separator that is
+    // all inside `tryExpandAtSeparator` (a separator rule reads the line before
+    // the separator, an instant rule the line through it). Any other typed
+    // character only has instant rules, tried by `tryExpandInstant`. One
+    // keystroke expands at most once.
     const separator = tryExpandAtSeparator(editor, getSnippets(), {
         ...deps,
         prefix: getPrefix(),
-        patterns: patterns.hasSeparator ? patterns.rules : undefined,
+        patterns: patterns.rules.length > 0 ? patterns.rules : undefined,
+        instant,
     });
     const expanded = instant
         ? separator.then((first) => first ?? tryExpandInstant(editor, patterns.rules, deps))
