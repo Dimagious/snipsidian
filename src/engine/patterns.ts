@@ -35,19 +35,23 @@ const MAX_INSTANT_UNBOUNDED_QUANTIFIERS = 1;
  * Most terms (atoms, groups, anchors) all lookbehinds of a pattern may hold together. A lookbehind runs at every
  * backtrack step of the part before it, so its size is a multiplier; 8 covers what people write (`(?<= )`,
  * a short fixed word) and bounds the reach: a lookbehind never looks back more than
- * 8 code points, which is `LOOKBEHIND_CONTEXT` code units at most (2 each for an astral character).
+ * 8 characters (code units: without `u` an astral character is two atoms), so `LOOKBEHIND_CONTEXT` code units are
+ * enough.
  */
 export const LOOKBEHIND_ATOM_LIMIT = 8;
 /** Characters kept before the window as context for lookbehind, `\b` and `^` inside it (see `tryRule`). */
 const LOOKBEHIND_CONTEXT = LOOKBEHIND_ATOM_LIMIT * 2;
 /**
- * Runtime guard (S-015, round 2): an `exec` over this many ms is slow. An accepted pattern takes microseconds; the
- * polynomial case `\w*\w*\w{0,3}x$` under `iu` measured 0.05 ms on a 64-character line (2026-11-18, Node), so a sample over 2 ms is not a normal exec.
+ * Runtime guard (S-015, round 2): an `exec` over this many ms is slow. A warm exec of an accepted pattern takes well
+ * under a millisecond: the polynomial case `\w*\w*\w{0,3}x$` (with and without `i`) measured a median of 0.2 ms on a
+ * line of 64 `a` (2026-11-18, Node, fresh process; its first call took 4.6 ms, the compile), so a sample over 2 ms on a
+ * warm rule is not a normal exec, and a cold one is re-run (`RULE_SLOW_RETRIES`).
  */
 export const RULE_SLOW_MS = 2;
 /**
- * A slow sample is not yet a strike: V8 compiles a regex lazily (on its 1st `exec`, again on tier-up and again on the
- * first non-Latin-1 input), and a rule under `iu` can take a few ms for each of those and microseconds after.
+ * A slow sample is not yet a strike: V8 compiles a regex lazily (on its 1st `exec`, again on tier-up and again when
+ * the input's string representation changes), and a rule under `i` can take a few ms for each of those and
+ * microseconds after.
  * So a slow `exec` is re-run on the same text up to this many more times; only if the FASTEST run is still over
  * `RULE_SLOW_MS` is the keystroke slow.
  */
@@ -59,26 +63,24 @@ export const RULE_STRIKE_WINDOW = 50;
 /** One call (one keystroke) stops trying further rules once its rules have spent this long. */
 export const KEYSTROKE_BUDGET_MS = 8;
 /**
- * S-015, round 6. Under `u`, the astral members and range ends of all classes of a pattern may span this many distinct
- * lead surrogates (one per 1024 code points: a "block" in the message). V8 compiles such a class into one branch per
- * lead, so the first exec after non-Latin-1 text grows with the count: measured 2026-11-18 (Node, fresh process,
- * `[^...]{1,4}-\d{2}-\d{2}zq` under `iu`) 0.8 ms for 4 leads, 12 ms for 16, 38 ms for 24, 0.9 s for 64, 2.6 s for 85.
- * Real emoji classes span 1-3 leads. Without `u` an astral literal is two code units and none of this happens.
- */
-export const MAX_ASTRAL_BLOCKS = 4;
-/**
- * Backstop for V8 compile hotspots the static checks do not know (S-015, round 6; round 5 and 6 each found one after the
- * fact). A rule's regex is compiled lazily, so the compile cost lands inside one `exec`: the 1st, the 2nd (tier-up) or
- * the first on text beyond Latin-1. Re-running cannot see it (the code is compiled by then), so the guard looks at the
- * first sample of such a COLD exec only. One over this many ms switches the rule off for the session: an unknown
- * hotspot costs one pause per rule, not a pause per keystroke. A normal rule's later spike (a GC pause on a warm
- * exec) never counts, because only cold execs are looked at; one GC pause this long on a cold exec still would, and
- * the rule comes back when the rules are edited or Obsidian restarts. Measured compile costs: under 2 ms up to 8 lead
- * surrogates, 12 ms at 16 and 38 ms at 24; the limit is above anything the structural caps accept.
+ * Backstop for V8 compile hotspots the static checks do not know (S-015, round 6 and 7). A rule's regex is compiled
+ * lazily, so the compile cost lands inside an `exec`. Which exec is not predictable from the text: V8 compiles on the
+ * 1st, again on the 2nd (tier-up) and again whenever the input's string representation is new to the code, and an
+ * ASCII line sliced from a two-byte note can be that. So the guard does not look at the content, only at the run count:
+ * a rule's COLD execs are its first `RULE_COLD_RUNS` (1st, 2nd, 3rd), and for each of them the SUM of the samples of
+ * that run (the first one plus its re-runs, see `RULE_SLOW_RETRIES`) is compared with this limit. Over it, the rule is
+ * switched off for the session ("too expensive to compile"): an unknown hotspot costs one pause per rule, not a pause
+ * per keystroke. The sum, not the first sample alone, because two samples of 43.7 ms and 48.9 ms are each under the
+ * limit and are still a rule that takes 90 ms to compile. A later (warm) exec never counts here: a one-off 60 ms GC
+ * pause on an exec after the third is a slow sample like any other (it takes `RULE_SLOW_STRIKES` of them to switch the
+ * rule off). One GC pause this long on a cold exec would switch the rule off; it comes back when the rules are edited
+ * or Obsidian restarts. Without the `u` flag, the first exec of 288 accepted adjacent-ranged-term shapes (`\w \S . [^a]`
+ * and others, 3 to 8 repeats, with and without `i`) on Cyrillic and emoji text measured 12 ms at worst, 26 of 576 runs
+ * over 2 ms and 4 over 5 ms (2026-11-18, Node, one fresh process per run), so the limit is above anything measured.
  */
 export const RULE_COMPILE_LIMIT_MS = 50;
-/** The first this-many execs of a rule are cold: V8 compiles on the 1st and again on the 2nd (tier-up). */
-const RULE_COLD_RUNS = 2;
+/** The first this-many execs of a rule are cold (see `RULE_COMPILE_LIMIT_MS`). */
+const RULE_COLD_RUNS = 3;
 /** Group names that placeholders already use (or will: B-204, B-218). */
 const RESERVED_GROUP_NAMES: ReadonlySet<string> = new Set(["date", "time", "title", "notedate"]);
 /**
@@ -126,6 +128,12 @@ const REASON_LOOKAHEAD = "Lookahead, (?=...) and (?!...), is not supported.";
 const REASON_PROPERTY =
     "Unicode property classes like \\p{L} aren't supported in patterns yet. Use \\w or a range such as [а-яё] instead.";
 
+/** Round 7 (owner, 2026-11-18): without `u`, an astral character in `[...]` is two members and could match half of it. */
+const REASON_ASTRAL_CLASS =
+    "Emoji and other characters outside the basic plane can't go inside [ ] yet. Write them as plain text instead.";
+/** Round 7 (owner, 2026-11-18): `u` is refused; only `i` is allowed. */
+const REASON_UNICODE_FLAG = "The u flag isn't supported in patterns yet. Emoji still work as plain text, outside [ ].";
+
 /** "This escape isn't supported in patterns: \041": the escape as written, with the digits of an octal one. */
 function unsupportedEscape(src: string, backslashAt: number, length?: number): Refusal {
     const e = src[backslashAt + 1] ?? "";
@@ -138,13 +146,7 @@ function unsupportedEscape(src: string, backslashAt: number, length?: number): R
 class Parser {
     pos = 0;
     readonly names: string[] = [];
-    /** Under `u`: the distinct lead surrogates of the astral members and range ends of every class (S-015, round 6). */
-    readonly leads = new Set<number>();
-    /** `unicode`: the `u` flag. Escapes mean different things with and without it (`\u{1,}`). */
-    constructor(
-        private readonly src: string,
-        private readonly unicode: boolean,
-    ) {}
+    constructor(private readonly src: string) {}
 
     parseAlternatives(): Term[][] {
         let current: Term[] = [];
@@ -216,19 +218,18 @@ class Parser {
             case "?":
                 throw new Refusal("A quantifier has nothing to repeat.");
             default:
-                // Literal, `.`, or a `{` that is not a quantifier. Under `u` an astral character is one atom (a
-                // quantifier after it repeats both halves), as the engine reads it.
-                if (this.unicode && isHighSurrogate(this.src.charCodeAt(start)) && isLowSurrogate(this.src.charCodeAt(this.pos))) this.pos++;
+                // Literal, `.`, or a `{` that is not a quantifier. Without `u` an astral character is two atoms (its
+                // code units), and a quantifier after it repeats the second one only: as the engine reads it.
                 return { kind: "atom", text: this.src.slice(start, this.pos) };
         }
     }
 
     /**
      * `this.pos` is just after the backslash. An allowlist (S-015, round 2): only the escapes the parser models
-     * exactly are read, everything else is refused. Annex B (the rules for a pattern without `u`) reads legacy octal
-     * (`\041`), `\c` or `\u{1,}` as something other than they look, and a parser that disagrees with the
-     * engine about where an atom ends can hide a quantifier from the checks or give the end-character test the wrong
-     * atoms. Refusing them costs nothing a person would write on purpose.
+     * exactly are read, everything else is refused. Annex B (the rules for a pattern without `u`, the only kind
+     * allowed) reads legacy octal (`\041`), `\c` or `\u{1,}` as something other than they look, and a parser that
+     * disagrees with the engine about where an atom ends can hide a quantifier from the checks or give the
+     * end-character test the wrong atoms. Refusing them costs nothing a person would write on purpose.
      */
     private parseEscape(): Node {
         const start = this.pos - 1;
@@ -257,8 +258,7 @@ class Parser {
         if (e === "x") {
             this.skipHex(2);
         } else if (e === "u") {
-            if (this.unicode && this.src[this.pos] === "{") this.skipBraces();
-            else this.skipHex(4, true);
+            this.skipHex(4, true);
         } else if (e === "p" || e === "P") {
             throw new Refusal(REASON_PROPERTY);
         } else if (/[A-Za-z]/.test(e)) {
@@ -268,17 +268,10 @@ class Parser {
         // Anything else is an identity escape of a symbol (`\.`, `\:`, `\-`): one atom.
     }
 
-    /** `this.pos` is at `{`. Skips to just after the closing brace. */
-    private skipBraces(): void {
-        const end = this.src.indexOf("}", this.pos);
-        if (end < 0) throw new Refusal("An escape is missing its closing brace.");
-        this.pos = end + 1;
-    }
-
     /**
      * Skips `count` hex digits. Without all of them the escape is just its letter (Annex B), which the parser does
-     * not model: refused. `\u` escapes of surrogates (D800-DFFF) are refused as well: under `u` a pair of them is one
-     * character, and the end-character test could not tell.
+     * not model: refused. `\u` escapes of surrogates (D800-DFFF) are refused as well: a class or an atom must not
+     * hold half of an emoji (see `REASON_ASTRAL_CLASS`).
      */
     private skipHex(count: number, unicodeEscape = false): void {
         const digits = this.src.slice(this.pos, this.pos + count);
@@ -287,60 +280,20 @@ class Parser {
         this.pos += count;
     }
 
-    /** `this.pos` is just after the `[`. */
+    /**
+     * `this.pos` is just after the `[`. Members are not modelled (the class is one atom, `text` as written); it is read
+     * only to find its end and to refuse a surrogate: without `u` an emoji in a class is two members, a high and a low
+     * half, and `[^😀]` would match each half alone and split a pair (S-015, round 7).
+     */
     private skipClass(): void {
         if (this.src[this.pos] === "^") this.pos++;
-        let prev: number | null | undefined;
-        let rangeFrom: number | null | undefined;
         while (this.pos < this.src.length) {
-            const c = this.src[this.pos];
-            if (c === "]") {
-                this.pos++;
-                return;
-            }
-            if (c === "-" && prev !== undefined && rangeFrom === undefined && this.src[this.pos + 1] !== "]") {
-                // A range: the next member is its upper end.
-                this.pos++;
-                rangeFrom = prev;
-                prev = undefined;
-                continue;
-            }
-            const member = this.classMember();
-            if (rangeFrom !== undefined) {
-                this.countLeads(rangeFrom, member);
-                rangeFrom = undefined;
-            } else {
-                this.countLeads(member, member);
-                prev = member;
-            }
+            const c = this.src[this.pos++];
+            if (c === "]") return;
+            if (c === "\\") this.skipEscape(true);
+            else if (c !== undefined && isSurrogate(c.charCodeAt(0))) throw new Refusal(REASON_ASTRAL_CLASS);
         }
         throw new Refusal("A character class is not closed.");
-    }
-
-    /**
-     * Reads one class member at `this.pos` and returns its code point, or `null` for a class escape (`\d`, `\s`) that is
-     * no single character. Under `u` a surrogate pair is one member.
-     */
-    private classMember(): number | null {
-        const start = this.pos;
-        const c = this.src[this.pos++];
-        if (c === "\\") {
-            this.skipEscape(true);
-            const e = this.src[start + 1];
-            if (e === "u" && this.src[start + 2] === "{") return Number.parseInt(this.src.slice(start + 3, this.pos - 1), 16);
-            if (e === "u" || e === "x") return Number.parseInt(this.src.slice(start + 2, this.pos), 16);
-            return null;
-        }
-        const code = this.src.codePointAt(start) ?? 0;
-        if (this.unicode && code > 0xffff) this.pos++;
-        return code;
-    }
-
-    /** Under `u`, adds the lead surrogate of every astral code point of `lo..hi` (a `null` end is no single character). */
-    private countLeads(lo: number | null, hi: number | null): void {
-        if (!this.unicode || lo === null || hi === null || hi <= 0xffff) return;
-        // At most 1024 leads exist, so the loop is bounded; an out-of-range end is refused by `new RegExp` before this runs.
-        for (let lead = (Math.max(lo, 0x10000) - 0x10000) >> 10; lead <= (hi - 0x10000) >> 10; lead++) this.leads.add(lead);
     }
 
     /** `this.pos` is just after the `(`. */
@@ -527,7 +480,7 @@ function endOfSequence(seq: readonly Term[]): EndInfo {
 
 /**
  * A test for the character a match can end with, or `null` when that is not known (anything goes). It is a
- * superset on purpose: the atoms are tested with the rule's own flags, so `i` folds case and `u` reads `\u{...}`.
+ * superset on purpose: the atoms are tested with the rule's own flags, so `i` folds case.
  */
 function buildEndTest(alts: readonly Term[][], flags: string): RegExp | null {
     const end = endOfAlternatives(alts);
@@ -549,19 +502,20 @@ type CacheEntry = { core: CompiledCore } | { reason: string; unbounded?: number 
 
 const cache = new Map<string, CacheEntry>();
 
-/** `/body$/flags` -> `{ body, flags }`. Only `i` and `u` are allowed, as written (`u` is never added: `\:` throws under it). */
+/** `/body$/flags` -> `{ body, flags }`. Only `i` is allowed (round 7: `u` is refused, see `REASON_UNICODE_FLAG`). */
 function parseSource(source: string): { body: string; flags: string } {
     if (source.length > MAX_PATTERN_BODY + 8) {
         throw new Refusal(`The pattern is longer than ${MAX_PATTERN_BODY} characters.`);
     }
     const m = /^\/([\s\S]+)\/([a-z]*)$/.exec(source);
-    if (!m) throw new Refusal("Write the pattern as /pattern$/, with the flags i or u after the last slash if you need them.");
+    if (!m) throw new Refusal("Write the pattern as /pattern$/, with the flag i after the last slash if you need it.");
     const body = m[1] ?? "";
     const flags = m[2] ?? "";
     if (body.length > MAX_PATTERN_BODY) throw new Refusal(`The pattern is longer than ${MAX_PATTERN_BODY} characters.`);
     const seen = new Set<string>();
     for (const flag of flags) {
-        if (flag !== "i" && flag !== "u") throw new Refusal(`The flag "${flag}" is not supported. Only i and u are.`);
+        if (flag === "u") throw new Refusal(REASON_UNICODE_FLAG);
+        if (flag !== "i") throw new Refusal(`The flag "${flag}" is not supported. Only i is.`);
         if (seen.has(flag)) throw new Refusal(`The flag "${flag}" is written twice.`);
         seen.add(flag);
     }
@@ -577,19 +531,17 @@ function buildCore(source: string): CompiledCore {
     try {
         new RegExp(body, flags);
     } catch (err) {
-        const message = err instanceof Error ? err.message : "The pattern does not compile.";
-        // A malformed `\pL` or `\p{RGI_Emoji}` under `u` is still a property escape: same hint, not V8's wording.
-        throw new Refusal(message.includes("Invalid property name") ? REASON_PROPERTY : message);
+        // `[😀-😅]` is "out of order" for V8 without `u` (a range from a high half to a lower one): name the real problem.
+        try {
+            new Parser(body).parseAlternatives();
+        } catch (parseErr) {
+            if (parseErr instanceof Refusal && parseErr.message === REASON_ASTRAL_CLASS) throw parseErr;
+        }
+        throw new Refusal(err instanceof Error ? err.message : "The pattern does not compile.");
     }
-    const parser = new Parser(body, flags.includes("u"));
+    const parser = new Parser(body);
     const alts = parser.parseAlternatives();
     if (parser.pos < body.length) throw new Refusal("The pattern has an unbalanced parenthesis.");
-    if (parser.leads.size > MAX_ASTRAL_BLOCKS) {
-        throw new Refusal(
-            `This class mixes characters from too many Unicode blocks (${parser.leads.size}); the limit is ${MAX_ASTRAL_BLOCKS}. ` +
-                "Keep to a few related symbols, such as emoji, or use a range like [а-яё].",
-        );
-    }
     const { usesBol, unbounded } = analyze(alts, parser.names);
     // `$` only binds the last alternative of `cat|dog$`: wrap the body so every alternative ends at the caret.
     // `g` is only there for `lastIndex`: the matcher starts at the second character of a cut window, so `\b` and
@@ -669,14 +621,9 @@ export type RuleHealth = {
     deadlineCuts: number;
     /** Set when the rule was switched off for the session: the reason a person can read. */
     switchedOff?: string;
-    /** An exec of this rule has already run on text beyond Latin-1 (V8 compiles again for the first such text). */
-    sawWide: boolean;
 };
 
-/**
- * Whether a match of the rule can end with `ch` (the last character of the line, for an instant rule): the last code
- * point for a `u` rule, the last code unit for one without `u`, which is how the engine reads it.
- */
+/** Whether a match of the rule can end with `ch` (the last code unit of the line, for an instant rule). */
 export function canEndWith(rule: CompiledRule, ch: string): boolean {
     return rule.endTest === null || rule.endTest.test(ch);
 }
@@ -718,7 +665,7 @@ export function compileRule(raw: unknown): CompileResult {
             re: entry.core.re,
             usesBol: entry.core.usesBol,
             endTest: entry.core.endTest,
-            health: { runs: 0, strikes: [], deadlineCuts: 0, sawWide: false },
+            health: { runs: 0, strikes: [], deadlineCuts: 0 },
         },
     };
 }
@@ -804,13 +751,8 @@ function isLowSurrogate(code: number): boolean {
     return code >= 0xdc00 && code <= 0xdfff;
 }
 
-/** The last character of `text` as the rule's regex reads it: a code point under `u`, else a code unit. */
-function lastChar(rule: CompiledRule, text: string): string {
-    const last = text.charCodeAt(text.length - 1);
-    if (rule.endTest?.unicode && isLowSurrogate(last) && isHighSurrogate(text.charCodeAt(text.length - 2))) {
-        return text.slice(-2);
-    }
-    return text.charAt(text.length - 1);
+function isSurrogate(code: number): boolean {
+    return code >= 0xd800 && code <= 0xdfff;
 }
 
 /**
@@ -833,12 +775,6 @@ function switchOff(rule: CompiledRule, reason: string): void {
     console.warn("[snipsy] pattern rule switched off", { id: rule.id, reason });
 }
 
-/** Text beyond Latin-1: the first such exec makes V8 compile the regex for two-byte input. */
-function isWide(text: string): boolean {
-    for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) > 0xff) return true;
-    return false;
-}
-
 /** Where the 64-character window of `text` starts: never between the halves of a surrogate pair. */
 function windowStartOf(text: string): number {
     const windowStart = Math.max(0, text.length - PATTERN_TAIL_LIMIT);
@@ -849,45 +785,47 @@ function windowStartOf(text: string): number {
 }
 
 /**
- * True when `tryRule` would not run this rule on `text`: an instant rule whose end-character test says the typed
- * character cannot end it, or a `^` rule on a line the window cut (`^` means "line start", and a cut line cannot say).
+ * True when `tryRule` would not run this rule on `text`: a text that ends between the halves of an emoji (its last
+ * code unit is a high surrogate: the match would end there and leave the low half behind, round 7); an instant rule
+ * whose end-character test says the typed character cannot end it; or a `^` rule on a line the window cut (`^` means
+ * "line start", and a cut line cannot say).
  */
 function skipsText(rule: CompiledRule, text: string): boolean {
-    if (rule.mode === "instant" && !canEndWith(rule, lastChar(rule, text))) return true;
+    if (isHighSurrogate(text.charCodeAt(text.length - 1))) return true;
+    if (rule.mode === "instant" && !canEndWith(rule, text.charAt(text.length - 1))) return true;
     return rule.usesBol && windowStartOf(text) > 0;
 }
 
 /**
  * One rule on one text. Only the last 64 characters can be matched; a few more are kept before them for `\b` and
- * lookbehind (at most `LOOKBEHIND_ATOM_LIMIT` code points back).
+ * lookbehind (at most `LOOKBEHIND_ATOM_LIMIT` code units back).
  */
 function tryRule(rule: CompiledRule, text: string, timing: Timing): PatternMatch | null {
-    // (Instant rules fire on a typed single code unit, so an astral character, typed as two, never reaches here; not
-    // a fix target.)
+    // (Instant rules fire on a typed single code unit, so an astral character, typed as two, never reaches here
+    // half-typed: `skipsText` skips a text that ends between its halves.)
     if (skipsText(rule, text)) return null;
     const windowStart = windowStartOf(text);
     // Context before the window is for looking only (`\b`, lookbehind): without it the cut would look like a line
     // start. The match itself must start inside the window, which `lastIndex` makes the engine do. The context may
     // start between the halves of a surrogate pair, and that is harmless: a lookbehind holds at most
-    // `LOOKBEHIND_ATOM_LIMIT` terms, each at most one code point (two code units), and starts at or after the window,
-    // so it reads at most `LOOKBEHIND_CONTEXT` units back. To need the split pair it would have to read 17 units, and
-    // the 8 code points before it cannot take an odd 15 (see the test "context split in a pair").
+    // `LOOKBEHIND_ATOM_LIMIT` terms, each at most one code unit (the `u` flag is refused, an emoji is two terms), and
+    // the window start is never inside a pair, so a lookbehind reads at most 8 units back, within the context.
     const contextStart = Math.max(0, windowStart - LOOKBEHIND_CONTEXT);
     const context = contextStart > 0 ? text.slice(contextStart) : text;
     const from = windowStart - contextStart;
     rule.re.lastIndex = from;
     rule.health.runs++;
     const health = rule.health;
-    // Cold exec: V8 may compile inside it (see `RULE_COMPILE_LIMIT_MS`). Decided before the run, flagged after it.
-    const wide = !health.sawWide && isWide(context);
-    const cold = health.runs <= RULE_COLD_RUNS || wide;
+    // Cold exec (see `RULE_COMPILE_LIMIT_MS`): by run count only. The cost of this run is the SUM of its samples.
+    const cold = health.runs <= RULE_COLD_RUNS;
     let started = timing.clock();
     const m = rule.re.exec(context);
     let fastest = timing.clock() - started;
+    let total = fastest;
     timing.spent += fastest;
-    if (wide) health.sawWide = true;
-    if (cold && fastest > RULE_COMPILE_LIMIT_MS) {
-        switchOff(rule, `Switched off: too expensive to compile (${Math.round(fastest)} ms).`);
+    // One sample over the limit is enough: no re-run needed (nor wanted, it could cost as much again).
+    if (cold && total > RULE_COMPILE_LIMIT_MS) {
+        switchOff(rule, `Switched off: too expensive to compile (${Math.round(total)} ms).`);
     }
     // A slow sample may be V8 compiling the regex lazily: run the same exec again before calling it slow. The
     // extra time counts against the keystroke budget; the result is the same each time, the first one is used.
@@ -897,13 +835,21 @@ function tryRule(rule: CompiledRule, text: string, timing: Timing): PatternMatch
         rule.re.exec(context);
         const took = timing.clock() - started;
         timing.spent += took;
+        total += took;
         if (took < fastest) fastest = took;
+    }
+    if (cold && health.switchedOff === undefined && total > RULE_COMPILE_LIMIT_MS) {
+        switchOff(rule, `Switched off: too expensive to compile (${Math.round(total)} ms).`);
     }
     if (fastest > RULE_SLOW_MS) strikeRule(rule, text);
     if (!m || m[0].length === 0 || m.index + m[0].length !== context.length) return null;
+    // A match must not start between the halves of an emoji: replacing from there would leave a lone high surrogate
+    // behind (`/(.)x$/` on "😀x" matches the low half). Checked on the whole text: the context may start mid-pair.
+    const start = contextStart + m.index;
+    if (start > 0 && isLowSurrogate(text.charCodeAt(start)) && isHighSurrogate(text.charCodeAt(start - 1))) return null;
     const named = new Map<string, string | undefined>();
     if (m.groups) for (const [name, value] of Object.entries(m.groups)) named.set(name, value);
-    return { rule, index: contextStart + m.index, end: text.length, captures: Array.from(m), named };
+    return { rule, index: start, end: text.length, captures: Array.from(m), named };
 }
 
 /** The line as each kind of rule reads it (a text that is `undefined` means that kind has nothing to run on). */
