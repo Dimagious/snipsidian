@@ -42,12 +42,12 @@ export const LOOKBEHIND_ATOM_LIMIT = 8;
 const LOOKBEHIND_CONTEXT = LOOKBEHIND_ATOM_LIMIT * 2;
 /**
  * Runtime guard (S-015, round 2): an `exec` over this many ms is slow. An accepted pattern takes microseconds; the
- * slowest polynomial cases measured (`\p{L}*\p{L}*\p{L}{0,3}x$` under `iu`) take about 4 ms, so 5 would never fire on them.
+ * slowest polynomial cases measured (`\w*\w*\w{0,3}x$` under `iu`) take about 4 ms, so 5 would never fire on them.
  */
 export const RULE_SLOW_MS = 2;
 /**
  * A slow sample is not yet a strike: V8 compiles a regex lazily (on its 1st `exec`, again on tier-up and again on the
- * first non-Latin-1 input), and a `\p{...}` rule under `iu` takes a few ms for each of those and microseconds after.
+ * first non-Latin-1 input), and a rule under `iu` can take a few ms for each of those and microseconds after.
  * So a slow `exec` is re-run on the same text up to this many more times; only if the FASTEST run is still over
  * `RULE_SLOW_MS` is the keystroke slow.
  */
@@ -67,19 +67,6 @@ const RESERVED_GROUP_NAMES: ReadonlySet<string> = new Set(["date", "time", "titl
  * With these limits the worst case measured stays near 0.5 ms; `[+-]?\d+(?:\.\d+)?` (2 unbounded, product 4) passes.
  */
 const MAX_BOUNDED_CHOICES: readonly number[] = [1024, 16, 4];
-/**
- * Unicode property escapes (S-015, round 4). V8 compiles a regex lazily, and consecutive `\p{...}`/`\P{...}` atoms cost
- * about 8x more for each one on the first non-Latin-1 `exec` (measured 2026-11-18, Node 22, `"я1"` and a 64-character
- * Cyrillic line, `u` and `iu` alike): 3 atoms 1-1.5 ms, 4 atoms 4-6 ms, 5 atoms 30-250 ms, 6 atoms 0.3-2 s, and 100
- * distinct rules of 3 take 118 ms to compile. A negated one (`\P{...}`, `\p{...}` inside `[^...]`) costs about 1.5x a
- * positive one. So each escape weighs 2, or 3 if negated, and a pattern may weigh 6 in all: three positive, two
- * negated, or one of each, which keeps the first two-byte `exec` near 1 ms. Every occurrence counts, inside a class
- * or not. A repeated term counts once per copy V8 writes out: it unrolls a term with a minimum of 2 or 3 (`(...){3}`:
- * 3 groups of 3 atoms took 2 s), and loops one with a minimum of 4 or more, `+`, `*` and `?` (0.2-1 ms).
- */
-export const PROPERTY_WEIGHT_POSITIVE = 2;
-export const PROPERTY_WEIGHT_NEGATED = 3;
-export const PROPERTY_WEIGHT_LIMIT = 6;
 /** Compile cache bound: far above 100 rules, so only a stream of edits ever hits it. */
 const MAX_CACHE_ENTRIES = 500;
 
@@ -100,11 +87,8 @@ class Refusal extends Error {
 
 type Anchor = "bol" | "eol" | "word";
 type Node =
-    /**
-     * `text` is the atom as written (`a`, `\w`, `[a-z]`): the end-character test is built from it. `weight` is what
-     * its Unicode property escapes add up to (see `PROPERTY_WEIGHT_LIMIT`), 0 for most atoms.
-     */
-    | { kind: "atom"; text: string; weight: number }
+    /** `text` is the atom as written (`a`, `\w`, `[a-z]`): the end-character test is built from it. */
+    | { kind: "atom"; text: string }
     | { kind: "assert"; anchor: Anchor }
     | { kind: "group"; behind: boolean; alts: Term[][] };
 /** `max` is `Infinity` for `*`, `+`, `{n,}`. */
@@ -112,6 +96,14 @@ type Term = { node: Node; min: number; max: number; quantified: boolean };
 
 const REASON_BACKREF = "Backreferences like \\1 or \\k<name> are not supported.";
 const REASON_LOOKAHEAD = "Lookahead, (?=...) and (?!...), is not supported.";
+/**
+ * Round 5 (owner, 2026-11-18): every `\p{...}` and `\P{...}` is refused, in or out of a class, under any flags. V8
+ * compiles one on the first non-Latin-1 `exec`, during typing, and a single one next to a ranged quantifier and a short
+ * tail took 90-430 ms (`\p{L}{1,4}-\d{2}-\d{2}$`); the cost cannot be bounded by counting them. Without `u` the
+ * escape means a literal letter, which is no reason to give a second message: the person meant a property class.
+ */
+const REASON_PROPERTY =
+    "Unicode property classes like \\p{L} aren't supported in patterns yet. Use \\w or a range such as [а-яё] instead.";
 
 /** "This escape isn't supported in patterns: \041": the escape as written, with the digits of an octal one. */
 function unsupportedEscape(src: string, backslashAt: number, length?: number): Refusal {
@@ -125,10 +117,7 @@ function unsupportedEscape(src: string, backslashAt: number, length?: number): R
 class Parser {
     pos = 0;
     readonly names: string[] = [];
-    /** Weight of the property escapes of the atom being read (`parseAtom` resets it). */
-    private weight = 0;
-
-    /** `unicode`: the `u` flag. Escapes mean different things with and without it (`\u{1,}`, `\p{1,}`). */
+    /** `unicode`: the `u` flag. Escapes mean different things with and without it (`\u{1,}`). */
     constructor(
         private readonly src: string,
         private readonly unicode: boolean,
@@ -187,13 +176,12 @@ class Parser {
     private parseAtom(): Node {
         const start = this.pos;
         const c = this.src[this.pos++];
-        this.weight = 0;
         switch (c) {
             case "\\":
                 return this.parseEscape();
             case "[":
                 this.skipClass();
-                return { kind: "atom", text: this.src.slice(start, this.pos), weight: this.weight };
+                return { kind: "atom", text: this.src.slice(start, this.pos) };
             case "(":
                 return this.parseGroup();
             case "^":
@@ -208,14 +196,14 @@ class Parser {
                 // Literal, `.`, or a `{` that is not a quantifier. Under `u` an astral character is one atom (a
                 // quantifier after it repeats both halves), as the engine reads it.
                 if (this.unicode && isHighSurrogate(this.src.charCodeAt(start)) && isLowSurrogate(this.src.charCodeAt(this.pos))) this.pos++;
-                return { kind: "atom", text: this.src.slice(start, this.pos), weight: 0 };
+                return { kind: "atom", text: this.src.slice(start, this.pos) };
         }
     }
 
     /**
      * `this.pos` is just after the backslash. An allowlist (S-015, round 2): only the escapes the parser models
      * exactly are read, everything else is refused. Annex B (the rules for a pattern without `u`) reads legacy octal
-     * (`\041`), `\c`, `\u{1,}` or `\p{1,}` as something other than they look, and a parser that disagrees with the
+     * (`\041`), `\c` or `\u{1,}` as something other than they look, and a parser that disagrees with the
      * engine about where an atom ends can hide a quantifier from the checks or give the end-character test the wrong
      * atoms. Refusing them costs nothing a person would write on purpose.
      */
@@ -224,14 +212,14 @@ class Parser {
         const e = this.src[this.pos];
         this.skipEscape(false);
         if (e === "b" || e === "B") return { kind: "assert", anchor: "word" };
-        return { kind: "atom", text: this.src.slice(start, this.pos), weight: this.weight };
+        return { kind: "atom", text: this.src.slice(start, this.pos) };
     }
 
     /**
      * Moves `this.pos` past one escape (it is just after the backslash) or throws. `inClass`: inside `[...]`, where
      * `\b` is a backspace and `\B` does not exist.
      */
-    private skipEscape(inClass: boolean, negatedClass = false): void {
+    private skipEscape(inClass: boolean): void {
         const e = this.src[this.pos++];
         if (e === undefined) throw new Refusal("The pattern ends with a lone backslash.");
         if (!inClass && e >= "1" && e <= "9") throw new Refusal(REASON_BACKREF);
@@ -248,11 +236,10 @@ class Parser {
         } else if (e === "u") {
             if (this.unicode && this.src[this.pos] === "{") this.skipBraces();
             else this.skipHex(4, true);
-        } else if ((e === "p" || e === "P") && this.unicode && this.src[this.pos] === "{") {
-            this.skipBraces();
-            this.weight += e === "P" || negatedClass ? PROPERTY_WEIGHT_NEGATED : PROPERTY_WEIGHT_POSITIVE;
+        } else if (e === "p" || e === "P") {
+            throw new Refusal(REASON_PROPERTY);
         } else if (/[A-Za-z]/.test(e)) {
-            // Every other letter: `\c`, `\a`, `\e`, `\k`, `\p` without `u` (a letter, not a property), `\B` in a class.
+            // Every other letter: `\c`, `\a`, `\e`, `\k`, `\B` in a class.
             throw unsupportedEscape(this.src, this.pos - 2);
         }
         // Anything else is an identity escape of a symbol (`\.`, `\:`, `\-`): one atom.
@@ -279,10 +266,9 @@ class Parser {
 
     /** `this.pos` is just after the `[`. */
     private skipClass(): void {
-        const negated = this.src[this.pos] === "^";
         while (this.pos < this.src.length) {
             const c = this.src[this.pos++];
-            if (c === "\\") this.skipEscape(true, negated);
+            if (c === "\\") this.skipEscape(true);
             else if (c === "]") return;
         }
         throw new Refusal("A character class is not closed.");
@@ -366,22 +352,6 @@ function lookbehindTerms(alts: readonly Term[][], inside: boolean): number {
     return count;
 }
 
-/**
- * Property weight of the alternatives (see `PROPERTY_WEIGHT_LIMIT`). The alternatives of a group add up, as the engine
- * compiles all of them. A term with a minimum of 2 or 3 is unrolled by V8 into that many copies, which multiply.
- */
-function propertyWeight(alts: readonly Term[][]): number {
-    let total = 0;
-    for (const alt of alts) {
-        for (const term of alt) {
-            const copies = term.min === 2 || term.min === 3 ? term.min : 1;
-            const inner = term.node.kind === "atom" ? term.node.weight : term.node.kind === "group" ? propertyWeight(term.node.alts) : 0;
-            total += copies * inner;
-        }
-    }
-    return total;
-}
-
 /** What the static check learned about an accepted pattern. */
 type Analysis = { usesBol: boolean; unbounded: number };
 
@@ -437,13 +407,6 @@ function analyze(alts: readonly Term[][], names: readonly string[]): Analysis {
                 "Remove some of them.",
         );
     }
-    const weight = propertyWeight(alts);
-    if (weight > PROPERTY_WEIGHT_LIMIT) {
-        throw new Refusal(
-            `Too many Unicode property classes (\\p{...} and \\P{...}); this pattern has ${weight}, the limit is ${PROPERTY_WEIGHT_LIMIT} ` +
-                `(a negated one, \\P{...} or \\p{...} inside [^...], counts ${PROPERTY_WEIGHT_NEGATED}, any other counts ${PROPERTY_WEIGHT_POSITIVE}).`,
-        );
-    }
     if (minLength(alts) === 0) {
         throw new Refusal("The pattern can match an empty string, so it would fire on every keystroke.");
     }
@@ -495,7 +458,7 @@ function endOfSequence(seq: readonly Term[]): EndInfo {
 
 /**
  * A test for the character a match can end with, or `null` when that is not known (anything goes). It is a
- * superset on purpose: the atoms are tested with the rule's own flags, so `i` folds case and `u` reads `\p{...}`.
+ * superset on purpose: the atoms are tested with the rule's own flags, so `i` folds case and `u` reads `\u{...}`.
  */
 function buildEndTest(alts: readonly Term[][], flags: string): RegExp | null {
     const end = endOfAlternatives(alts);

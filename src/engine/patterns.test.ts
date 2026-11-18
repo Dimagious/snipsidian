@@ -14,9 +14,6 @@ import {
     NO_PATTERNS,
     PATTERN_TAIL_LIMIT,
     patternHealth,
-    PROPERTY_WEIGHT_LIMIT,
-    PROPERTY_WEIGHT_NEGATED,
-    PROPERTY_WEIGHT_POSITIVE,
     RULE_SLOW_MS,
     RULE_SLOW_RETRIES,
     RULE_SLOW_STRIKES,
@@ -345,8 +342,8 @@ describe("patterns: the checker looks at structure, not at characters", () => {
         expect(check(src(String.raw`a?b$`)).ok).toBe(true);
     });
 
-    it("handles \\p{...}, \\u{...} and \\xHH without losing its place", () => {
-        expect(check(src(String.raw`\p{L}+x$`, "u")).ok).toBe(true);
+    it("handles \\u{...} and \\xHH without losing its place", () => {
+        expect(check(src(String.raw`\u{61}+x$`, "u")).ok).toBe(true);
         expect(check(src(String.raw`\u{1F600}x$`, "u")).ok).toBe(true);
         expect(check(src(String.raw`\x41B$`)).ok).toBe(true);
     });
@@ -788,7 +785,7 @@ describe("patterns: escapes are an allowlist (S-015, round 2)", () => {
         ]) {
             expect(check(src(body)), body).toEqual({ ok: true });
         }
-        expect(check(src(String.raw`\u{1F600}\P{Lu}[\p{L}\u{61}]$`, "u"))).toEqual({ ok: true });
+        expect(check(src(String.raw`\u{1F600}[\u{61}b]\\p$`, "u"))).toEqual({ ok: true }); // `\\p` is a backslash and a letter
     });
 
     it("keeps the backreference reason for \\1..\\9 and \\k<name>", () => {
@@ -801,14 +798,14 @@ describe("patterns: escapes are an allowlist (S-015, round 2)", () => {
 
     it("under u the brace forms are one atom, not a quantifier", () => {
         expect(check(src(String.raw`\u{1F600}\u{1F600}\u{1F600}\u{1F600}x$`, "u"))).toEqual({ ok: true });
-        expect(check(src(String.raw`(\p{L}+)+$`, "u")).ok).toBe(false);
-        expect(check(src(String.raw`(\p{L}\p{L})+$`, "u"))).toEqual({ ok: true }); // the braces are no quantifier
-        expect(check(src(String.raw`\p{L}+\p{L}+\p{L}+$`, "u")).ok).toBe(false);
-        expect(check(src(String.raw`\p{L}+\p{L}+x$`, "u"))).toEqual({ ok: true });
+        expect(check(src(String.raw`(\u{61}+)+$`, "u")).ok).toBe(false);
+        expect(check(src(String.raw`(\u{61}\u{62})+$`, "u"))).toEqual({ ok: true }); // the braces are no quantifier
+        expect(check(src(String.raw`\u{61}+\u{61}+\u{61}+$`, "u")).ok).toBe(false);
+        expect(check(src(String.raw`\u{61}+\u{61}+x$`, "u"))).toEqual({ ok: true });
     });
 
     it("an unterminated brace escape is refused under u", () => {
-        expect(check(src(String.raw`\p{L$`, "u")).ok).toBe(false);
+        expect(check(src(String.raw`\u{61$`, "u")).ok).toBe(false);
     });
 
     // The bug class this closes: the parser read `\041` as `\0` + `4` + `1`, so the end-character test said the match
@@ -884,98 +881,116 @@ describe("patterns: alternation is a choice point (S-015)", () => {
     });
 });
 
-describe("patterns: Unicode property escapes are capped (S-015, round 4)", () => {
-    // V8 compiles consecutive \p{...}/\P{...} atoms with a cost that grows about 8x per atom on the first non-Latin-1
-    // `exec`: 3 atoms ~1 ms, 4 ~5 ms, 5 ~30-250 ms, 6 ~0.3-2 s. A positive one weighs 2, a negated one 3, the limit is 6.
+describe("patterns: Unicode property escapes are refused (S-015, round 5)", () => {
+    // V8 compiles a property class on the first non-Latin-1 `exec`, during typing, and one `\p{L}{1,4}` next to a short
+    // tail took 90-430 ms there, non-monotonically in the quantifier, the tail and the property: a count cannot bound
+    // it (round 4 tried), so none is accepted. The cheap constructs (\w, ., [^a], [а-яё], astral ranges) stay.
+    const REASON =
+        "Unicode property classes like \\p{L} aren't supported in patterns yet. Use \\w or a range such as [а-яё] instead.";
     const u = (body: string, flags = "u"): string => src(body + "$", flags);
 
-    it("the constants are the measured ones", () => {
-        expect([PROPERTY_WEIGHT_POSITIVE, PROPERTY_WEIGHT_NEGATED, PROPERTY_WEIGHT_LIMIT]).toEqual([2, 3, 6]);
-    });
-
     it.each([
-        ["three positive", String.raw`\p{L}\p{N}\p{Lu}z`],
-        ["two negated", String.raw`\P{L}\P{N}z`],
-        ["one negated, one positive", String.raw`\P{L}\p{N}z`],
-        ["a negated class and a positive one", String.raw`[^\p{L}]\p{N}z`],
-        ["three properties in one class", String.raw`[\p{L}\p{N}\p{Z}]z`],
-        ["one quantified atom, many times", String.raw`\p{L}{10}z`],
-        ["a quantified atom, unbounded", String.raw`\p{L}+\p{N}+z`],
-        ["a repeated group, looped (min over 3)", String.raw`(?:\p{L}\p{N}){4}z`],
-        ["a repeated group, once or none", String.raw`(?:\p{L}\p{N})?\p{Lu}z`],
-        ["three written-out copies of a quantified atom", String.raw`\p{L}{3}z`],
-        ["a property in a lookbehind", String.raw`(?<=\p{L}\p{N})\p{Lu}z`],
-        ["scripts, which are cheap, still count", String.raw`\p{Script=Cyrillic}\p{Script=Latin}\p{L}z`],
-    ])("accepts %s", (_label, body) => {
-        for (const flags of ["u", "iu"]) expect(check(u(body, flags)), `${body} /${flags}`).toEqual({ ok: true });
-    });
-
-    it.each([
-        ["four positive (the checker's \\p{L} x4 case)", String.raw`\p{L}\p{N}\p{Lu}\p{Ll}z`],
-        ["six consecutive \\P{L} (2 s on the first two-byte exec)", String.raw`\P{L}\P{L}\P{L}\P{L}\P{L}\P{L}z`],
-        ["three negated", String.raw`\P{L}\P{N}\P{Lu}z`],
-        ["two negated and one positive", String.raw`\P{L}\P{N}\p{Lu}z`],
-        ["one negated and two positive", String.raw`\P{L}\p{N}\p{Lu}z`],
-        ["\\p{...} inside a negated class counts as negated", String.raw`[^\p{L}][^\p{N}][^\p{Lu}]z`],
-        ["a \\P{...} inside a positive class counts as negated", String.raw`[\P{L}][\P{N}][\P{Lu}]z`],
-        ["four properties in one class", String.raw`[\p{L}\p{N}\p{Z}\p{P}]z`],
-        ["a capture group does not hide them", String.raw`(\P{L})(\P{L})(\P{L})z`],
-        ["a repeated group is unrolled by V8 (x3): 3 atoms x 3 copies took 2 s", String.raw`(?:\P{L}\P{L}\P{L}){3}z`],
-        ["a repeated group x2, two atoms", String.raw`(?:\p{L}\p{N}){2}z`],
-        ["a group repeated at least 3 times", String.raw`(?:\p{L}\p{N}){3,}z`],
-        ["a quantified atom written out 3 times and one more", String.raw`\p{L}{3}\p{N}z`],
-        ["copies multiply through a plain group around them", String.raw`(?:x(?:\p{L}\p{N}){2})z`],
-        ["inside a lookbehind", String.raw`(?<=\p{L}\p{N}\p{Lu}\p{Ll})z`],
-    ])("refuses %s", (_label, body) => {
+        ["a single \\p{L}", String.raw`\p{L}x`],
+        ["a single \\P{L}", String.raw`\P{L}x`],
+        ["a script", String.raw`\p{Script=Cyrillic}x`],
+        ["a long property name", String.raw`\p{Lowercase_Letter}x`],
+        ["inside a class", String.raw`[\p{L}]x`],
+        ["inside a negated class", String.raw`[^\p{L}]x`],
+        ["\\P inside a class", String.raw`[a\P{N}]x`],
+        ["inside a group", String.raw`(?:\p{L}|b)x`],
+        ["inside a lookbehind", String.raw`(?<=\p{L})x`],
+        ["inside a negative lookbehind", String.raw`(?<!\P{L})x`],
+        ["the last atom before $", String.raw`x\p{L}`],
+        ["a quantified one", String.raw`\p{L}+x`],
+        // The shapes the checker measured at 90-430 ms on the first non-Latin-1 exec.
+        ["round 5: \\p{L}{1,4}-\\d{2}-\\d{2}", String.raw`\p{L}{1,4}-\d{2}-\d{2}`],
+        ["round 5: \\p{L}{2,4}\\d{4}", String.raw`\p{L}{2,4}\d{4}`],
+        ["round 5: \\P{Cn}{1,4}\\w{6}\\P{Cn}{1,4}\\w{6}", String.raw`\P{Cn}{1,4}\w{6}\P{Cn}{1,4}\w{6}`],
+        // The round 4 cases (the weighted cap): all of them are refused now, with the same reason.
+        ["round 4: four positive", String.raw`\p{L}\p{N}\p{Lu}\p{Ll}z`],
+        ["round 4: six consecutive \\P{L} (2 s on the first two-byte exec)", String.raw`\P{L}\P{L}\P{L}\P{L}\P{L}\P{L}z`],
+        ["round 4: three negated", String.raw`\P{L}\P{N}\P{Lu}z`],
+        ["round 4: \\p{...} in negated classes", String.raw`[^\p{L}][^\p{N}][^\p{Lu}]z`],
+        ["round 4: four properties in one class", String.raw`[\p{L}\p{N}\p{Z}\p{P}]z`],
+        ["round 4: a repeated group x3", String.raw`(?:\P{L}\P{L}\P{L}){3}z`],
+        ["round 4: a quantified atom written out 3 times", String.raw`\p{L}{3}\p{N}z`],
+        ["round 4: three positive (was accepted)", String.raw`\p{L}\p{N}\p{Lu}z`],
+    ])("refuses %s under u and iu, in both modes", (_label, body) => {
         for (const flags of ["u", "iu"]) {
-            const result = check(u(body, flags));
-            expect(result.ok, `${body} /${flags}`).toBe(false);
-            if (!result.ok) expect(result.reason).toMatch(/^Too many Unicode property classes/);
+            for (const mode of ["separator", "instant"] as const) {
+                const result = check(u(body, flags), mode);
+                expect(result.ok, `${body} /${flags} ${mode}`).toBe(false);
+                if (!result.ok) expect(result.reason).toBe(REASON);
+            }
         }
     });
 
-    it("the reason says what was counted and what the limit is", () => {
-        const result = check(u(String.raw`\p{L}\p{N}\p{Lu}\p{Ll}z`));
+    it("refuses them without u as well, with the same reason (the person meant a property class)", () => {
+        for (const body of [String.raw`\p{L}x`, String.raw`\P{L}x`, String.raw`[\p{L}]x`, String.raw`(\p{1,})+`, String.raw`\px`]) {
+            const result = check(u(body, ""));
+            expect(result.ok, body).toBe(false);
+            if (!result.ok) expect(result.reason, body).toBe(REASON);
+        }
+    });
+
+    it("the reason is sentence case, helps and has no dash", () => {
+        expect(REASON).toMatch(/^[A-Z]/);
+        expect(REASON).not.toMatch(/[\u2013\u2014]/);
+        expect(REASON).toContain("[а-яё]");
+    });
+
+    it("an escaped backslash before p is a literal, not a property", () => {
+        expect(check(u(String.raw`\\px`))).toEqual({ ok: true });
+        expect(check(u(String.raw`\\p{L}x`, ""))).toEqual({ ok: true }); // without u the braces are plain characters
+    });
+
+    it("a rule with a property class never compiles, whichever way it gets in", () => {
+        const result = compileRule(rule(u(String.raw`\p{L}{1,4}-\d{2}-\d{2}`, "iu")));
         expect(result.ok).toBe(false);
-        if (!result.ok) expect(result.reason).toBe(
-            "Too many Unicode property classes (\\p{...} and \\P{...}); this pattern has 8, the limit is 6 " +
-                "(a negated one, \\P{...} or \\p{...} inside [^...], counts 3, any other counts 2).",
-        );
+        if (!result.ok) expect(result.reason).toBe(REASON);
+        expect(compilePatternRules([rule(u(String.raw`\p{L}x`))]).rules).toEqual([]);
     });
 
-    it("an instant rule has the same limit", () => {
-        expect(check(u(String.raw`\p{L}\p{N}\p{Lu}z`), "instant")).toEqual({ ok: true });
-        expect(check(u(String.raw`\p{L}\p{N}\p{Lu}\p{Ll}z`), "instant").ok).toBe(false);
+    it("the cheap constructs stay accepted: \\w, ., [^a], [а-яё], astral ranges and escapes", () => {
+        for (const body of [
+            String.raw`\w{1,4}-\d{2}-\d{2}`,
+            String.raw`[а-яё]{2,4}\d{4}`,
+            String.raw`[^a]{1,4}\w{6}.{1,4}\w{6}`,
+            "[😀-😅]{1,4}abcdef",
+            String.raw`\u{1F600}{1,4}\w{6}`,
+            String.raw`\w\w\w\w\w\w\w\w\w\w\w\w[^a-z][^a-z][^a-z][^a-z][а-яё]{2}z`,
+        ]) {
+            for (const flags of ["u", "iu"]) expect(check(u(body, flags)), `${body} /${flags}`).toEqual({ ok: true });
+        }
     });
 
-    it("a non-property class and plain classes are free: \\w, [^a-z], [а-я] x12", () => {
-        expect(check(u(String.raw`\w\w\w\w\w\w\w\w\w\w\w\w[^a-z][^a-z][^a-z][^a-z][а-яё]{2}z`, "iu"))).toEqual({ ok: true });
-    });
-
-    // The first exec on non-Latin-1 text is where V8 compiles; a fresh `RegExp` per run so nothing is warmed. The test
-    // asserts no time but the 1.5 s watchdog of `execWithin`: the 6x `\P{L}` that this round refuses took 2 s here.
-    it("the first two-byte exec of any pattern at the limit stays far under the watchdog, under u and iu", () => {
-        const atLimit = [
-            String.raw`\p{L}\p{N}\p{Lu}`,
-            String.raw`\P{L}\P{ID_Continue}`,
-            String.raw`\P{L}\p{Alphabetic}`,
-            String.raw`[^\p{L}\p{N}]`,
-            String.raw`\p{Alphabetic}\P{L}`,
-            String.raw`[\p{L}\p{N}\p{Alphabetic}]`,
-            String.raw`\p{L}{3}`,
-            String.raw`(?:\p{L}\p{N}){4}`,
-            String.raw`\P{ID_Continue}\P{Alphabetic}`,
-        ];
-        const lines = ["я1", "я".repeat(63) + "1", "я1".repeat(32)];
+    // Why this replaces round 4's "first exec at the limit" test: that test existed because property classes could still
+    // be accepted. None can now, and the construct sweep shows the rest stay under ~4 ms. What is left is a cheap
+    // smoke guard: the constructs the checker swept, with a ranged quantifier and a 6-character tail, run their first
+    // two-byte exec under the 1.5 s watchdog. It cannot measure V8's compile cost in a fresh process (the process
+    // shares compiled code and nothing here is timed), so it catches only a blow-up of seconds, not a regression of
+    // milliseconds; that is what the refusal above and the runtime guard are for.
+    it("the first two-byte exec of the non-property constructs the checker swept stays under the watchdog", () => {
+        const atoms = [String.raw`\w`, ".", "[^a]", "[а-яё]", "[😀-😅]", String.raw`\u{1F600}`, String.raw`\W`, String.raw`\S`];
+        const lines = ["я1", "я".repeat(63) + "1", "я1".repeat(32), "😀".repeat(31) + "я1"];
         let n = 0;
-        for (const body of atLimit) {
-            for (const flags of ["u", "iu"]) {
-                // A distinct literal at the end keeps V8's own compile cache from sharing the regex between runs.
-                const letter = String.fromCharCode(97 + (n++ % 26)) + String.fromCharCode(97 + Math.floor(n / 26));
-                const { re } = compiled(u(body + letter, flags));
-                for (const text of lines) {
-                    expect(() => execWithin(re, text), `${body} /${flags} on ${text.slice(0, 4)}`).not.toThrow();
-                    re.lastIndex = 0;
+        for (const atom of atoms) {
+            for (const q of ["{1,4}", "{2,4}"]) {
+                for (const flags of ["u", "iu"]) {
+                    // A distinct literal at the end keeps V8's own compile cache from sharing the regex between runs.
+                    const letter = String.fromCharCode(97 + (n++ % 26)) + String.fromCharCode(97 + Math.floor(n / 26));
+                    const bodies = [
+                        `${atom}${q}-\\d{2}-\\d{2}${letter}`,
+                        `${atom}${q}\\d{4}${letter}`,
+                        `${atom}${q}\\w{6}${atom}${q}\\w{6}${letter}`,
+                    ];
+                    for (const body of bodies) {
+                        const { re } = compiled(u(body, flags));
+                        for (const text of lines) {
+                            expect(() => execWithin(re, text), `${body} /${flags} on ${text.slice(0, 4)}`).not.toThrow();
+                            re.lastIndex = 0;
+                        }
+                    }
                 }
             }
         }
@@ -984,9 +999,9 @@ describe("patterns: Unicode property escapes are capped (S-015, round 4)", () =>
     it("checking and compiling a new source never runs it (no compile-time exec)", () => {
         const exec = vi.spyOn(RegExp.prototype, "exec");
         try {
-            const marker = String.raw`neverrun(\d+)\p{L}$`;
-            expect(check(u(marker))).toEqual({ ok: true });
-            const r = compiled(u(String.raw`compiled(\d+)\p{L}\p{N}x`));
+            const marker = String.raw`neverrun(\d+)\w$`;
+            expect(check(src(marker, "u"))).toEqual({ ok: true });
+            const r = compiled(src(String.raw`compiled(\d+)\w\Wx$`, "u"));
             const ownRuns = exec.mock.contexts.filter((c) => c === r.re || (c instanceof RegExp && c.source.includes("neverrun")));
             expect(ownRuns).toEqual([]);
         } finally {
@@ -1100,12 +1115,15 @@ describe("patterns: canEndWith (which typed characters can end a match)", () => 
         expect(can(String.raw`x(?:yz)?$`, "y")).toBe(false);
     });
 
-    it("follows the flags: i folds case, u reads \\p{...}", () => {
+    it("follows the flags: i folds case, u reads \\u{...} and astral characters", () => {
         expect(can("ABC$", "c", "i")).toBe(true);
         expect(can("ABC$", "C", "i")).toBe(true);
         expect(can("ABC$", "c")).toBe(false);
-        expect(can(String.raw`\p{L}$`, "é", "u")).toBe(true);
-        expect(can(String.raw`\p{L}$`, "1", "u")).toBe(false);
+        expect(can(String.raw`\u{1F600}$`, "😀", "u")).toBe(true);
+        expect(can(String.raw`\u{1F600}$`, "x", "u")).toBe(false);
+        expect(can("[😀-😅]$", "😃", "u")).toBe(true);
+        expect(can("[а-яё]$", "ё", "iu")).toBe(true);
+        expect(can("[а-яё]$", "1", "iu")).toBe(false);
     });
 
     // Round 2: the typed character is the last CODE POINT of a `u` rule's text, not a lone low surrogate.
@@ -1649,7 +1667,7 @@ function mulberry32(seed: number): () => number {
  */
 describe("patterns: no accepted pattern can hang (seeded, randomized)", () => {
     const ATOMS = ["a", "b", "x", "u", "c", "k", "s", String.raw`\w`, String.raw`\d`, String.raw`\s`, ".", "[ab]", "[^a]", String.raw`\.`, String.raw`\u0061`, String.raw`\x61`, "ſ", "K"];
-    const UNICODE_ATOMS = [String.raw`\u{61}`, String.raw`\p{L}`, String.raw`\P{Lu}`, "😀", String.raw`[\p{L}\d]`, String.raw`\u{1F600}`];
+    const UNICODE_ATOMS = [String.raw`\u{61}`, "[^😀]", "[😀-😅]", "😀", String.raw`[\u{61}\d]`, String.raw`\u{1F600}`, "[а-яё]"];
     const QUANTS = ["", "", "", "?", "*", "+", "{1,3}", "{0,5}", "{2,}", "{1,10}", "{2}", "??", "+?", "{0,40}"];
     /** Overlapping alternatives: each way of splitting the input is a different path. */
     const HOT_GROUPS = [
@@ -1755,7 +1773,7 @@ describe("patterns: no accepted pattern can hang (seeded, randomized)", () => {
  */
 describe("patterns: canEndWith never excludes a character the regex matches (seeded)", () => {
     const ATOMS = ["a", "b", "A", "k", "1", "!", String.raw`\d`, String.raw`\w`, "[ab]", ".", String.raw`\.`, String.raw`\x41`, String.raw`\u0061`, String.raw`\0`, String.raw`\041`, String.raw`\01`, "4", "[^a]", "ſ", "K", "[😀😁]", "😀", String.raw`\b`];
-    const UNICODE_ATOMS = [String.raw`\p{L}`, String.raw`\u{1F600}`, String.raw`\u{61}`, String.raw`[\p{L}\d]`, "[😀😁]"];
+    const UNICODE_ATOMS = ["[а-яё]", String.raw`\u{1F600}`, String.raw`\u{61}`, String.raw`[\u{61}\d]`, "[😀😁]", "[😀-😅]", "[^😀]"];
     const QUANTS = ["", "", "?", "*", "+", "{1,2}"];
     const TEXT_CHARS = ["a", "b", "A", "B", "k", "K", "1", "!", ".", " ", "ſ", "K", "😀", "😁", "\u0000", "é", "s", "S", "\u0001", "4"];
 
