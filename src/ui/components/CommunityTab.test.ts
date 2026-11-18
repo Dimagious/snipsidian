@@ -96,4 +96,17 @@ describe("CommunityTab smoke", () => {
         expect(renders.espanso).toHaveBeenCalledWith(root);
         expect(renders.textSnippets).toHaveBeenCalledWith(root);
     });
+
+    // Under the Text Snippets id the section itself decides (it shows only
+    // when a backup of the original file exists); the tab always hands it the root.
+    it("still renders the Text Snippets section under the text-snippets-obsidian id", async () => {
+        const compat = makeMockPlugin({ pluginId: "text-snippets-obsidian" });
+        const tab = new CommunityTab(compat.app as unknown as App, compat as unknown as SnipSidianPlugin);
+        const root = document.createElement("div");
+        document.body.appendChild(root);
+        await tab.render(root);
+        expect(renders.textSnippets).toHaveBeenCalledWith(root);
+        expect(renders.browser).toHaveBeenCalledTimes(1);
+        expect(renders.espanso).toHaveBeenCalledTimes(1);
+    });
 });

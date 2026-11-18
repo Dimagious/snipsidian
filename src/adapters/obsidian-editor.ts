@@ -12,6 +12,8 @@ import {
 import { clock } from "./clock";
 import { readClipboardSafe } from "./clipboard";
 import { expand } from "../engine";
+import { shouldExpandHere } from "../engine/guards";
+import { findTrigger } from "../engine/match";
 import type { Dict, EditPlan, ExpandContext, ExpandInput, FieldStops } from "../engine/types";
 import { isSeparator } from "../shared/delimiters";
 import { isInFencedCode, isInInlineCode, isInMath, isInYamlFrontmatter } from "../shared/markdown";
@@ -241,6 +243,10 @@ async function expandAndApply(
     separator: string,
     /** The live caret when the expansion started. */
     cursorAtStart: EditorPosition,
+    /** The selected text when it started (`""` = none): "stayed" needs both. */
+    selectionAtStart = "",
+    /** B-255 manual mode (selection / mid-word): put the caret after the new text. */
+    moveCaretToEnd = false,
 ): Promise<ExpansionResult | undefined> {
     const plan = await expand(input, dict, ctx);
     if (!plan) return undefined;
@@ -259,10 +265,15 @@ async function expandAndApply(
     // B-147: the user may have moved during the (clipboard) await. A field
     // session pulls the caret into the first field, so it opens only when the
     // caret is still where the expansion started (same rule as the pickers).
-    const stayed = samePos(editor.getCursor(), cursorAtStart) && !editor.getSelection();
+    const stayed = samePos(editor.getCursor(), cursorAtStart) && editor.getSelection() === selectionAtStart;
     // A field plan carries a fallback caret (the first field); when the user
     // moved, that must not pull the caret back either.
     applyEditPlan(editor, plan.fields && !stayed ? { ...plan, newCursor: undefined } : plan, targetLine);
+    // The replaced range held the caret or the selection; park the caret
+    // after the new text unless a field session or `$|` places it.
+    if (moveCaretToEnd && stayed && !plan.fields && plan.newCursor === undefined) {
+        editor.setCursor(advancePosition({ line: targetLine, ch: plan.fromCh }, plan.insert));
+    }
     const result: ExpansionResult = {
         from,
         insert: plan.insert,
@@ -293,6 +304,11 @@ async function expandAndApply(
  * (code, math, frontmatter, prefix mode, the dict the caller passes already
  * has disabled groups removed). A selection, the start of a line and a
  * missing trigger all return `undefined`: the command stays silent.
+ *
+ * B-255 `manual`: the Tab key and the Text Snippets alias command. Like the
+ * original plugin, a selection that is exactly a trigger is replaced, and a
+ * caret inside a word takes the whole word around it (see
+ * {@link cursorExpansionInput}). Every guard above still applies.
  */
 export async function tryExpandAtCursor(
     editor: Editor,
@@ -302,27 +318,93 @@ export async function tryExpandAtCursor(
         now: Date;
         readClipboard?: () => Promise<string>;
         prefix?: string;
+        manual?: boolean;
     },
 ): Promise<ExpansionResult | undefined> {
-    if (editor.getSelection()) return undefined;
+    const at = cursorExpansionInput(editor, dict, deps.prefix, deps.manual === true);
+    if (!at) return undefined;
+    const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, at.cursor.line, at.input.sepCh);
+    return expandAndApply(editor, dict, at.input, ctx, at.cursor.line, at.lineText, "", at.cursor, at.selection, at.moveCaretToEnd);
+}
+
+/**
+ * B-255: synchronous twin of the check inside `tryExpandAtCursor` in manual
+ * mode: would the expand path find a snippet right now (same input helper,
+ * same guards, nothing is resolved or written)? The Tab key needs the answer
+ * at once, to decide whether it is taken or passed on to indent.
+ */
+export function canExpandAtCursor(editor: Editor, dict: Dict, prefix?: string): boolean {
+    const at = cursorExpansionInput(editor, dict, prefix, true);
+    if (!at) return false;
+    const ctx = makeContext(editor, undefined, clock.now(), undefined, at.cursor.line, at.input.sepCh);
+    return shouldExpandHere(ctx) && findTrigger(at.input, dict) !== null;
+}
+
+/**
+ * The input for expanding at the caret, or `undefined` when nothing can match
+ * there. Shared by the expand path and `canExpandAtCursor`, so they agree.
+ *
+ * Default mode: the trigger must end exactly at the caret, which must sit at
+ * a word end (typing would not expand inside a word either). `manual` adds
+ * the two behaviours of the original Text Snippets plugin: a one-line
+ * selection that is exactly a trigger is replaced, and a caret strictly
+ * inside a word (a word character on both sides) uses the whole word as the
+ * candidate. A caret at the START of a word is not "inside": Tab there keeps
+ * indenting. The caret is moved to the end of the inserted text afterwards
+ * (`moveCaretToEnd`), as the original did.
+ */
+function cursorExpansionInput(
+    editor: Editor,
+    dict: Dict,
+    prefix: string | undefined,
+    manual: boolean,
+): { input: ExpandInput; cursor: EditorPosition; lineText: string; selection: string; moveCaretToEnd: boolean } | undefined {
+    const selection = editor.getSelection();
     const cursor = editor.getCursor();
-    if (cursor.ch === 0) return undefined;
     const lineText = editor.getLine(cursor.line) ?? "";
-    // Inside a word (`sig|nature`) the text before the caret is not a trigger:
-    // typing would not expand there either (a separator ends the word first).
-    const after = lineText[cursor.ch];
-    if (after !== undefined && !isSeparator(after)) return undefined;
-    // `\n` is a virtual separator: `findTrigger` reads the trigger BEFORE
-    // `sepCh`, which here is the caret itself.
-    const input: ExpandInput = {
-        textBefore: lineText.slice(0, cursor.ch),
-        textAfter: lineText.slice(cursor.ch),
+    const build = (sepCh: number): ExpandInput => ({
+        textBefore: lineText.slice(0, sepCh),
+        textAfter: lineText.slice(sepCh),
+        // `\n` is a virtual separator: `findTrigger` reads the trigger BEFORE
+        // `sepCh`, which here is the end of the candidate itself.
         lastTyped: "\n",
-        sepCh: cursor.ch,
-        prefix: deps.prefix,
-    };
-    const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, cursor.line, cursor.ch);
-    return expandAndApply(editor, dict, input, ctx, cursor.line, lineText, "", cursor);
+        sepCh,
+        prefix,
+    });
+
+    if (selection) {
+        if (!manual) return undefined;
+        const from = editor.getCursor("from");
+        const to = editor.getCursor("to");
+        if (from.line !== to.line || from.line !== cursor.line) return undefined;
+        const input = build(to.ch);
+        const match = findTrigger(input, dict);
+        // The selection must BE the trigger, not the tail of a longer word. In
+        // prefix mode two selections qualify: prefix char + trigger (it starts
+        // where the match starts), or the trigger alone with the prefix char
+        // right before it (that char is consumed, as when typing).
+        const startsAt = match?.fromCh;
+        const exact = startsAt === from.ch;
+        const bareWithPrefix = prefix !== undefined && prefix !== "" && startsAt === from.ch - 1;
+        if (!match || match.toCh !== to.ch || !(exact || bareWithPrefix)) return undefined;
+        return { input, cursor, lineText, selection, moveCaretToEnd: true };
+    }
+
+    let sepCh = cursor.ch;
+    let moveCaretToEnd = false;
+    const after = lineText[cursor.ch];
+    if (after !== undefined && !isSeparator(after)) {
+        // Inside a word (`sig|nature`) typing would not expand. Manual mode
+        // takes the whole word around the caret, but only from strictly
+        // inside it (a word character right before the caret too).
+        const before = cursor.ch > 0 ? lineText[cursor.ch - 1] : undefined;
+        if (!manual || before === undefined || isSeparator(before)) return undefined;
+        while (sepCh < lineText.length && !isSeparator(lineText[sepCh] ?? " ")) sepCh++;
+        moveCaretToEnd = true;
+    } else if (cursor.ch === 0) {
+        return undefined;
+    }
+    return { input: build(sepCh), cursor, lineText, selection: "", moveCaretToEnd };
 }
 
 /** B-197: what the picker paths need to run the full placeholder pipeline. */

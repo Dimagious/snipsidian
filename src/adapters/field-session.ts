@@ -165,12 +165,12 @@ class EmptyFieldWidget extends WidgetType {
         return other.current === this.current;
     }
 
-    toDOM(view: EditorView): HTMLElement {
-        // A detached element: `createSpan` on a document would append to it.
-        const el = view.dom.ownerDocument.createElement("span");
-        el.className = this.current ? `${EMPTY_CLASS} ${FIELD_CURRENT_CLASS}` : EMPTY_CLASS;
-        el.setAttribute("aria-hidden", "true");
-        return el;
+    toDOM(): HTMLElement {
+        // The global helper makes a DETACHED element (CM6 inserts it itself).
+        return createSpan({
+            cls: this.current ? `${EMPTY_CLASS} ${FIELD_CURRENT_CLASS}` : EMPTY_CLASS,
+            attr: { "aria-hidden": "true" },
+        });
     }
 
     ignoreEvent(): boolean {
@@ -298,12 +298,17 @@ export function escapeFieldSession(view: FieldCommandView): boolean {
  * costs nothing outside a session (every command returns `false` then) and
  * guarantees the keys are honoured inside one.
  */
-export function buildFieldSessionExtension(): Extension {
+export function buildFieldSessionExtension(
+    /** B-255: what Tab does when no session is open (e.g. expand the trigger
+     *  before the caret). Returns `true` only when it took the key; `false`
+     *  lets Tab through (indent, other plugins). Never consulted in a session. */
+    onTabOutsideSession?: (view: EditorView) => boolean,
+): Extension {
     return [
         fieldSessionField,
         Prec.highest(
             keymap.of([
-                { key: "Tab", run: (view) => nextField(view) },
+                { key: "Tab", run: (view) => nextField(view) || (onTabOutsideSession?.(view) ?? false) },
                 { key: "Shift-Tab", run: (view) => previousField(view) },
                 { key: "Escape", run: (view) => escapeFieldSession(view) },
             ]),

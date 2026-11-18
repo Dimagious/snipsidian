@@ -78,6 +78,8 @@ export function makeMockPlugin(opts: {
     settings?: Partial<SnipSidianSettings>;
     pluginVersion?: string;
     activeEditor?: MockEditor | null;
+    /** The manifest id the plugin ships under (the same build has two). */
+    pluginId?: string;
 } = {}) {
     const settings: SnipSidianSettings = {
         ...makeDefaultSettings(),
@@ -90,7 +92,12 @@ export function makeMockPlugin(opts: {
     return {
         app,
         settings,
-        manifest: { version: opts.pluginVersion ?? "1.1.1" },
+        manifest: {
+            id: opts.pluginId ?? "snipsidian",
+            // eslint-disable-next-line obsidianmd/hardcoded-config-path -- test fixture, mirrors what Obsidian puts in `manifest.dir`
+            dir: `.obsidian/plugins/${opts.pluginId ?? "snipsidian"}`,
+            version: opts.pluginVersion ?? "1.1.1",
+        },
         saveSettings: async () => {
             // Snapshot the settings at save time so tests can assert
             // the exact state that was written (vs the current

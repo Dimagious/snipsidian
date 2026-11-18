@@ -48,7 +48,7 @@ beforeEach(() => {
 function mount(): HTMLButtonElement {
     const root = document.createElement("div");
     document.body.appendChild(root);
-    new TextSnippetsSection(plugin.app as unknown as App, plugin as unknown as SnipSidianPlugin).render(root);
+    void new TextSnippetsSection(plugin.app as unknown as App, plugin as unknown as SnipSidianPlugin).render(root);
     const btn = Array.from(root.querySelectorAll("button")).find((b) => b.textContent === "Import");
     if (!btn) throw new Error("Import button not rendered");
     return btn;
@@ -88,6 +88,15 @@ describe("TextSnippetsSection", () => {
         ).find((el) => el.textContent === "Text Snippets import");
         expect(heading).toBeTruthy();
         expect(btn.textContent).toBe("Import");
+    });
+
+    // The old text said Snipsy always expands "as you type", false with "Expand while typing" off.
+    it("the description does not promise expansion while typing, and points at the Tab option", () => {
+        mount();
+        const desc = document.querySelector(".setting-item-description")?.textContent ?? "";
+        expect(desc).not.toContain("automatically as you type");
+        expect(desc).toContain("Expand on Tab");
+        expect(desc).toContain("Expand while typing");
     });
 
     it("shows a Notice and writes nothing when the source plugin has no data.json", async () => {
@@ -384,6 +393,99 @@ describe("TextSnippetsSection: Unicode triggers", () => {
         );
         await clickAndSettle(mount());
         expect(document.body.querySelector(".modal-content .snipsy-espanso-skip-status")).toBeNull();
+    });
+});
+
+describe("TextSnippetsSection under the text-snippets-obsidian id (recovery from a backup)", () => {
+    const DIR = ".cfg/plugins/text-snippets-obsidian";
+    const BACKUP = `${DIR}/text-snippets-backup.json`;
+
+    beforeEach(() => {
+        plugin = makeMockPlugin({ pluginId: "text-snippets-obsidian" });
+        Object.assign(plugin.app.vault, { configDir: ".cfg" });
+        Object.assign(plugin.manifest, { dir: DIR });
+        Object.assign(plugin.app.vault.adapter, {
+            exists: async (p: string) => files.has(p),
+            read: readSpy,
+            write: writeSpy,
+            list: async (dir: string) => ({
+                files: Array.from(files.keys()).filter((p) => p.startsWith(`${dir}/`)),
+                folders: [],
+            }),
+        });
+    });
+
+    async function mountCompat(): Promise<{ root: HTMLElement; button: HTMLButtonElement | undefined }> {
+        const root = document.createElement("div");
+        document.body.appendChild(root);
+        await new TextSnippetsSection(plugin.app as unknown as App, plugin as unknown as SnipSidianPlugin).render(root);
+        const button = Array.from(root.querySelectorAll("button")).find((b) => b.textContent === "Import");
+        return { root, button };
+    }
+
+    it("is hidden when there is no backup (data.json alone is the migrated file)", async () => {
+        files.set(`${DIR}/data.json`, "{}");
+        const { root, button } = await mountCompat();
+        expect(button).toBeUndefined();
+        expect(root.textContent).not.toContain("Text Snippets import");
+    });
+
+    it("is hidden when the folder cannot be listed, and says why in the console", async () => {
+        const err = vi.spyOn(console, "error").mockImplementation(() => undefined);
+        Object.assign(plugin.app.vault.adapter, { list: async () => Promise.reject(new Error("no folder")) });
+        const { button } = await mountCompat();
+        expect(button).toBeUndefined();
+        expect(err).toHaveBeenCalled();
+        err.mockRestore();
+    });
+
+    it("is shown when a text-snippets-backup*.json exists, with a description naming the backup", async () => {
+        files.set(BACKUP, JSON.stringify({ snippets_file: "brb : be right back" }));
+        const { root, button } = await mountCompat();
+        expect(button).toBeDefined();
+        expect(root.querySelector(".setting-item-description")?.textContent).toContain("backup of the original Text Snippets file");
+    });
+
+    it("reads the newest backup (highest number), not the first one and not data.json", async () => {
+        files.set(`${DIR}/data.json`, JSON.stringify({ snippets_file: "cur : from data" }));
+        files.set(BACKUP, JSON.stringify({ snippets_file: "old : from first" }));
+        files.set(`${DIR}/text-snippets-backup-2.json`, JSON.stringify({ snippets_file: "mid : from second" }));
+        files.set(`${DIR}/text-snippets-backup-10.json`, JSON.stringify({ snippets_file: "new : from tenth" }));
+        files.set(`${DIR}/text-snippets-backup-x.json`, JSON.stringify({ snippets_file: "bad : not a backup" }));
+        const { button } = await mountCompat();
+        await clickAndSettle(button as HTMLButtonElement);
+        await apply();
+        expect(readSpy).toHaveBeenCalledWith(`${DIR}/text-snippets-backup-10.json`);
+        expect(readSpy).not.toHaveBeenCalledWith(`${DIR}/data.json`);
+        expect(plugin.settings.snippets["text-snippets/new"]).toBe("from tenth");
+        expect(plugin.settings.snippets["text-snippets/old"]).toBeUndefined();
+        expect(writeSpy).not.toHaveBeenCalled();
+    });
+
+    it("still goes through the validated import: an over-limit backup is refused and nothing is written", async () => {
+        const lines = Array.from({ length: 501 }, (_, i) => `t${i} : v${i}`).join("\n");
+        files.set(BACKUP, JSON.stringify({ snippets_file: lines }));
+        const { button } = await mountCompat();
+        const before = JSON.stringify(plugin.settings.snippets);
+        await clickAndSettle(button as HTMLButtonElement);
+        expect(noticeCalls.some((m) => m.startsWith("Cannot import Text Snippets"))).toBe(true);
+        expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+    });
+
+    it("the `snipsidian` id keeps reading the other plugin's data.json and shows the section without a backup", async () => {
+        plugin = makeMockPlugin();
+        Object.assign(plugin.app.vault, { configDir: ".cfg" });
+        Object.assign(plugin.app.vault.adapter, {
+            exists: async (p: string) => files.has(p),
+            read: readSpy,
+            list: vi.fn(),
+        });
+        files.set(SOURCE, JSON.stringify({ snippets_file: "a : b" }));
+        const { button } = await mountCompat();
+        expect(button).toBeDefined();
+        await clickAndSettle(button as HTMLButtonElement);
+        expect(readSpy).toHaveBeenCalledWith(SOURCE);
+        expect((plugin.app.vault.adapter as unknown as { list: ReturnType<typeof vi.fn> }).list).not.toHaveBeenCalled();
     });
 });
 

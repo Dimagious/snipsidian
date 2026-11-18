@@ -125,4 +125,25 @@ describe("field-commands: expandTriggerAtCursor (B-244)", () => {
         await expandTriggerAtCursor(app, asEditor(named), () => ({ fname: "$filename" }), spy);
         expect(named.getLine(0)).toBe("note.md");
     });
+
+    it("returns what it expanded (the Tab path marks it), undefined when nothing was", async () => {
+        const hit = await expandTriggerAtCursor(app, asEditor(editorWith("say brb", 7)), () => dict, noPrefix);
+        expect(hit).toMatchObject({ from: 4, original: "brb", insert: "be right back" });
+        expect(await expandTriggerAtCursor(app, asEditor(editorWith("plain", 5)), () => dict, noPrefix)).toBeUndefined();
+    });
+
+    it("manual mode takes a selected trigger and a caret inside a word; the default does not", async () => {
+        const selected = editorWith("say brb", 7);
+        selected.selection = "brb";
+        await expandTriggerAtCursor(app, asEditor(selected), () => dict, noPrefix, { manual: true });
+        expect(selected.getLine(0)).toBe("say be right back");
+
+        const inside = editorWith("say brb now", 6);
+        await expandTriggerAtCursor(app, asEditor(inside), () => dict, noPrefix, { manual: true });
+        expect(inside.getLine(0)).toBe("say be right back now");
+
+        const plain = editorWith("say brb now", 6);
+        await expandTriggerAtCursor(app, asEditor(plain), () => dict, noPrefix);
+        expect(plain.getLine(0)).toBe("say brb now");
+    });
 });

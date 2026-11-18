@@ -398,6 +398,12 @@ export const INSTALL_MAX_TRIGGER_LEN = 50;
  *  Defence against a small `snippets` count with megabyte-sized replacements. */
 export const INSTALL_MAX_TOTAL_BYTES = 2 * 1024 * 1024; // 2 MiB
 
+/** Options of {@link validatePackageForInstall} (see its doc). */
+export interface InstallValidationOptions {
+  allowUnicodeLetters?: boolean;
+  maxSnippets?: number;
+}
+
 /** Validates a community-package payload at install time. Runs on the
  *  runtime `PackageItem` shape (NOT the YAML submission shape). Catches
  *  attacker-controlled keys/values that bypassed the submission-time
@@ -413,11 +419,18 @@ export const INSTALL_MAX_TOTAL_BYTES = 2 * 1024 * 1024; // 2 MiB
  *  `options.allowUnicodeLetters` widens the trigger charset to Unicode
  *  letters, marks and numbers. Only the Text Snippets import opts in;
  *  community packs and every other caller keep the ASCII allowlist.
+ *
+ *  `options.maxSnippets` replaces the count cap (default
+ *  `INSTALL_MAX_SNIPPETS`). Only the first-run migration of the user's OWN
+ *  Text Snippets file lifts it (S-010 precedent: a count cap would break
+ *  legitimate large libraries); every other caller keeps 500. The per-entry
+ *  and total-size limits are never lifted.
  */
 export function validatePackageForInstall(
   pkg: { label: string; snippets?: { [trigger: string]: string } },
-  options: { allowUnicodeLetters?: boolean } = {}
+  options: InstallValidationOptions = {}
 ): ValidationResult {
+  const maxSnippets = options.maxSnippets ?? INSTALL_MAX_SNIPPETS;
   const allowUnicode = options.allowUnicodeLetters === true;
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -443,9 +456,9 @@ export function validatePackageForInstall(
     return { isValid: false, errors, warnings };
   }
 
-  if (entries.length > INSTALL_MAX_SNIPPETS) {
+  if (entries.length > maxSnippets) {
     errors.push(
-      `Package has ${entries.length} snippets, exceeds limit of ${INSTALL_MAX_SNIPPETS}`
+      `Package has ${entries.length} snippets, exceeds limit of ${maxSnippets}`
     );
   }
 

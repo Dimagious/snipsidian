@@ -26,7 +26,9 @@ export class CommunityTab {
     await this.packageBrowser.render(root);
     this.packageSubmission.render(root);
     this.espansoSection.render(root);
-    this.textSnippetsSection.render(root);
+    // Under the Text Snippets id the section shows only when a backup of the
+    // original file exists (recovery after a failed conversion).
+    await this.textSnippetsSection.render(root);
   }
 
 }

@@ -1,15 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import type { EditorView, ViewUpdate } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
+import { keymap } from "@codemirror/view";
 import type { App } from "obsidian";
 import { nth } from "../test/helpers";
 
 // mock the engine adapter call
 vi.mock("../adapters/obsidian-editor", () => ({
     tryExpandAtSeparator: vi.fn().mockResolvedValue(undefined),
+    canExpandAtCursor: vi.fn().mockReturnValue(false),
 }));
-import { tryExpandAtSeparator } from "../adapters/obsidian-editor";
-import { handleViewUpdate, CompositionRetry, buildExpansionExtension } from "./cm6-bridge";
+vi.mock("./field-commands", () => ({
+    expandTriggerAtCursor: vi.fn().mockResolvedValue(undefined),
+}));
+import { canExpandAtCursor, tryExpandAtSeparator } from "../adapters/obsidian-editor";
+import { expandTriggerAtCursor } from "./field-commands";
+import { handleViewUpdate, handleTab, CompositionRetry, buildExpansionExtension } from "./cm6-bridge";
 import { buildFieldSessionExtension, fieldSessionField, startFieldSessionEffect } from "../adapters/field-session";
 
 /**
@@ -573,5 +579,138 @@ describe("cm6-bridge: field session wiring (B-243)", () => {
     it("the extension carries the session field", () => {
         const state = EditorState.create({ doc: "x", extensions: [buildExpansionExtension(makeApp(), () => ({}))] });
         expect(() => state.field(fieldSessionField)).not.toThrow();
+    });
+});
+
+describe("cm6-bridge: manual mode, expand while typing off (B-255)", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it("typing never expands when onType is off, even for genuine typing", () => {
+        const outcome = handleViewUpdate(makeApp(), () => ({ fn: "x" }), makeUpdate({}), () => undefined, () => false, () => false);
+        expect(outcome).toBe("ignored");
+        expect(tryExpandAtSeparator).not.toHaveBeenCalled();
+    });
+
+    it("typing still expands when onType is on (and by default)", () => {
+        handleViewUpdate(makeApp(), () => ({}), makeUpdate({}), () => undefined, () => false, () => true);
+        handleViewUpdate(makeApp(), () => ({}), makeUpdate({}));
+        expect(tryExpandAtSeparator).toHaveBeenCalledTimes(2);
+    });
+
+    it("is read at call time: flipping the setting takes effect on the next update", () => {
+        let onType = false;
+        const app = makeApp();
+        handleViewUpdate(app, () => ({}), makeUpdate({}), () => undefined, () => false, () => onType);
+        expect(tryExpandAtSeparator).not.toHaveBeenCalled();
+        onType = true;
+        handleViewUpdate(app, () => ({}), makeUpdate({}), () => undefined, () => false, () => onType);
+        expect(tryExpandAtSeparator).toHaveBeenCalledTimes(1);
+    });
+
+    it("the composition retry stays idle when onType is off (nothing becomes pending)", () => {
+        const view = { hasFocus: true, composing: true };
+        const retry = new CompositionRetry(asView(view), makeApp(), () => ({}), () => undefined, () => false, () => false);
+        retry.record(makeUpdate({ view, composing: true }));
+        expect(retry.pending).toBe(false);
+        retry.destroy();
+    });
+});
+
+describe("cm6-bridge: Tab expansion (B-255)", () => {
+    const view = { composing: false, state: { readOnly: false } };
+    const editor = { cm: view } as unknown;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    function tab(opts: { onTab?: boolean; found?: boolean; editorOverride?: unknown; v?: unknown } = {}): boolean {
+        vi.mocked(canExpandAtCursor).mockReturnValue(opts.found ?? true);
+        const app = makeApp({ editor: opts.editorOverride === undefined ? editor : opts.editorOverride });
+        return handleTab((opts.v ?? view) as EditorView, app, () => ({ brb: "x" }), () => undefined, () => opts.onTab ?? true);
+    }
+
+    it("takes Tab and runs the command expansion when a trigger sits before the caret", () => {
+        expect(tab()).toBe(true);
+        expect(expandTriggerAtCursor).toHaveBeenCalledTimes(1);
+    });
+
+    it("lets Tab through when there is no trigger (indent keeps working)", () => {
+        expect(tab({ found: false })).toBe(false);
+        expect(expandTriggerAtCursor).not.toHaveBeenCalled();
+    });
+
+    it("lets Tab through when Expand on Tab is off, without even looking", () => {
+        expect(tab({ onTab: false })).toBe(false);
+        expect(canExpandAtCursor).not.toHaveBeenCalled();
+    });
+
+    it("lets Tab through during IME composition and in a read-only view", () => {
+        expect(tab({ v: { ...view, composing: true } })).toBe(false);
+        const ro = { composing: false, state: { readOnly: true } };
+        expect(tab({ v: ro, editorOverride: { cm: ro } })).toBe(false);
+        expect(expandTriggerAtCursor).not.toHaveBeenCalled();
+    });
+
+    it("never acts on another pane's editor (editor.cm is a different view)", () => {
+        expect(tab({ editorOverride: { cm: { composing: false, state: { readOnly: false } } } })).toBe(false);
+        expect(tab({ editorOverride: null })).toBe(false);
+        expect(expandTriggerAtCursor).not.toHaveBeenCalled();
+    });
+
+    it("expands in manual mode (selection, caret inside a word) like the original plugin", () => {
+        expect(tab()).toBe(true);
+        expect(nth(vi.mocked(expandTriggerAtCursor).mock.calls, 0)[4]).toEqual({ manual: true });
+    });
+
+    describe("highlight / Backspace-undo mark (B-176) on Tab expansions", () => {
+        const info = { from: 0, insert: "xx", original: "brb", separator: "" };
+        function tabWith(getHighlight: boolean, result: object | undefined): { dispatch: Mock } {
+            const dispatch = vi.fn();
+            const v = { ...view, dispatch };
+            vi.mocked(expandTriggerAtCursor).mockResolvedValueOnce(result as never);
+            vi.mocked(canExpandAtCursor).mockReturnValue(true);
+            const app = makeApp({ editor: { cm: v } });
+            handleTab(v as unknown as EditorView, app, () => ({ brb: "x" }), () => undefined, () => true, () => getHighlight);
+            return { dispatch };
+        }
+
+        it("marks the landed expansion when Highlight expansions is on", async () => {
+            const { dispatch } = tabWith(true, info);
+            await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1));
+        });
+
+        it("marks nothing when the setting is off, when a field session took the caret, or when nothing expanded", async () => {
+            const off = tabWith(false, info);
+            const session = tabWith(true, { ...info, session: { fields: [1, 2], final: 3 } });
+            const none = tabWith(true, undefined);
+            await new Promise((r) => setTimeout(r, 0));
+            expect(off.dispatch).not.toHaveBeenCalled();
+            expect(session.dispatch).not.toHaveBeenCalled();
+            expect(none.dispatch).not.toHaveBeenCalled();
+        });
+    });
+
+    it("logs a failing expansion instead of an unhandled rejection", async () => {
+        const boom = new Error("boom");
+        vi.mocked(expandTriggerAtCursor).mockRejectedValueOnce(boom);
+        const log = vi.spyOn(console, "error").mockImplementation(() => {});
+        expect(tab()).toBe(true);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(log).toHaveBeenCalledWith("[snipsy] Tab expansion error", boom);
+        log.mockRestore();
+    });
+
+    it("the built extension routes Tab outside a session to handleTab", () => {
+        vi.mocked(canExpandAtCursor).mockReturnValue(true);
+        const state = EditorState.create({
+            doc: "brb",
+            extensions: [buildExpansionExtension(makeApp({ editor }), () => ({ brb: "x" }), () => undefined, () => false, () => true, () => true)],
+        });
+        const binding = state.facet(keymap).flat().find((b) => b.key === "Tab");
+        expect(binding?.run?.(Object.assign(view, { state }) as unknown as EditorView)).toBe(true);
+        expect(expandTriggerAtCursor).toHaveBeenCalled();
     });
 });

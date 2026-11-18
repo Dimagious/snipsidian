@@ -11,6 +11,7 @@ export default defineUnitConfig({
         "src/ui/**/*.test.ts",
         "src/adapters/clipboard.test.ts",
         "src/adapters/field-session.dom.test.ts",
+        "src/app/tab-expansion.dom.test.ts",
         "src/test/integration/jsdom-env.test.ts",
     ],
     coverage: {

@@ -17,6 +17,12 @@ import {
 import { DEFAULT_DELIMITERS } from "../shared/delimiters";
 import { INSTALL_MAX_REPLACEMENT_LEN, INSTALL_MAX_TRIGGER_LEN } from "../services/package-validator";
 
+/** Id of the abandoned "Text Snippets" community plugin (B-174). */
+export const TEXT_SNIPPETS_PLUGIN_ID = "text-snippets-obsidian";
+
+/** Group the imported snippets land in (already a valid slug). */
+export const TEXT_SNIPPETS_GROUP_SLUG = "text-snippets";
+
 /** One record that couldn't be imported, and why. */
 export interface TextSnippetsSkip {
     /** Best-effort label: the trimmed trigger, or the start of the
