@@ -4,8 +4,8 @@ import { SnipSidianSettingTab } from "../ui/settings";
 import { defaultSnippetsAsGroup } from "../store/presets";
 import type { SnipSidianSettings } from "../types";
 import { getDict, getAllSnippetsFlat } from "../store/snippets";
-import { getCompiledPatterns } from "../store/patterns";
-import type { CompiledPatterns } from "../engine/patterns";
+import { getCompiledPatterns, patternsSignature } from "../store/patterns";
+import { patternHealth, type CompiledPatterns, type PatternHealth } from "../engine/patterns";
 import { SnippetPickerService } from "../core/snippet-picker";
 import { openSnippetPickerModal } from "../ui/components/SnippetPickerModal";
 import { openAddSnippetFromSelection } from "../ui/components/AddFromSelection";
@@ -13,12 +13,25 @@ import { expandTriggerAtCursor, jumpToNextField } from "./field-commands";
 
 export default class HotstringsPlugin extends Plugin {
     settings!: SnipSidianSettings;
-    /** ADR-0008: compiled pattern rules of the current settings; dropped whenever settings are loaded or saved. */
+    /** ADR-0008: compiled pattern rules of the current settings; dropped when settings are loaded or the rules change. */
     private compiledPatterns: CompiledPatterns | undefined;
+    /** `patternsSignature` of the settings `compiledPatterns` was built from. */
+    private compiledSignature: string | undefined;
 
     private getPatterns(): CompiledPatterns {
-        this.compiledPatterns ??= getCompiledPatterns(this.settings);
+        if (!this.compiledPatterns) {
+            this.compiledPatterns = getCompiledPatterns(this.settings);
+            this.compiledSignature = patternsSignature(this.settings);
+        }
         return this.compiledPatterns;
+    }
+
+    /**
+     * ADR-0008: what the runtime guard saw on the live compiled rules (switched-off rules, deadline cuts), for the
+     * Patterns page. Reads the cached instance the hot path uses, never a fresh compile. Session only.
+     */
+    patternHealth(): PatternHealth {
+        return patternHealth(this.getPatterns());
     }
 
     async onload() {
@@ -159,8 +172,12 @@ export default class HotstringsPlugin extends Plugin {
     }
 
     async saveSettings() {
-        // Every settings change goes through here (the UI saves after each edit): the next keystroke recompiles.
-        this.compiledPatterns = undefined;
+        // Every settings change goes through here (the UI saves after each edit, the community cache saves after
+        // each fetch). Recompile on the next keystroke only when the rules or the muted groups changed: an unrelated
+        // save must not reset what the runtime guard learned (strikes, switch-offs).
+        if (this.compiledPatterns && patternsSignature(this.settings) !== this.compiledSignature) {
+            this.compiledPatterns = undefined;
+        }
         await this.saveData(this.settings);
     }
 }

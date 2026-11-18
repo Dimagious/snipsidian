@@ -387,9 +387,79 @@ describe("app/plugin", () => {
             const first = get();
             expect(get()).toBe(first);
             expect(get()).toBe(first);
+            plugin.settings.patterns = [{ id: "q", source: "/b$/", replacement: "y", enabled: true, mode: "instant" }];
             await plugin.saveSettings();
             expect(get()).not.toBe(first);
-            expect(get().rules.map((r) => r.id)).toEqual(["p"]);
+            expect(get().rules.map((r) => r.id)).toEqual(["q"]);
+        });
+
+        it("a save that changes no pattern keeps the compiled set, and with it what the runtime guard learned", async () => {
+            const { plugin, get } = await getPatternsArg({
+                snippets: { a: "b" },
+                patterns: [{ id: "p", source: "/a$/", replacement: "x", enabled: true, mode: "instant" }],
+            });
+            const first = get();
+            // e.g. the community cache saves the settings on every fetch
+            plugin.settings.snippets = { ...plugin.settings.snippets, c: "d" };
+            await plugin.saveSettings();
+            await plugin.saveSettings();
+            expect(get()).toBe(first);
+        });
+
+        it("a changed rule, a toggled rule or a muted group recompiles", async () => {
+            const { plugin, get } = await getPatternsArg({
+                snippets: { a: "b" },
+                patterns: [{ id: "p", source: "/a$/", replacement: "x", enabled: true, mode: "instant", group: "g" }],
+            });
+            let last = get();
+            const expectFresh = (): void => {
+                const next = get();
+                expect(next).not.toBe(last);
+                last = next;
+            };
+            const rule = plugin.settings.patterns?.[0];
+            if (!rule) throw new Error("no rule");
+            rule.replacement = "z"; // edited in place, then saved
+            await plugin.saveSettings();
+            expectFresh();
+            rule.enabled = false;
+            await plugin.saveSettings();
+            expectFresh();
+            expect(get().rules).toEqual([]);
+            rule.enabled = true;
+            await plugin.saveSettings();
+            expectFresh();
+            plugin.settings.disabledGroups = ["g"];
+            await plugin.saveSettings();
+            expectFresh();
+            expect(get().rules).toEqual([]);
+        });
+
+        it("patternHealth() reads the live compiled set: a switch-off shows up, and an unrelated save does not erase it", async () => {
+            vi.spyOn(console, "warn").mockImplementation(() => {});
+            try {
+                const { plugin, get } = await getPatternsArg({
+                    snippets: { a: "b" },
+                    patterns: [{ id: "p", source: "/a$/", replacement: "x", enabled: true, mode: "instant" }],
+                });
+                expect(plugin.patternHealth()).toEqual({ switchedOff: [], deadlineHits: 0 });
+                const rule = get().rules[0];
+                if (!rule) throw new Error("no rule");
+                rule.health.switchedOff = "Switched off: slow on this note.";
+                rule.health.deadlineCuts = 2;
+                await plugin.saveSettings();
+                expect(plugin.patternHealth()).toEqual({
+                    switchedOff: [{ id: "p", reason: "Switched off: slow on this note." }],
+                    deadlineHits: 2,
+                });
+            } finally {
+                vi.restoreAllMocks();
+            }
+        });
+
+        it("patternHealth() with no patterns is clean", async () => {
+            const { plugin } = await getPatternsArg({ snippets: { a: "b" } });
+            expect(plugin.patternHealth()).toEqual({ switchedOff: [], deadlineHits: 0 });
         });
 
         it("a refused rule in data.json is reported once at load and does not stop the others", async () => {

@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { expand, expandInstant } from "./expand";
-import { compilePatternRules } from "./patterns";
+import { compilePatternRules, matchPatterns } from "./patterns";
 import type { CompiledRule } from "./patterns";
 import type { Dict, ExpandContext, PatternRule } from "./types";
 
@@ -226,13 +226,19 @@ describe("expand: one order for instant and separator rules (ADR-0008, owner 202
 });
 
 describe("expandInstant (ADR-0008)", () => {
+    /** The adapter matches first (to decide whether to build a context) and hands the hit on: the same two steps. */
+    async function instantPlan(textBefore: string, c: ExpandContext, rules: readonly CompiledRule[]): ReturnType<typeof expandInstant> {
+        const hit = matchPatterns(textBefore, rules, "instant");
+        return hit ? expandInstant(textBefore, c, hit) : null;
+    }
+
     const arrows = patterns(
         { source: String.raw`/<<$/`, replacement: "\u226a", mode: "instant" },
         { source: String.raw`/\u226a<$/`, replacement: "\u22d8", mode: "instant" },
     );
 
     it("a match that ends at the caret is replaced, the caret lands after it", async () => {
-        const plan = await expandInstant("a <<", pctx, arrows);
+        const plan = await instantPlan("a <<", pctx, arrows);
         expect(plan).toMatchObject({ kind: "pattern", fromCh: 2, toCh: 4, insert: "\u226a" });
         // no explicit caret: the editor maps the caret at the end of the replaced range to the end of the insert
         expect(plan?.newCursor).toBeUndefined();
@@ -241,43 +247,58 @@ describe("expandInstant (ADR-0008)", () => {
     it("the inserted text is not scanned again in the same call (<< gives one step, not two)", async () => {
         // `<<` -> `\u226a`; the second rule would match `\u226a<`, which is NOT what the line holds, and the
         // inserted text itself is never offered to a rule. One call, one plan.
-        const plan = await expandInstant("<<", pctx, arrows);
+        const plan = await instantPlan("<<", pctx, arrows);
         expect(plan?.insert).toBe("\u226a");
         // The next keystroke sees it: `\u226a<` -> `\u22d8`.
-        expect((await expandInstant("\u226a<", pctx, arrows))?.insert).toBe("\u22d8");
+        expect((await instantPlan("\u226a<", pctx, arrows))?.insert).toBe("\u22d8");
     });
 
     it("no match, no plan; separator-mode rules are ignored", async () => {
-        await expect(expandInstant("a <", pctx, arrows)).resolves.toBeNull();
-        await expect(expandInstant("<<", pctx, patterns({ source: "/<<$/", mode: "separator" }))).resolves.toBeNull();
-        await expect(expandInstant("<<", pctx, [])).resolves.toBeNull();
+        await expect(instantPlan("a <", pctx, arrows)).resolves.toBeNull();
+        await expect(instantPlan("<<", pctx, patterns({ source: "/<<$/", mode: "separator" }))).resolves.toBeNull();
+        await expect(instantPlan("<<", pctx, [])).resolves.toBeNull();
     });
 
     it("guards apply", async () => {
         for (const flag of ["isInCode", "isInMath", "isInFrontmatter"] as const) {
-            await expect(expandInstant("<<", { ...pctx, [flag]: true }, arrows), flag).resolves.toBeNull();
+            await expect(instantPlan("<<", { ...pctx, [flag]: true }, arrows), flag).resolves.toBeNull();
         }
     });
 
     it("$| puts the caret inside the insert, fields start at the first field", async () => {
         const caret = patterns({ source: "/box$/", replacement: "[ $| ]", mode: "instant" });
-        const plan = await expandInstant("box", pctx, caret);
+        const plan = await instantPlan("box", pctx, caret);
         expect(plan?.newCursor).toEqual({ lineDelta: 0, ch: 2 });
         const fields = patterns({ source: "/lnk$/", replacement: "[$1]($2)", mode: "instant" });
-        const withFields = await expandInstant("see lnk", pctx, fields);
+        const withFields = await instantPlan("see lnk", pctx, fields);
         expect(withFields?.fields).toEqual([1, 3]);
         expect(withFields?.newCursor).toEqual({ lineDelta: 0, ch: 5 });
     });
 
     it("$| on a later line of a multi-line replacement is placed by line and column", async () => {
         const rules = patterns({ source: "/cal$/", replacement: "> [!note]\n> $|", mode: "instant" });
-        const plan = await expandInstant("cal", pctx, rules);
+        const plan = await instantPlan("cal", pctx, rules);
         expect(plan?.newCursor).toEqual({ lineDelta: 1, ch: 2 });
     });
 
     it("a capture sits where the typed text was: 1/2 -> half", async () => {
         const rules = patterns({ source: String.raw`/(\d{1,2})\/(\d{1,2})$/`, replacement: "{{1}}\u2044{{2}}", mode: "instant" });
-        const plan = await expandInstant("take 3/4", pctx, rules);
+        const plan = await instantPlan("take 3/4", pctx, rules);
         expect(plan).toMatchObject({ fromCh: 5, toCh: 8, insert: "3\u20444" });
+    });
+
+    it("plans from the match it is given and does not run the regex again (one 8 ms budget per hit, not two)", async () => {
+        const [rule] = patterns({ source: "/->$/", replacement: "\u2192", mode: "instant" });
+        if (!rule) throw new Error("no rule");
+        const exec = vi.spyOn(rule.re, "exec");
+        const hit = matchPatterns("a ->", [rule], "instant");
+        expect(exec).toHaveBeenCalledTimes(1);
+        if (!hit) throw new Error("no hit");
+        const plan = await expandInstant("a ->", pctx, hit);
+        expect(exec).toHaveBeenCalledTimes(1);
+        expect(plan).toMatchObject({ kind: "pattern", fromCh: 2, toCh: 4, insert: "\u2192" });
+        // Guards still apply to a hit that was found outside code.
+        await expect(expandInstant("a ->", { ...pctx, isInCode: true }, hit)).resolves.toBeNull();
+        expect(exec).toHaveBeenCalledTimes(1);
     });
 });

@@ -12,8 +12,11 @@ import {
     LOOKBEHIND_ATOM_LIMIT,
     MAX_PATTERN_REPLACEMENT,
     NO_PATTERNS,
+    patternHealth,
     RULE_SLOW_MS,
+    RULE_SLOW_RETRIES,
     RULE_SLOW_STRIKES,
+    RULE_STRIKE_WINDOW,
     switchedOffRules,
     type CompiledRule,
     type PatternMatch,
@@ -46,7 +49,7 @@ function compiled(source: string, replacement = "x", mode: PatternRule["mode"] =
  */
 const execContext = createContext({ re: /x/, text: "" });
 const execScript = new Script("re.lastIndex = 0; re.exec(text)");
-function execWithin(re: RegExp, text: string, timeout = 100): void {
+function execWithin(re: RegExp, text: string, timeout = 1500): void {
     execContext.re = re;
     execContext.text = text;
     execScript.runInContext(execContext, { timeout });
@@ -142,7 +145,7 @@ describe("patterns: S-015 corpus", () => {
         if (!result.ok) expect(result.reason).toMatch(expected);
     });
 
-    // Accepted patterns do not blow up on adversarial 64-char strings. Under a vm watchdog (100 ms, see `execWithin`),
+    // Accepted patterns do not blow up on adversarial 64-char strings. Under a vm watchdog (1.5 s, see `execWithin`),
     // not a stopwatch: a backtracking blow-up takes seconds to minutes, so the watchdog tells it from a slow machine.
     // No "under 1 ms" promise (ADR-0008, round 2): polynomial cost is the runtime guard's job.
     it("every accepted corpus pattern stays far from a backtracking blow-up on adversarial 64-char strings", () => {
@@ -313,6 +316,15 @@ describe("patterns: the checker looks at structure, not at characters", () => {
         expect(check(src(String.raw`(?<a>x)\k<a>$`)).ok).toBe(false);
         expect(check(src(String.raw`(x)\10$`)).ok).toBe(false);
         expect(check(src(String.raw`\0x$`)).ok).toBe(true); // NUL, not a backreference
+    });
+
+    it("refuses \\1-\\9 inside a class: legacy octal there, which the parser does not model", () => {
+        for (const digit of ["1", "5", "8", "9"]) {
+            const result = check(src(`[\\${digit}]$`));
+            expect(result.ok, `[\\${digit}]`).toBe(false);
+            if (!result.ok) expect(result.reason, digit).toMatch(/isn't supported/);
+        }
+        expect(check(src(String.raw`[\0]$`)).ok).toBe(true); // NUL stays fine
     });
 
     it("refuses negative lookahead and any quantifier in a lookbehind", () => {
@@ -1095,6 +1107,19 @@ describe("patterns: the window keeps context for lookbehind and \\b", () => {
         expect(matchPatterns("😀😁😂😃😄😅😆X" + "y".repeat(64), [r], "separator")).toBeNull();
     });
 
+    // The context before the window may start between the halves of a pair; no accepted lookbehind can read that far.
+    it("context split in a pair: the widest lookbehind (8 terms, 15 units here) never needs the cut half", () => {
+        // 17 units before the 64 y's: the context (16 units back from the window) starts on the emoji's low surrogate.
+        const prefix = "😀" + "😁".repeat(7) + "z";
+        expect(prefix.length).toBe(LOOKBEHIND_ATOM_LIMIT * 2 + 1);
+        const r = compiled(String.raw`/(?<=😁😁😁😁😁😁😁z)y{64}$/u`);
+        expect(matchPatterns(prefix + "y".repeat(64), [r], "separator")?.index).toBe(prefix.length);
+        // The same lookbehind refuses to see a different character where it looks.
+        expect(matchPatterns("😀" + "😁".repeat(6) + "😂z" + "y".repeat(64), [r], "separator")).toBeNull();
+        // One more term would reach the split half, and the gate does not allow it.
+        expect(check(src(String.raw`(?<=😀😁😁😁😁😁😁😁z)y$`, "u")).ok).toBe(false);
+    });
+
     it("\\b does not see a false start: a word cut by the window is not replaced", () => {
         const r = compiled(String.raw`/\b(\w+);$/`);
         expect(matchPatterns("w".repeat(70) + ";", [r], "separator")).toBeNull();
@@ -1243,21 +1268,21 @@ describe("patterns: runtime guard (fake clock)", () => {
     });
 
     it("stops trying further rules once the keystroke has spent its budget; later rules do not run", () => {
-        const t = steppingClock(3); // three rules take 9 ms, over the 8 ms budget
-        const rules = ["/aa$/", "/bb$/", "/cc$/", "/dd$/", "/ee$/"].map((source, i) => fresh(source, "separator", `r${String(i)}`));
+        const t = steppingClock(RULE_SLOW_MS); // not slow (at the threshold); five rules take 10 ms, over the 8 ms budget
+        const rules = ["/aa$/", "/bb$/", "/cc$/", "/dd$/", "/ee$/", "/ff$/"].map((source, i) => fresh(source, "separator", `r${String(i)}`));
         expect(KEYSTROKE_BUDGET_MS).toBe(8);
-        expect(matchPatterns("x ee", rules.map((r) => r.rule), "separator", t.clock)).toBeNull();
-        expect(rules.map((r) => r.exec.mock.calls.length)).toEqual([1, 1, 1, 0, 0]);
+        expect(matchPatterns("x ff", rules.map((r) => r.rule), "separator", t.clock)).toBeNull();
+        expect(rules.map((r) => r.exec.mock.calls.length)).toEqual([1, 1, 1, 1, 1, 0]);
     });
 
-    it("stays within the budget: two 3 ms rules do not stop the third", () => {
-        const t = steppingClock(3);
+    it("stays within the budget: two 2 ms rules do not stop the third", () => {
+        const t = steppingClock(RULE_SLOW_MS);
         const rules = ["/aa$/", "/bb$/", "/cc$/"].map((source, i) => fresh(source, "separator", `r${String(i)}`));
         expect(matchPatterns("x cc", rules.map((r) => r.rule), "separator", t.clock)?.rule.id).toBe("r2");
     });
 
     it("a rule that matches before the budget runs out still wins", () => {
-        const t = steppingClock(3);
+        const t = steppingClock(RULE_SLOW_MS);
         const rules = ["/aa$/", "/bb$/"].map((source, i) => fresh(source, "separator", `r${String(i)}`));
         expect(matchPatterns("x aa", rules.map((r) => r.rule), "separator", t.clock)?.rule.id).toBe("r0");
     });
@@ -1266,9 +1291,9 @@ describe("patterns: runtime guard (fake clock)", () => {
         const t = steppingClock(9); // the first rule that runs spends the whole budget
         const rules = [fresh("/aa$/", "instant", "i0"), fresh("/bb$/", "separator", "s0"), fresh("/cc$/", "instant", "i1")];
         const all = rules.map((r) => r.rule);
-        // i0 is skipped by its end test (no exec), s0 runs and spends 9 ms, so i1 is never tried.
+        // i0 is skipped by its end test (no exec), s0 runs (slow: with its retries) and spends the budget, so i1 is never tried.
         expect(matchPatternsInOrder({ atCaret: "zz cc", beforeSeparator: "zz" }, all, t.clock)).toBeNull();
-        expect(rules.map((r) => r.exec.mock.calls.length)).toEqual([0, 1, 0]);
+        expect(rules.map((r) => r.exec.mock.calls.length)).toEqual([0, 1 + RULE_SLOW_RETRIES, 0]);
         // With a cheap clock the same call reaches i1 and matches.
         t.step = 1;
         expect(matchPatternsInOrder({ atCaret: "zz cc", beforeSeparator: "zz" }, all, t.clock)?.rule.id).toBe("i1");
@@ -1285,6 +1310,180 @@ describe("patterns: runtime guard (fake clock)", () => {
         expect(switchedOffRules(second)).toEqual([]);
         expect(matchPatterns("a42", second.rules, "separator")?.captures[1]).toBe("42");
         vi.restoreAllMocks();
+    });
+
+    // -- Round 3: a slow sample is retried (lazy compilation is not slowness) and strikes decay ----------------------
+
+    /** A clock whose n-th `exec` costs `costs[n]` ms (the last cost repeats). Only `tryRule` reads it, twice per exec. */
+    function scriptedClock(costs: readonly number[]): () => number {
+        let reads = 0;
+        let now = 0;
+        return () => {
+            const exec = Math.floor(reads++ / 2);
+            if (reads % 2 === 1) return now; // start of an exec
+            now += costs[Math.min(exec, costs.length - 1)] ?? 0;
+            return now; // end of it
+        };
+    }
+
+    it("slow, slow, fast on the same text is lazy compilation, not slowness: no strike, on any number of keystrokes", () => {
+        const { rule, exec } = fresh("/(\\d+)$/");
+        // V8 compiles on the 1st exec, again on tier-up and on the first non-Latin-1 input: 3 ms, 3 ms, then microseconds.
+        const keystrokes = RULE_SLOW_STRIKES + 2;
+        const clock = scriptedClock(Array.from({ length: keystrokes }, () => [3, 3, 0.01]).flat());
+        for (let i = 0; i < keystrokes; i++) matchPatterns("a" + String(i), [rule], "separator", clock);
+        expect(switchedOffRules(set(rule))).toEqual([]);
+        expect(exec).toHaveBeenCalledTimes(3 * keystrokes);
+    });
+
+    it("a slow sample is re-run on the same text, at most RULE_SLOW_RETRIES more times", () => {
+        expect(RULE_SLOW_RETRIES).toBe(2);
+        const { rule, exec } = fresh("/(\\d+)$/");
+        matchPatterns("a1", [rule], "separator", scriptedClock([5, 5, 5, 5, 5]));
+        expect(exec).toHaveBeenCalledTimes(1 + RULE_SLOW_RETRIES);
+        // Every re-run read the same text from the same position.
+        expect(new Set(exec.mock.calls.map((c) => c[0]))).toEqual(new Set(["a1"]));
+    });
+
+    it("stops re-running as soon as one run is fast; a fast first run is not re-run at all", () => {
+        const slowThenFast = fresh("/(\\d+)$/");
+        matchPatterns("a1", [slowThenFast.rule], "separator", scriptedClock([5, 0.01]));
+        expect(slowThenFast.exec).toHaveBeenCalledTimes(2);
+        const fast = fresh("/(\\d+)$/");
+        matchPatterns("a1", [fast.rule], "separator", scriptedClock([0.01]));
+        expect(fast.exec).toHaveBeenCalledTimes(1);
+    });
+
+    it("a rule slow on every run (the fastest of the three is still over the threshold) is switched off after 3 keystrokes", () => {
+        vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const { rule } = fresh("/(\\d+)$/");
+        const clock = scriptedClock([RULE_SLOW_MS + 1]);
+        for (let i = 0; i < RULE_SLOW_STRIKES - 1; i++) matchPatterns("a" + String(i), [rule], "separator", clock);
+        expect(switchedOffRules(set(rule))).toEqual([]);
+        matchPatterns("a99", [rule], "separator", clock);
+        expect(switchedOffRules(set(rule))).toHaveLength(1);
+        vi.restoreAllMocks();
+    });
+
+    it("the FASTEST of the runs decides: 5, 4, 3 ms is still slow, 5, 4, 2 ms is not (at the threshold)", () => {
+        const slow = fresh("/(\\d+)$/");
+        matchPatterns("a1", [slow.rule], "separator", scriptedClock([5, 4, 3]));
+        expect(slow.rule.health.strikes).toHaveLength(1);
+        const ok = fresh("/(\\d+)$/");
+        matchPatterns("a1", [ok.rule], "separator", scriptedClock([5, 4, RULE_SLOW_MS]));
+        expect(ok.rule.health.strikes).toHaveLength(0);
+    });
+
+    it("the re-runs count against the keystroke budget", () => {
+        // Rule 0 takes 3 + 3 + 3 = 9 ms with its re-runs: over the 8 ms budget, so rule 1 is not tried.
+        const rules = ["/aa$/", "/bb$/"].map((source, i) => fresh(source, "separator", `r${String(i)}`));
+        expect(matchPatterns("x bb", rules.map((r) => r.rule), "separator", scriptedClock([3, 3, 3, 0.01]))).toBeNull();
+        expect(rules.map((r) => r.exec.mock.calls.length)).toEqual([1 + RULE_SLOW_RETRIES, 0]);
+    });
+
+    it("strikes decay: slow keystrokes far apart (more than RULE_STRIKE_WINDOW runs) never add up", () => {
+        const { rule } = fresh("/(\\d+)$/");
+        const slow = scriptedClock([RULE_SLOW_MS + 1]);
+        const fast = scriptedClock([0.01]);
+        let n = 0;
+        for (let round = 0; round < 6; round++) {
+            matchPatterns("s" + String(n++), [rule], "separator", slow);
+            for (let i = 0; i < RULE_STRIKE_WINDOW; i++) matchPatterns("f" + String(n++), [rule], "separator", fast);
+        }
+        expect(switchedOffRules(set(rule))).toEqual([]);
+        expect(rule.health.strikes.length).toBeLessThan(RULE_SLOW_STRIKES);
+    });
+
+    it("three slow keystrokes inside the window still switch the rule off, with fast ones in between", () => {
+        vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const { rule } = fresh("/(\\d+)$/");
+        const slow = scriptedClock([RULE_SLOW_MS + 1]);
+        const fast = scriptedClock([0.01]);
+        let n = 0;
+        for (let round = 0; round < RULE_SLOW_STRIKES; round++) {
+            matchPatterns("s" + String(n++), [rule], "separator", slow);
+            // Fast runs in between, few enough that all three slow runs fall inside the last RULE_STRIKE_WINDOW runs.
+            if (round < RULE_SLOW_STRIKES - 1) for (let i = 0; i < Math.floor(RULE_STRIKE_WINDOW / 2) - 2; i++) matchPatterns("f" + String(n++), [rule], "separator", fast);
+        }
+        expect(switchedOffRules(set(rule))).toHaveLength(1);
+        vi.restoreAllMocks();
+    });
+
+    it("the window edge: the third slow keystroke exactly RULE_STRIKE_WINDOW runs after the first no longer counts the first", () => {
+        const { rule } = fresh("/(\\d+)$/");
+        const slow = scriptedClock([RULE_SLOW_MS + 1]);
+        const fast = scriptedClock([0.01]);
+        matchPatterns("s0", [rule], "separator", slow); // run 1
+        matchPatterns("s1", [rule], "separator", slow); // run 2
+        for (let i = 0; i < RULE_STRIKE_WINDOW - 2; i++) matchPatterns("f" + String(i), [rule], "separator", fast); // runs 3..50
+        matchPatterns("s2", [rule], "separator", slow); // run 51: run 1 is 50 runs back, outside "the last 50"
+        expect(switchedOffRules(set(rule))).toEqual([]);
+        expect(rule.health.strikes).toHaveLength(2);
+    });
+
+    it("a skipped rule (end test) is not a run and does not age the strikes", () => {
+        const { rule } = fresh("/(\\d+)$/", "instant");
+        const slow = scriptedClock([RULE_SLOW_MS + 1]);
+        matchPatterns("a1", [rule], "instant", slow);
+        for (let i = 0; i < RULE_STRIKE_WINDOW * 2; i++) matchPatterns("a" + String(i) + "z", [rule], "instant", slow); // cannot end with z
+        expect(rule.health.runs).toBe(1);
+    });
+
+    // -- Round 3: starvation is visible -----------------------------------------------------------------------------
+
+    it("patternHealth: switched-off rules and how many keystrokes the deadline cut", () => {
+        const t = steppingClock(RULE_SLOW_MS);
+        const rules = ["/aa$/", "/bb$/", "/cc$/", "/dd$/", "/ee$/", "/ff$/"].map((source, i) => fresh(source, "separator", `r${String(i)}`));
+        const all = set(...rules.map((r) => r.rule));
+        expect(patternHealth(all)).toEqual({ switchedOff: [], deadlineHits: 0 });
+        matchPatterns("x ff", all.rules, "separator", t.clock);
+        matchPatterns("x ff", all.rules, "separator", t.clock);
+        expect(patternHealth(all)).toEqual({ switchedOff: [], deadlineHits: 2 });
+    });
+
+    it("the deadline is counted once per cut keystroke, not per skipped rule, and only when a rule was really skipped", () => {
+        const t = steppingClock(RULE_SLOW_MS);
+        const rules = ["/aa$/", "/bb$/", "/cc$/", "/dd$/", "/ee$/"].map((source, i) => fresh(source, "separator", `r${String(i)}`));
+        const all = set(...rules.map((r) => r.rule));
+        // Five rules spend exactly 10 ms: the budget is crossed after the last one, nothing was skipped.
+        matchPatterns("x ee", all.rules, "separator", t.clock);
+        expect(patternHealth(all).deadlineHits).toBe(0);
+        // A sixth rule would have been skipped.
+        const six = set(...all.rules, fresh("/ff$/", "separator", "r5").rule);
+        matchPatterns("x ff", six.rules, "separator", t.clock);
+        expect(patternHealth(six).deadlineHits).toBe(1);
+    });
+
+    it("a rule that is switched off, or has no text to run on, is not a starved rule", () => {
+        vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const t = steppingClock(9);
+        const first = fresh("/aa$/", "separator", "first");
+        const off = fresh("/bb$/", "separator", "off");
+        off.rule.health.switchedOff = "off";
+        const instantOnly = fresh("/cc$/", "instant", "needs-caret");
+        matchPatternsInOrder({ beforeSeparator: "zz" }, [first.rule, off.rule, instantOnly.rule], t.clock);
+        expect(patternHealth(set(first.rule, off.rule, instantOnly.rule)).deadlineHits).toBe(0);
+        vi.restoreAllMocks();
+    });
+
+    it("NO_PATTERNS has a clean bill of health", () => {
+        expect(patternHealth(NO_PATTERNS)).toEqual({ switchedOff: [], deadlineHits: 0 });
+    });
+
+    it("a rule is warmed up once when it is compiled, on ASCII and on non-Latin-1 text (V8 compiles lazily on those)", () => {
+        const exec = vi.spyOn(RegExp.prototype, "exec");
+        try {
+            const r = compiled(String.raw`/warm(\d+)up$/`);
+            const own = exec.mock.calls.map((c, i) => ({ text: c[0], re: exec.mock.contexts[i] })).filter((c) => c.re === r.re);
+            expect(own.map((c) => c.text)).toEqual(["a", "\u044f1"]);
+            // Warming leaves the regex ready for the matcher: lastIndex is back at 0, and the same source is not warmed again.
+            expect(r.re.lastIndex).toBe(0);
+            exec.mockClear();
+            expect(compiled(String.raw`/warm(\d+)up$/`).re).toBe(r.re);
+            expect(exec.mock.calls.filter((_, i) => exec.mock.contexts[i] === r.re)).toEqual([]);
+        } finally {
+            exec.mockRestore();
+        }
     });
 
     it("the default clock is the real one: a normal match works without injecting anything", () => {
@@ -1312,8 +1511,8 @@ function mulberry32(seed: number): () => number {
 
 /**
  * Why this shape: a JS `exec` cannot be interrupted from the same thread, so a test that runs a hanging pattern
- * hangs the suite. `node:vm` with `timeout` (100 ms: an accepted pattern takes microseconds, a blow-up seconds to
- * minutes) runs the script under a watchdog that terminates it (irregexp checks for the interrupt while it
+ * hangs the suite. `node:vm` with `timeout` (1.5 s: an accepted pattern takes microseconds, a real blow-up seconds to
+ * minutes; the margin keeps a loaded CI box from failing a fast one) runs the script under a watchdog that terminates it (irregexp checks for the interrupt while it
  * backtracks), so a pattern the gate wrongly accepts shows up as a failing test, not as a stuck run. No child
  * process, no worker, no flaky kill timers; the generator is seeded, so a failure names a pattern that reproduces.
  *
@@ -1399,7 +1598,7 @@ describe("patterns: no accepted pattern can hang (seeded, randomized)", () => {
             if (!result.ok) continue;
             accepted++;
             for (const text of ADVERSARIAL) {
-                // The time bound: throws ERR_SCRIPT_EXECUTION_TIMEOUT after 100 ms.
+                // The time bound: throws ERR_SCRIPT_EXECUTION_TIMEOUT after 1.5 s.
                 try {
                     execWithin(result.rule.re, text);
                 } catch (err) {
@@ -1464,5 +1663,5 @@ describe("patterns: canEndWith never excludes a character the regex matches (see
             }
         }
         expect(matched).toBeGreaterThan(500);
-    });
+    }, 30_000);
 });

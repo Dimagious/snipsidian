@@ -15,3 +15,12 @@ export function getCompiledPatterns(settings: SnipSidianSettings): CompiledPatte
     if (!settings.patterns || settings.patterns.length === 0) return NO_PATTERNS;
     return compilePatternRules(settings.patterns, settings.disabledGroups);
 }
+
+/**
+ * ADR-0008: a cheap fingerprint of everything `getCompiledPatterns` reads (the rules and the muted groups). The plugin
+ * recompiles only when it changes, so a save that touches something else (the community cache saves after every
+ * fetch) keeps the compiled rules and what the runtime guard learned about them.
+ */
+export function patternsSignature(settings: SnipSidianSettings): string {
+    return JSON.stringify([settings.patterns ?? null, settings.disabledGroups ?? null]);
+}

@@ -45,8 +45,17 @@ const LOOKBEHIND_CONTEXT = LOOKBEHIND_ATOM_LIMIT * 2;
  * slowest polynomial cases measured (`\p{L}*\p{L}*\p{L}{0,3}x$` under `iu`) take about 4 ms, so 5 would never fire on them.
  */
 export const RULE_SLOW_MS = 2;
-/** ...and a rule that was slow on this many separate keystrokes is switched off for the session. */
+/**
+ * A slow sample is not yet a strike: V8 compiles a regex lazily (on its 1st `exec`, again on tier-up and again on the
+ * first non-Latin-1 input), and a `\p{...}` rule under `iu` takes a few ms for each of those and microseconds after.
+ * So a slow `exec` is re-run on the same text up to this many more times; only if the FASTEST run is still over
+ * `RULE_SLOW_MS` is the keystroke slow.
+ */
+export const RULE_SLOW_RETRIES = 2;
+/** ...and a rule that was slow on this many separate keystrokes within its last `RULE_STRIKE_WINDOW` runs is switched off. */
 export const RULE_SLOW_STRIKES = 3;
+/** Strikes decay: only slow keystrokes among a rule's last this-many runs count, not those of the whole session. */
+export const RULE_STRIKE_WINDOW = 50;
 /** One call (one keystroke) stops trying further rules once its rules have spent this long. */
 export const KEYSTROKE_BUDGET_MS = 8;
 /** Group names that placeholders already use (or will: B-204, B-218). */
@@ -464,6 +473,9 @@ type CacheEntry = { core: CompiledCore } | { reason: string; unbounded?: number 
 
 const cache = new Map<string, CacheEntry>();
 
+/** One ASCII and one non-Latin-1 text for the compile-time warm-up (see `buildCore`). */
+const WARMUP_TEXTS: readonly string[] = ["a", "\u044f1"];
+
 /** `/body$/flags` -> `{ body, flags }`. Only `i` and `u` are allowed, as written (`u` is never added: `\:` throws under it). */
 function parseSource(source: string): { body: string; flags: string } {
     if (source.length > MAX_PATTERN_BODY + 8) {
@@ -502,6 +514,14 @@ function buildCore(source: string): CompiledCore {
     // `g` is only there for `lastIndex`: the matcher starts at the second character of a cut window, so `\b` and
     // lookbehind can still see the character before it.
     const re = new RegExp(`(?:${body.slice(0, -1)})$`, `${flags}g`);
+    // V8 compiles a regex lazily: on the first `exec`, again on tier-up and again on the first non-Latin-1 input, a few
+    // ms each for a `\p{...}` rule under `iu` (measured). Pay it here, on two tiny texts, not on a keystroke. The gate
+    // above leaves no exponential case and the inputs are 1-2 characters, so this cannot hang.
+    for (const sample of WARMUP_TEXTS) {
+        re.lastIndex = 0;
+        re.exec(sample);
+    }
+    re.lastIndex = 0;
     return { re, usesBol, unbounded, endTest: buildEndTest(alts, flags) };
 }
 
@@ -566,10 +586,14 @@ export type CompiledRule = {
 
 /** What the runtime guard learned about a rule on the hot path. Mutated by the matcher only. */
 export type RuleHealth = {
-    /** Keystrokes on which one `exec` took longer than `RULE_SLOW_MS`. */
-    slowKeystrokes: number;
+    /** How many times the rule's `exec` has run (a re-run of a slow sample is not a new run). */
+    runs: number;
+    /** `runs` at each slow keystroke still inside the last `RULE_STRIKE_WINDOW` runs. */
+    strikes: number[];
     /** The text of the last slow keystroke: the same line read twice is one keystroke. */
     lastSlowText?: string;
+    /** Keystrokes on which the deadline cut the rule loop and this was the first rule left untried. */
+    deadlineCuts: number;
     /** Set when the rule was switched off for the session: the reason a person can read. */
     switchedOff?: string;
 };
@@ -619,7 +643,7 @@ export function compileRule(raw: unknown): CompileResult {
             re: entry.core.re,
             usesBol: entry.core.usesBol,
             endTest: entry.core.endTest,
-            health: { slowKeystrokes: 0 },
+            health: { runs: 0, strikes: [], deadlineCuts: 0 },
         },
     };
 }
@@ -715,16 +739,18 @@ function lastChar(rule: CompiledRule, text: string): string {
 }
 
 /**
- * Counts a slow `exec` against the rule: the third slow keystroke switches it off for the session. The same line
- * seen twice is one keystroke (the instant path reads it in the adapter and again when planning the edit).
+ * Counts a slow keystroke against the rule: the third one within its last `RULE_STRIKE_WINDOW` runs switches it off
+ * for the session. The same line seen twice is one keystroke.
  */
 function strikeRule(rule: CompiledRule, text: string): void {
     const health = rule.health;
     if (health.switchedOff !== undefined || health.lastSlowText === text) return;
     health.lastSlowText = text;
-    health.slowKeystrokes++;
-    if (health.slowKeystrokes < RULE_SLOW_STRIKES) return;
-    health.switchedOff = `Switched off: slow on this note (${health.slowKeystrokes} times over ${RULE_SLOW_MS} ms).`;
+    health.strikes.push(health.runs);
+    // Decay: a strike `RULE_STRIKE_WINDOW` runs back or more is outside "the last N runs".
+    while (health.strikes.length > 0 && health.runs - (health.strikes[0] ?? 0) >= RULE_STRIKE_WINDOW) health.strikes.shift();
+    if (health.strikes.length < RULE_SLOW_STRIKES) return;
+    health.switchedOff = `Switched off: slow on this note (${health.strikes.length} times over ${RULE_SLOW_MS} ms).`;
     console.warn("[snipsy] pattern rule switched off", { id: rule.id, reason: health.switchedOff });
 }
 
@@ -744,18 +770,31 @@ function tryRule(rule: CompiledRule, text: string, timing: Timing): PatternMatch
     // `^` means "line start": a window that cut the line cannot say.
     if (rule.usesBol && windowStart > 0) return null;
     // Context before the window is for looking only (`\b`, lookbehind): without it the cut would look like a line
-    // start. The match itself must start inside the window, which `lastIndex` makes the engine do.
-    let contextStart = Math.max(0, windowStart - LOOKBEHIND_CONTEXT);
-    if (contextStart > 0 && isLowSurrogate(text.charCodeAt(contextStart)) && isHighSurrogate(text.charCodeAt(contextStart - 1))) {
-        contextStart--;
-    }
+    // start. The match itself must start inside the window, which `lastIndex` makes the engine do. The context may
+    // start between the halves of a surrogate pair, and that is harmless: a lookbehind holds at most
+    // `LOOKBEHIND_ATOM_LIMIT` terms, each at most one code point (two code units), and starts at or after the window,
+    // so it reads at most `LOOKBEHIND_CONTEXT` units back. To need the split pair it would have to read 17 units, and
+    // the 8 code points before it cannot take an odd 15 (see the test "context split in a pair").
+    const contextStart = Math.max(0, windowStart - LOOKBEHIND_CONTEXT);
     const context = contextStart > 0 ? text.slice(contextStart) : text;
-    rule.re.lastIndex = windowStart - contextStart;
-    const started = timing.clock();
+    const from = windowStart - contextStart;
+    rule.re.lastIndex = from;
+    rule.health.runs++;
+    let started = timing.clock();
     const m = rule.re.exec(context);
-    const took = timing.clock() - started;
-    timing.spent += took;
-    if (took > RULE_SLOW_MS) strikeRule(rule, text);
+    let fastest = timing.clock() - started;
+    timing.spent += fastest;
+    // A slow sample may be V8 compiling the regex lazily: run the same exec again before calling it slow. The
+    // extra time counts against the keystroke budget; the result is the same each time, the first one is used.
+    for (let retry = 0; retry < RULE_SLOW_RETRIES && fastest > RULE_SLOW_MS; retry++) {
+        rule.re.lastIndex = from;
+        started = timing.clock();
+        rule.re.exec(context);
+        const took = timing.clock() - started;
+        timing.spent += took;
+        if (took < fastest) fastest = took;
+    }
+    if (fastest > RULE_SLOW_MS) strikeRule(rule, text);
     if (!m || m[0].length === 0 || m.index + m[0].length !== context.length) return null;
     const named = new Map<string, string | undefined>();
     if (m.groups) for (const [name, value] of Object.entries(m.groups)) named.set(name, value);
@@ -785,10 +824,18 @@ export function matchPatternsInOrder(
     clock: () => number = defaultClock,
 ): PatternMatch | null {
     const timing: Timing = { clock, spent: 0 };
-    for (const rule of rules) {
-        if (timing.spent > KEYSTROKE_BUDGET_MS) return null;
+    const textOf = (rule: CompiledRule): string | undefined => (rule.mode === "instant" ? texts.atCaret : texts.beforeSeparator);
+    for (let i = 0; i < rules.length; i++) {
+        const rule = rules[i];
+        if (!rule) continue;
+        if (timing.spent > KEYSTROKE_BUDGET_MS) {
+            // Starved rules must not be silent: count the cut once, on the first rule that was left untried.
+            const starved = rules.slice(i).find((r) => r.health.switchedOff === undefined && textOf(r) !== undefined);
+            if (starved) starved.health.deadlineCuts++;
+            return null;
+        }
         if (rule.health.switchedOff !== undefined) continue;
-        const text = rule.mode === "instant" ? texts.atCaret : texts.beforeSeparator;
+        const text = textOf(rule);
         if (text === undefined) continue;
         const hit = tryRule(rule, text, timing);
         if (hit) return hit;
@@ -803,6 +850,19 @@ export function switchedOffRules(patterns: CompiledPatterns): PatternRuleError[]
         if (rule.health.switchedOff !== undefined) off.push({ id: rule.id, reason: rule.health.switchedOff });
     }
     return off;
+}
+
+/** What the runtime guard saw on this compiled set (for the Patterns page; session only, never saved). */
+export type PatternHealth = {
+    readonly switchedOff: PatternRuleError[];
+    /** Keystrokes on which the 8 ms deadline cut the rule loop, so later rules did not get their turn. */
+    readonly deadlineHits: number;
+};
+
+export function patternHealth(patterns: CompiledPatterns): PatternHealth {
+    let deadlineHits = 0;
+    for (const rule of patterns.rules) deadlineHits += rule.health.deadlineCuts;
+    return { switchedOff: switchedOffRules(patterns), deadlineHits };
 }
 
 /** Rules of one `mode` on `text`, in list order. */

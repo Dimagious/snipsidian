@@ -1284,6 +1284,21 @@ describe("adapters/obsidian-editor: tryExpandInstant", () => {
         expect(specs).toEqual([{ changes: { from: 2, to: 4, insert: "\u2192" }, userEvent: PATTERN_USER_EVENT }]);
     });
 
+    it("a hit runs the rule's regex once: the plan is built from the match found first", async () => {
+        const [rule] = arrow;
+        if (!rule) throw new Error("no rule");
+        const exec = vi.spyOn(rule.re, "exec");
+        const ed = at("a ->");
+        await tryExpandInstant(asEditor(ed), arrow, pdeps);
+        expect(ed.getLine(0)).toBe("a \u2192");
+        expect(exec).toHaveBeenCalledTimes(1);
+        // A guarded hit (inside inline code) is matched once too, then dropped.
+        exec.mockClear();
+        await tryExpandInstant(asEditor(at("`a ->` b", 5)), arrow, pdeps);
+        expect(exec).toHaveBeenCalledTimes(1);
+        exec.mockRestore();
+    });
+
     it("text after the caret stays", async () => {
         const ed = at("a -> b", 4);
         await tryExpandInstant(asEditor(ed), arrow, pdeps);

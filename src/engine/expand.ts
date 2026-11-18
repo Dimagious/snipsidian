@@ -2,7 +2,7 @@ import type { Dict, EditPlan, ExpandContext, ExpandInput } from "./types";
 import { shouldExpandHere } from "./guards";
 import { findTrigger } from "./match";
 import { applyPlaceholders } from "./placeholders";
-import { applyPatternReplacement, matchPatterns, matchPatternsInOrder, type CompiledRule } from "./patterns";
+import { applyPatternReplacement, matchPatternsInOrder, type CompiledRule, type PatternMatch } from "./patterns";
 import { buildEdit } from "./edit";
 import { DEFAULT_DELIMITERS } from "../shared/delimiters";
 
@@ -62,7 +62,8 @@ async function expandPatternAtSeparator(
 
 /**
  * ADR-0008, instant mode: `textBefore` is the line up to the caret right after
- * a typed character. The match must end at the caret. The editor maps a caret
+ * a typed character. `hit` is the match the caller already found on that line
+ * (so the regex runs once per keystroke, not twice); it ends at the caret. The editor maps a caret
  * that sits at the end of the replaced range to the end of the insert, so the
  * caret lands after the inserted text unless the replacement says otherwise
  * (`$|`, fields). The inserted text is not scanned again: the next keystroke
@@ -71,11 +72,9 @@ async function expandPatternAtSeparator(
 export async function expandInstant(
     textBefore: string,
     ctx: ExpandContext,
-    patterns: readonly CompiledRule[],
+    hit: PatternMatch,
 ): Promise<EditPlan | null> {
-    if (patterns.length === 0 || !shouldExpandHere(ctx)) return null;
-    const hit = matchPatterns(textBefore, patterns, "instant");
-    if (!hit) return null;
+    if (!shouldExpandHere(ctx)) return null;
     const applied = await applyPatternReplacement(hit, ctx);
     const input: ExpandInput = { textBefore, textAfter: "", lastTyped: "", sepCh: textBefore.length };
     const plan = buildEdit(input, { trigger: hit.rule.id, fromCh: hit.index, toCh: textBefore.length }, applied);

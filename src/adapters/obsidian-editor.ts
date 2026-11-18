@@ -393,9 +393,11 @@ export async function tryExpandInstant(
     if (DEFAULT_DELIMITERS.includes(textBefore.charAt(textBefore.length - 1))) return undefined;
     // This runs after EVERY typed character: look at the tail first and build the context (it scans the note for
     // frontmatter, fences and math) only for a match.
-    if (!matchPatterns(textBefore, patterns, "instant")) return undefined;
+    // The match is handed on, so the rule's regex runs once per hit.
+    const hit = matchPatterns(textBefore, patterns, "instant");
+    if (!hit) return undefined;
     const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, cursor.line, cursor.ch);
-    return expandAndApply(editor, () => expandInstant(textBefore, ctx, patterns), cursor.line, lineText, "", cursor);
+    return expandAndApply(editor, () => expandInstant(textBefore, ctx, hit), cursor.line, lineText, "", cursor);
 }
 
 /** B-197: what the picker paths need to run the full placeholder pipeline. */

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getCompiledPatterns } from "./patterns";
+import { getCompiledPatterns, patternsSignature } from "./patterns";
 import { NO_PATTERNS } from "../engine/patterns";
 import type { SnipSidianSettings } from "../types";
 import type { PatternRule } from "../engine/types";
@@ -65,5 +65,31 @@ describe("store/patterns: getCompiledPatterns", () => {
         expect(getCompiledPatterns(s).rules).toHaveLength(2);
         if (s.patterns?.[0]) s.patterns[0].enabled = false;
         expect(getCompiledPatterns(s).rules.map((r) => r.id)).toEqual(["b"]);
+    });
+});
+
+describe("store/patterns: patternsSignature", () => {
+    it("is stable for unrelated changes and moves with the rules and the muted groups", () => {
+        const s = settings({ patterns: [rule("a", "/a$/", { group: "g" })] });
+        const before = patternsSignature(s);
+        s.snippets = { "x/y": "z" };
+        s.expansion = { highlight: true };
+        expect(patternsSignature(s)).toBe(before);
+        const edits: Array<(x: SnipSidianSettings) => void> = [
+            (x) => { if (x.patterns?.[0]) x.patterns[0].replacement = "other"; },
+            (x) => { if (x.patterns?.[0]) x.patterns[0].source = "/b$/"; },
+            (x) => { if (x.patterns?.[0]) x.patterns[0].enabled = false; },
+            (x) => { x.patterns?.push(rule("b", "/b$/")); },
+            (x) => { x.disabledGroups = ["g"]; },
+        ];
+        for (const edit of edits) {
+            const copy: SnipSidianSettings = structuredClone(s);
+            edit(copy);
+            expect(patternsSignature(copy)).not.toBe(before);
+        }
+    });
+
+    it("treats no patterns and no muted groups as one state", () => {
+        expect(patternsSignature(settings())).toBe(patternsSignature(settings({ snippets: { a: "b" } })));
     });
 });
