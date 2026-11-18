@@ -67,6 +67,19 @@ const RESERVED_GROUP_NAMES: ReadonlySet<string> = new Set(["date", "time", "titl
  * With these limits the worst case measured stays near 0.5 ms; `[+-]?\d+(?:\.\d+)?` (2 unbounded, product 4) passes.
  */
 const MAX_BOUNDED_CHOICES: readonly number[] = [1024, 16, 4];
+/**
+ * Unicode property escapes (S-015, round 4). V8 compiles a regex lazily, and consecutive `\p{...}`/`\P{...}` atoms cost
+ * about 8x more for each one on the first non-Latin-1 `exec` (measured 2026-11-18, Node 22, `"я1"` and a 64-character
+ * Cyrillic line, `u` and `iu` alike): 3 atoms 1-1.5 ms, 4 atoms 4-6 ms, 5 atoms 30-250 ms, 6 atoms 0.3-2 s, and 100
+ * distinct rules of 3 take 118 ms to compile. A negated one (`\P{...}`, `\p{...}` inside `[^...]`) costs about 1.5x a
+ * positive one. So each escape weighs 2, or 3 if negated, and a pattern may weigh 6 in all: three positive, two
+ * negated, or one of each, which keeps the first two-byte `exec` near 1 ms. Every occurrence counts, inside a class
+ * or not. A repeated term counts once per copy V8 writes out: it unrolls a term with a minimum of 2 or 3 (`(...){3}`:
+ * 3 groups of 3 atoms took 2 s), and loops one with a minimum of 4 or more, `+`, `*` and `?` (0.2-1 ms).
+ */
+export const PROPERTY_WEIGHT_POSITIVE = 2;
+export const PROPERTY_WEIGHT_NEGATED = 3;
+export const PROPERTY_WEIGHT_LIMIT = 6;
 /** Compile cache bound: far above 100 rules, so only a stream of edits ever hits it. */
 const MAX_CACHE_ENTRIES = 500;
 
@@ -87,8 +100,11 @@ class Refusal extends Error {
 
 type Anchor = "bol" | "eol" | "word";
 type Node =
-    /** `text` is the atom as written (`a`, `\w`, `[a-z]`): the end-character test is built from it. */
-    | { kind: "atom"; text: string }
+    /**
+     * `text` is the atom as written (`a`, `\w`, `[a-z]`): the end-character test is built from it. `weight` is what
+     * its Unicode property escapes add up to (see `PROPERTY_WEIGHT_LIMIT`), 0 for most atoms.
+     */
+    | { kind: "atom"; text: string; weight: number }
     | { kind: "assert"; anchor: Anchor }
     | { kind: "group"; behind: boolean; alts: Term[][] };
 /** `max` is `Infinity` for `*`, `+`, `{n,}`. */
@@ -109,6 +125,8 @@ function unsupportedEscape(src: string, backslashAt: number, length?: number): R
 class Parser {
     pos = 0;
     readonly names: string[] = [];
+    /** Weight of the property escapes of the atom being read (`parseAtom` resets it). */
+    private weight = 0;
 
     /** `unicode`: the `u` flag. Escapes mean different things with and without it (`\u{1,}`, `\p{1,}`). */
     constructor(
@@ -169,12 +187,13 @@ class Parser {
     private parseAtom(): Node {
         const start = this.pos;
         const c = this.src[this.pos++];
+        this.weight = 0;
         switch (c) {
             case "\\":
                 return this.parseEscape();
             case "[":
                 this.skipClass();
-                return { kind: "atom", text: this.src.slice(start, this.pos) };
+                return { kind: "atom", text: this.src.slice(start, this.pos), weight: this.weight };
             case "(":
                 return this.parseGroup();
             case "^":
@@ -189,7 +208,7 @@ class Parser {
                 // Literal, `.`, or a `{` that is not a quantifier. Under `u` an astral character is one atom (a
                 // quantifier after it repeats both halves), as the engine reads it.
                 if (this.unicode && isHighSurrogate(this.src.charCodeAt(start)) && isLowSurrogate(this.src.charCodeAt(this.pos))) this.pos++;
-                return { kind: "atom", text: this.src.slice(start, this.pos) };
+                return { kind: "atom", text: this.src.slice(start, this.pos), weight: 0 };
         }
     }
 
@@ -205,14 +224,14 @@ class Parser {
         const e = this.src[this.pos];
         this.skipEscape(false);
         if (e === "b" || e === "B") return { kind: "assert", anchor: "word" };
-        return { kind: "atom", text: this.src.slice(start, this.pos) };
+        return { kind: "atom", text: this.src.slice(start, this.pos), weight: this.weight };
     }
 
     /**
      * Moves `this.pos` past one escape (it is just after the backslash) or throws. `inClass`: inside `[...]`, where
      * `\b` is a backspace and `\B` does not exist.
      */
-    private skipEscape(inClass: boolean): void {
+    private skipEscape(inClass: boolean, negatedClass = false): void {
         const e = this.src[this.pos++];
         if (e === undefined) throw new Refusal("The pattern ends with a lone backslash.");
         if (!inClass && e >= "1" && e <= "9") throw new Refusal(REASON_BACKREF);
@@ -231,6 +250,7 @@ class Parser {
             else this.skipHex(4, true);
         } else if ((e === "p" || e === "P") && this.unicode && this.src[this.pos] === "{") {
             this.skipBraces();
+            this.weight += e === "P" || negatedClass ? PROPERTY_WEIGHT_NEGATED : PROPERTY_WEIGHT_POSITIVE;
         } else if (/[A-Za-z]/.test(e)) {
             // Every other letter: `\c`, `\a`, `\e`, `\k`, `\p` without `u` (a letter, not a property), `\B` in a class.
             throw unsupportedEscape(this.src, this.pos - 2);
@@ -259,9 +279,10 @@ class Parser {
 
     /** `this.pos` is just after the `[`. */
     private skipClass(): void {
+        const negated = this.src[this.pos] === "^";
         while (this.pos < this.src.length) {
             const c = this.src[this.pos++];
-            if (c === "\\") this.skipEscape(true);
+            if (c === "\\") this.skipEscape(true, negated);
             else if (c === "]") return;
         }
         throw new Refusal("A character class is not closed.");
@@ -345,6 +366,22 @@ function lookbehindTerms(alts: readonly Term[][], inside: boolean): number {
     return count;
 }
 
+/**
+ * Property weight of the alternatives (see `PROPERTY_WEIGHT_LIMIT`). The alternatives of a group add up, as the engine
+ * compiles all of them. A term with a minimum of 2 or 3 is unrolled by V8 into that many copies, which multiply.
+ */
+function propertyWeight(alts: readonly Term[][]): number {
+    let total = 0;
+    for (const alt of alts) {
+        for (const term of alt) {
+            const copies = term.min === 2 || term.min === 3 ? term.min : 1;
+            const inner = term.node.kind === "atom" ? term.node.weight : term.node.kind === "group" ? propertyWeight(term.node.alts) : 0;
+            total += copies * inner;
+        }
+    }
+    return total;
+}
+
 /** What the static check learned about an accepted pattern. */
 type Analysis = { usesBol: boolean; unbounded: number };
 
@@ -398,6 +435,13 @@ function analyze(alts: readonly Term[][], names: readonly string[]): Analysis {
         throw new Refusal(
             "The pattern has too many optional or ranged parts (?, {n,m}) next to its other quantifiers, so matching could become slow. " +
                 "Remove some of them.",
+        );
+    }
+    const weight = propertyWeight(alts);
+    if (weight > PROPERTY_WEIGHT_LIMIT) {
+        throw new Refusal(
+            `Too many Unicode property classes (\\p{...} and \\P{...}); this pattern has ${weight}, the limit is ${PROPERTY_WEIGHT_LIMIT} ` +
+                `(a negated one, \\P{...} or \\p{...} inside [^...], counts ${PROPERTY_WEIGHT_NEGATED}, any other counts ${PROPERTY_WEIGHT_POSITIVE}).`,
         );
     }
     if (minLength(alts) === 0) {
@@ -473,9 +517,6 @@ type CacheEntry = { core: CompiledCore } | { reason: string; unbounded?: number 
 
 const cache = new Map<string, CacheEntry>();
 
-/** One ASCII and one non-Latin-1 text for the compile-time warm-up (see `buildCore`). */
-const WARMUP_TEXTS: readonly string[] = ["a", "\u044f1"];
-
 /** `/body$/flags` -> `{ body, flags }`. Only `i` and `u` are allowed, as written (`u` is never added: `\:` throws under it). */
 function parseSource(source: string): { body: string; flags: string } {
     if (source.length > MAX_PATTERN_BODY + 8) {
@@ -514,14 +555,6 @@ function buildCore(source: string): CompiledCore {
     // `g` is only there for `lastIndex`: the matcher starts at the second character of a cut window, so `\b` and
     // lookbehind can still see the character before it.
     const re = new RegExp(`(?:${body.slice(0, -1)})$`, `${flags}g`);
-    // V8 compiles a regex lazily: on the first `exec`, again on tier-up and again on the first non-Latin-1 input, a few
-    // ms each for a `\p{...}` rule under `iu` (measured). Pay it here, on two tiny texts, not on a keystroke. The gate
-    // above leaves no exponential case and the inputs are 1-2 characters, so this cannot hang.
-    for (const sample of WARMUP_TEXTS) {
-        re.lastIndex = 0;
-        re.exec(sample);
-    }
-    re.lastIndex = 0;
     return { re, usesBol, unbounded, endTest: buildEndTest(alts, flags) };
 }
 
@@ -754,21 +787,33 @@ function strikeRule(rule: CompiledRule, text: string): void {
     console.warn("[snipsy] pattern rule switched off", { id: rule.id, reason: health.switchedOff });
 }
 
+/** Where the 64-character window of `text` starts: never between the halves of a surrogate pair. */
+function windowStartOf(text: string): number {
+    const windowStart = Math.max(0, text.length - PATTERN_TAIL_LIMIT);
+    if (windowStart > 0 && isLowSurrogate(text.charCodeAt(windowStart)) && isHighSurrogate(text.charCodeAt(windowStart - 1))) {
+        return windowStart + 1;
+    }
+    return windowStart;
+}
+
+/**
+ * True when `tryRule` would not run this rule on `text`: an instant rule whose end-character test says the typed
+ * character cannot end it, or a `^` rule on a line the window cut (`^` means "line start", and a cut line cannot say).
+ */
+function skipsText(rule: CompiledRule, text: string): boolean {
+    if (rule.mode === "instant" && !canEndWith(rule, lastChar(rule, text))) return true;
+    return rule.usesBol && windowStartOf(text) > 0;
+}
+
 /**
  * One rule on one text. Only the last 64 characters can be matched; a few more are kept before them for `\b` and
  * lookbehind (at most `LOOKBEHIND_ATOM_LIMIT` code points back).
  */
 function tryRule(rule: CompiledRule, text: string, timing: Timing): PatternMatch | null {
-    // An instant rule is tried after every keystroke: skip it unless the typed character can end it. (Instant rules
-    // fire on a typed single code unit, so an astral character, typed as two, never reaches here; not a fix target.)
-    if (rule.mode === "instant" && !canEndWith(rule, lastChar(rule, text))) return null;
-    let windowStart = Math.max(0, text.length - PATTERN_TAIL_LIMIT);
-    // The window never starts between the halves of a surrogate pair.
-    if (windowStart > 0 && isLowSurrogate(text.charCodeAt(windowStart)) && isHighSurrogate(text.charCodeAt(windowStart - 1))) {
-        windowStart++;
-    }
-    // `^` means "line start": a window that cut the line cannot say.
-    if (rule.usesBol && windowStart > 0) return null;
+    // (Instant rules fire on a typed single code unit, so an astral character, typed as two, never reaches here; not
+    // a fix target.)
+    if (skipsText(rule, text)) return null;
+    const windowStart = windowStartOf(text);
     // Context before the window is for looking only (`\b`, lookbehind): without it the cut would look like a line
     // start. The match itself must start inside the window, which `lastIndex` makes the engine do. The context may
     // start between the halves of a surrogate pair, and that is harmless: a lookbehind holds at most
@@ -829,8 +874,12 @@ export function matchPatternsInOrder(
         const rule = rules[i];
         if (!rule) continue;
         if (timing.spent > KEYSTROKE_BUDGET_MS) {
-            // Starved rules must not be silent: count the cut once, on the first rule that was left untried.
-            const starved = rules.slice(i).find((r) => r.health.switchedOff === undefined && textOf(r) !== undefined);
+            // Starved rules must not be silent: count the cut once, on the first rule that was left untried (one that would
+            // have been skipped anyway, for its text or its end character, is not starved).
+            const starved = rules.slice(i).find((r) => {
+                const own = textOf(r);
+                return r.health.switchedOff === undefined && own !== undefined && !skipsText(r, own);
+            });
             if (starved) starved.health.deadlineCuts++;
             return null;
         }

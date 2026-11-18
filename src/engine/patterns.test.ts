@@ -12,7 +12,11 @@ import {
     LOOKBEHIND_ATOM_LIMIT,
     MAX_PATTERN_REPLACEMENT,
     NO_PATTERNS,
+    PATTERN_TAIL_LIMIT,
     patternHealth,
+    PROPERTY_WEIGHT_LIMIT,
+    PROPERTY_WEIGHT_NEGATED,
+    PROPERTY_WEIGHT_POSITIVE,
     RULE_SLOW_MS,
     RULE_SLOW_RETRIES,
     RULE_SLOW_STRIKES,
@@ -784,7 +788,7 @@ describe("patterns: escapes are an allowlist (S-015, round 2)", () => {
         ]) {
             expect(check(src(body)), body).toEqual({ ok: true });
         }
-        expect(check(src(String.raw`\u{1F600}\p{L}\P{Lu}[\p{L}\u{61}]$`, "u"))).toEqual({ ok: true });
+        expect(check(src(String.raw`\u{1F600}\P{Lu}[\p{L}\u{61}]$`, "u"))).toEqual({ ok: true });
     });
 
     it("keeps the backreference reason for \\1..\\9 and \\k<name>", () => {
@@ -877,6 +881,117 @@ describe("patterns: alternation is a choice point (S-015)", () => {
     it("a single alternative, or a top-level alternation, adds no choice of its own", () => {
         expect(check(src("(a)".repeat(40) + "x$"))).toEqual({ ok: true });
         expect(check(src(String.raw`cat|dog|bird|fish|mouse|horse$`))).toEqual({ ok: true });
+    });
+});
+
+describe("patterns: Unicode property escapes are capped (S-015, round 4)", () => {
+    // V8 compiles consecutive \p{...}/\P{...} atoms with a cost that grows about 8x per atom on the first non-Latin-1
+    // `exec`: 3 atoms ~1 ms, 4 ~5 ms, 5 ~30-250 ms, 6 ~0.3-2 s. A positive one weighs 2, a negated one 3, the limit is 6.
+    const u = (body: string, flags = "u"): string => src(body + "$", flags);
+
+    it("the constants are the measured ones", () => {
+        expect([PROPERTY_WEIGHT_POSITIVE, PROPERTY_WEIGHT_NEGATED, PROPERTY_WEIGHT_LIMIT]).toEqual([2, 3, 6]);
+    });
+
+    it.each([
+        ["three positive", String.raw`\p{L}\p{N}\p{Lu}z`],
+        ["two negated", String.raw`\P{L}\P{N}z`],
+        ["one negated, one positive", String.raw`\P{L}\p{N}z`],
+        ["a negated class and a positive one", String.raw`[^\p{L}]\p{N}z`],
+        ["three properties in one class", String.raw`[\p{L}\p{N}\p{Z}]z`],
+        ["one quantified atom, many times", String.raw`\p{L}{10}z`],
+        ["a quantified atom, unbounded", String.raw`\p{L}+\p{N}+z`],
+        ["a repeated group, looped (min over 3)", String.raw`(?:\p{L}\p{N}){4}z`],
+        ["a repeated group, once or none", String.raw`(?:\p{L}\p{N})?\p{Lu}z`],
+        ["three written-out copies of a quantified atom", String.raw`\p{L}{3}z`],
+        ["a property in a lookbehind", String.raw`(?<=\p{L}\p{N})\p{Lu}z`],
+        ["scripts, which are cheap, still count", String.raw`\p{Script=Cyrillic}\p{Script=Latin}\p{L}z`],
+    ])("accepts %s", (_label, body) => {
+        for (const flags of ["u", "iu"]) expect(check(u(body, flags)), `${body} /${flags}`).toEqual({ ok: true });
+    });
+
+    it.each([
+        ["four positive (the checker's \\p{L} x4 case)", String.raw`\p{L}\p{N}\p{Lu}\p{Ll}z`],
+        ["six consecutive \\P{L} (2 s on the first two-byte exec)", String.raw`\P{L}\P{L}\P{L}\P{L}\P{L}\P{L}z`],
+        ["three negated", String.raw`\P{L}\P{N}\P{Lu}z`],
+        ["two negated and one positive", String.raw`\P{L}\P{N}\p{Lu}z`],
+        ["one negated and two positive", String.raw`\P{L}\p{N}\p{Lu}z`],
+        ["\\p{...} inside a negated class counts as negated", String.raw`[^\p{L}][^\p{N}][^\p{Lu}]z`],
+        ["a \\P{...} inside a positive class counts as negated", String.raw`[\P{L}][\P{N}][\P{Lu}]z`],
+        ["four properties in one class", String.raw`[\p{L}\p{N}\p{Z}\p{P}]z`],
+        ["a capture group does not hide them", String.raw`(\P{L})(\P{L})(\P{L})z`],
+        ["a repeated group is unrolled by V8 (x3): 3 atoms x 3 copies took 2 s", String.raw`(?:\P{L}\P{L}\P{L}){3}z`],
+        ["a repeated group x2, two atoms", String.raw`(?:\p{L}\p{N}){2}z`],
+        ["a group repeated at least 3 times", String.raw`(?:\p{L}\p{N}){3,}z`],
+        ["a quantified atom written out 3 times and one more", String.raw`\p{L}{3}\p{N}z`],
+        ["copies multiply through a plain group around them", String.raw`(?:x(?:\p{L}\p{N}){2})z`],
+        ["inside a lookbehind", String.raw`(?<=\p{L}\p{N}\p{Lu}\p{Ll})z`],
+    ])("refuses %s", (_label, body) => {
+        for (const flags of ["u", "iu"]) {
+            const result = check(u(body, flags));
+            expect(result.ok, `${body} /${flags}`).toBe(false);
+            if (!result.ok) expect(result.reason).toMatch(/^Too many Unicode property classes/);
+        }
+    });
+
+    it("the reason says what was counted and what the limit is", () => {
+        const result = check(u(String.raw`\p{L}\p{N}\p{Lu}\p{Ll}z`));
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.reason).toBe(
+            "Too many Unicode property classes (\\p{...} and \\P{...}); this pattern has 8, the limit is 6 " +
+                "(a negated one, \\P{...} or \\p{...} inside [^...], counts 3, any other counts 2).",
+        );
+    });
+
+    it("an instant rule has the same limit", () => {
+        expect(check(u(String.raw`\p{L}\p{N}\p{Lu}z`), "instant")).toEqual({ ok: true });
+        expect(check(u(String.raw`\p{L}\p{N}\p{Lu}\p{Ll}z`), "instant").ok).toBe(false);
+    });
+
+    it("a non-property class and plain classes are free: \\w, [^a-z], [а-я] x12", () => {
+        expect(check(u(String.raw`\w\w\w\w\w\w\w\w\w\w\w\w[^a-z][^a-z][^a-z][^a-z][а-яё]{2}z`, "iu"))).toEqual({ ok: true });
+    });
+
+    // The first exec on non-Latin-1 text is where V8 compiles; a fresh `RegExp` per run so nothing is warmed. The test
+    // asserts no time but the 1.5 s watchdog of `execWithin`: the 6x `\P{L}` that this round refuses took 2 s here.
+    it("the first two-byte exec of any pattern at the limit stays far under the watchdog, under u and iu", () => {
+        const atLimit = [
+            String.raw`\p{L}\p{N}\p{Lu}`,
+            String.raw`\P{L}\P{ID_Continue}`,
+            String.raw`\P{L}\p{Alphabetic}`,
+            String.raw`[^\p{L}\p{N}]`,
+            String.raw`\p{Alphabetic}\P{L}`,
+            String.raw`[\p{L}\p{N}\p{Alphabetic}]`,
+            String.raw`\p{L}{3}`,
+            String.raw`(?:\p{L}\p{N}){4}`,
+            String.raw`\P{ID_Continue}\P{Alphabetic}`,
+        ];
+        const lines = ["я1", "я".repeat(63) + "1", "я1".repeat(32)];
+        let n = 0;
+        for (const body of atLimit) {
+            for (const flags of ["u", "iu"]) {
+                // A distinct literal at the end keeps V8's own compile cache from sharing the regex between runs.
+                const letter = String.fromCharCode(97 + (n++ % 26)) + String.fromCharCode(97 + Math.floor(n / 26));
+                const { re } = compiled(u(body + letter, flags));
+                for (const text of lines) {
+                    expect(() => execWithin(re, text), `${body} /${flags} on ${text.slice(0, 4)}`).not.toThrow();
+                    re.lastIndex = 0;
+                }
+            }
+        }
+    });
+
+    it("checking and compiling a new source never runs it (no compile-time exec)", () => {
+        const exec = vi.spyOn(RegExp.prototype, "exec");
+        try {
+            const marker = String.raw`neverrun(\d+)\p{L}$`;
+            expect(check(u(marker))).toEqual({ ok: true });
+            const r = compiled(u(String.raw`compiled(\d+)\p{L}\p{N}x`));
+            const ownRuns = exec.mock.contexts.filter((c) => c === r.re || (c instanceof RegExp && c.source.includes("neverrun")));
+            expect(ownRuns).toEqual([]);
+        } finally {
+            exec.mockRestore();
+        }
     });
 });
 
@@ -1466,24 +1581,35 @@ describe("patterns: runtime guard (fake clock)", () => {
         vi.restoreAllMocks();
     });
 
-    it("NO_PATTERNS has a clean bill of health", () => {
-        expect(patternHealth(NO_PATTERNS)).toEqual({ switchedOff: [], deadlineHits: 0 });
+    it("a rule the matcher would skip anyway (an instant end character that cannot end it) is not a starved rule", () => {
+        const t = steppingClock(9);
+        const first = fresh(String.raw`/(\d+)b$/`, "instant", "first");
+        const skipped = fresh(String.raw`/(\d+)!$/`, "instant", "skipped");
+        // The first rule runs (the line ends in "b") and spends 9 ms; the second could never end with "b".
+        matchPatternsInOrder({ atCaret: "hello ab" }, [first.rule, skipped.rule], t.clock);
+        expect(skipped.exec).not.toHaveBeenCalled();
+        expect(patternHealth(set(first.rule, skipped.rule)).deadlineHits).toBe(0);
+        // The same two rules, but the second can end with the typed character: now it was really cut.
+        const cut = fresh(String.raw`/(\d+)b$/`, "instant", "cut");
+        matchPatternsInOrder({ atCaret: "hello ab" }, [fresh(String.raw`/(\d+)b$/`, "instant", "a").rule, cut.rule], t.clock);
+        expect(patternHealth(set(cut.rule)).deadlineHits).toBe(1);
     });
 
-    it("a rule is warmed up once when it is compiled, on ASCII and on non-Latin-1 text (V8 compiles lazily on those)", () => {
-        const exec = vi.spyOn(RegExp.prototype, "exec");
-        try {
-            const r = compiled(String.raw`/warm(\d+)up$/`);
-            const own = exec.mock.calls.map((c, i) => ({ text: c[0], re: exec.mock.contexts[i] })).filter((c) => c.re === r.re);
-            expect(own.map((c) => c.text)).toEqual(["a", "\u044f1"]);
-            // Warming leaves the regex ready for the matcher: lastIndex is back at 0, and the same source is not warmed again.
-            expect(r.re.lastIndex).toBe(0);
-            exec.mockClear();
-            expect(compiled(String.raw`/warm(\d+)up$/`).re).toBe(r.re);
-            expect(exec.mock.calls.filter((_, i) => exec.mock.contexts[i] === r.re)).toEqual([]);
-        } finally {
-            exec.mockRestore();
-        }
+    it("a rule with ^ on a line longer than the window is not a starved rule either", () => {
+        const t = steppingClock(9);
+        const first = fresh("/(\\d+)b$/", "separator", "first");
+        const bol = fresh("/^(\\d+)b$/", "separator", "bol");
+        const long = "x".repeat(PATTERN_TAIL_LIMIT + 5) + "1b";
+        matchPatternsInOrder({ beforeSeparator: long }, [first.rule, bol.rule], t.clock);
+        expect(patternHealth(set(first.rule, bol.rule)).deadlineHits).toBe(0);
+        // On a short line the ^ rule would have run, so skipping it is a cut.
+        const shortBol = fresh("/^(\\d+)b$/", "separator", "short");
+        matchPatternsInOrder({ beforeSeparator: "xb" }, [fresh("/(\\d+)b$/", "separator", "a").rule, shortBol.rule], t.clock);
+        expect(patternHealth(set(shortBol.rule)).deadlineHits).toBe(1);
+    });
+
+    it("NO_PATTERNS has a clean bill of health", () => {
+        expect(patternHealth(NO_PATTERNS)).toEqual({ switchedOff: [], deadlineHits: 0 });
     });
 
     it("the default clock is the real one: a normal match works without injecting anything", () => {
