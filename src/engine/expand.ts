@@ -2,7 +2,7 @@ import type { Dict, EditPlan, ExpandContext, ExpandInput } from "./types";
 import { shouldExpandHere } from "./guards";
 import { findTrigger } from "./match";
 import { applyPlaceholders } from "./placeholders";
-import { applyPatternReplacement, matchPatternsInOrder, type CompiledRule, type PatternMatch } from "./patterns";
+import { matchPatternsInOrder, safePatternReplacement, type CompiledRule, type PatternMatch } from "./patterns";
 import { buildEdit } from "./edit";
 import { DEFAULT_DELIMITERS } from "../shared/delimiters";
 
@@ -50,7 +50,8 @@ async function expandPatternAtSeparator(
         patterns,
     );
     if (!hit) return null;
-    const applied = await applyPatternReplacement(hit, ctx);
+    const applied = await safePatternReplacement(hit, ctx);
+    if (!applied) return null;
     if (hit.rule.mode === "instant") {
         // The match ends with the typed separator: it is replaced with the rest.
         const plan = buildEdit(input, { trigger: hit.rule.id, fromCh: hit.index, toCh: throughCaret.length }, applied);
@@ -75,7 +76,8 @@ export async function expandInstant(
     hit: PatternMatch,
 ): Promise<EditPlan | null> {
     if (!shouldExpandHere(ctx)) return null;
-    const applied = await applyPatternReplacement(hit, ctx);
+    const applied = await safePatternReplacement(hit, ctx);
+    if (!applied) return null;
     const input: ExpandInput = { textBefore, textAfter: "", lastTyped: "", sepCh: textBefore.length };
     const plan = buildEdit(input, { trigger: hit.rule.id, fromCh: hit.index, toCh: textBefore.length }, applied);
     return { ...plan, kind: "pattern" };

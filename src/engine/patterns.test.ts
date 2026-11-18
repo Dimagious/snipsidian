@@ -2,6 +2,7 @@ import { describe, it, expect, vi, type MockInstance } from "vitest";
 import { createContext, Script } from "node:vm";
 import {
     applyPatternReplacement,
+    safePatternReplacement,
     checkPattern,
     canEndWith,
     matchPatternsInOrder,
@@ -23,6 +24,7 @@ import {
     type CompiledRule,
     type PatternMatch,
 } from "./patterns";
+import { expand } from "./expand";
 import type { ExpandContext, PatternMode, PatternRule } from "./types";
 
 const ctx: ExpandContext = { isInCode: false, isInMath: false, isInFrontmatter: false, now: new Date("2025-09-02T10:11:12") };
@@ -32,6 +34,9 @@ const check = (source: string, mode: PatternMode = "separator") => checkPattern(
 
 /** `/body/` or a full source. */
 const src = (body: string, flags = ""): string => `/${body}/${flags}`;
+
+/** A high half not followed by a low one, or a low half not preceded by a high one. */
+const hasLoneSurrogate = (text: string): boolean => /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(text);
 
 function rule(source: string, replacement = "x", extra: Partial<PatternRule> = {}): PatternRule {
     return { id: "r1", source, replacement, enabled: true, mode: "instant", ...extra };
@@ -982,7 +987,7 @@ describe("patterns: Unicode property escapes are refused (S-015, round 5)", () =
             String.raw`\w{1,4}-\d{2}-\d{2}`,
             String.raw`[а-яё]{2,4}\d{4}`,
             String.raw`[^a]{1,4}\w{6}.{1,4}\w{6}`,
-            "😀{1,4}abcdef",
+            "(?:😀){1,4}abcdef",
             "😀x{1,4}\\w{6}",
             String.raw`\w\w\w\w\w\w\w\w\w\w\w\w[^a-z][^a-z][^a-z][^a-z][а-яё]{2}z`,
         ]) {
@@ -997,7 +1002,7 @@ describe("patterns: Unicode property escapes are refused (S-015, round 5)", () =
     // shares compiled code and nothing here is timed), so it catches only a blow-up of seconds, not a regression of
     // milliseconds; that is what the refusal above and the runtime guard are for.
     it("the first two-byte exec of the non-property constructs the checker swept stays under the watchdog", () => {
-        const atoms = [String.raw`\w`, ".", "[^a]", "[а-яё]", "😀", String.raw`\W`, String.raw`\S`, "[^a-z]"];
+        const atoms = [String.raw`\w`, ".", "[^a]", "[а-яё]", "(?:😀)", String.raw`\W`, String.raw`\S`, "[^a-z]"];
         const lines = ["я1", "я".repeat(63) + "1", "я1".repeat(32), "😀".repeat(31) + "я1"];
         let n = 0;
         for (const atom of atoms) {
@@ -1085,7 +1090,7 @@ describe("patterns: no astral character inside a class (S-015, round 7)", () => 
     it("an emoji outside a class stays legal, quantified or not", () => {
         expect(check(pat("😀x"))).toEqual({ ok: true });
         expect(check(pat(":smile:"))).toEqual({ ok: true });
-        expect(check(pat("a😀{1,4}"))).toEqual({ ok: true });
+        expect(check(pat("a(?:😀){1,4}"))).toEqual({ ok: true });
         expect(check(pat("(?:😀|😁)x"))).toEqual({ ok: true });
         expect(check(pat("😀", "i"))).toEqual({ ok: true });
     });
@@ -1110,8 +1115,6 @@ describe("patterns: no astral character inside a class (S-015, round 7)", () => 
 describe("patterns: a match never splits an emoji (S-015, round 7)", () => {
     // Without `u`, `.`, `[^a]` and `\S` match a single surrogate half. A match that starts on a low half, or whose text
     // ends on a high half, would leave a lone surrogate behind when the plan replaces it.
-    const hasLoneSurrogate = (text: string): boolean => /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(text);
-
     /** What the editor would do with a match: replace `[index, end)` of the text with the replacement. */
     const applied = (text: string, source: string, mode: PatternMode): string | null => {
         const m = matchPatterns(text, [compiled(source, "<R>", mode)], mode);
@@ -1152,8 +1155,8 @@ describe("patterns: a match never splits an emoji (S-015, round 7)", () => {
     it("an emoji inside the match is replaced whole, a plain-text emoji rule works", () => {
         expect(applied("hi :smile:", "/:smile:$/", "separator")).toBe("hi <R>");
         expect(applied("a 😀x", "/😀x$/", "instant")).toBe("a <R>");
-        // `😀+` repeats the LOW half (no `u`): the match is the second emoji and the x, the first one stays.
-        expect(applied("😀😀x", "/(😀+)x$/", "separator")).toBe("😀<R>");
+        // The emoji is repeated through a group (a quantifier right after it is refused, round 8).
+        expect(applied("😀😀x", "/((?:😀)+)x$/", "separator")).toBe("<R>");
     });
 
     it("a text that ends between the halves of an emoji is skipped without running the regex (no orphan high half)", () => {
@@ -1187,6 +1190,176 @@ describe("patterns: a match never splits an emoji (S-015, round 7)", () => {
     it("the window start never splits a pair either (round 2, unchanged)", () => {
         const m = matchPatterns("😀" + "y".repeat(63), [compiled("/[^]{62}$/")], "separator");
         expect(m?.index).toBe(3);
+    });
+});
+
+describe("patterns: a capture never holds half an emoji (S-015, round 8)", () => {
+    /** The line after the editor replaced the match with its replacement; `null` when nothing expands. */
+    async function lineAfter(text: string, source: string, replacement: string, mode: PatternMode): Promise<string | null> {
+        const m = matchPatterns(text, [compiled(source, replacement, mode)], mode);
+        if (!m) return null;
+        const out = await safePatternReplacement(m, ctx);
+        return out ? text.slice(0, m.index) + out.text + text.slice(m.end) : null;
+    }
+
+    const REPROS: ReadonlyArray<readonly [string, string, string]> = [
+        ["/(.)(.)x$/", "{{1}}", "😀x"],
+        ["/(.)(.)x$/", "{{2}}{{1}}", "😀x"],
+        ["/(?<a>.)(?<b>.)$/", "{{b}}{{a}}", "😀"],
+        [String.raw`/(\S+)\S$/`, "{{1}}", "hi😀"],
+        [String.raw`/(\w+)(.)(.)$/`, "{{1}}{{3}}", "ab😀"],
+        ["/:(.)(.*)$/", "{{1}}", "x :😀abc"],
+        ["/x(.)?(.)$/", "{{2}}", "x😀"],
+        ["/(.)+$/", "{{1}}", "ab😀"],
+        [String.raw`/(\W)(\W)$/`, "{{2}}{{1}}", "😀"],
+    ];
+
+    it.each(REPROS)("%s with %s on %j never writes a lone surrogate, in both modes", async (source, replacement, text) => {
+        for (const mode of ["separator", "instant"] as const) {
+            const line = await lineAfter(text, source, replacement, mode);
+            if (line !== null) expect(hasLoneSurrogate(line), `${mode}: ${JSON.stringify(line)}`).toBe(false);
+        }
+    });
+
+    it("layer one: a rule whose capture would be half an emoji does not match at all", () => {
+        for (const mode of ["separator", "instant"] as const) {
+            expect(matchPatterns("😀x", [compiled("/(.)(.)x$/", "{{1}}", mode)], mode), mode).toBeNull();
+            expect(matchPatterns("hi😀", [compiled(String.raw`/(\S+)\S$/`, "{{1}}", mode)], mode), mode).toBeNull();
+        }
+    });
+
+    it("whole emoji in captures still expand, in order", async () => {
+        expect(await lineAfter("😀😁x", "/(.{2})(.{2})x$/", "{{2}}{{1}}!", "separator")).toBe("😁😀!");
+        expect(await lineAfter("ab😀", String.raw`/(\w+)(\W{2})$/`, "{{1}}-{{2}}", "separator")).toBe("ab-😀");
+        expect(await lineAfter("x 12", String.raw`/(?<n>\d+)$/`, "<{{n}}>", "instant")).toBe("x <12>");
+    });
+
+    it("layer two: a match whose capture is half an emoji (built by hand) yields no replacement", async () => {
+        const base = matchOf("/(.)x$/", "bx", "{{1}}");
+        const high = "😀".charAt(0);
+        const low = "😀".charAt(1);
+        for (const bad of [high, low, "a" + high, low + "a", "😀" + high]) {
+            expect(await safePatternReplacement({ ...base, captures: ["bx", bad] }, ctx), JSON.stringify(bad)).toBeNull();
+        }
+        expect(await safePatternReplacement({ ...base, captures: ["bx", "😀"] }, ctx)).toEqual({ text: "😀" });
+    });
+
+    it("layer two: a range that would leave a lone half at either edge yields no replacement", async () => {
+        const high = "😀".charAt(0);
+        const make = (text: string, index: number): PatternMatch => ({ ...matchOf("/(.)x$/", "bx", "y"), text, index, end: text.length });
+        // Starts on the low half of a pair: the high half stays behind.
+        expect(await safePatternReplacement(make("😀x", 1), ctx)).toBeNull();
+        // Ends on a high half: the low half is left to follow.
+        expect(await safePatternReplacement(make("a" + high, 0), ctx)).toBeNull();
+        // After a whole pair, or on plain text, it is fine.
+        expect(await safePatternReplacement(make("😀x", 2), ctx)).toEqual({ text: "y" });
+        expect(await safePatternReplacement(make("abx", 0), ctx)).toEqual({ text: "y" });
+    });
+
+    it("a clipboard or replacement text with a lone half is not inserted", async () => {
+        const high = "😀".charAt(0);
+        const m = matchOf("/x$/", "x", "[$clipboard]");
+        const out = await safePatternReplacement(m, { ...ctx, readClipboard: async () => high });
+        expect(out).toBeNull();
+    });
+
+    it("expand() gives no plan for a half-emoji capture, in both modes", async () => {
+        const delimiters = [" "];
+        for (const mode of ["separator", "instant"] as const) {
+            const r = compiled("/(.)(.)x$/", "{{1}}", mode);
+            const plan = await expand({ textBefore: "😀x", textAfter: "", lastTyped: " ", sepCh: 3 }, {}, ctx, delimiters, [r], true);
+            expect(plan, mode).toBeNull();
+        }
+        const ok = await expand({ textBefore: "ab😀x", textAfter: "", lastTyped: " ", sepCh: 5 }, {}, ctx, delimiters, [compiled(String.raw`/(\w+)(.{2})x$/`, "{{2}}{{1}}", "separator")], false);
+        expect(ok?.insert).toBe("😀ab");
+    });
+
+    // A random accepted rule with capture references on random texts with emoji: the line after the edit never has a lone half.
+    it("fuzz: no capture reference ever puts a lone surrogate into the line (seeded, both modes)", async () => {
+        const rand = mulberry32(0x8a8a);
+        const pick = <T>(list: readonly T[]): T => list[Math.floor(rand() * list.length)] as T;
+        const atoms = [".", String.raw`\S`, String.raw`\W`, String.raw`\w`, "[^a]", "[ab]", "a", "x", "😀", String.raw`\d`, "(?:😀)", "[^]"];
+        const quants = ["", "", "?", "*", "+", "{1,3}", "{2}", "{0,2}", "+?"];
+        const textChars = ["a", "b", "x", "1", " ", ":", "😀", "😁", "🙏", "я", "😀😁"];
+        const refs = ["{{0}}", "{{1}}", "{{2}}", "{{3}}", "{{1}}{{2}}", "{{3}}{{1}}", "{{n}}", "[{{2}}]", "{{1}}{{1}}"];
+        let matched = 0;
+        let produced = 0;
+        for (let i = 0; i < 6000; i++) {
+            const parts: string[] = [];
+            const length = 1 + Math.floor(rand() * 3);
+            for (let j = 0; j < length; j++) {
+                const piece = pick(atoms) + pick(quants);
+                const r = rand();
+                parts.push(r < 0.35 ? `(${piece})` : r < 0.45 ? `(?<n>${piece})` : piece);
+            }
+            const mode = pick(["instant", "separator"] as const);
+            const result = compileRule(rule(`/${parts.join("")}$/${pick(["", "i"])}`, pick(refs), { mode }));
+            if (!result.ok) continue;
+            for (let k = 0; k < 15; k++) {
+                let text = "";
+                const n = 1 + Math.floor(rand() * 6);
+                for (let c = 0; c < n; c++) text += pick(textChars);
+                const m = matchPatterns(text, [result.rule], mode);
+                if (!m) continue;
+                matched++;
+                for (const cap of m.captures) expect(hasLoneSurrogate(cap ?? ""), `/${parts.join("")}$/ ${mode} on ${JSON.stringify(text)}`).toBe(false);
+                const out = await safePatternReplacement(m, ctx);
+                if (!out) continue;
+                produced++;
+                const line = text.slice(0, m.index) + out.text + text.slice(m.end);
+                expect(hasLoneSurrogate(line), `/${parts.join("")}$/ ${result.rule.replacement} ${mode} on ${JSON.stringify(text)} -> ${JSON.stringify(line)}`).toBe(false);
+            }
+        }
+        expect(matched).toBeGreaterThan(500);
+        expect(produced).toBeGreaterThan(300);
+    }, 60_000);
+});
+
+describe("patterns: a quantifier after an emoji, and an escaped half (S-015, round 8)", () => {
+    const QUANTIFIER = "A quantifier (*, +, ?, {n,m}) can't follow an emoji directly. Put the emoji in a group to repeat it, like (?:😀)+.";
+
+    it.each(["/a😀?b$/", "/😀+x$/", "/x😀*$/", "/😀{2}$/", "/😀{1,3}x$/", "/😀+?x$/", "/a😀🙏?$/"])("%s is refused with the group hint", (source) => {
+        for (const mode of ["separator", "instant"] as const) {
+            expect(check(source, mode), `${source} ${mode}`).toEqual({ ok: false, reason: QUANTIFIER });
+        }
+    });
+
+    it("an emoji in a group can be repeated, and an emoji with no quantifier after it is fine", () => {
+        for (const source of ["/(?:😀)+x$/", "/a(?:😀)?b$/", "/(😀){2}$/", "/😀x+$/", "/😀{x$/", "/😀😁x$/"]) {
+            expect(check(source), source).toEqual({ ok: true });
+        }
+    });
+
+    it("an emoji alternation under a quantifier gets a hint that does not point at [ ]", () => {
+        const result = check("/(?:😀|🙏)+x$/");
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+            expect(result.reason).toContain("(?:😀|🙏)");
+            expect(result.reason).not.toContain("[ab]");
+        }
+        // The same group without the quantifier is accepted, and the old hint stays for ordinary alternations.
+        expect(check("/(?:😀|🙏)x$/")).toEqual({ ok: true });
+        const plain = check("/(?:a|b)+x$/");
+        expect(plain.ok === false && plain.reason.includes("[ab]")).toBe(true);
+    });
+
+    it.each([
+        ["an escaped high half outside a class", "/\\\uD83Dx$/"],
+        ["an escaped low half outside a class", "/\\\uDE00x$/"],
+        ["an escaped lone half inside a class", "/[\\\uD83D]x$/"],
+        ["an escaped emoji", "/\\😀x$/"],
+        ["an escaped emoji inside a class", "/[\\😀]x$/"],
+    ])("%s is refused", (_label, source) => {
+        for (const mode of ["separator", "instant"] as const) {
+            expect(check(source, mode).ok, `${source} ${mode}`).toBe(false);
+        }
+        expect(compilePatternRules([rule(source)]).rules).toEqual([]);
+    });
+
+    it("escaped symbols and non-surrogate escapes stay legal", () => {
+        for (const source of [String.raw`/\.x$/`, String.raw`/[\-a]x$/`, String.raw`/\u0041x$/`, String.raw`/\uFFFFx$/`]) {
+            expect(check(source), source).toEqual({ ok: true });
+        }
     });
 });
 
@@ -1466,10 +1639,11 @@ describe("patterns: the window keeps context for lookbehind and \\b", () => {
         expect(matchPatterns("zz" + "y".repeat(63), [compiled("/[^]{64}$/")], "separator")?.index).toBe(1);
     });
 
-    it("a lone low surrogate at the window start is not moved", () => {
-        // No high surrogate before it: nothing to split.
-        const m = matchPatterns("x\uDE00" + "y".repeat(63), [compiled("/[^]{64}$/")], "separator");
-        expect(m?.index).toBe(1);
+    it("a lone low surrogate at the window start is not moved, and a match that would begin with it is dropped (round 8)", () => {
+        // No high surrogate before it: nothing to split, so the window starts on it and `[^]{64}` would take it as its
+        // first unit. A capture that begins with a lone half is never produced, so there is no match.
+        expect(matchPatterns("x\uDE00" + "y".repeat(63), [compiled("/[^]{64}$/")], "separator")).toBeNull();
+        expect(matchPatterns("x\uDE00" + "y".repeat(63), [compiled("/[^]{63}$/")], "separator")?.index).toBe(2);
     });
 });
 

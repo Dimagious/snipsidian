@@ -71,9 +71,11 @@ export const KEYSTROKE_BUDGET_MS = 8;
  * that run (the first one plus its re-runs, see `RULE_SLOW_RETRIES`) is compared with this limit. Over it, the rule is
  * switched off for the session ("too expensive to compile"): an unknown hotspot costs one pause per rule, not a pause
  * per keystroke. The sum, not the first sample alone, because two samples of 43.7 ms and 48.9 ms are each under the
- * limit and are still a rule that takes 90 ms to compile. A later (warm) exec never counts here: a one-off 60 ms GC
- * pause on an exec after the third is a slow sample like any other (it takes `RULE_SLOW_STRIKES` of them to switch the
- * rule off). One GC pause this long on a cold exec would switch the rule off; it comes back when the rules are edited
+ * limit and are still a rule that takes 90 ms to compile. A later (warm) exec never counts here: a GC pause on
+ * an exec after the third is a slow sample like any other (it takes `RULE_SLOW_STRIKES` of them to switch the rule
+ * off). A V8 recompile on a run after the third is NOT guarded at all: the fastest of the 3 samples decides a strike,
+ * so a compile spike never strikes. It is bounded by the number of V8 recompiles (a few per rule), each measured at
+ * 2.3 ms at most on the worst accepted shapes. One GC pause this long on a cold exec would switch the rule off; it comes back when the rules are edited
  * or Obsidian restarts. Without the `u` flag, the first exec of 288 accepted adjacent-ranged-term shapes (`\w \S . [^a]`
  * and others, 3 to 8 repeats, with and without `i`) on Cyrillic and emoji text measured 12 ms at worst, 26 of 576 runs
  * over 2 ms and 4 over 5 ms (2026-11-18, Node, one fresh process per run), so the limit is above anything measured.
@@ -131,6 +133,15 @@ const REASON_PROPERTY =
 /** Round 7 (owner, 2026-11-18): without `u`, an astral character in `[...]` is two members and could match half of it. */
 const REASON_ASTRAL_CLASS =
     "Emoji and other characters outside the basic plane can't go inside [ ] yet. Write them as plain text instead.";
+/** Round 8: a quantifier right after an emoji would repeat only its low half. */
+const REASON_EMOJI_QUANTIFIER =
+    "A quantifier (*, +, ?, {n,m}) can't follow an emoji directly. Put the emoji in a group to repeat it, like (?:😀)+.";
+/** Round 8: an escaped half of an emoji (`\<surrogate>`) is refused, in or out of a class. */
+const REASON_ESCAPED_ASTRAL = "A backslash can't go before an emoji. Write the emoji as plain text.";
+/** A repeated group of emoji alternatives: the usual `[ab]` advice is refused for emoji (`REASON_ASTRAL_CLASS`). */
+const REASON_REPEATED_EMOJI_ALTERNATION =
+    "A repeated group can't contain an alternation or a quantifier, because matching can become very slow, and emoji can't go inside [ ] instead. " +
+    "Use the group once, like (?:😀|🙏), or write one rule per emoji.";
 /** Round 7 (owner, 2026-11-18): `u` is refused; only `i` is allowed. */
 const REASON_UNICODE_FLAG = "The u flag isn't supported in patterns yet. Emoji still work as plain text, outside [ ].";
 
@@ -166,6 +177,7 @@ class Parser {
     }
 
     private parseTerm(): Term {
+        const atomStart = this.pos;
         const node = this.parseAtom();
         let min = 1;
         let max = 1;
@@ -195,6 +207,12 @@ class Parser {
         }
         // Lazy marker: `a+?`. It changes nothing for the checks.
         if (quantified && this.src[this.pos] === "?") this.pos++;
+        // Without `u` an emoji is two atoms and the quantifier would repeat its low half only (`😀+x` is a high half,
+        // then many low halves): refuse it rather than match something no one meant (round 8).
+        if (quantified && node.kind === "atom" && node.text.length === 1 && isLowSurrogate(node.text.charCodeAt(0))) {
+            const before = this.src.charCodeAt(atomStart - 1);
+            if (atomStart > 0 && isHighSurrogate(before)) throw new Refusal(REASON_EMOJI_QUANTIFIER);
+        }
         return { node, min, max, quantified };
     }
 
@@ -246,6 +264,8 @@ class Parser {
     private skipEscape(inClass: boolean): void {
         const e = this.src[this.pos++];
         if (e === undefined) throw new Refusal("The pattern ends with a lone backslash.");
+        // An identity escape of a surrogate half (round 8): the pair would be split into an atom and a stray half.
+        if (isSurrogate(e.charCodeAt(0))) throw new Refusal(REASON_ESCAPED_ASTRAL);
         if (!inClass && e >= "1" && e <= "9") throw new Refusal(REASON_BACKREF);
         if (!inClass && e === "k" && this.src[this.pos] === "<") throw new Refusal(REASON_BACKREF);
         if (e === "0") {
@@ -402,9 +422,12 @@ function analyze(alts: readonly Term[][], names: readonly string[]): Analysis {
             throw new Refusal("A lookbehind can't contain a quantifier (*, +, ?, {n,m}). Keep it a fixed length.");
         }
         if (!t.node.behind && t.max > 1 && (hasQuantifier(t.node.alts) || hasAlternation(t.node.alts))) {
+            const emoji = someTerm(t.node.alts, (inner) => inner.node.kind === "atom" && isSurrogate(inner.node.text.charCodeAt(0)));
             throw new Refusal(
-                "A repeated group can't contain a quantifier or an alternation, because matching can become very slow. " +
-                    "Use a character class like [ab] or take the inner quantifier out.",
+                emoji && hasAlternation(t.node.alts)
+                    ? REASON_REPEATED_EMOJI_ALTERNATION
+                    : "A repeated group can't contain a quantifier or an alternation, because matching can become very slow. " +
+                          "Use a character class like [ab] or take the inner quantifier out.",
             );
         }
         return false;
@@ -535,7 +558,7 @@ function buildCore(source: string): CompiledCore {
         try {
             new Parser(body).parseAlternatives();
         } catch (parseErr) {
-            if (parseErr instanceof Refusal && parseErr.message === REASON_ASTRAL_CLASS) throw parseErr;
+            if (parseErr instanceof Refusal && (parseErr.message === REASON_ASTRAL_CLASS || parseErr.message === REASON_ESCAPED_ASTRAL)) throw parseErr;
         }
         throw new Refusal(err instanceof Error ? err.message : "The pattern does not compile.");
     }
@@ -735,6 +758,8 @@ export type PatternMatch = {
     /** `captures[0]` is the whole match; a group that did not take part is `undefined`. */
     readonly captures: ReadonlyArray<string | undefined>;
     readonly named: ReadonlyMap<string, string | undefined>;
+    /** The text the rule ran on (`index` and `end` are positions in it). */
+    readonly text: string;
 };
 
 /** Time spent by the rules of one call (one keystroke) and the clock that measures it. */
@@ -753,6 +778,20 @@ function isLowSurrogate(code: number): boolean {
 
 function isSurrogate(code: number): boolean {
     return code >= 0xd800 && code <= 0xdfff;
+}
+
+/** A high half not followed by a low one, or a low half not preceded by a high one. */
+function hasLoneSurrogate(text: string): boolean {
+    for (let i = 0; i < text.length; i++) {
+        const code = text.charCodeAt(i);
+        if (isHighSurrogate(code)) {
+            if (!isLowSurrogate(text.charCodeAt(i + 1))) return true;
+            i++;
+        } else if (isLowSurrogate(code)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
@@ -847,9 +886,12 @@ function tryRule(rule: CompiledRule, text: string, timing: Timing): PatternMatch
     // behind (`/(.)x$/` on "😀x" matches the low half). Checked on the whole text: the context may start mid-pair.
     const start = contextStart + m.index;
     if (start > 0 && isLowSurrogate(text.charCodeAt(start)) && isHighSurrogate(text.charCodeAt(start - 1))) return null;
+    // Without `u`, `.`, `\S`, `\W` and `[^a]` take one code unit: a capture can be half an emoji, and `{{n}}` would write
+    // it into the note as a lone surrogate (round 8). Such a match is dropped, like one that starts mid-pair.
+    for (const capture of m) if (capture !== undefined && hasLoneSurrogate(capture)) return null;
     const named = new Map<string, string | undefined>();
     if (m.groups) for (const [name, value] of Object.entries(m.groups)) named.set(name, value);
-    return { rule, index: start, end: text.length, captures: Array.from(m), named };
+    return { rule, index: start, end: text.length, captures: Array.from(m), named, text };
 }
 
 /** The line as each kind of rule reads it (a text that is `undefined` means that kind has nothing to run on). */
@@ -998,6 +1040,20 @@ export async function applyPatternReplacement(match: PatternMatch, ctx: ExpandCo
     });
     const applied = await applyPlaceholders(template, scrubContext(ctx, base, values.length));
     return swapSentinels(applied, base, values);
+}
+
+/**
+ * `applyPatternReplacement` plus the last safety net (round 8), the one both callers in `expand.ts` use: `null` (no
+ * expansion) when the insert holds a lone surrogate half, or when replacing `[index, end)` would leave one at either
+ * edge of the range (a high half just before it, a high half as its last unit). Layer one is `tryRule` dropping such
+ * matches; this catches whatever it did not foresee (a clipboard or date text, a future capture source).
+ */
+export async function safePatternReplacement(match: PatternMatch, ctx: ExpandContext): Promise<AppliedReplacement | null> {
+    const applied = await applyPatternReplacement(match, ctx);
+    if (hasLoneSurrogate(applied.text)) return null;
+    if (isHighSurrogate(match.text.charCodeAt(match.index - 1))) return null;
+    if (isHighSurrogate(match.text.charCodeAt(match.end - 1))) return null;
+    return applied;
 }
 
 function swapSentinels(applied: AppliedReplacement, base: number, values: readonly string[]): AppliedReplacement {
