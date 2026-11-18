@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, type MockInstance } from "vitest";
 import { createContext, Script } from "node:vm";
 import {
     applyPatternReplacement,
@@ -8,8 +8,13 @@ import {
     compilePatternRules,
     compileRule,
     matchPatterns,
+    KEYSTROKE_BUDGET_MS,
+    LOOKBEHIND_ATOM_LIMIT,
     MAX_PATTERN_REPLACEMENT,
     NO_PATTERNS,
+    RULE_SLOW_MS,
+    RULE_SLOW_STRIKES,
+    switchedOffRules,
     type CompiledRule,
     type PatternMatch,
 } from "./patterns";
@@ -31,6 +36,20 @@ function compiled(source: string, replacement = "x", mode: PatternRule["mode"] =
     const result = compileRule(rule(source, replacement, { mode }));
     if (!result.ok) throw new Error(`expected ${source} to compile: ${result.reason}`);
     return result.rule;
+}
+
+/**
+ * Runs `re.exec(text)` under a `node:vm` watchdog: a JS `exec` cannot be interrupted from the same thread, but the
+ * script `timeout` terminates it (irregexp checks for the interrupt while it backtracks). A pattern that is too slow
+ * fails the test with ERR_SCRIPT_EXECUTION_TIMEOUT instead of hanging the suite, and the test asserts no wall-clock
+ * time of its own (that only adds flakes).
+ */
+const execContext = createContext({ re: /x/, text: "" });
+const execScript = new Script("re.lastIndex = 0; re.exec(text)");
+function execWithin(re: RegExp, text: string, timeout = 100): void {
+    execContext.re = re;
+    execContext.text = text;
+    execScript.runInContext(execContext, { timeout });
 }
 
 function matchOf(source: string, text: string, replacement = "x"): PatternMatch {
@@ -123,8 +142,9 @@ describe("patterns: S-015 corpus", () => {
         if (!result.ok) expect(result.reason).toMatch(expected);
     });
 
-    // Timing (ADR-0008): accepted patterns run in well under 1 ms here. The bound is loose on purpose (25 ms): it
-    // guards orders of magnitude (a backtracking blow-up takes seconds), not a slow or loaded CI machine.
+    // Accepted patterns do not blow up on adversarial 64-char strings. Under a vm watchdog (100 ms, see `execWithin`),
+    // not a stopwatch: a backtracking blow-up takes seconds to minutes, so the watchdog tells it from a slow machine.
+    // No "under 1 ms" promise (ADR-0008, round 2): polynomial cost is the runtime guard's job.
     it("every accepted corpus pattern stays far from a backtracking blow-up on adversarial 64-char strings", () => {
         const adversarial = [
             "a".repeat(64),
@@ -140,19 +160,10 @@ describe("patterns: S-015 corpus", () => {
             "Mrs " + "w".repeat(59) + "!",
             "foo " + "b".repeat(59) + "!",
         ];
-        const runs = 50;
         for (const [label, source] of MUST_ACCEPT) {
             const { re } = compiled(source);
             for (const text of adversarial) {
-                const exec = (): void => {
-                    re.lastIndex = 0;
-                    re.exec(text);
-                };
-                for (let i = 0; i < 5; i++) exec(); // warm up
-                const start = performance.now();
-                for (let i = 0; i < runs; i++) exec();
-                const perRun = (performance.now() - start) / runs;
-                expect(perRun, `${label} on ${text.slice(0, 12)}...`).toBeLessThan(25);
+                expect(() => execWithin(re, text), `${label} on ${text.slice(0, 12)}...`).not.toThrow();
             }
         }
     });
@@ -290,18 +301,11 @@ describe("patterns: the checker looks at structure, not at characters", () => {
         ["a? x4 + \\w+ (16)", String.raw`a?a?a?a?\w+!$`],
         ["a? x2 + \\w+\\w+ (4)", String.raw`a?a?\w+\w+!$`],
         ["dates and times", String.raw`(\d{1,2})\/(\d{1,2})\/(\d{2,4})$`],
-    ])("accepts at the limit: %s, and it stays far from a blow-up (25 ms bound, see above)", (_label, body) => {
+    ])("accepts at the limit: %s, and it stays far from a blow-up (vm watchdog, see above)", (_label, body) => {
         expect(check(src(body))).toEqual({ ok: true });
         const { re } = compiled(src(body));
         for (const text of ["a".repeat(64), "w".repeat(64), "1/".repeat(32), "a".repeat(63) + "!"]) {
-            const exec = (): void => {
-                re.lastIndex = 0;
-                re.exec(text);
-            };
-            for (let i = 0; i < 5; i++) exec();
-            const start = performance.now();
-            for (let i = 0; i < 20; i++) exec();
-            expect((performance.now() - start) / 20, `${body} on ${text.slice(0, 8)}`).toBeLessThan(25);
+            expect(() => execWithin(re, text), `${body} on ${text.slice(0, 8)}`).not.toThrow();
         }
     });
 
@@ -328,7 +332,7 @@ describe("patterns: the checker looks at structure, not at characters", () => {
     it("handles \\p{...}, \\u{...} and \\xHH without losing its place", () => {
         expect(check(src(String.raw`\p{L}+x$`, "u")).ok).toBe(true);
         expect(check(src(String.raw`\u{1F600}x$`, "u")).ok).toBe(true);
-        expect(check(src(String.raw`\x41B\cJ$`)).ok).toBe(true);
+        expect(check(src(String.raw`\x41B$`)).ok).toBe(true);
     });
 
     it("refuses syntax it does not understand rather than guessing", () => {
@@ -715,29 +719,71 @@ describe("patterns: replacement", () => {
 // Checker round 1 (ADR-0008 amendments)
 // ---------------------------------------------------------------------------
 
-describe("patterns: escapes are read by the flags (S-015)", () => {
-    // Without `u`, \u{1,} / \p{1,} / \P{1,} are one letter and the quantifier {1,}. The parser used to swallow them as
-    // one atom, so a pattern with real nested quantifiers looked harmless (and hung `exec` for seconds).
+describe("patterns: escapes are an allowlist (S-015, round 2)", () => {
+    // Round 1: without `u`, \u{1,} / \p{1,} / \P{1,} are one letter and the quantifier {1,}, and the parser used to
+    // swallow them as one atom. Round 2: instead of modelling every Annex B form (legacy octal, \c, identity
+    // escapes of letters), the parser refuses what it does not model exactly.
     it.each([
-        ["\\u{1,}", String.raw`(\u{1,})+$`],
-        ["\\p{1,}", String.raw`(\p{1,})+$`],
-        ["\\P{1,}", String.raw`(\P{1,})+$`],
-    ])("%s without u is a letter and a quantifier: a repeated group around it is refused", (_label, body) => {
-        const result = check(src(body));
-        expect(result.ok).toBe(false);
-        if (!result.ok) expect(result.reason).toMatch(/repeated group/i);
+        ["\\u{1,} without u", String.raw`(\u{1,})+$`, ""],
+        ["\\p{1,} without u", String.raw`(\p{1,})+$`, ""],
+        ["\\P{1,} without u", String.raw`(\P{1,})+$`, ""],
+        ["\\p{L} without u", String.raw`\p{L}$`, ""],
+        ["\\u12 (incomplete)", String.raw`\u12$`, ""],
+        ["\\u123 (incomplete)", String.raw`a\u123$`, ""],
+        ["\\x4 (incomplete)", String.raw`a\x4$`, ""],
+        ["\\c before a letter", String.raw`\cJ$`, ""],
+        ["\\c before a non-letter", String.raw`.*.*\c*\c*x$`, ""],
+        ["\\c at the end of a class", String.raw`[\c]x$`, ""],
+        ["legacy octal \\041", String.raw`\041$`, ""],
+        ["legacy octal \\00", String.raw`a\00$`, ""],
+        ["legacy octal in a class", String.raw`[\041]$`, ""],
+        ["\\a (identity escape of a letter)", String.raw`\a$`, ""],
+        ["\\e", String.raw`\e$`, ""],
+        ["\\k without a name", String.raw`\k$`, ""],
+        ["\\B in a class", String.raw`[\B]$`, ""],
+        ["a surrogate escape under u", String.raw`\uD83D\uDE00$`, "u"],
+        ["a lone surrogate escape", String.raw`a\uDE00$`, ""],
+    ])("refuses %s", (_label, body, flags) => {
+        const result = check(src(body, flags));
+        expect(result.ok, body).toBe(false);
+        if (!result.ok) expect(result.reason, body).toMatch(/^[A-Z]/);
     });
 
-    it("counts the quantifier of \\u{1,} without u, so four of them hit the cap of two", () => {
-        expect(check(src(String.raw`\u{1,}\u{1,}x$`))).toEqual({ ok: true });
-        const three = check(src(String.raw`\u{1,}\u{1,}\u{1,}x$`));
-        expect(three.ok).toBe(false);
-        if (!three.ok) expect(three.reason).toMatch(/unbounded/);
+    it("names the escape in the reason", () => {
+        const reason = (body: string): string => {
+            const result = check(src(body));
+            return result.ok ? "accepted" : result.reason;
+        };
+        expect(reason(String.raw`a\041$`)).toBe("This escape isn't supported in patterns: \\041");
+        expect(reason(String.raw`\cJ$`)).toBe("This escape isn't supported in patterns: \\c");
+        expect(reason(String.raw`\e$`)).toBe("This escape isn't supported in patterns: \\e");
     });
 
-    it("under u the same text is a brace escape: one atom, not a quantifier", () => {
-        // \u{1F600} and \p{L} are single atoms, so three of them with a quantifier each are 3 unbounded, but the
-        // braces add none.
+    it("still accepts the escapes the parser models exactly", () => {
+        for (const body of [
+            String.raw`\d\D\w\W\s\S$`,
+            String.raw`\n\r\t\f\v$`,
+            String.raw`a\0$`, // NUL: \0 not followed by a digit
+            String.raw`\x41\u0041$`,
+            String.raw`\.\*\+\?\^\$\|\(\)\[\]\{\}\\\/$`,
+            String.raw`\:\-\#\@\_$`, // identity escapes of non-letters, without u
+            String.raw`[\d\-\.\]\x41\u0041\b]$`,
+            String.raw`\bword\b$`,
+        ]) {
+            expect(check(src(body)), body).toEqual({ ok: true });
+        }
+        expect(check(src(String.raw`\u{1F600}\p{L}\P{Lu}[\p{L}\u{61}]$`, "u"))).toEqual({ ok: true });
+    });
+
+    it("keeps the backreference reason for \\1..\\9 and \\k<name>", () => {
+        for (const body of [String.raw`(a)\1$`, String.raw`(x)\10$`, String.raw`(?<a>x)\k<a>$`]) {
+            const result = check(src(body));
+            expect(result.ok, body).toBe(false);
+            if (!result.ok) expect(result.reason, body).toMatch(/backreference/i);
+        }
+    });
+
+    it("under u the brace forms are one atom, not a quantifier", () => {
         expect(check(src(String.raw`\u{1F600}\u{1F600}\u{1F600}\u{1F600}x$`, "u"))).toEqual({ ok: true });
         expect(check(src(String.raw`(\p{L}+)+$`, "u")).ok).toBe(false);
         expect(check(src(String.raw`(\p{L}\p{L})+$`, "u"))).toEqual({ ok: true }); // the braces are no quantifier
@@ -745,20 +791,15 @@ describe("patterns: escapes are read by the flags (S-015)", () => {
         expect(check(src(String.raw`\p{L}+\p{L}+x$`, "u"))).toEqual({ ok: true });
     });
 
-    it("\\uHHHH and \\xHH are one atom only when all their hex digits are there", () => {
-        expect(check(src(String.raw`\u0041+\x41+$`))).toEqual({ ok: true });
-        // `\u12` is `u`, `1`, `2` without u: the {3,} belongs to `2`, and there are three unbounded quantifiers.
-        expect(check(src(String.raw`\u12{3,}\w+\s+$`)).ok).toBe(false);
+    it("an unterminated brace escape is refused under u", () => {
+        expect(check(src(String.raw`\p{L$`, "u")).ok).toBe(false);
     });
 
-    it("\\c takes the next character only when it is an ASCII letter", () => {
-        // `\cJ` is one atom: two unbounded quantifiers.
-        expect(check(src(String.raw`\cJ+\cJ+x$`))).toEqual({ ok: true });
-        // `\c` before a non-letter is a literal backslash, and `c` is its own atom: four real unbounded quantifiers.
-        const four = check(src(String.raw`.*.*\c*\c*x$`));
-        expect(four.ok).toBe(false);
-        if (!four.ok) expect(four.reason).toMatch(/unbounded/);
-        expect(check(src(String.raw`\c1+\c1+\c1+$`)).ok).toBe(false);
+    // The bug class this closes: the parser read `\041` as `\0` + `4` + `1`, so the end-character test said the match
+    // could only end with `1` while V8 matches "!" (U+0021).
+    it("regression: /\\041$/ is refused, not read as \\0, 4, 1 (the end test would have said no to \"!\")", () => {
+        expect(compileRule(rule(src(String.raw`\041$`), "x", { mode: "instant" })).ok).toBe(false);
+        expect(new RegExp("(?:\\041)$").test("a!")).toBe(true); // V8 does match
     });
 
     it("a group name written with an escape is refused (it can hide a reserved one)", () => {
@@ -768,6 +809,37 @@ describe("patterns: escapes are read by the flags (S-015)", () => {
             if (!result.ok) expect(result.reason, body).toMatch(/group name/i);
         }
         expect(check(src(String.raw`(?<name>a)b$`))).toEqual({ ok: true });
+    });
+});
+
+describe("patterns: lookbehind is capped (S-015, round 2)", () => {
+    it(`allows ${String(LOOKBEHIND_ATOM_LIMIT)} atoms in all lookbehinds together, refuses the ninth`, () => {
+        expect(LOOKBEHIND_ATOM_LIMIT).toBe(8);
+        expect(check(src(String.raw`(?<=abcdefgh)x$`))).toEqual({ ok: true });
+        const nine = check(src(String.raw`(?<=abcdefghi)x$`));
+        expect(nine.ok).toBe(false);
+        if (!nine.ok) expect(nine.reason).toMatch(/lookbehind/i);
+    });
+
+    it("counts across lookbehinds, across alternatives and in nested groups", () => {
+        expect(check(src(String.raw`(?<=abcd)(?<!efgh)x$`))).toEqual({ ok: true });
+        expect(check(src(String.raw`(?<=abcd)(?<!efghi)x$`)).ok).toBe(false);
+        expect(check(src(String.raw`(?<=abcd|efgh)x$`))).toEqual({ ok: true });
+        expect(check(src(String.raw`(?<=abcd|efghi)x$`)).ok).toBe(false);
+        expect(check(src(String.raw`(?<=a(?:bcde)f)x$`))).toEqual({ ok: true }); // 7 terms: a, the group, b-e, f
+        expect(check(src(String.raw`(?<=a(?:bcdefgh))x$`)).ok).toBe(false); // 9 terms: a, the group, b-h
+    });
+
+    it("an anchor inside a lookbehind costs one, atoms outside lookbehinds cost nothing", () => {
+        expect(check(src(String.raw`(?<=^abcdefg)x$`))).toEqual({ ok: true });
+        expect(check(src(String.raw`(?<=^abcdefgh)x$`)).ok).toBe(false);
+        expect(check(src(String.raw`abcdefghijklmnop(?<=ab)x$`))).toEqual({ ok: true });
+    });
+
+    it("the existing refusal for a quantifier inside a lookbehind stays", () => {
+        const result = check(src(String.raw`(?<=a+)x$`));
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.reason).toMatch(/quantifier/i);
     });
 });
 
@@ -909,6 +981,29 @@ describe("patterns: canEndWith (which typed characters can end a match)", () => 
         expect(can(String.raw`\p{L}$`, "1", "u")).toBe(false);
     });
 
+    // Round 2: the typed character is the last CODE POINT of a `u` rule's text, not a lone low surrogate.
+    it("a u rule tests the last code point: /[😀😁]$/u is not filtered out after an emoji", () => {
+        expect(can("[😀😁]$", "😀", "u")).toBe(true);
+        expect(can("[😀😁]$", "x", "u")).toBe(false);
+        const r = compiled("/[😀😁]$/u", "x", "instant");
+        expect(matchPatterns("hi 😀", [r], "instant")?.index).toBe(3);
+        expect(matchPatterns("hi 😂", [r], "instant")).toBeNull();
+    });
+
+    it("a rule without u reads code units: the class holds the surrogate halves", () => {
+        const r = compiled("/[😀😁]$/", "x", "instant");
+        expect(matchPatterns("hi 😀", [r], "instant")?.index).toBe(4);
+        expect(matchPatterns("hi 😂", [r], "instant")).toBeNull();
+    });
+
+    it("an astral last character that no atom can end with is still skipped", () => {
+        const r = compiled("/-->$/u", "x", "instant");
+        const re = new RegExp(r.re.source, r.re.flags);
+        const exec = vi.spyOn(re, "exec");
+        expect(matchPatterns("a😀", [{ ...r, re }], "instant")).toBeNull();
+        expect(exec).not.toHaveBeenCalled();
+    });
+
     it("a rule with no end set answers yes (not computable means any)", () => {
         expect(canEndWith({ ...compiled("/a$/"), endTest: null }, "z")).toBe(true);
     });
@@ -967,12 +1062,37 @@ describe("patterns: one order for all rules", () => {
     });
 });
 
-describe("patterns: the window keeps one character of context", () => {
-    it("a lookbehind sees the character before a cut window, not a false line start", () => {
+describe("patterns: the window keeps context for lookbehind and \\b", () => {
+    it("a lookbehind sees the characters before a cut window, not a false line start", () => {
         const r = compiled(String.raw`/(?<!k)(y{63});$/`);
         expect(matchPatterns("k" + "y".repeat(63) + ";", [r], "separator")).toBeNull();
         // The control: the same line with another letter in front does match, from the window start.
         expect(matchPatterns("j" + "y".repeat(63) + ";", [r], "separator")?.index).toBe(1);
+    });
+
+    // Checker round 2: the old window kept ONE context character, so a two-character lookbehind saw only the second.
+    it("regression: a multi-character negative lookbehind sees all its characters", () => {
+        const r = compiled(String.raw`/(?<!kk)y{64}$/`);
+        expect(matchPatterns("kk" + "y".repeat(64), [r], "separator")).toBeNull();
+        expect(matchPatterns("jk" + "y".repeat(64), [r], "separator")?.index).toBe(2);
+    });
+
+    it("regression: a multi-character positive lookbehind sees all its characters", () => {
+        const r = compiled(String.raw`/(?<=ab)y{64}$/`);
+        expect(matchPatterns("ab" + "y".repeat(64), [r], "separator")?.index).toBe(2);
+        expect(matchPatterns("xb" + "y".repeat(64), [r], "separator")).toBeNull();
+    });
+
+    it("a lookbehind of the full atom budget sees all of it", () => {
+        const r = compiled(String.raw`/(?<=abcdefgh)y{64}$/`);
+        expect(matchPatterns("abcdefgh" + "y".repeat(64), [r], "separator")?.index).toBe(8);
+        expect(matchPatterns("abcdefgX" + "y".repeat(64), [r], "separator")).toBeNull();
+    });
+
+    it("astral characters in a lookbehind are seen whole (two code units each)", () => {
+        const r = compiled(String.raw`/(?<=😀😁😂😃😄😅😆😇)y{64}$/u`);
+        expect(matchPatterns("😀😁😂😃😄😅😆😇" + "y".repeat(64), [r], "separator")?.index).toBe(16);
+        expect(matchPatterns("😀😁😂😃😄😅😆X" + "y".repeat(64), [r], "separator")).toBeNull();
     });
 
     it("\\b does not see a false start: a word cut by the window is not replaced", () => {
@@ -989,9 +1109,32 @@ describe("patterns: the window keeps one character of context", () => {
         expect(matchPatterns("a".repeat(64), [compiled("/^a{64}$/")], "separator")?.index).toBe(0);
     });
 
-    it("a match cannot start before the window (the context character is only for looking)", () => {
-        // 65 characters: the pattern needs all 65, which is out of reach, even though the context char is there.
+    it("a match cannot start before the window (the context is only for looking)", () => {
+        // 65 characters: the pattern needs all 65, which is out of reach, even though the context is there.
         expect(matchPatterns("a".repeat(65), [compiled("/a{65}$/")], "separator")).toBeNull();
+    });
+
+    // Round 2: the window never starts between the halves of a surrogate pair.
+    it("does not split an emoji at the window start", () => {
+        const r = compiled("/[^]{64}$/");
+        // 65 code units: the emoji is units 0-1, so the window would start on its low surrogate (index 1).
+        const m = matchPatterns("😀" + "y".repeat(63), [r], "separator");
+        expect(m).toBeNull(); // moved forward one unit: 63 units are left, so {64} cannot match
+    });
+
+    it("moves the window start past a low surrogate and still matches what fits", () => {
+        const r = compiled("/[^]{62}$/");
+        const m = matchPatterns("😀" + "y".repeat(63), [r], "separator");
+        expect(m?.index).toBe(3);
+        expect(m?.captures[0]).toBe("y".repeat(62));
+        // The same line without a pair at the cut starts exactly at the window.
+        expect(matchPatterns("zz" + "y".repeat(63), [compiled("/[^]{64}$/")], "separator")?.index).toBe(1);
+    });
+
+    it("a lone low surrogate at the window start is not moved", () => {
+        // No high surrogate before it: nothing to split.
+        const m = matchPatterns("x\uDE00" + "y".repeat(63), [compiled("/[^]{64}$/")], "separator");
+        expect(m?.index).toBe(1);
     });
 });
 
@@ -1017,39 +1160,195 @@ describe("patterns: deviations from plain RegExp stay pinned", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Runtime guard (S-015, round 2): polynomial cost is bounded by time, not by syntax
+// ---------------------------------------------------------------------------
+
+describe("patterns: runtime guard (fake clock)", () => {
+    /** A clock that moves `step` ms on every read: one `exec` is read twice, so it costs exactly `step`. */
+    function steppingClock(initial: number): { clock: () => number; step: number } {
+        const state = { step: initial, now: 0, clock: (): number => (state.now += state.step) };
+        return state;
+    }
+
+    /** A fresh `RegExp` per rule: the compile cache shares one between rules of the same source. */
+    function fresh(source: string, mode: PatternMode = "separator", id = "r"): { rule: CompiledRule; exec: MockInstance<RegExp["exec"]> } {
+        const base = compiled(source, "x", mode);
+        const re = new RegExp(base.re.source, base.re.flags);
+        const exec = vi.spyOn(re, "exec");
+        return { rule: { ...base, id, re }, exec };
+    }
+
+    const set = (...rules: CompiledRule[]) => ({ rules, errors: [], hasInstant: false, hasSeparator: true });
+
+    it("one slow sample does not switch a rule off (a GC pause)", () => {
+        const t = steppingClock(RULE_SLOW_MS + 1);
+        const { rule } = fresh("/(\\d+)$/");
+        matchPatterns("a1", [rule], "separator", t.clock);
+        t.step = 0.01;
+        for (let i = 0; i < 50; i++) matchPatterns("a" + String(i), [rule], "separator", t.clock);
+        expect(switchedOffRules(set(rule))).toEqual([]);
+        expect(matchPatterns("a77", [rule], "separator", t.clock)?.captures[1]).toBe("77");
+    });
+
+    it("a sample at the threshold is not slow (only more than the threshold is)", () => {
+        const { clock } = steppingClock(RULE_SLOW_MS);
+        const { rule } = fresh("/(\\d+)$/");
+        for (let i = 0; i < 10; i++) matchPatterns("a" + String(i), [rule], "separator", clock);
+        expect(switchedOffRules(set(rule))).toEqual([]);
+    });
+
+    it("strikes accumulate across keystrokes: the third slow one switches the rule off, with a visible reason", () => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const { clock } = steppingClock(RULE_SLOW_MS + 1);
+        const { rule, exec } = fresh("/(\\d+)$/", "separator", "slow-one");
+        for (let i = 0; i < RULE_SLOW_STRIKES - 1; i++) matchPatterns("a" + String(i), [rule], "separator", clock);
+        expect(switchedOffRules(set(rule))).toEqual([]);
+        matchPatterns("a99", [rule], "separator", clock);
+        expect(switchedOffRules(set(rule))).toEqual([
+            { id: "slow-one", reason: `Switched off: slow on this note (${String(RULE_SLOW_STRIKES)} times over ${String(RULE_SLOW_MS)} ms).` },
+        ]);
+        // Off for the session: the regex is not run again, and nothing matches.
+        const calls = exec.mock.calls.length;
+        expect(matchPatterns("a123", [rule], "separator", clock)).toBeNull();
+        expect(exec.mock.calls.length).toBe(calls);
+        // One warning, with the rule's id; later keystrokes do not repeat it.
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(JSON.stringify(warn.mock.calls[0])).toContain("slow-one");
+        warn.mockRestore();
+    });
+
+    it("the same text twice is one keystroke (the instant path reads the line twice)", () => {
+        const { clock } = steppingClock(RULE_SLOW_MS + 1);
+        const { rule } = fresh("/(\\d+)$/");
+        for (let i = 0; i < 10; i++) matchPatterns("same1", [rule], "separator", clock);
+        expect(switchedOffRules(set(rule))).toEqual([]);
+    });
+
+    it("fast rules are never switched off, however many keystrokes", () => {
+        const { clock } = steppingClock(0.01);
+        const { rule } = fresh("/(\\d+)$/");
+        for (let i = 0; i < 2000; i++) matchPatterns("n" + String(i), [rule], "separator", clock);
+        expect(switchedOffRules(set(rule))).toEqual([]);
+    });
+
+    it("a rule switched off does not stop the others", () => {
+        vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const t = steppingClock(RULE_SLOW_MS + 1);
+        const slow = fresh("/(\\d+)$/", "separator", "slow").rule;
+        const fast = fresh("/(\\w+)!$/", "separator", "fast").rule;
+        for (let i = 0; i < RULE_SLOW_STRIKES; i++) matchPatterns("a" + String(i), [slow], "separator", t.clock);
+        t.step = 0.01;
+        expect(matchPatterns("a1!", [slow, fast], "separator", t.clock)?.rule.id).toBe("fast");
+        vi.restoreAllMocks();
+    });
+
+    it("stops trying further rules once the keystroke has spent its budget; later rules do not run", () => {
+        const t = steppingClock(3); // three rules take 9 ms, over the 8 ms budget
+        const rules = ["/aa$/", "/bb$/", "/cc$/", "/dd$/", "/ee$/"].map((source, i) => fresh(source, "separator", `r${String(i)}`));
+        expect(KEYSTROKE_BUDGET_MS).toBe(8);
+        expect(matchPatterns("x ee", rules.map((r) => r.rule), "separator", t.clock)).toBeNull();
+        expect(rules.map((r) => r.exec.mock.calls.length)).toEqual([1, 1, 1, 0, 0]);
+    });
+
+    it("stays within the budget: two 3 ms rules do not stop the third", () => {
+        const t = steppingClock(3);
+        const rules = ["/aa$/", "/bb$/", "/cc$/"].map((source, i) => fresh(source, "separator", `r${String(i)}`));
+        expect(matchPatterns("x cc", rules.map((r) => r.rule), "separator", t.clock)?.rule.id).toBe("r2");
+    });
+
+    it("a rule that matches before the budget runs out still wins", () => {
+        const t = steppingClock(3);
+        const rules = ["/aa$/", "/bb$/"].map((source, i) => fresh(source, "separator", `r${String(i)}`));
+        expect(matchPatterns("x aa", rules.map((r) => r.rule), "separator", t.clock)?.rule.id).toBe("r0");
+    });
+
+    it("applies to matchPatternsInOrder too: both modes share one budget for the call", () => {
+        const t = steppingClock(9); // the first rule that runs spends the whole budget
+        const rules = [fresh("/aa$/", "instant", "i0"), fresh("/bb$/", "separator", "s0"), fresh("/cc$/", "instant", "i1")];
+        const all = rules.map((r) => r.rule);
+        // i0 is skipped by its end test (no exec), s0 runs and spends 9 ms, so i1 is never tried.
+        expect(matchPatternsInOrder({ atCaret: "zz cc", beforeSeparator: "zz" }, all, t.clock)).toBeNull();
+        expect(rules.map((r) => r.exec.mock.calls.length)).toEqual([0, 1, 0]);
+        // With a cheap clock the same call reaches i1 and matches.
+        t.step = 1;
+        expect(matchPatternsInOrder({ atCaret: "zz cc", beforeSeparator: "zz" }, all, t.clock)?.rule.id).toBe("i1");
+    });
+
+    it("recompiling gives fresh rules: the switch-off is for the compiled set, not for the source", () => {
+        vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const list = [{ id: "r1", source: String.raw`/(\d+)$/`, replacement: "x", enabled: true, mode: "separator" }];
+        const first = compilePatternRules(list);
+        const t = steppingClock(RULE_SLOW_MS + 1);
+        for (let i = 0; i < RULE_SLOW_STRIKES; i++) matchPatterns("a" + String(i), first.rules, "separator", t.clock);
+        expect(switchedOffRules(first)).toHaveLength(1);
+        const second = compilePatternRules(list);
+        expect(switchedOffRules(second)).toEqual([]);
+        expect(matchPatterns("a42", second.rules, "separator")?.captures[1]).toBe("42");
+        vi.restoreAllMocks();
+    });
+
+    it("the default clock is the real one: a normal match works without injecting anything", () => {
+        expect(matchPatterns("x 12", [compiled(String.raw`/(\d+)$/`)], "separator")?.captures[1]).toBe("12");
+    });
+
+    it("NO_PATTERNS has nothing switched off", () => {
+        expect(switchedOffRules(NO_PATTERNS)).toEqual([]);
+    });
+});
+
+// ---------------------------------------------------------------------------
 // The net under the corpus: random accepted patterns must not be able to hang
 // ---------------------------------------------------------------------------
 
+function mulberry32(seed: number): () => number {
+    let a = seed;
+    return () => {
+        a = (a + 0x6d2b79f5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
 /**
  * Why this shape: a JS `exec` cannot be interrupted from the same thread, so a test that runs a hanging pattern
- * hangs the suite. `node:vm` with `timeout` runs the script under a watchdog that terminates it (irregexp checks
- * for the interrupt while it backtracks), so a pattern the gate wrongly accepts shows up as a failing test after
- * one second, not as a stuck run. No child process, no worker, no flaky kill timers; the generator is seeded, so
- * a failure names a pattern that reproduces.
+ * hangs the suite. `node:vm` with `timeout` (100 ms: an accepted pattern takes microseconds, a blow-up seconds to
+ * minutes) runs the script under a watchdog that terminates it (irregexp checks for the interrupt while it
+ * backtracks), so a pattern the gate wrongly accepts shows up as a failing test, not as a stuck run. No child
+ * process, no worker, no flaky kill timers; the generator is seeded, so a failure names a pattern that reproduces.
+ *
+ * The generator is weighted toward what hangs: the same alternation group repeated many times (`(?:a|aa)` x24,
+ * `(?:a|)` x30), alone and next to unbounded quantifiers, lookbehinds, `u` and `iu` (case folding), both modes.
+ * Mutation check (recorded in the checker report): removing the alternation budget (`boundedChoices *=
+ * alts.length`) makes this test fail.
  */
 describe("patterns: no accepted pattern can hang (seeded, randomized)", () => {
-    function mulberry32(seed: number): () => number {
-        let a = seed;
-        return () => {
-            a = (a + 0x6d2b79f5) | 0;
-            let t = Math.imul(a ^ (a >>> 15), 1 | a);
-            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-        };
-    }
-
-    const ATOMS = ["a", "b", "x", "u", "c", String.raw`\w`, String.raw`\d`, String.raw`\s`, ".", "[ab]", "[^a]", String.raw`\.`, String.raw`\u{1,}`, String.raw`\p{1,}`, String.raw`\c`, String.raw`\u0061`, String.raw`\x61`];
+    const ATOMS = ["a", "b", "x", "u", "c", "k", "s", String.raw`\w`, String.raw`\d`, String.raw`\s`, ".", "[ab]", "[^a]", String.raw`\.`, String.raw`\u0061`, String.raw`\x61`, "ſ", "K"];
+    const UNICODE_ATOMS = [String.raw`\u{61}`, String.raw`\p{L}`, String.raw`\P{Lu}`, "😀", String.raw`[\p{L}\d]`, String.raw`\u{1F600}`];
     const QUANTS = ["", "", "", "?", "*", "+", "{1,3}", "{0,5}", "{2,}", "{1,10}", "{2}", "??", "+?", "{0,40}"];
+    /** Overlapping alternatives: each way of splitting the input is a different path. */
+    const HOT_GROUPS = [
+        "(?:a|aa)", "(?:a|)", "(a|ab)", "(?:a|a)", String.raw`(?:\w|\w\w)`, "(?:ab|a|b)", "(?:x|xx|)", String.raw`(?:\s|\s\s)`,
+        "(?:[ab]|[ab][ab])", String.raw`(?:\w|)`,
+    ];
+    const LOOKBEHINDS = ["(?<=ab)", "(?<!k)", String.raw`(?<=\w\w)`, "(?<!kk)", String.raw`(?<=^|\s)`, String.raw`(?<=a|b)`, "(?<=abcdefgh)", "(?<!abcdefghi)"];
 
-    function generate(rand: () => number): string {
+    function generate(rand: () => number, unicode: boolean): string {
         const pick = <T>(list: readonly T[]): T => list[Math.floor(rand() * list.length)] as T;
+        const atoms = unicode ? [...ATOMS.filter((a) => !a.includes(String.raw`\x`)), ...UNICODE_ATOMS] : ATOMS;
+        const atom = (): string => (rand() < 0.4 ? pick(["a", String.raw`\w`, "[ab]", "."]) : pick(atoms)) + pick(QUANTS);
         const sequence = (depth: number): string => {
             const length = 1 + Math.floor(rand() * (depth === 0 ? 7 : 3));
             let out = "";
             for (let i = 0; i < length; i++) out += term(depth);
-            // The known hangs are one term repeated (`(?:a|aa)` x24): copy a term a few times, at the top level.
-            if (depth === 0 && rand() < 0.5) out += term(1).repeat(2 + Math.floor(rand() * 30));
-            if (depth === 0 && rand() < 0.5) out += term(0);
+            if (depth === 0) {
+                // The known hangs are one term repeated: copy a term many times, or a hot alternation group.
+                const r = rand();
+                if (r < 0.3) out += term(1).repeat(2 + Math.floor(rand() * 30));
+                else if (r < 0.7) out += pick(HOT_GROUPS).repeat(2 + Math.floor(rand() * 40)) + (rand() < 0.5 ? "" : atom());
+                if (rand() < 0.4) out += pick(LOOKBEHINDS);
+                if (rand() < 0.5) out += term(0);
+            }
             return out;
         };
         const alternatives = (depth: number): string => {
@@ -1060,7 +1359,9 @@ describe("patterns: no accepted pattern can hang (seeded, randomized)", () => {
         };
         const term = (depth: number): string => {
             if (depth < 2 && rand() < 0.3) return `${pick(["(", "(?:"])}${alternatives(depth + 1)})${pick(QUANTS)}`;
-            return pick(ATOMS) + pick(QUANTS);
+            if (rand() < 0.08) return pick(LOOKBEHINDS);
+            if (rand() < 0.12) return pick(HOT_GROUPS) + pick(QUANTS);
+            return atom();
         };
         const body = rand() < 0.1 ? alternatives(0) : sequence(0);
         return `${body}$`;
@@ -1077,35 +1378,91 @@ describe("patterns: no accepted pattern can hang (seeded, randomized)", () => {
         " ".repeat(63) + "x",
         "u".repeat(63) + "!",
         "c".repeat(63) + "!",
-        "\\".repeat(31) + "c".repeat(32) + "!",
         "a".repeat(32) + "x" + "a".repeat(31) + "!",
         "x".repeat(64),
+        // Case folding: the long S, the Kelvin sign, astral characters.
+        "ſ".repeat(62) + "a!",
+        "x".repeat(63) + "K",
+        "k".repeat(63) + "K",
+        "😀".repeat(31) + "!",
+        "s".repeat(31) + "ſ".repeat(31) + "!",
     ];
 
     it("every accepted random pattern finishes on adversarial 64-character lines", () => {
         const rand = mulberry32(0x5115);
-        const context = createContext({ re: /x/, text: "" });
-        const script = new Script("re.lastIndex = 0; re.exec(text)");
         let accepted = 0;
-        for (let i = 0; i < 4000; i++) {
-            const body = generate(rand);
-            const flags = rand() < 0.15 ? "i" : "";
-            const result = compileRule(rule(`/${body}/${flags}`, "x", { mode: "separator" }));
+        for (let i = 0; i < 6000; i++) {
+            const flags = ["", "", "i", "u", "iu"][Math.floor(rand() * 5)] ?? "";
+            const body = generate(rand, flags.includes("u"));
+            const mode = rand() < 0.5 ? "separator" : "instant";
+            const result = compileRule(rule(`/${body}/${flags}`, "x", { mode }));
             if (!result.ok) continue;
             accepted++;
-            context.re = result.rule.re;
             for (const text of ADVERSARIAL) {
-                context.text = text;
-                // The time bound: throws ERR_SCRIPT_EXECUTION_TIMEOUT after 1 s (a blow-up takes seconds to minutes,
-                // an accepted pattern microseconds). No wall-clock assertion on top: that would only add flakes.
+                // The time bound: throws ERR_SCRIPT_EXECUTION_TIMEOUT after 100 ms.
                 try {
-                    script.runInContext(context, { timeout: 1000 });
+                    execWithin(result.rule.re, text);
                 } catch (err) {
-                    throw new Error(`/${body}/${flags} hung on ${JSON.stringify(text.slice(0, 20))}...: ${String(err)}`, { cause: err });
+                    throw new Error(`/${body}/${flags} (${mode}) hung on ${JSON.stringify(text.slice(0, 20))}...: ${String(err)}`, { cause: err });
                 }
             }
         }
         // The test must not be vacuous: a good share of the random patterns passes the gate.
         expect(accepted).toBeGreaterThan(300);
-    }, 60_000);
+    }, 120_000);
+
+    it("the generator does produce the shapes that hang when ungated (it is not testing only easy ones)", () => {
+        const rand = mulberry32(0x5115);
+        let hotRepeated = 0;
+        for (let i = 0; i < 6000; i++) {
+            const flags = ["", "", "i", "u", "iu"][Math.floor(rand() * 5)] ?? "";
+            const body = generate(rand, flags.includes("u"));
+            if (HOT_GROUPS.some((g) => body.includes(g.repeat(12)))) hotRepeated++;
+        }
+        expect(hotRepeated).toBeGreaterThan(100);
+    });
+});
+
+/**
+ * Seeded invariant (round 2): whenever a rule's regex matches at the end of a text, `canEndWith` says the last
+ * character can end a match. It catches a parser that disagrees with V8 about where an atom ends (legacy octal
+ * `\041` was read as `\0`, `4`, `1`: the end test then excluded "!", which V8 matches).
+ */
+describe("patterns: canEndWith never excludes a character the regex matches (seeded)", () => {
+    const ATOMS = ["a", "b", "A", "k", "1", "!", String.raw`\d`, String.raw`\w`, "[ab]", ".", String.raw`\.`, String.raw`\x41`, String.raw`\u0061`, String.raw`\0`, String.raw`\041`, String.raw`\01`, "4", "[^a]", "ſ", "K", "[😀😁]", "😀", String.raw`\b`];
+    const UNICODE_ATOMS = [String.raw`\p{L}`, String.raw`\u{1F600}`, String.raw`\u{61}`, String.raw`[\p{L}\d]`, "[😀😁]"];
+    const QUANTS = ["", "", "?", "*", "+", "{1,2}"];
+    const TEXT_CHARS = ["a", "b", "A", "B", "k", "K", "1", "!", ".", " ", "ſ", "K", "😀", "😁", "\u0000", "é", "s", "S", "\u0001", "4"];
+
+    it("holds for random accepted rules on random texts (both modes, i, u, iu)", () => {
+        const rand = mulberry32(0xc0de);
+        const pick = <T>(list: readonly T[]): T => list[Math.floor(rand() * list.length)] as T;
+        let matched = 0;
+        for (let i = 0; i < 5000; i++) {
+            const flags = pick(["", "i", "u", "iu"]);
+            const unicode = flags.includes("u");
+            const atoms = unicode ? [...ATOMS, ...UNICODE_ATOMS] : ATOMS;
+            const length = 1 + Math.floor(rand() * 4);
+            let body = "";
+            for (let j = 0; j < length; j++) {
+                body += rand() < 0.15 ? `(?:${pick(atoms)}|${pick(atoms)})${pick(QUANTS)}` : pick(atoms) + pick(QUANTS);
+            }
+            const result = compileRule(rule(`/${body}$/${flags}`, "x", { mode: pick(["instant", "separator"] as const) }));
+            if (!result.ok) continue;
+            const r = result.rule;
+            for (let k = 0; k < 20; k++) {
+                let text = "";
+                const n = 1 + Math.floor(rand() * 6);
+                for (let c = 0; c < n; c++) text += pick(TEXT_CHARS);
+                r.re.lastIndex = 0;
+                const m = r.re.exec(text);
+                if (!m || m[0].length === 0) continue;
+                matched++;
+                // A `u` rule ends at a code point, a rule without `u` at a code unit.
+                const last = unicode ? ([...text].pop() ?? "") : text.charAt(text.length - 1);
+                expect(canEndWith(r, last), `/${body}$/${flags} matches ${JSON.stringify(text)}`).toBe(true);
+            }
+        }
+        expect(matched).toBeGreaterThan(500);
+    });
 });

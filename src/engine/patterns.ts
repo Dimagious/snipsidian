@@ -6,9 +6,11 @@ import type { AppliedReplacement, ExpandContext, PatternMode } from "./types";
  *
  * Three jobs live here:
  *   1. the S-015 static check (`checkPattern`): a small parser over the pattern,
- *      not a regex over the regex, that refuses what can make a JS `exec` slow
- *      or ambiguous (a JS regex cannot be interrupted, so the defence is to
- *      never run a dangerous one);
+ *      not a regex over the regex, that refuses what can backtrack exponentially
+ *      and what the parser could read differently from the engine (a JS regex
+ *      cannot be interrupted, so a dangerous one is not run). Polynomial cost
+ *      cannot be bounded by syntax: the runtime guard in `matchPatternsInOrder`
+ *      times each `exec` and switches off a rule that is slow on several keystrokes;
  *   2. the ONE place a rule becomes a `RegExp` (`compileRule`, via the private
  *      `compileSource`). It always runs the check, there is no bypass
  *      (S-009 lesson: a gate on some write paths only is no gate);
@@ -29,6 +31,24 @@ const MAX_UNBOUNDED_QUANTIFIERS = 2;
  * two unbounded quantifiers belongs to "After a separator", which is tried once per separator.
  */
 const MAX_INSTANT_UNBOUNDED_QUANTIFIERS = 1;
+/**
+ * Most terms (atoms, groups, anchors) all lookbehinds of a pattern may hold together. A lookbehind runs at every
+ * backtrack step of the part before it, so its size is a multiplier; 8 covers what people write (`(?<= )`,
+ * a short fixed word) and bounds the reach: a lookbehind never looks back more than
+ * 8 code points, which is `LOOKBEHIND_CONTEXT` code units at most (2 each for an astral character).
+ */
+export const LOOKBEHIND_ATOM_LIMIT = 8;
+/** Characters kept before the window as context for lookbehind, `\b` and `^` inside it (see `tryRule`). */
+const LOOKBEHIND_CONTEXT = LOOKBEHIND_ATOM_LIMIT * 2;
+/**
+ * Runtime guard (S-015, round 2): an `exec` over this many ms is slow. An accepted pattern takes microseconds; the
+ * slowest polynomial cases measured (`\p{L}*\p{L}*\p{L}{0,3}x$` under `iu`) take about 4 ms, so 5 would never fire on them.
+ */
+export const RULE_SLOW_MS = 2;
+/** ...and a rule that was slow on this many separate keystrokes is switched off for the session. */
+export const RULE_SLOW_STRIKES = 3;
+/** One call (one keystroke) stops trying further rules once its rules have spent this long. */
+export const KEYSTROKE_BUDGET_MS = 8;
 /** Group names that placeholders already use (or will: B-204, B-218). */
 const RESERVED_GROUP_NAMES: ReadonlySet<string> = new Set(["date", "time", "title", "notedate"]);
 /**
@@ -67,6 +87,15 @@ type Term = { node: Node; min: number; max: number; quantified: boolean };
 
 const REASON_BACKREF = "Backreferences like \\1 or \\k<name> are not supported.";
 const REASON_LOOKAHEAD = "Lookahead, (?=...) and (?!...), is not supported.";
+
+/** "This escape isn't supported in patterns: \041": the escape as written, with the digits of an octal one. */
+function unsupportedEscape(src: string, backslashAt: number, length?: number): Refusal {
+    const e = src[backslashAt + 1] ?? "";
+    let end = backslashAt + 2;
+    if (length !== undefined) end = backslashAt + length;
+    else if (e >= "0" && e <= "9") while (/[0-9]/.test(src[end] ?? "")) end++;
+    return new Refusal(`This escape isn't supported in patterns: ${src.slice(backslashAt, end)}`);
+}
 
 class Parser {
     pos = 0;
@@ -148,54 +177,82 @@ class Parser {
             case "?":
                 throw new Refusal("A quantifier has nothing to repeat.");
             default:
-                // Literal, `.`, or a `{` that is not a quantifier.
+                // Literal, `.`, or a `{` that is not a quantifier. Under `u` an astral character is one atom (a
+                // quantifier after it repeats both halves), as the engine reads it.
+                if (this.unicode && isHighSurrogate(this.src.charCodeAt(start)) && isLowSurrogate(this.src.charCodeAt(this.pos))) this.pos++;
                 return { kind: "atom", text: this.src.slice(start, this.pos) };
         }
     }
 
     /**
-     * `this.pos` is just after the backslash. Follows the engine, which reads escapes by flags: the brace forms
-     * `\u{...}`, `\p{...}`, `\P{...}` exist only under `u`; without it they are a letter and a quantifier
-     * (`\u{1,}` is `u{1,}`). `\uHHHH` and `\xHH` need all their digits, and `\c` needs an ASCII letter (before
-     * anything else it is a literal backslash and the `c` is read on its own).
+     * `this.pos` is just after the backslash. An allowlist (S-015, round 2): only the escapes the parser models
+     * exactly are read, everything else is refused. Annex B (the rules for a pattern without `u`) reads legacy octal
+     * (`\041`), `\c`, `\u{1,}` or `\p{1,}` as something other than they look, and a parser that disagrees with the
+     * engine about where an atom ends can hide a quantifier from the checks or give the end-character test the wrong
+     * atoms. Refusing them costs nothing a person would write on purpose.
      */
     private parseEscape(): Node {
         const start = this.pos - 1;
-        const e = this.src[this.pos++];
-        if (e === undefined) throw new Refusal("The pattern ends with a lone backslash.");
-        if (e >= "1" && e <= "9") throw new Refusal(REASON_BACKREF);
-        if (e === "k" && this.src[this.pos] === "<") throw new Refusal(REASON_BACKREF);
+        const e = this.src[this.pos];
+        this.skipEscape(false);
         if (e === "b" || e === "B") return { kind: "assert", anchor: "word" };
-        if (this.unicode && (e === "p" || e === "P" || e === "u") && this.src[this.pos] === "{") {
-            const end = this.src.indexOf("}", this.pos);
-            if (end < 0) throw new Refusal("An escape is missing its closing brace.");
-            this.pos = end + 1;
-        } else if (e === "u") {
-            this.skipHex(4);
-        } else if (e === "x") {
-            this.skipHex(2);
-        } else if (e === "c") {
-            if (/[A-Za-z]/.test(this.src[this.pos] ?? "")) this.pos++;
-            else {
-                this.pos--; // the `c` is not part of this escape
-                return { kind: "atom", text: "\\\\" };
-            }
-        }
         return { kind: "atom", text: this.src.slice(start, this.pos) };
     }
 
-    /** Skips `count` hex digits, but only when all of them are there (else the escape is just its letter). */
-    private skipHex(count: number): void {
-        if (/^[0-9a-fA-F]+$/.test(this.src.slice(this.pos, this.pos + count)) && this.pos + count <= this.src.length) {
-            this.pos += count;
+    /**
+     * Moves `this.pos` past one escape (it is just after the backslash) or throws. `inClass`: inside `[...]`, where
+     * `\b` is a backspace and `\B` does not exist.
+     */
+    private skipEscape(inClass: boolean): void {
+        const e = this.src[this.pos++];
+        if (e === undefined) throw new Refusal("The pattern ends with a lone backslash.");
+        if (!inClass && e >= "1" && e <= "9") throw new Refusal(REASON_BACKREF);
+        if (!inClass && e === "k" && this.src[this.pos] === "<") throw new Refusal(REASON_BACKREF);
+        if (e === "0") {
+            // `\0` is NUL only when no digit follows; `\041` is legacy octal.
+            if (/[0-9]/.test(this.src[this.pos] ?? "")) throw unsupportedEscape(this.src, this.pos - 2);
+            return;
         }
+        if (e >= "1" && e <= "9") throw unsupportedEscape(this.src, this.pos - 2);
+        if ("dDwWsSnrtfv".includes(e) || (inClass ? e === "b" : e === "b" || e === "B")) return;
+        if (e === "x") {
+            this.skipHex(2);
+        } else if (e === "u") {
+            if (this.unicode && this.src[this.pos] === "{") this.skipBraces();
+            else this.skipHex(4, true);
+        } else if ((e === "p" || e === "P") && this.unicode && this.src[this.pos] === "{") {
+            this.skipBraces();
+        } else if (/[A-Za-z]/.test(e)) {
+            // Every other letter: `\c`, `\a`, `\e`, `\k`, `\p` without `u` (a letter, not a property), `\B` in a class.
+            throw unsupportedEscape(this.src, this.pos - 2);
+        }
+        // Anything else is an identity escape of a symbol (`\.`, `\:`, `\-`): one atom.
+    }
+
+    /** `this.pos` is at `{`. Skips to just after the closing brace. */
+    private skipBraces(): void {
+        const end = this.src.indexOf("}", this.pos);
+        if (end < 0) throw new Refusal("An escape is missing its closing brace.");
+        this.pos = end + 1;
+    }
+
+    /**
+     * Skips `count` hex digits. Without all of them the escape is just its letter (Annex B), which the parser does
+     * not model: refused. `\u` escapes of surrogates (D800-DFFF) are refused as well: under `u` a pair of them is one
+     * character, and the end-character test could not tell.
+     */
+    private skipHex(count: number, unicodeEscape = false): void {
+        const digits = this.src.slice(this.pos, this.pos + count);
+        if (digits.length !== count || !/^[0-9a-fA-F]+$/.test(digits)) throw unsupportedEscape(this.src, this.pos - 2);
+        if (unicodeEscape && /^[dD][89a-fA-F]/.test(digits)) throw unsupportedEscape(this.src, this.pos - 2, count + 2);
+        this.pos += count;
     }
 
     /** `this.pos` is just after the `[`. */
     private skipClass(): void {
         while (this.pos < this.src.length) {
             const c = this.src[this.pos++];
-            if (c === "\\") this.pos++;
+            if (c === "\\") this.skipEscape(true);
             else if (c === "]") return;
         }
         throw new Refusal("A character class is not closed.");
@@ -267,6 +324,18 @@ function hasQuantifier(alts: readonly Term[][]): boolean {
     return someTerm(alts, (t) => t.quantified);
 }
 
+/** Terms inside lookbehinds, all alternatives counted (an upper bound of how far back any of them can look). */
+function lookbehindTerms(alts: readonly Term[][], inside: boolean): number {
+    let count = 0;
+    for (const alt of alts) {
+        for (const term of alt) {
+            if (inside) count++;
+            if (term.node.kind === "group") count += lookbehindTerms(term.node.alts, inside || term.node.behind);
+        }
+    }
+    return count;
+}
+
 /** What the static check learned about an accepted pattern. */
 type Analysis = { usesBol: boolean; unbounded: number };
 
@@ -304,6 +373,12 @@ function analyze(alts: readonly Term[][], names: readonly string[]): Analysis {
     };
     // Visits every term (the predicate never says yes, so `someTerm` walks the whole tree).
     someTerm(alts, checkTerm);
+    if (lookbehindTerms(alts, false) > LOOKBEHIND_ATOM_LIMIT) {
+        throw new Refusal(
+            `A pattern can have at most ${LOOKBEHIND_ATOM_LIMIT} characters or groups inside its lookbehinds (all of them together), ` +
+                "because a lookbehind is checked again at every step of the matching. Shorten it.",
+        );
+    }
     if (unbounded > MAX_UNBOUNDED_QUANTIFIERS) {
         throw new Refusal(
             `At most ${MAX_UNBOUNDED_QUANTIFIERS} unbounded quantifiers (*, +, {n,}) are allowed; this pattern has ${unbounded}.`,
@@ -485,9 +560,24 @@ export type CompiledRule = {
     readonly usesBol: boolean;
     /** Tests the last character of a possible match; `null` = not known, any character. */
     readonly endTest: RegExp | null;
+    /** Runtime guard state (S-015, round 2): lives and dies with this compiled rule, never saved. */
+    readonly health: RuleHealth;
 };
 
-/** Whether a match of the rule can end with `ch` (the character just typed, for an instant rule). */
+/** What the runtime guard learned about a rule on the hot path. Mutated by the matcher only. */
+export type RuleHealth = {
+    /** Keystrokes on which one `exec` took longer than `RULE_SLOW_MS`. */
+    slowKeystrokes: number;
+    /** The text of the last slow keystroke: the same line read twice is one keystroke. */
+    lastSlowText?: string;
+    /** Set when the rule was switched off for the session: the reason a person can read. */
+    switchedOff?: string;
+};
+
+/**
+ * Whether a match of the rule can end with `ch` (the last character of the line, for an instant rule): the last code
+ * point for a `u` rule, the last code unit for one without `u`, which is how the engine reads it.
+ */
 export function canEndWith(rule: CompiledRule, ch: string): boolean {
     return rule.endTest === null || rule.endTest.test(ch);
 }
@@ -521,7 +611,16 @@ export function compileRule(raw: unknown): CompileResult {
     if (!("core" in entry)) return { ok: false, reason: entry.reason };
     return {
         ok: true,
-        rule: { id, mode, replacement, group, re: entry.core.re, usesBol: entry.core.usesBol, endTest: entry.core.endTest },
+        rule: {
+            id,
+            mode,
+            replacement,
+            group,
+            re: entry.core.re,
+            usesBol: entry.core.usesBol,
+            endTest: entry.core.endTest,
+            health: { slowKeystrokes: 0 },
+        },
     };
 }
 
@@ -592,19 +691,71 @@ export type PatternMatch = {
     readonly named: ReadonlyMap<string, string | undefined>;
 };
 
-/** One rule on one text. Only the last 64 characters can be matched; one more is kept for `\b` and lookbehind. */
-function tryRule(rule: CompiledRule, text: string): PatternMatch | null {
-    // An instant rule is tried after every keystroke: skip it unless the typed character can end it.
-    if (rule.mode === "instant" && !canEndWith(rule, text.charAt(text.length - 1))) return null;
-    const windowStart = Math.max(0, text.length - PATTERN_TAIL_LIMIT);
+/** Time spent by the rules of one call (one keystroke) and the clock that measures it. */
+type Timing = { readonly clock: () => number; spent: number };
+
+/** Milliseconds, from `performance.now()`; the engine takes a clock so the guard can be tested without waiting. */
+const defaultClock = (): number => performance.now();
+
+function isHighSurrogate(code: number): boolean {
+    return code >= 0xd800 && code <= 0xdbff;
+}
+
+function isLowSurrogate(code: number): boolean {
+    return code >= 0xdc00 && code <= 0xdfff;
+}
+
+/** The last character of `text` as the rule's regex reads it: a code point under `u`, else a code unit. */
+function lastChar(rule: CompiledRule, text: string): string {
+    const last = text.charCodeAt(text.length - 1);
+    if (rule.endTest?.unicode && isLowSurrogate(last) && isHighSurrogate(text.charCodeAt(text.length - 2))) {
+        return text.slice(-2);
+    }
+    return text.charAt(text.length - 1);
+}
+
+/**
+ * Counts a slow `exec` against the rule: the third slow keystroke switches it off for the session. The same line
+ * seen twice is one keystroke (the instant path reads it in the adapter and again when planning the edit).
+ */
+function strikeRule(rule: CompiledRule, text: string): void {
+    const health = rule.health;
+    if (health.switchedOff !== undefined || health.lastSlowText === text) return;
+    health.lastSlowText = text;
+    health.slowKeystrokes++;
+    if (health.slowKeystrokes < RULE_SLOW_STRIKES) return;
+    health.switchedOff = `Switched off: slow on this note (${health.slowKeystrokes} times over ${RULE_SLOW_MS} ms).`;
+    console.warn("[snipsy] pattern rule switched off", { id: rule.id, reason: health.switchedOff });
+}
+
+/**
+ * One rule on one text. Only the last 64 characters can be matched; a few more are kept before them for `\b` and
+ * lookbehind (at most `LOOKBEHIND_ATOM_LIMIT` code points back).
+ */
+function tryRule(rule: CompiledRule, text: string, timing: Timing): PatternMatch | null {
+    // An instant rule is tried after every keystroke: skip it unless the typed character can end it. (Instant rules
+    // fire on a typed single code unit, so an astral character, typed as two, never reaches here; not a fix target.)
+    if (rule.mode === "instant" && !canEndWith(rule, lastChar(rule, text))) return null;
+    let windowStart = Math.max(0, text.length - PATTERN_TAIL_LIMIT);
+    // The window never starts between the halves of a surrogate pair.
+    if (windowStart > 0 && isLowSurrogate(text.charCodeAt(windowStart)) && isHighSurrogate(text.charCodeAt(windowStart - 1))) {
+        windowStart++;
+    }
     // `^` means "line start": a window that cut the line cannot say.
     if (rule.usesBol && windowStart > 0) return null;
-    // One character before the window is context only (`\b`, lookbehind): without it the cut would look like a line
+    // Context before the window is for looking only (`\b`, lookbehind): without it the cut would look like a line
     // start. The match itself must start inside the window, which `lastIndex` makes the engine do.
-    const contextStart = Math.max(0, windowStart - 1);
+    let contextStart = Math.max(0, windowStart - LOOKBEHIND_CONTEXT);
+    if (contextStart > 0 && isLowSurrogate(text.charCodeAt(contextStart)) && isHighSurrogate(text.charCodeAt(contextStart - 1))) {
+        contextStart--;
+    }
     const context = contextStart > 0 ? text.slice(contextStart) : text;
     rule.re.lastIndex = windowStart - contextStart;
+    const started = timing.clock();
     const m = rule.re.exec(context);
+    const took = timing.clock() - started;
+    timing.spent += took;
+    if (took > RULE_SLOW_MS) strikeRule(rule, text);
     if (!m || m[0].length === 0 || m.index + m[0].length !== context.length) return null;
     const named = new Map<string, string | undefined>();
     if (m.groups) for (const [name, value] of Object.entries(m.groups)) named.set(name, value);
@@ -623,20 +774,45 @@ export type PatternTexts = {
  * Tries the rules strictly top to bottom, whatever their mode (ADR-0008, one order for all rules): the first that
  * matches wins. The match must END at the end of its text: that is checked here, not trusted from the `$` in the
  * source.
+ *
+ * Runtime guard (S-015, round 2): every `exec` is timed. A rule slow on `RULE_SLOW_STRIKES` separate keystrokes is
+ * switched off (see `switchedOffRules`), and the loop stops once the rules of this call have spent
+ * `KEYSTROKE_BUDGET_MS`. Literal snippets never come through here.
  */
-export function matchPatternsInOrder(texts: PatternTexts, rules: readonly CompiledRule[]): PatternMatch | null {
+export function matchPatternsInOrder(
+    texts: PatternTexts,
+    rules: readonly CompiledRule[],
+    clock: () => number = defaultClock,
+): PatternMatch | null {
+    const timing: Timing = { clock, spent: 0 };
     for (const rule of rules) {
+        if (timing.spent > KEYSTROKE_BUDGET_MS) return null;
+        if (rule.health.switchedOff !== undefined) continue;
         const text = rule.mode === "instant" ? texts.atCaret : texts.beforeSeparator;
         if (text === undefined) continue;
-        const hit = tryRule(rule, text);
+        const hit = tryRule(rule, text, timing);
         if (hit) return hit;
     }
     return null;
 }
 
+/** The rules the runtime guard switched off, with the reason (for the Patterns page; never saved to `data.json`). */
+export function switchedOffRules(patterns: CompiledPatterns): PatternRuleError[] {
+    const off: PatternRuleError[] = [];
+    for (const rule of patterns.rules) {
+        if (rule.health.switchedOff !== undefined) off.push({ id: rule.id, reason: rule.health.switchedOff });
+    }
+    return off;
+}
+
 /** Rules of one `mode` on `text`, in list order. */
-export function matchPatterns(text: string, rules: readonly CompiledRule[], mode: PatternMode): PatternMatch | null {
-    return matchPatternsInOrder(mode === "instant" ? { atCaret: text } : { beforeSeparator: text }, rules);
+export function matchPatterns(
+    text: string,
+    rules: readonly CompiledRule[],
+    mode: PatternMode,
+    clock: () => number = defaultClock,
+): PatternMatch | null {
+    return matchPatternsInOrder(mode === "instant" ? { atCaret: text } : { beforeSeparator: text }, rules, clock);
 }
 
 // ---------------------------------------------------------------------------
