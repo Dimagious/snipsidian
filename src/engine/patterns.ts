@@ -622,6 +622,8 @@ export type CompiledRule = {
     readonly id: string;
     readonly mode: PatternMode;
     readonly replacement: string;
+    /** The `{{n}}` / `{{name}}` keys the replacement uses (round 9): only those captures must be free of half emoji. */
+    readonly refs: readonly string[];
     readonly group?: string;
     readonly re: RegExp;
     /** The pattern uses `^`: skipped when the window does not start at the line start. */
@@ -676,6 +678,10 @@ export function compileRule(raw: unknown): CompileResult {
     if (replacement.length > MAX_PATTERN_REPLACEMENT) {
         return { ok: false, reason: `The replacement is longer than ${MAX_PATTERN_REPLACEMENT} characters.` };
     }
+    // Round 9: a hand-edited replacement with half an emoji would compile and then never fire (the last net drops it).
+    if (hasLoneSurrogate(replacement)) {
+        return { ok: false, reason: "The replacement contains half of an emoji. Paste the emoji again." };
+    }
     const entry = resolveSource(source, mode);
     if (!("core" in entry)) return { ok: false, reason: entry.reason };
     return {
@@ -684,6 +690,7 @@ export function compileRule(raw: unknown): CompileResult {
             id,
             mode,
             replacement,
+            refs: Array.from(new Set(Array.from(replacement.matchAll(CAPTURE_REF_RE), (found) => found[1] ?? ""))),
             group,
             re: entry.core.re,
             usesBol: entry.core.usesBol,
@@ -882,13 +889,19 @@ function tryRule(rule: CompiledRule, text: string, timing: Timing): PatternMatch
     }
     if (fastest > RULE_SLOW_MS) strikeRule(rule, text);
     if (!m || m[0].length === 0 || m.index + m[0].length !== context.length) return null;
-    // A match must not start between the halves of an emoji: replacing from there would leave a lone high surrogate
-    // behind (`/(.)x$/` on "😀x" matches the low half). Checked on the whole text: the context may start mid-pair.
+    // Without `u`, `.`, `\S`, `\W` and `[^a]` take one code unit, so a match or a capture can be half an emoji, and
+    // `{{n}}` would write it into the note as a lone surrogate (round 8). The whole match must not start or end
+    // between the halves of a pair (replacing it would leave one behind), and neither may a capture the replacement
+    // uses (round 9: one it does not use is harmless). Such a match is dropped.
+    if (hasLoneSurrogate(m[0])) return null;
+    for (const key of rule.refs) {
+        const value = key.length === 1 && key >= "0" && key <= "9" ? m[Number(key)] : m.groups && Object.prototype.hasOwnProperty.call(m.groups, key) ? m.groups[key] : undefined;
+        if (value !== undefined && hasLoneSurrogate(value)) return null;
+    }
+    // Defence in depth (round 7): `hasLoneSurrogate(m[0])` already covers a start on a low half; kept as a second
+    // check on the whole text, because the context may start mid-pair.
     const start = contextStart + m.index;
     if (start > 0 && isLowSurrogate(text.charCodeAt(start)) && isHighSurrogate(text.charCodeAt(start - 1))) return null;
-    // Without `u`, `.`, `\S`, `\W` and `[^a]` take one code unit: a capture can be half an emoji, and `{{n}}` would write
-    // it into the note as a lone surrogate (round 8). Such a match is dropped, like one that starts mid-pair.
-    for (const capture of m) if (capture !== undefined && hasLoneSurrogate(capture)) return null;
     const named = new Map<string, string | undefined>();
     if (m.groups) for (const [name, value] of Object.entries(m.groups)) named.set(name, value);
     return { rule, index: start, end: text.length, captures: Array.from(m), named, text };

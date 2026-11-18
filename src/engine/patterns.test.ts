@@ -1234,6 +1234,24 @@ describe("patterns: a capture never holds half an emoji (S-015, round 8)", () =>
         expect(await lineAfter("x 12", String.raw`/(?<n>\d+)$/`, "<{{n}}>", "instant")).toBe("x <12>");
     });
 
+    it("a half-emoji capture the replacement never uses does not stop the rule (round 9)", async () => {
+        // `(\S)` holds the high half of the first emoji, but the replacement is plain text: the whole match is clean.
+        for (const mode of ["separator", "instant"] as const) {
+            expect(await lineAfter("😀hi.up", String.raw`/(\S)\S*\.up$/`, "UP", mode), mode).toBe("UP");
+            expect(await lineAfter("😀hi.up", String.raw`/(?<c>\S)\S*\.up$/`, "UP {{zz}}", mode), mode).toBe("UP {{zz}}");
+            // The same capture, referenced by number or by name, still drops the match.
+            expect(await lineAfter("😀hi.up", String.raw`/(\S)\S*\.up$/`, "{{1}}", mode), mode).toBeNull();
+            expect(await lineAfter("😀hi.up", String.raw`/(?<c>\S)\S*\.up$/`, "{{c}}", mode), mode).toBeNull();
+        }
+    });
+
+    it("the whole match must not start or end between the halves of an emoji, referenced or not (round 9)", () => {
+        for (const mode of ["separator", "instant"] as const) {
+            expect(matchPatterns("😀x", [compiled("/.x$/", "Y", mode)], mode), mode).toBeNull();
+            expect(matchPatterns("😀x", [compiled("/\\S+$/", "Y", mode)], mode)?.index, mode).toBe(0);
+        }
+    });
+
     it("layer two: a match whose capture is half an emoji (built by hand) yields no replacement", async () => {
         const base = matchOf("/(.)x$/", "bx", "{{1}}");
         const high = "😀".charAt(0);
@@ -1302,7 +1320,8 @@ describe("patterns: a capture never holds half an emoji (S-015, round 8)", () =>
                 const m = matchPatterns(text, [result.rule], mode);
                 if (!m) continue;
                 matched++;
-                for (const cap of m.captures) expect(hasLoneSurrogate(cap ?? ""), `/${parts.join("")}$/ ${mode} on ${JSON.stringify(text)}`).toBe(false);
+                // Round 9: the whole match is always whole; a capture the replacement does not use may be half (the line check below covers the used ones).
+                expect(hasLoneSurrogate(m.captures[0] ?? ""), `/${parts.join("")}$/ ${mode} on ${JSON.stringify(text)}`).toBe(false);
                 const out = await safePatternReplacement(m, ctx);
                 if (!out) continue;
                 produced++;
@@ -1354,6 +1373,23 @@ describe("patterns: a quantifier after an emoji, and an escaped half (S-015, rou
             expect(check(source, mode).ok, `${source} ${mode}`).toBe(false);
         }
         expect(compilePatternRules([rule(source)]).rules).toEqual([]);
+    });
+
+    it("an escaped emoji after a bad range still names the escape, not the range (round 9)", () => {
+        // `[z-a\😀]` fails `new RegExp` with "Range out of order": the escaped-emoji reason is the useful one.
+        for (const source of ["/[z-a\\😀]$/", "/x[z-a\\😀]$/"]) {
+            expect(check(source), source).toEqual({ ok: false, reason: "A backslash can't go before an emoji. Write the emoji as plain text." });
+        }
+    });
+
+    it.each([["\uD83D"], ["\uD83D$|\uDE00"], ["a\uDE00"], ["ok \uD83D"]])("a replacement with half an emoji (%j) is refused at compile (round 9)", (replacement) => {
+        const result = compileRule(rule("/x$/", replacement));
+        expect(result).toEqual({ ok: false, reason: "The replacement contains half of an emoji. Paste the emoji again." });
+        expect(compilePatternRules([rule("/x$/", replacement)]).errors).toEqual([{ id: "r1", reason: "The replacement contains half of an emoji. Paste the emoji again." }]);
+    });
+
+    it("a replacement with whole emoji still compiles", () => {
+        expect(compileRule(rule("/x$/", "😀$|🙏")).ok).toBe(true);
     });
 
     it("escaped symbols and non-surrogate escapes stay legal", () => {

@@ -302,3 +302,29 @@ describe("expandInstant (ADR-0008)", () => {
         expect(exec).toHaveBeenCalledTimes(1);
     });
 });
+
+describe("expand: the last surrogate net runs in every caller (S-015, round 9)", () => {
+    const half = "\uD83D";
+    const halfCtx: ExpandContext = { ...pctx, readClipboard: async () => half };
+    const okCtx: ExpandContext = { ...pctx, readClipboard: async () => "ok" };
+
+    it("separator path: a lone half from the clipboard gives no plan, a clean clipboard does", async () => {
+        const rules = patterns({ source: "/:x$/", replacement: "[$clipboard]", mode: "separator" });
+        await expect(expand(sepInput("a :x "), dict, halfCtx, undefined, rules)).resolves.toBeNull();
+        expect((await expand(sepInput("a :x "), dict, okCtx, undefined, rules))?.insert).toBe("[ok]");
+    });
+
+    it("instant rule through a typed separator: same", async () => {
+        const rules = patterns({ source: "/:x $/", replacement: "[$clipboard]", mode: "instant" });
+        await expect(expand(sepInput("a :x "), dict, halfCtx, undefined, rules, true)).resolves.toBeNull();
+        expect((await expand(sepInput("a :x "), dict, okCtx, undefined, rules, true))?.consumesSeparator).toBe(true);
+    });
+
+    it("expandInstant: same", async () => {
+        const rules = patterns({ source: "/:x$/", replacement: "[$clipboard]", mode: "instant" });
+        const hit = matchPatterns("a :x", rules, "instant");
+        expect(hit).not.toBeNull();
+        await expect(expandInstant("a :x", halfCtx, hit!)).resolves.toBeNull();
+        expect((await expandInstant("a :x", okCtx, hit!))?.insert).toBe("[ok]");
+    });
+});
