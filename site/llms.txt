@@ -21,3 +21,5 @@ Plugin id: snipsidian
   https://raw.githubusercontent.com/Dimagious/snipsidian/main/docs/reference.md
 - Changelog:
   https://raw.githubusercontent.com/Dimagious/snipsidian/main/CHANGELOG.md
+- Video overview (2 minutes, English, with subtitles):
+  https://www.youtube.com/watch?v=O1bAmuBuQ1Q
