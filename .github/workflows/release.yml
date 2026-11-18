@@ -30,4 +30,4 @@ jobs:
     needs: test
     # The kit's workflow builds in a job with a read-only token, attests main.js, manifest.json and styles.css, and
     # makes a draft release with the CHANGELOG section as notes. `opdk release` verifies the draft and publishes it.
-    uses: Dimagious/obsidian-plugin-dev-kit/.github/workflows/release.yml@9de7d2f0bd83d4aeb0b6f7f3566915eb3823cfdf # v0.3.1
+    uses: Dimagious/obsidian-plugin-dev-kit/.github/workflows/release.yml@7c8c4acd95411becb54921eb0aeba14d0226ebe9 # v0.4.1
