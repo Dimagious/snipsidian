@@ -24,7 +24,7 @@ import {
     type CompiledRule,
     type PatternMatch,
 } from "./patterns";
-import { expand } from "./expand";
+import { expand, expandInstant } from "./expand";
 import type { ExpandContext, PatternMode, PatternRule } from "./types";
 
 const ctx: ExpandContext = { isInCode: false, isInMath: false, isInFrontmatter: false, now: new Date("2025-09-02T10:11:12") };
@@ -1292,6 +1292,37 @@ describe("patterns: a capture never holds half an emoji (S-015, round 8)", () =>
         expect(ok?.insert).toBe("😀ab");
     });
 
+    // Round 10: the check covers every key the replacement uses, named ones and each of several.
+    it("layer one: a named reference, and the second of two, are checked too", () => {
+        for (const mode of ["separator", "instant"] as const) {
+            expect(matchPatterns("😀hi.up", [compiled(String.raw`/(?<c>\S)\S*\.up$/`, "{{c}}", mode)], mode), `named ${mode}`).toBeNull();
+            expect(matchPatterns("a😀.x", [compiled(String.raw`/(a)(\S)\S\.x$/`, "{{1}}{{2}}", mode)], mode), `second ${mode}`).toBeNull();
+        }
+    });
+
+    const applyPlan = (line: string, plan: { fromCh: number; toCh: number; insert: string } | null): string => (plan ? line.slice(0, plan.fromCh) + plan.insert + line.slice(plan.toCh) : line);
+
+    it("a rule dropped for a half-emoji named or second capture falls through to the next rule, in both modes", async () => {
+        const cases = [
+            { text: "😀hi.up", rules: [String.raw`/(?<c>\S)\S*\.up$/`, "{{c}}", "/\\.up$/", "UP"], out: "😀hiUP" },
+            { text: "a😀.x", rules: [String.raw`/(a)(\S)\S\.x$/`, "{{1}}{{2}}", "/\\.x$/", "X"], out: "a😀X" },
+        ] as const;
+        for (const { text, rules, out } of cases) {
+            // Separator rules, through expand() on a typed space.
+            const set = [compiled(rules[0], rules[1], "separator"), compiled(rules[2], rules[3], "separator")];
+            const plan = await expand({ textBefore: text, textAfter: "", lastTyped: " ", sepCh: text.length }, {}, ctx, [" "], set, false);
+            expect(plan, `separator ${text}`).not.toBeNull();
+            expect(applyPlan(text, plan), `separator ${text}`).toBe(out);
+            // Instant rules: the first match (after the null one) is the second rule.
+            const iset = [compiled(rules[0], rules[1], "instant"), compiled(rules[2], rules[3], "instant")];
+            const hit = matchPatterns(text, iset, "instant");
+            expect(hit?.rule.replacement, `instant ${text}`).toBe(rules[3]);
+            const iplan = hit ? await expandInstant(text, ctx, hit) : null;
+            expect(iplan, `instant ${text}`).not.toBeNull();
+            expect(applyPlan(text, iplan), `instant ${text}`).toBe(out);
+        }
+    });
+
     // A random accepted rule with capture references on random texts with emoji: the line after the edit never has a lone half.
     it("fuzz: no capture reference ever puts a lone surrogate into the line (seeded, both modes)", async () => {
         const rand = mulberry32(0x8a8a);
@@ -1322,6 +1353,11 @@ describe("patterns: a capture never holds half an emoji (S-015, round 8)", () =>
                 matched++;
                 // Round 9: the whole match is always whole; a capture the replacement does not use may be half (the line check below covers the used ones).
                 expect(hasLoneSurrogate(m.captures[0] ?? ""), `/${parts.join("")}$/ ${mode} on ${JSON.stringify(text)}`).toBe(false);
+                // Round 10: every key the replacement uses resolves to a capture without a lone half.
+                for (const key of m.rule.refs) {
+                    const value = /^\d$/.test(key) ? m.captures[Number(key)] : m.named.get(key);
+                    expect(hasLoneSurrogate(value ?? ""), `{{${key}}} of /${parts.join("")}$/ ${mode} on ${JSON.stringify(text)}`).toBe(false);
+                }
                 const out = await safePatternReplacement(m, ctx);
                 if (!out) continue;
                 produced++;
