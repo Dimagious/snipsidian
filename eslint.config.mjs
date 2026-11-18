@@ -18,6 +18,9 @@ export default [
       // Integration layer (B-219): its own tsconfig and lint config
       // (`npm run it:lint`), outside this project's tsconfig.
       'integration/**',
+      // Config of the overview video recording (e2e/video.spec.ts); like
+      // playwright.config.ts and e2e/, outside the plugin's lint scope.
+      'playwright.video.config.ts',
       // Test scaffolding: the fake Obsidian and the factories. None of it is
       // bundled, and the plugin preset's rules have no meaning for code that
       // stands in for the host. The `*.test.ts` files and the other helpers

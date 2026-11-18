@@ -3,6 +3,6 @@
   "compilerOptions": {
     "types": ["node", "obsidian"]
   },
-  "include": ["e2e/**/*.ts", "playwright.config.ts"],
+  "include": ["e2e/**/*.ts", "playwright.config.ts", "playwright.video.config.ts"],
   "exclude": ["node_modules"]
 }
