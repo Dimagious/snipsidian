@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-11-18
+
 ### Added
 
 - **Manual expansion mode** (B-255). Two new switches in Settings, General, Expansion: **Expand while typing** (on by default, nothing changes for existing installs) and **Expand on Tab** (off by default). With typing off, a trigger is never expanded as you type; with Tab on, Tab expands the trigger right before the cursor, with the same guards as the "Expand trigger at cursor" command (code, math, frontmatter, prefix mode, disabled groups). Like the Text Snippets plugin, Tab also takes a selection that is exactly a trigger, and with the caret inside a word it expands the whole word around the caret (a caret at the start of a word does not count, so Tab keeps indenting there). Without a trigger, Tab works as before (list indent, other plugins), and inside a field session Tab still jumps to the next field.
