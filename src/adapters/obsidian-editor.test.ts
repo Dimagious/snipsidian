@@ -1653,35 +1653,48 @@ describe("adapters/obsidian-editor: B-255 canExpandAtCursor", () => {
     }
 
     it("is true for a trigger right before the caret", () => {
-        expect(canExpandAtCursor(asEditor(at("say brb")), dict)).toBe(true);
-        expect(canExpandAtCursor(asEditor(at("brb tail", 3)), dict)).toBe(true);
+        expect(canExpandAtCursor(asEditor(at("say brb")), dict)).toBeDefined();
+        expect(canExpandAtCursor(asEditor(at("brb tail", 3)), dict)).toBeDefined();
     });
 
     it("is false with no trigger, an unknown word, or a caret at column 0", () => {
-        expect(canExpandAtCursor(asEditor(at("say hello")), dict)).toBe(false);
-        expect(canExpandAtCursor(asEditor(at("")), dict)).toBe(false);
-        expect(canExpandAtCursor(asEditor(at("brb", 0)), dict)).toBe(false);
+        expect(canExpandAtCursor(asEditor(at("say hello")), dict)).toBeUndefined();
+        expect(canExpandAtCursor(asEditor(at("")), dict)).toBeUndefined();
+        expect(canExpandAtCursor(asEditor(at("brb", 0)), dict)).toBeUndefined();
     });
 
     it("is false inside a word that is no trigger, with a selection that is no trigger, and in code", () => {
-        expect(canExpandAtCursor(asEditor(at("brbx", 3)), dict)).toBe(false);
-        expect(canExpandAtCursor(asEditor(at("hello world", 5, "hello")), dict)).toBe(false);
-        expect(canExpandAtCursor(asEditor(at("`brb")), dict)).toBe(false);
+        expect(canExpandAtCursor(asEditor(at("brbx", 3)), dict)).toBeUndefined();
+        expect(canExpandAtCursor(asEditor(at("hello world", 5, "hello")), dict)).toBeUndefined();
+        expect(canExpandAtCursor(asEditor(at("`brb")), dict)).toBeUndefined();
     });
 
     // Parity with the original plugin: both inputs agree with the expand path.
     it("is true for a selection that is exactly a trigger, and for a caret inside a trigger word", () => {
-        expect(canExpandAtCursor(asEditor(at("say brb", 7, "brb")), dict)).toBe(true);
-        expect(canExpandAtCursor(asEditor(at("say brb now", 6)), dict)).toBe(true);
+        expect(canExpandAtCursor(asEditor(at("say brb", 7, "brb")), dict)).toBeDefined();
+        expect(canExpandAtCursor(asEditor(at("say brb now", 6)), dict)).toBeDefined();
     });
 
     it("is false for a caret at the START of a word (Tab keeps indenting there)", () => {
-        expect(canExpandAtCursor(asEditor(at("say brb", 4)), dict)).toBe(false);
+        expect(canExpandAtCursor(asEditor(at("say brb", 4)), dict)).toBeUndefined();
     });
 
     it("honours prefix mode like the command does", () => {
-        expect(canExpandAtCursor(asEditor(at("brb")), dict, ":")).toBe(false);
-        expect(canExpandAtCursor(asEditor(at(":brb")), dict, ":")).toBe(true);
+        expect(canExpandAtCursor(asEditor(at("brb")), dict, ":")).toBeUndefined();
+        expect(canExpandAtCursor(asEditor(at(":brb")), dict, ":")).toBeDefined();
+    });
+
+    // Tab runs this on every press: the note scan for frontmatter, fences and math (it reads `lastLine`) is only for
+    // a line that has something to expand.
+    it("looks at the note (frontmatter, fences, math) only when the line has a candidate", () => {
+        const scans = (ed: MockEditor): number => {
+            const spy = vi.spyOn(ed, "lastLine");
+            canExpandAtCursor(asEditor(ed), dict);
+            return spy.mock.calls.length;
+        };
+        expect(scans(at("say hello"))).toBe(0);
+        expect(scans(at("   "))).toBe(0);
+        expect(scans(at("say brb"))).toBeGreaterThan(0);
     });
 
     it("does not resolve or write anything", () => {
@@ -1691,33 +1704,72 @@ describe("adapters/obsidian-editor: B-255 canExpandAtCursor", () => {
     });
 
     it("never matches an inherited Object.prototype key (S-008)", () => {
-        expect(canExpandAtCursor(asEditor(at("constructor")), {})).toBe(false);
+        expect(canExpandAtCursor(asEditor(at("constructor")), {})).toBeUndefined();
     });
 
     describe("with pattern rules (ADR-0008)", () => {
         const date = rules({ source: String.raw`/\bdd(\d+)$/`, mode: "separator" });
 
         it("is true for a rule that matches the line before the caret, false without the rules", () => {
-            expect(canExpandAtCursor(asEditor(at("on dd5")), dict, undefined, date)).toBe(true);
-            expect(canExpandAtCursor(asEditor(at("on dd5")), dict)).toBe(false);
+            expect(canExpandAtCursor(asEditor(at("on dd5")), dict, undefined, date)).toBeDefined();
+            expect(canExpandAtCursor(asEditor(at("on dd5")), dict)).toBeUndefined();
         });
 
         it("is false when no rule matches, and for the empty rule list", () => {
-            expect(canExpandAtCursor(asEditor(at("on hello")), dict, undefined, date)).toBe(false);
-            expect(canExpandAtCursor(asEditor(at("on dd5")), dict, undefined, [])).toBe(false);
+            expect(canExpandAtCursor(asEditor(at("on hello")), dict, undefined, date)).toBeUndefined();
+            expect(canExpandAtCursor(asEditor(at("on dd5")), dict, undefined, [])).toBeUndefined();
         });
 
         it("a caret inside the word is judged on the word up to its end, as the expand path does", () => {
-            expect(canExpandAtCursor(asEditor(at("on dd5 now", 5)), dict, undefined, date)).toBe(true);
+            expect(canExpandAtCursor(asEditor(at("on dd5 now", 5)), dict, undefined, date)).toBeDefined();
         });
 
         it("a selection is never matched against rules, only literal triggers count", () => {
-            expect(canExpandAtCursor(asEditor(at("on dd5", 6, "dd5")), dict, undefined, date)).toBe(false);
-            expect(canExpandAtCursor(asEditor(at("say brb", 7, "brb")), dict, undefined, date)).toBe(true);
+            expect(canExpandAtCursor(asEditor(at("on dd5", 6, "dd5")), dict, undefined, date)).toBeUndefined();
+            expect(canExpandAtCursor(asEditor(at("say brb", 7, "brb")), dict, undefined, date)).toBeDefined();
         });
 
         it("the guards still apply: no match in inline code", () => {
-            expect(canExpandAtCursor(asEditor(at("`on dd5")), dict, undefined, date)).toBe(false);
+            expect(canExpandAtCursor(asEditor(at("`on dd5")), dict, undefined, date)).toBeUndefined();
+        });
+
+        it("instant rules are skipped: Tab has no typed character to complete", () => {
+            const arrow = rules({ source: "/->$/", mode: "instant" });
+            expect(canExpandAtCursor(asEditor(at("a ->")), dict, undefined, arrow)).toBeUndefined();
+            // The same text through a separator rule is found, so the skip is about the mode.
+            const sep = rules({ source: "/->$/", mode: "separator" });
+            expect(canExpandAtCursor(asEditor(at("a ->")), dict, undefined, sep)).toBeDefined();
+        });
+
+        it("hands back what it found: the literal trigger, or the rule hit", () => {
+            const lit = canExpandAtCursor(asEditor(at("say brb")), dict, undefined, date);
+            expect(lit).toMatchObject({ literal: true });
+            expect(lit?.hit).toBeUndefined();
+            const hit = canExpandAtCursor(asEditor(at("on dd5")), dict, undefined, date);
+            expect(hit).toMatchObject({ literal: false, hit: { index: 3, captures: ["dd5", "5"] } });
+        });
+
+        // Owner decision: a match that starts after the caret would replace a tail the caret is not in.
+        describe("a caret inside a word (the match must start at or before the caret)", () => {
+            const tail = rules({ source: String.raw`/dd(\d+)$/`, mode: "separator" });
+
+            it("a match that starts after the caret does not count", () => {
+                expect(canExpandAtCursor(asEditor(at("abcdd5 x", 1)), dict, undefined, tail)).toBeUndefined();
+                expect(canExpandAtCursor(asEditor(at("abcdd5 x", 2)), dict, undefined, tail)).toBeUndefined();
+            });
+
+            it("a match that starts exactly at the caret, or spans it, counts", () => {
+                expect(canExpandAtCursor(asEditor(at("abcdd5 x", 3)), dict, undefined, tail)).toBeDefined();
+                expect(canExpandAtCursor(asEditor(at("abcdd5 x", 4)), dict, undefined, tail)).toBeDefined();
+            });
+
+            it("at the end of the word (not inside it) the rule is judged as before", () => {
+                expect(canExpandAtCursor(asEditor(at("abcdd5 x", 6)), dict, undefined, tail)).toBeDefined();
+            });
+
+            it("a literal trigger inside the word is unchanged", () => {
+                expect(canExpandAtCursor(asEditor(at("say brb now", 5)), dict, undefined, tail)).toBeDefined();
+            });
         });
 
         it("does not write anything", () => {
@@ -1779,6 +1831,60 @@ describe("adapters/obsidian-editor: manual expansion with pattern rules (B-255 +
     it("without `manual` a rule inside a word does nothing, as before", async () => {
         const ed = at("on dd5 now", 5);
         expect(await tryExpandAtCursor(asEditor(ed), dict, { now, patterns: date })).toBeUndefined();
+    });
+
+    describe("a caret inside a word: the match must start at or before the caret (command and Tab alike)", () => {
+        const tail = rules({ source: String.raw`/dd(\d+)$/`, replacement: "day {{1}}", mode: "separator" });
+
+        it("a tail the caret is not in is left alone: nothing changes, the caret stays", async () => {
+            const ed = at("abcdd5 x", 1);
+            expect(await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: tail })).toBeUndefined();
+            expect(ed.getLine(0)).toBe("abcdd5 x");
+            expect(ed.getCursor()).toEqual({ line: 0, ch: 1 });
+        });
+
+        it("a match that spans the caret still expands and parks the caret after the new text", async () => {
+            const ed = at("abcdd5 x", 4);
+            await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: tail });
+            expect(ed.getLine(0)).toBe("abcday 5 x");
+            expect(ed.getCursor()).toEqual({ line: 0, ch: 8 });
+        });
+    });
+
+    describe("rules run once per Tab (the check's hit is handed to the expansion)", () => {
+        const ruleSet = rules({ source: String.raw`/\bdd(\d+)$/`, replacement: "day {{1}}", mode: "separator" });
+
+        it("check plus expansion with `prepared` is one run of the rule", async () => {
+            const ed = at("on dd5");
+            const found = canExpandAtCursor(asEditor(ed), dict, undefined, ruleSet);
+            expect(found).toBeDefined();
+            await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: ruleSet, prepared: found });
+            expect(ed.getLine(0)).toBe("on day 5");
+            expect(ruleSet[0]?.health.runs).toBe(1);
+        });
+
+        it("a rule the first run switched off cannot make the expansion find nothing", async () => {
+            const ed = at("on dd5");
+            const found = canExpandAtCursor(asEditor(ed), dict, undefined, ruleSet);
+            // What a second run would see: the guard (strikes, 8 ms budget) took the rule out after the check.
+            const rule = ruleSet[0];
+            if (rule) rule.health.switchedOff = "Switched off: test.";
+            await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: ruleSet, prepared: found });
+            expect(ed.getLine(0)).toBe("on day 5");
+            // Control: without the handed hit the same switched-off rule finds nothing, so the test is not vacuous.
+            const again = at("on dd5");
+            expect(await tryExpandAtCursor(asEditor(again), dict, { now, manual: true, patterns: ruleSet })).toBeUndefined();
+        });
+
+        it("a literal trigger handed over expands without the rules being consulted", async () => {
+            const both = rules({ source: "/brb$/", replacement: "PATTERN", mode: "separator" });
+            const ed = at("say brb");
+            const found = canExpandAtCursor(asEditor(ed), dict, undefined, both);
+            expect(both[0]?.health.runs).toBe(0);
+            await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: both, prepared: found });
+            expect(ed.getLine(0)).toBe("say be right back");
+            expect(both[0]?.health.runs).toBe(0);
+        });
     });
 });
 

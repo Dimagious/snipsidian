@@ -242,6 +242,14 @@ export default class HotstringsPlugin extends Plugin {
     }
 
     async saveSettings() {
+        // Every settings change goes through here (the UI saves after each edit, the community cache saves after
+        // each fetch). Recompile on the next keystroke only when the rules or the muted groups changed: an unrelated
+        // save must not reset what the runtime guard learned (strikes, switch-offs). Before the backup guard below:
+        // a refused save leaves the settings changed in memory, and rules compiled from the old ones must not go on
+        // running.
+        if (this.compiledPatterns && patternsSignature(this.settings) !== this.compiledSignature) {
+            this.compiledPatterns = undefined;
+        }
         // B-254: never overwrite the Text Snippets file while its backup is
         // missing: retry the backup first; a failure refuses the save.
         if (this.unsavedOriginal !== null) {
@@ -261,12 +269,6 @@ export default class HotstringsPlugin extends Plugin {
                 throw err;
             }
             this.unsavedOriginal = null;
-        }
-        // Every settings change goes through here (the UI saves after each edit, the community cache saves after
-        // each fetch). Recompile on the next keystroke only when the rules or the muted groups changed: an unrelated
-        // save must not reset what the runtime guard learned (strikes, switch-offs).
-        if (this.compiledPatterns && patternsSignature(this.settings) !== this.compiledSignature) {
-            this.compiledPatterns = undefined;
         }
         await this.saveData(this.settings);
     }

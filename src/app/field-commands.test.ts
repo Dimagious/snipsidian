@@ -4,6 +4,7 @@ import type { App } from "obsidian";
 import { MockEditor, asEditor } from "../test/factories/editor";
 import { compilePatternRules, NO_PATTERNS } from "../engine/patterns";
 import { expandTriggerAtCursor, jumpToNextField } from "./field-commands";
+import { canExpandAtCursor } from "../adapters/obsidian-editor";
 import {
     buildFieldSessionExtension,
     fieldSessionField,
@@ -173,6 +174,22 @@ describe("field-commands: expandTriggerAtCursor with patterns (ADR-0008)", () =>
         expect(hit.getLine(0)).toBe("take 3\u20444");
         expect(result).toMatchObject({ original: "3/4" });
         expect(await expandTriggerAtCursor(app, asEditor(editorWith("plain", 5)), () => ({}), noPrefix, () => set, { manual: true })).toBeUndefined();
+    });
+
+    it("a prepared hit (the Tab check) is expanded as found: the rules are not run again", async () => {
+        const mock = editorWith("take 3/4", 8);
+        const prepared = canExpandAtCursor(asEditor(mock), {}, undefined, set.rules);
+        expect(prepared?.hit).toBeDefined();
+        // Switched off after the check: only the handed-over hit can still expand.
+        const rule = set.rules[0];
+        if (!rule) throw new Error("rule missing");
+        rule.health.switchedOff = "Switched off: test.";
+        try {
+            await expandTriggerAtCursor(app, asEditor(mock), () => ({}), noPrefix, () => set, { manual: true, prepared });
+            expect(mock.getLine(0)).toBe("take 3\u20444");
+        } finally {
+            rule.health.switchedOff = undefined;
+        }
     });
 
     it("manual mode with a selection ignores the rules", async () => {

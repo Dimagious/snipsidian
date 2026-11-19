@@ -912,6 +912,25 @@ describe("app/plugin", () => {
             expect(getPatterns?.().rules.map((r) => r.id)).toEqual(["new"]);
         });
 
+        // The settings in memory changed even when the backup guard refuses the write: rules compiled from the old
+        // ones must not go on running.
+        it("a save the backup guard refuses still drops the compiled rules that no longer match the settings", async () => {
+            const adapter = new FakeAdapter();
+            const { plugin } = compatPlugin(COMPAT_MANIFEST, adapter);
+            const rule = (id: string) => ({ id, source: "/a$/", replacement: "x", enabled: true, mode: "separator" as const });
+            load(plugin, { snippets: { a: "b" }, patterns: [rule("old")] });
+            await plugin.onload();
+            const getPatterns = lastBuildArgs()[4];
+            expect(getPatterns?.().rules.map((r) => r.id)).toEqual(["old"]);
+
+            // An unconvertible original is still unsaved (see above): the next save is refused until it is backed up.
+            adapter.failWrite = true;
+            (plugin as unknown as { unsavedOriginal: string | null }).unsavedOriginal = ORIGINAL;
+            plugin.settings.patterns = [rule("new")];
+            await expect(plugin.saveSettings()).rejects.toThrow("disk full");
+            expect(getPatterns?.().rules.map((r) => r.id)).toEqual(["new"]);
+        });
+
         it("under snipsidian there is no text-snippets command and no default hotkeys", async () => {
             const plugin = makePlugin(makeApp());
             await plugin.onload();

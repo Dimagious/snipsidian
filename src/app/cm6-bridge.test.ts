@@ -9,12 +9,12 @@ import { nth } from "../test/helpers";
 vi.mock("../adapters/obsidian-editor", () => ({
     tryExpandAtSeparator: vi.fn().mockResolvedValue(undefined),
     tryExpandInstant: vi.fn().mockResolvedValue(undefined),
-    canExpandAtCursor: vi.fn().mockReturnValue(false),
+    canExpandAtCursor: vi.fn().mockReturnValue(undefined),
 }));
 vi.mock("./field-commands", () => ({
     expandTriggerAtCursor: vi.fn().mockResolvedValue(undefined),
 }));
-import { canExpandAtCursor, tryExpandAtSeparator, tryExpandInstant } from "../adapters/obsidian-editor";
+import { canExpandAtCursor, tryExpandAtSeparator, tryExpandInstant, type CursorExpansion } from "../adapters/obsidian-editor";
 import { expandTriggerAtCursor } from "./field-commands";
 import { compilePatternRules, NO_PATTERNS, type CompiledPatterns } from "../engine/patterns";
 import { handleViewUpdate, handleTab, CompositionRetry, buildExpansionExtension } from "./cm6-bridge";
@@ -1242,13 +1242,15 @@ describe("cm6-bridge: manual mode, expand while typing off (B-255)", () => {
 describe("cm6-bridge: Tab expansion (B-255)", () => {
     const view = { composing: false, state: { readOnly: false } };
     const editor = { cm: view } as unknown;
+    /** What the check found; handleTab only passes it on. */
+    const FOUND = { literal: true } as unknown as CursorExpansion;
 
     beforeEach(() => {
         vi.clearAllMocks();
     });
 
     function tab(opts: { onTab?: boolean; found?: boolean; editorOverride?: unknown; v?: unknown } = {}): boolean {
-        vi.mocked(canExpandAtCursor).mockReturnValue(opts.found ?? true);
+        vi.mocked(canExpandAtCursor).mockReturnValue((opts.found ?? true) ? FOUND : undefined);
         const app = makeApp({ editor: opts.editorOverride === undefined ? editor : opts.editorOverride });
         return handleTab((opts.v ?? view) as EditorView, app, () => ({ brb: "x" }), () => undefined, () => opts.onTab ?? true);
     }
@@ -1283,7 +1285,15 @@ describe("cm6-bridge: Tab expansion (B-255)", () => {
 
     it("expands in manual mode (selection, caret inside a word) like the original plugin", () => {
         expect(tab()).toBe(true);
-        expect(nth(vi.mocked(expandTriggerAtCursor).mock.calls, 0)[5]).toEqual({ manual: true });
+        expect(nth(vi.mocked(expandTriggerAtCursor).mock.calls, 0)[5]).toMatchObject({ manual: true });
+    });
+
+    // The check decided to take Tab: its hit goes on, so the rules are not run a second time and the two cannot
+    // disagree (a rule switched off or cut by the time budget in between swallowed the key).
+    it("hands what the check found on to the expansion (prepared), not a second look", () => {
+        expect(tab()).toBe(true);
+        expect(nth(vi.mocked(expandTriggerAtCursor).mock.calls, 0)[5]?.prepared).toBe(FOUND);
+        expect(canExpandAtCursor).toHaveBeenCalledTimes(1);
     });
 
     describe("with pattern rules (ADR-0008)", () => {
@@ -1291,7 +1301,7 @@ describe("cm6-bridge: Tab expansion (B-255)", () => {
             { id: "s", source: "/dd$/", replacement: "x", enabled: true, mode: "separator" },
         ]);
         const tabWith = (getPatterns?: () => CompiledPatterns): boolean => {
-            vi.mocked(canExpandAtCursor).mockReturnValue(true);
+            vi.mocked(canExpandAtCursor).mockReturnValue(FOUND);
             const app = makeApp({ editor });
             return handleTab(
                 view as unknown as EditorView,
@@ -1309,7 +1319,7 @@ describe("cm6-bridge: Tab expansion (B-255)", () => {
             expect(vi.mocked(canExpandAtCursor).mock.calls[0]?.[3]).toBe(patterns.rules);
             const call = nth(vi.mocked(expandTriggerAtCursor).mock.calls, 0);
             expect(call[4]?.()).toBe(patterns);
-            expect(call[5]).toEqual({ manual: true });
+            expect(call[5]).toEqual({ manual: true, prepared: FOUND });
         });
 
         it("without patterns the check gets an empty rule list (as before)", () => {
@@ -1318,7 +1328,7 @@ describe("cm6-bridge: Tab expansion (B-255)", () => {
         });
 
         it("a Tab that matches no literal trigger and no rule is passed on, nothing runs", () => {
-            vi.mocked(canExpandAtCursor).mockReturnValue(false);
+            vi.mocked(canExpandAtCursor).mockReturnValue(undefined);
             const app = makeApp({ editor });
             const taken = handleTab(
                 view as unknown as EditorView,
@@ -1349,7 +1359,7 @@ describe("cm6-bridge: Tab expansion (B-255)", () => {
             const dispatch = vi.fn();
             const v = { ...view, dispatch };
             vi.mocked(expandTriggerAtCursor).mockResolvedValueOnce(result as never);
-            vi.mocked(canExpandAtCursor).mockReturnValue(true);
+            vi.mocked(canExpandAtCursor).mockReturnValue(FOUND);
             const app = makeApp({ editor: { cm: v } });
             handleTab(v as unknown as EditorView, app, () => ({ brb: "x" }), () => undefined, () => true, () => getHighlight);
             return { dispatch };
@@ -1382,7 +1392,7 @@ describe("cm6-bridge: Tab expansion (B-255)", () => {
     });
 
     it("the built extension routes Tab outside a session to handleTab", () => {
-        vi.mocked(canExpandAtCursor).mockReturnValue(true);
+        vi.mocked(canExpandAtCursor).mockReturnValue(FOUND);
         const state = EditorState.create({
             doc: "brb",
             extensions: [buildExpansionExtension(makeApp({ editor }), () => ({ brb: "x" }), () => undefined, () => false, () => NO_PATTERNS, () => true, () => true)],

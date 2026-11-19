@@ -82,3 +82,16 @@ export async function expandInstant(
     const plan = buildEdit(input, { trigger: hit.rule.id, fromCh: hit.index, toCh: textBefore.length }, applied);
     return { ...plan, kind: "pattern" };
 }
+
+/**
+ * ADR-0008, a separator rule the caller already matched on the line before the caret (the Tab key and the
+ * command: the check that decided Tab is taken found the hit, so the rules run once per key and the decision
+ * and the expansion cannot disagree). Same guards and plan as the separator branch of `expand`.
+ */
+export async function expandPatternHit(input: ExpandInput, ctx: ExpandContext, hit: PatternMatch): Promise<EditPlan | null> {
+    if (!shouldExpandHere(ctx)) return null;
+    const applied = await safePatternReplacement(hit, ctx);
+    if (!applied) return null;
+    const plan = buildEdit(input, { trigger: hit.rule.id, fromCh: hit.index, toCh: input.textBefore.length }, applied);
+    return { ...plan, kind: "pattern" };
+}

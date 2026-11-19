@@ -12,10 +12,10 @@ import {
 import { clock } from "./clock";
 import { readClipboardSafe } from "./clipboard";
 import { expand } from "../engine";
-import { expandInstant } from "../engine/expand";
+import { expandInstant, expandPatternHit } from "../engine/expand";
 import { shouldExpandHere } from "../engine/guards";
 import { findTrigger } from "../engine/match";
-import { matchPatterns, matchPatternsInOrder, type CompiledRule } from "../engine/patterns";
+import { matchPatterns, matchPatternsInOrder, type CompiledRule, type PatternMatch } from "../engine/patterns";
 import type { Dict, EditPlan, ExpandContext, ExpandInput, FieldStops } from "../engine/types";
 import { DEFAULT_DELIMITERS, isSeparator } from "../shared/delimiters";
 import { isInFencedCode, isInInlineCode, isInMath, isInYamlFrontmatter } from "../shared/markdown";
@@ -414,17 +414,23 @@ export async function tryExpandAtCursor(
         /** ADR-0008: compiled pattern rules (separator mode is tried). */
         patterns?: readonly CompiledRule[];
         manual?: boolean;
+        /**
+         * What `canExpandAtCursor` just found (the Tab key): used as is, so the rules are not run a second time and
+         * the decision to take the key cannot differ from the expansion. Only valid in the same synchronous turn
+         * (the editor must not have changed since).
+         */
+        prepared?: CursorExpansion;
     },
 ): Promise<ExpansionResult | undefined> {
-    const at = cursorExpansionInput(editor, dict, deps.prefix, deps.manual === true);
+    const at = deps.prepared ?? planCursorExpansion(editor, dict, deps.prefix, deps.patterns ?? [], deps.manual === true);
     if (!at) return undefined;
     const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, at.cursor.line, at.input.sepCh);
-    // ADR-0008: pattern rules read the line before the caret; a selection that is a trigger has no such line.
-    const patterns = at.selection ? [] : (deps.patterns ?? []);
+    const hit = at.hit;
     // No `pairCloser`: a command or Tab never takes an auto-paired closer (only the typing path knows one was inserted).
     return expandAndApply(
         editor,
-        () => expand(at.input, dict, ctx, DEFAULT_DELIMITERS, patterns),
+        // A literal trigger runs through `expand` without rules (it found it already); a rule hit is expanded as found.
+        () => (hit ? expandPatternHit(at.input, ctx, hit) : expand(at.input, dict, ctx)),
         at.cursor.line,
         at.lineText,
         "",
@@ -440,6 +446,9 @@ export async function tryExpandAtCursor(
  * mode: would the expand path find a snippet right now (same input helper,
  * same guards, nothing is resolved or written)? The Tab key needs the answer
  * at once, to decide whether it is taken or passed on to indent.
+ *
+ * Returns what it found (`undefined` = nothing): the caller hands it to
+ * `tryExpandAtCursor` as `prepared`, so a pattern rule runs once per Tab.
  */
 export function canExpandAtCursor(
     editor: Editor,
@@ -447,15 +456,48 @@ export function canExpandAtCursor(
     prefix?: string,
     /** ADR-0008: compiled pattern rules; a literal trigger wins, then the rules in list order (as `expand` does). */
     patterns: readonly CompiledRule[] = [],
-): boolean {
-    const at = cursorExpansionInput(editor, dict, prefix, true);
-    if (!at) return false;
-    const ctx = makeContext(editor, undefined, clock.now(), undefined, at.cursor.line, at.input.sepCh);
-    if (!shouldExpandHere(ctx)) return false;
-    if (findTrigger(at.input, dict) !== null) return true;
-    if (at.selection || patterns.length === 0) return false;
-    return matchPatternsInOrder({ beforeSeparator: at.input.textBefore }, patterns) !== null;
+): CursorExpansion | undefined {
+    // The line alone first (cheap): the context below scans the note for frontmatter, fences and math.
+    const plan = planCursorExpansion(editor, dict, prefix, patterns, true);
+    if (!plan) return undefined;
+    const ctx = makeContext(editor, undefined, clock.now(), undefined, plan.cursor.line, plan.input.sepCh);
+    return shouldExpandHere(ctx) ? plan : undefined;
 }
+
+/** What expanding at the caret found: the input, plus the literal trigger or the rule hit (never both). */
+export type CursorExpansion = CursorInput & {
+    /** A literal trigger ends the candidate (it wins over any rule). */
+    literal: boolean;
+    /** ADR-0008: the separator rule that matched when there is no literal trigger. */
+    hit?: PatternMatch;
+};
+
+/**
+ * The line-only part of "is there something to expand at the caret": the input, then a literal trigger, then
+ * (manual path and the command) the separator rules top to bottom. No Markdown context, no async.
+ */
+function planCursorExpansion(
+    editor: Editor,
+    dict: Dict,
+    prefix: string | undefined,
+    patterns: readonly CompiledRule[],
+    manual: boolean,
+): CursorExpansion | undefined {
+    const at = cursorExpansionInput(editor, dict, prefix, manual);
+    if (!at) return undefined;
+    if (findTrigger(at.input, dict) !== null) return { ...at, literal: true };
+    // A selection reaches here only as a literal trigger (`cursorExpansionInput` takes nothing else), which won
+    // above; kept as defence: a rule never reads a selection. Instant rules are not tried (no typed character).
+    if (at.selection || patterns.length === 0) return undefined;
+    const hit = matchPatternsInOrder({ beforeSeparator: at.input.textBefore }, patterns);
+    if (!hit) return undefined;
+    // A caret inside a word takes the line up to the word's end: a match that starts after the caret would replace
+    // a tail the caret is not in (`abc|dd5` is fine, `a|bcdd5` for `dd\d+$` is not), so it does not count.
+    if (at.moveCaretToEnd && hit.index > at.cursor.ch) return undefined;
+    return { ...at, literal: false, hit };
+}
+
+type CursorInput = { input: ExpandInput; cursor: EditorPosition; lineText: string; selection: string; moveCaretToEnd: boolean };
 
 /**
  * The input for expanding at the caret, or `undefined` when nothing can match
@@ -475,7 +517,7 @@ function cursorExpansionInput(
     dict: Dict,
     prefix: string | undefined,
     manual: boolean,
-): { input: ExpandInput; cursor: EditorPosition; lineText: string; selection: string; moveCaretToEnd: boolean } | undefined {
+): CursorInput | undefined {
     const selection = editor.getSelection();
     const cursor = editor.getCursor();
     const lineText = editor.getLine(cursor.line) ?? "";

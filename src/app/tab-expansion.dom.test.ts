@@ -62,6 +62,10 @@ interface Opts {
     prefix?: string;
     /** ADR-0008 pattern rules (compiled once per mount). */
     patterns?: Array<Partial<PatternRule> & { source: string; replacement: string }>;
+    /** An already compiled set (to read its rule health afterwards), instead of `patterns`. */
+    compiled?: () => CompiledPatterns;
+    /** "Expand while typing" (default off here: only Tab is under test). */
+    onType?: boolean;
 }
 
 function compile(rules: Opts["patterns"]): CompiledPatterns {
@@ -77,7 +81,7 @@ function mount(doc: string, anchor: number, head = anchor, opts: Opts = {}): Edi
         workspace: { get activeEditor() { return { editor, file: { name: "note.md" } }; } },
     } as unknown as App;
     const patterns = compile(opts.patterns);
-    const compiled = (): CompiledPatterns => patterns;
+    const compiled = opts.compiled ?? ((): CompiledPatterns => patterns);
     const view = new EditorView({
         state: EditorState.create({
             doc,
@@ -89,7 +93,7 @@ function mount(doc: string, anchor: number, head = anchor, opts: Opts = {}): Edi
                     () => opts.prefix,
                     () => false,
                     compiled,
-                    () => false, // typing never expands: only Tab is under test
+                    () => opts.onType ?? false, // typing does not expand unless a test asks: only Tab is under test
                     () => opts.onTab ?? true,
                 ),
             ],
@@ -225,6 +229,58 @@ describe("Tab through a real EditorView (B-255)", () => {
             expect(view.state.doc.toString()).toBe("on dd5");
         });
 
+        it("an instant-only rule is skipped on Tab: the key is not consumed (indent keeps it) and nothing is written", async () => {
+            const view = mount("a ->", 4, 4, { patterns: [{ source: "/->$/", replacement: "\u2192", mode: "instant" }] });
+            expect(pressTab(view)).toBe(false);
+            await new Promise((r) => setTimeout(r, 0));
+            expect(view.state.doc.toString()).toBe("a ->");
+            // Control: the same rule as a separator rule does take the key.
+            const sep = mount("a ->", 4, 4, { patterns: [{ source: "/->$/", replacement: "\u2192", mode: "separator" }] });
+            expect(pressTab(sep)).toBe(true);
+            await vi.waitFor(() => expect(sep.state.doc.toString()).toBe("a \u2192"));
+        });
+
+        it("the rules run once per Tab (health.runs counts one)", async () => {
+            const set = compile([date]);
+            const view = mount("on dd5", 6, 6, { compiled: () => set });
+            expect(pressTab(view)).toBe(true);
+            await vi.waitFor(() => expect(view.state.doc.toString()).toBe("on day 5"));
+            expect(set.rules[0]?.health.runs).toBe(1);
+        });
+
+        it("a rule the guard takes out after the check cannot swallow the Tab: the checked hit is expanded", async () => {
+            const set = compile([date]);
+            // What the guard (strikes, 8 ms budget) can do after the check ran the rule: from its first run on the
+            // rule reads as switched off. A second run would find nothing, with the key already consumed.
+            const health = set.rules[0]?.health;
+            if (!health) throw new Error("rule missing");
+            Object.defineProperty(health, "switchedOff", {
+                get: () => (health.runs >= 1 ? "Switched off: test." : undefined),
+                configurable: true,
+            });
+            const view = mount("on dd5", 6, 6, { compiled: () => set });
+            expect(pressTab(view)).toBe(true);
+            await vi.waitFor(() => expect(view.state.doc.toString()).toBe("on day 5"));
+            expect(health.runs).toBe(1);
+        });
+
+        // Owner decision: a match that starts after the caret would replace a tail the caret is not in.
+        const tail = { source: String.raw`/dd(\d+)$/`, replacement: "day {{1}}" };
+
+        it("a caret inside a word does not take a rule that matches only the tail after it (Tab passes through)", async () => {
+            const view = mount("abcdd5 x", 1, 1, { patterns: [tail] });
+            expect(pressTab(view)).toBe(false);
+            await new Promise((r) => setTimeout(r, 0));
+            expect(view.state.doc.toString()).toBe("abcdd5 x");
+            expect(view.state.selection.main.head).toBe(1);
+        });
+
+        it("a caret inside the match still expands it", async () => {
+            const view = mount("abcdd5 x", 4, 4, { patterns: [tail] });
+            expect(pressTab(view)).toBe(true);
+            await vi.waitFor(() => expect(view.state.doc.toString()).toBe("abcday 5 x"));
+        });
+
         it("inside an open field session Tab still jumps fields; rules do not start a new expansion", async () => {
             const view = mount("lnk dd5", 3, 3, { patterns: [date] });
             expect(pressTab(view)).toBe(true);
@@ -235,5 +291,28 @@ describe("Tab through a real EditorView (B-255)", () => {
             expect(view.state.selection.main.head).toBe(3);
             expect(view.state.doc.toString()).toBe("[]() dd5");
         });
+    });
+});
+
+describe("typing through the built extension honours Expand while typing (B-255)", () => {
+    /** A typed space after the caret text, the way CM6's own input handler tags it. */
+    function typeSpace(view: EditorView): void {
+        view.focus();
+        const at = view.state.doc.length;
+        view.dispatch({ changes: { from: at, insert: " " }, selection: { anchor: at + 1 }, userEvent: "input.type" });
+    }
+
+    it("control: with typing on, `brb` + space expands", async () => {
+        const view = mount("brb", 3, 3, { onType: true });
+        typeSpace(view);
+        await vi.waitFor(() => expect(view.state.doc.toString()).toBe("be right back "));
+    });
+
+    it("with typing off the same keystroke expands nothing (the setting reaches the composition-retry plugin)", async () => {
+        const view = mount("brb", 3, 3, { onType: false });
+        typeSpace(view);
+        // An expansion lands after the update (a microtask and more): give it every chance, then check.
+        await new Promise((r) => setTimeout(r, 20));
+        expect(view.state.doc.toString()).toBe("brb ");
     });
 });

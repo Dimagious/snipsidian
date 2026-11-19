@@ -1,6 +1,6 @@
 // src/app/field-commands.ts
 import type { App, Editor } from "obsidian";
-import { tryExpandAtCursor, type ExpansionResult } from "../adapters/obsidian-editor";
+import { tryExpandAtCursor, type CursorExpansion, type ExpansionResult } from "../adapters/obsidian-editor";
 import { readClipboardSafe } from "../adapters/clipboard";
 import { clock } from "../adapters/clock";
 import type { Dict } from "../engine/types";
@@ -34,7 +34,7 @@ export async function expandTriggerAtCursor(
     getPrefix: () => string | undefined,
     /** ADR-0008: separator-mode pattern rules are tried too (also on Tab); never an auto-pair closer. */
     getPatterns: () => CompiledPatterns = () => NO_PATTERNS,
-    options: { manual?: boolean } = {},
+    options: { manual?: boolean; prepared?: CursorExpansion } = {},
 ): Promise<ExpansionResult | undefined> {
     const filename = app.workspace.activeEditor?.file?.name;
     const result = await tryExpandAtCursor(editor, getSnippets(), {
@@ -44,6 +44,7 @@ export async function expandTriggerAtCursor(
         prefix: getPrefix(),
         patterns: getPatterns().rules,
         manual: options.manual,
+        prepared: options.prepared,
     });
     if (result) {
         startFieldSessionInEditor(editor, result.session);

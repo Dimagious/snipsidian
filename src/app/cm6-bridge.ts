@@ -505,8 +505,11 @@ export function handleTab(
     if (!editor || editor.cm !== view) return false;
     const dict = getSnippets();
     const patterns = getPatterns();
-    if (!canExpandAtCursor(editor, dict, getPrefix(), patterns.rules)) return false;
-    expandTriggerAtCursor(app, editor, () => dict, getPrefix, () => patterns, { manual: true })
+    const found = canExpandAtCursor(editor, dict, getPrefix(), patterns.rules);
+    if (!found) return false;
+    // The check's hit goes on to the expansion: the rules run once per Tab, and a rule the first run switched off
+    // or cut by the time budget cannot make the second one find nothing (Tab taken, nothing done).
+    expandTriggerAtCursor(app, editor, () => dict, getPrefix, () => patterns, { manual: true, prepared: found })
         .then((result) => {
             // Same as typing (B-176): a field session clears the mark at once,
             // so only a plain expansion is marked (highlight / Backspace undo).
