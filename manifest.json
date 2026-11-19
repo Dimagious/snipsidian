@@ -6,5 +6,6 @@
   "description": "Type a short trigger or a regex pattern, get Markdown. Hotstrings that stay quiet in code, a searchable snippet picker, community packs, and import from Text Snippets and Espanso.",
   "author": "Dimagious",
   "authorUrl": "https://github.com/Dimagious",
+  "fundingUrl": "https://buymeacoffee.com/dimagious",
   "isDesktopOnly": false
 }
