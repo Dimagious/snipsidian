@@ -74,6 +74,11 @@ type RowView = {
     note: string | undefined;
 };
 
+/** What a delete aims at: a rule by id (its row may be stale), an entry that is not a rule by its slot. */
+type DeleteTarget = { id: string } | { slot: number };
+
+const deleteTarget = (row: RowView): DeleteTarget => (row.isRule ? { id: row.id } : { slot: row.index });
+
 type EditorState = {
     /** The rule's unique id (`withUniqueIds`): the page finds the rule again by it, wherever it sits now. */
     id: string;
@@ -494,8 +499,7 @@ export class PatternsTab {
         if (!ed.isNew) {
             const del = footer.createEl("button", { text: "Delete", cls: "mod-warning snipsy-pattern-delete", attr: { type: "button" } });
             del.addEventListener("click", () => {
-                const index = locateRule(this.list(), ed.id);
-                if (index >= 0) this.confirmDelete(index);
+                this.confirmDelete({ id: ed.id });
             });
         }
         const spacer = footer.createDiv({ cls: "snipsy-pattern-footer-spacer" });
@@ -718,7 +722,16 @@ export class PatternsTab {
                 }
                 const at = locateRule(list, ed.id);
                 const existing = list[at];
-                const next = existing === undefined ? null : replaceRule(list, at, { ...rule, enabled: existing.enabled === true });
+                let next: PatternRule[] | null = null;
+                if (existing !== undefined) {
+                    // What is stored decides `enabled`: an entry that had no id is shown as off, but saving it as it
+                    // was (on) is the person fixing it. Other fields of the stored rule stay (a newer version's).
+                    const storedEntry: unknown = readPatterns(this.plugin.settings)[at];
+                    const enabled = isRuleObject(storedEntry) ? Reflect.get(storedEntry, "enabled") === true : existing.enabled === true;
+                    const merged: PatternRule = { ...existing, ...rule, enabled };
+                    if (group === undefined) delete merged.group;
+                    next = replaceRule(list, at, merged);
+                }
                 if (next === null) refusal.text = "This rule is no longer in the list.";
                 return next;
             });
@@ -859,7 +872,7 @@ export class PatternsTab {
             if (row.isRule) void this.move(row.id, 1);
         } else if (e.key === "Delete") {
             e.preventDefault();
-            this.confirmDelete(row.index);
+            this.confirmDelete(deleteTarget(row));
         }
     }
 
@@ -896,17 +909,18 @@ export class PatternsTab {
                 .setTitle("Delete rule")
                 .setIcon("trash")
                 .setWarning(true)
-                .onClick(() => this.confirmDelete(row.index)),
+                .onClick(() => this.confirmDelete(deleteTarget(row))),
         );
         const rect = anchor.getBoundingClientRect();
         menu.showAtPosition({ x: rect.left, y: rect.bottom });
     }
 
-    /** Asks, then drops the slot `index`: a rule is found again by its id, an entry that is not a rule by its slot. */
-    private confirmDelete(index: number): void {
-        const entry: unknown = this.list()[index];
+    /** Asks, then drops the entry: a rule is found by its id when asked and again when confirmed, an entry that is not a rule by its slot. */
+    private confirmDelete(target: DeleteTarget): void {
+        const id = "id" in target ? target.id : undefined;
+        const index = "id" in target ? locateRule(this.list(), target.id) : target.slot;
         if (index < 0 || index >= this.list().length) return;
-        const id = ruleId(entry);
+        const entry: unknown = this.list()[index];
         const rawSource: unknown = isRuleObject(entry) ? Reflect.get(entry, "source") : undefined;
         const source = typeof rawSource === "string" ? rawSource : "";
         new ConfirmModal(this.app, {

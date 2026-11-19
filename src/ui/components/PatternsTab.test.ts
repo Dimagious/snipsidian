@@ -4,6 +4,7 @@ import { Menu, Platform } from "../../test/stubs/obsidian";
 import type { PatternRule } from "../../engine/types";
 import type { SnipSidianSettings } from "../../types";
 import { STARTER_RULES } from "../../core/pattern-starter";
+import { compilePatternRules } from "../../engine/patterns";
 import { CAPTURE_HINT, INSTANT_NEEDS_TYPING, PATTERNS_UNREADABLE, PatternsTab, TRY_IT_CUT } from "./PatternsTab";
 import type { App } from "obsidian";
 import type SnipSidianPlugin from "../../main";
@@ -490,6 +491,18 @@ describe("PatternsTab: row states", () => {
         expect(q(".snipsy-pattern-note", target).textContent).toBe("Turned off for this session: it was too slow.");
         expect(stored()[1]?.enabled).toBe(true);
         expect(q<HTMLInputElement>("input", q(".snipsy-pattern-toggle", target)).disabled).toBe(false);
+    });
+
+    it("Paused shows on a twin too: the engine reports the stored id, which both entries share", () => {
+        mount(
+            [rule("a"), rule("a", { source: "/t$/" })],
+            {},
+            { switchedOff: [{ id: "a", reason: "Switched off: slow on this note (3 times over 2 ms)." }] },
+        );
+        expect(rowIds()[0]).toBe("a");
+        expect(rowIds()[1]).not.toBe("a");
+        expect(row(0).classList.contains("is-paused")).toBe(true);
+        expect(row(1).classList.contains("is-paused")).toBe(true);
     });
 
     it("Paused words a compile-time switch-off differently", () => {
@@ -1115,9 +1128,76 @@ describe("PatternsTab: entries a hand edit or sync can produce", () => {
             expect(original[0]).not.toHaveProperty("id");
             expect(original[2]?.id).toBe("a");
             expect(mock._saveCalls).toHaveLength(0);
-            // The ids do not change between draws.
-            const again = rowIds();
-            expect(again).toEqual(ids);
+            // The ids do not change when the page is drawn again.
+            tab.render(root);
+            expect(rowIds()).toEqual(ids);
+            tab.render(root);
+            expect(rowIds()).toEqual(ids);
+        });
+
+        it("ids stay the same when a failed save puts the old list back after the new one was read", async () => {
+            const original = [idless("one"), rule("a"), idless("two")];
+            mount(original);
+            const ids = rowIds();
+            const saves = deferSaves();
+            const input = q<HTMLInputElement>("input", q(".snipsy-pattern-toggle", row(1)));
+            input.checked = false;
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+            await settle();
+            // The pending write replaced the stored array; reading it must not forget the ids of the old one.
+            expect(mock.settings.patterns).not.toBe(original);
+            tab.render(root);
+            expect(rowIds()).toEqual(ids);
+            saves.reject(0);
+            await settle();
+            expect(mock.settings.patterns).toBe(original);
+            expect(rowIds()).toEqual(ids);
+        });
+
+        it("an unrelated write does not switch an id-less rule on: it is persisted off and the engine does not compile it", async () => {
+            mount([idless("one"), rule("a"), rule("b")]);
+            expect(compilePatternRules(mock.settings.patterns).rules.map((r) => r.id)).toEqual(["a", "b"]);
+            const input = q<HTMLInputElement>("input", q(".snipsy-pattern-toggle", row(2)));
+            input.checked = false;
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+            await settle();
+            expect(stored().map((r) => r.enabled)).toEqual([false, true, false]);
+            expect(storedIds()[0]).toMatch(/^p/);
+            expect(compilePatternRules(mock.settings.patterns).rules.map((r) => r.id)).toEqual(["a"]);
+            // It is an ordinary off rule now, and the person can turn it on.
+            expect(row(0).classList.contains("is-off")).toBe(true);
+            const toggle = q<HTMLInputElement>("input", q(".snipsy-pattern-toggle", row(0)));
+            expect(toggle.disabled).toBe(false);
+            expect(toggle.checked).toBe(false);
+        });
+
+        it("a rule with a non-string id is persisted off as well, and a repeated id keeps its enabled", async () => {
+            const numeric = { id: 5, source: "/n$/", replacement: "N", enabled: true, mode: "instant" } as unknown as PatternRule;
+            mount([numeric, rule("a"), rule("a", { source: "/t$/", enabled: true })]);
+            const input = q<HTMLInputElement>("input", q(".snipsy-pattern-toggle", row(1)));
+            input.checked = false;
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+            await settle();
+            expect(stored().map((r) => r.enabled)).toEqual([false, false, true]);
+        });
+
+        it("saving an id-less rule in the editor keeps it on, as it was stored", async () => {
+            mount([idless("one"), rule("b")]);
+            await editAndSave(0, "EDITED");
+            await click(saveButton());
+            expect(stored()[0]).toMatchObject({ replacement: "EDITED", enabled: true });
+            expect(compilePatternRules(mock.settings.patterns).rules.map((r) => r.id)).toHaveLength(2);
+        });
+
+        it("saving an id-less rule that an earlier write already persisted as off keeps it off", async () => {
+            mount([idless("one"), rule("b")]);
+            await editAndSave(0, "EDITED");
+            const input = q<HTMLInputElement>("input", q(".snipsy-pattern-toggle", row(1)));
+            input.checked = false;
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+            await settle();
+            await click(saveButton());
+            expect(stored()[0]).toMatchObject({ replacement: "EDITED", enabled: false });
         });
 
         it("the next write persists the ids, every entry distinct", async () => {
@@ -1129,7 +1209,82 @@ describe("PatternsTab: entries a hand edit or sync can produce", () => {
             await settle();
             expect(storedIds()).toEqual(ids);
             expect(new Set(storedIds()).size).toBe(3);
-            expect(stored().map((r) => r.enabled)).toEqual([true, false, true]);
+            // The id-less entry is persisted off, the twin keeps its enabled.
+            expect(stored().map((r) => r.enabled)).toEqual([false, false, true]);
+        });
+
+        it("Delete on a row that moved while its save was pending deletes that rule, not the one now at its old slot", async () => {
+            mount([rule("a"), rule("b"), rule("c")]);
+            const saves = deferSaves();
+            key(q(".snipsy-pattern-main", row(1)), "ArrowUp", { altKey: true });
+            await settle();
+            // The stored list is [b, a, c] already; the page is drawn again after the save, so row 1 still shows b
+            // while slot 1 now holds a.
+            expect(storedIds()).toEqual(["b", "a", "c"]);
+            const staleRow = row(1);
+            expect(staleRow.dataset.id).toBe("b");
+            key(q(".snipsy-pattern-main", staleRow), "Delete");
+            button("Delete", confirmModal()).click();
+            await settle();
+            saves.resolve(0);
+            saves.resolve(1);
+            await settle();
+            expect(storedIds()).toEqual(["a", "c"]);
+        });
+
+        it("the menu Delete on a row still showing b deletes b while a's delete is pending", async () => {
+            mount([rule("a"), rule("b"), rule("c")]);
+            const saves = deferSaves();
+            q(".snipsy-pattern-menu", row(0)).click();
+            menuItem("Delete rule")();
+            button("Delete", confirmModal()).click();
+            await settle();
+            expect(storedIds()).toEqual(["b", "c"]);
+            // The page was not drawn again for the pending delete: row 1 still shows b, and its slot is c's now.
+            const bRow = rows().find((r) => r.dataset.id === "b");
+            if (!bRow) throw new Error("No row b");
+            q(".snipsy-pattern-menu", bRow).click();
+            menuItem("Delete rule")();
+            button("Delete", confirmModal()).click();
+            await settle();
+            saves.resolve(0);
+            saves.resolve(1);
+            await settle();
+            expect(storedIds()).toEqual(["c"]);
+        });
+
+        it("the Delete button of an open editor deletes the edited rule by id", async () => {
+            mount([rule("a"), rule("b")]);
+            q(".snipsy-pattern-main", row(1)).click();
+            button("Delete", editor()).click();
+            button("Delete", confirmModal()).click();
+            await settle();
+            expect(storedIds()).toEqual(["a"]);
+        });
+
+        it("Delete asks nothing for a rule that is already gone", async () => {
+            mount([rule("a"), rule("b")]);
+            const staleRow = row(1);
+            mock.settings.patterns = [rule("a")];
+            key(q(".snipsy-pattern-main", staleRow), "Delete");
+            expect(document.body.querySelector(".snipsidian-confirm-modal")).toBeNull();
+        });
+
+        it("saving an edit keeps the fields of the stored rule the page does not know", async () => {
+            const future = { ...rule("a", { group: "grp" }), future: 1, nested: { x: [1] } } as PatternRule;
+            mount([future, rule("b")]);
+            await editAndSave(0, "EDITED");
+            await click(saveButton());
+            expect(stored()[0]).toMatchObject({ id: "a", replacement: "EDITED", future: 1, nested: { x: [1] }, group: "grp" });
+        });
+
+        it("clearing the group in the editor removes it from the saved rule", async () => {
+            mount([rule("a", { group: "grp" })]);
+            q(".snipsy-pattern-main", row(0)).click();
+            type(groupInput(), "");
+            await settle();
+            await click(saveButton());
+            expect(stored()[0]).not.toHaveProperty("group");
         });
 
         it("deleting a row above the edited id-less rule keeps the edit on that rule", async () => {

@@ -101,16 +101,23 @@ describe("pattern list operations", () => {
         const out = withUniqueIds(input, () => `f${n++}`) as unknown[];
         expect(out[0]).toBe(first);
         expect(out[1]).toEqual({ ...twin, id: "f0" });
-        expect(out[2]).toEqual({ source: "/x$/", id: "f1" });
+        // No string id: the engine skipped it, so the copy is off. A twin keeps its `enabled`.
+        expect(out[2]).toEqual({ source: "/x$/", id: "f1", enabled: false });
         expect(out[3]).toBeNull();
         expect(out[4]).toBe("s");
-        expect(out[5]).toEqual({ id: "f2", source: "/n$/" });
+        expect(out[5]).toEqual({ id: "f2", source: "/n$/", enabled: false });
         expect(out[6]).toBe(input[6]);
         // The stored entries are not touched.
         expect(twin.id).toBe("a");
         expect(noId).toEqual({ source: "/x$/" });
         const ids = (out as Array<{ id?: string } | null | string>).flatMap((e) => (typeof e === "object" && e !== null ? [e.id] : []));
         expect(new Set(ids).size).toBe(ids.length);
+    });
+
+    it("withUniqueIds turns an id-less rule off even when it was on, and leaves a twin's enabled alone", () => {
+        const input: unknown[] = [{ source: "/x$/", enabled: true }, { id: "", source: "/y$/", enabled: true }, rule("a"), rule("a", { enabled: true })];
+        const out = withUniqueIds(input) as Array<{ enabled: boolean }>;
+        expect(out.map((e) => e.enabled)).toEqual([false, false, true, true]);
     });
 
     it("withUniqueIds never hands out an id a later entry already has", () => {

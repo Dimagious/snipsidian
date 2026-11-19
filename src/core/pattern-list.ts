@@ -29,6 +29,11 @@ export function locateRule(rules: readonly unknown[], id: string): number {
  * The list with every object entry made addressable: one that has no string id, or whose id repeats an earlier
  * entry's, gets a fresh unique one on a copy (the stored entry is not touched). Everything else, including entries
  * that are not objects, keeps its identity. The page tracks rows, editor and menus by these ids alone.
+ *
+ * An entry with no string id is refused by the engine ("The rule has no id."), so it is not firing. Giving it an id
+ * must not switch it on behind the person's back: the copy is `enabled: false`. A repeated id is different: the engine
+ * compiles every entry on its own and does not look at ids for that, so a twin is already firing if it is enabled, and
+ * keeps its `enabled` unchanged.
  */
 export function withUniqueIds(rules: readonly unknown[], makeId: () => string = newPatternId): PatternRule[] {
     const seen = new Set<string>();
@@ -47,7 +52,7 @@ export function withUniqueIds(rules: readonly unknown[], makeId: () => string = 
         let fresh = makeId();
         while (seen.has(fresh) || taken.has(fresh)) fresh = makeId();
         taken.add(fresh);
-        return { ...(entry as PatternRule), id: fresh };
+        return { ...(entry as PatternRule), id: fresh, ...(id === undefined ? { enabled: false } : {}) };
     });
 }
 
