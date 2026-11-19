@@ -31,10 +31,15 @@ export interface EspansoMatch {
   trigger?: string;
   triggers?: string[];
   /** Regex-trigger form — mutually exclusive with `trigger`/`triggers`
-   *  in real Espanso packages. Not supported by Snipsy's engine
-   *  (B-074, deferred); B-139 reports it as skipped rather than
-   *  silently dropping it. */
+   *  in real Espanso packages. Imported as a pattern rule when it
+   *  passes the S-015 gate (ADR-0008); otherwise reported as skipped
+   *  (B-139) rather than silently dropped. */
   regex?: string;
+  /** Word-boundary options of a trigger match. A regex match that sets
+   *  one is skipped (a pattern can't honour it exactly). */
+  word?: boolean;
+  left_word?: boolean;
+  right_word?: boolean;
   replace?: string;
   replace_text?: string;
   output?: string;

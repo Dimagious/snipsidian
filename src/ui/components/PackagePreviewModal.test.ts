@@ -234,3 +234,24 @@ describe("PackagePreviewModal — conflict cards", () => {
         });
     });
 });
+
+describe("PackagePreviewModal: omitEmptySummary", () => {
+    function summaryText(modal: PackagePreviewModal): string {
+        return modal.contentEl.textContent ?? "";
+    }
+
+    it("leaves out '0 new snippets.' for an empty diff when the caller shows its own changes", () => {
+        const modal = new PackagePreviewModal(plugin.app as unknown as App, plugin as unknown as SnipSidianPlugin, "t", makeDiff(0));
+        modal.omitEmptySummary = true;
+        modal.open();
+        expect(summaryText(modal)).not.toContain("new snippet");
+    });
+
+    it("still shows the summary by default, and when the diff has something", () => {
+        expect(summaryText(mount(makeDiff(0)))).toContain("0 new snippets.");
+        const modal = new PackagePreviewModal(plugin.app as unknown as App, plugin as unknown as SnipSidianPlugin, "t", makeDiff(0, 2));
+        modal.omitEmptySummary = true;
+        modal.open();
+        expect(summaryText(modal)).toContain("2 new snippets.");
+    });
+});

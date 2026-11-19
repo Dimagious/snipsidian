@@ -1,13 +1,17 @@
 import { App, Notice } from "obsidian";
 import type SnipSidianPlugin from "../../../main";
-import { espansoYamlToSnippets, type EspansoSkip } from "../../../packages/espanso";
+import { espansoYamlToSnippets, type EspansoImportResult, type EspansoSkip } from "../../../packages/espanso";
 import { PackagePreviewModal } from "../Modals";
 import {
   countAppliedChanges,
   planGroupedImport,
   type CollisionSkip,
+  type GroupedImportPlan,
 } from "../../../core/install-plan";
-import { commitSnippets } from "../../../core/commit-snippets";
+import { commitSnippets, commitSnippetsAndPatterns } from "../../../core/commit-snippets";
+import { planPatternImport, type PatternImportPlan } from "../../../core/espanso-pattern-plan";
+import { readPatterns } from "../../../core/pattern-list";
+import { renderPatternPreview } from "./EspansoPatternPreview";
 import { slugifyGroup } from "../../../store/keys";
 import { GroupManager } from "../../utils/group-utils";
 import { renderSettingGroup } from "../../utils/setting-group";
@@ -51,6 +55,28 @@ function formatSkipSummary(
   return formatUnsupportedSummary(importedCount, skipped) + collidedPart;
 }
 
+/** What nothing-imported looks like when the skipped ones are regex matches only (ADR-0008): not forms or scripts. */
+const regexOnlySummary = (count: number): string =>
+  `${count} regex ${count === 1 ? "match" : "matches"} Snipsy can't use as patterns`;
+
+/** A parser skip of a `regex:` match (the parser says so: a literal trigger named `regex:foo` is not one). */
+function isRegexSkip(s: EspansoSkip): boolean {
+  return s.kind === "regex";
+}
+
+/** A plan with nothing to write: used when a file holds pattern rules and no literal snippets. */
+const NO_SNIPPET_PLAN: GroupedImportPlan = {
+  validation: { isValid: true, errors: [], warnings: [] },
+  skippedCollisions: [],
+  importable: {},
+  diff: { added: [], conflicts: [] },
+};
+
+/** The plan's own skips (a duplicate, past the cap, a gate failure) in the shape the skip summary reads. */
+function asSkips(plan: PatternImportPlan): EspansoSkip[] {
+  return plan.skipped.map((s) => ({ trigger: s.label, reason: s.reason, kind: "regex" as const }));
+}
+
 function formatUnsupportedSummary(importedCount: number, skipped: EspansoSkip[]): string {
   // B-034 (finding #7): `s.trigger` is a raw Espanso match trigger
   // parsed straight out of pasted YAML — untrusted. Sanitize each
@@ -58,10 +84,15 @@ function formatUnsupportedSummary(importedCount: number, skipped: EspansoSkip[])
   const shown = skipped.slice(0, 3).map((s) => sanitizeForNotice(s.trigger, 60));
   const names = skipped.length > 3 ? `${shown.join(", ")}, …` : shown.join(", ");
   if (importedCount === 0) {
+    if (skipped.every(isRegexSkip)) {
+      return `Nothing to import: ${regexOnlySummary(skipped.length)} (${names})`;
+    }
     const plural = skipped.length === 1 ? "match uses" : "matches use";
     return `Nothing to import: ${skipped.length} ${plural} forms/scripts Snipsy doesn't support (${names})`;
   }
-  return `${importedCount} imported, ${skipped.length} skipped: ${names}. Forms and scripts are not supported.`;
+  // Regex matches are left out for their own reasons (the preview names them): not "forms and scripts".
+  const why = skipped.every(isRegexSkip) ? "" : " Forms and scripts are not supported.";
+  return `${importedCount} imported, ${skipped.length} skipped: ${names}.${why}`;
 }
 
 export class EspansoSection {
@@ -122,7 +153,7 @@ export class EspansoSection {
     // at the row's padding.
     group.addSetting((s) => {
       s.descEl.appendText(
-        "Paste package YAML. Plain text triggers become snippets; forms and scripts are skipped. Find packages on the ",
+        "Paste package YAML. Plain text triggers become snippets and regex triggers become pattern rules; forms and scripts are skipped. Find packages on the ",
       );
       const espansoLink = s.descEl.createEl("a", {
         text: "Espanso hub",
@@ -140,7 +171,7 @@ export class EspansoSection {
     // can't be told apart and there's no bulk-uninstall path.
     let groupInput!: HTMLInputElement;
     group.addSetting((s) => {
-      s.setName("Group name").setDesc("Imported snippets go into this group.");
+      s.setName("Group name").setDesc("Imported snippets and pattern rules go into this group.");
       s.addText((t) => {
         groupInput = t.inputEl;
         t.inputEl.addClass("snipsy-espanso-group-input");
@@ -208,7 +239,7 @@ export class EspansoSection {
       // check, diff, conflict-modal apply, and the no-conflict path.
       // B-139: the importer now reports what it couldn't map
       // (`skipped`) alongside what it could (`snippets`).
-      let parsed: { snippets: Record<string, string>; skipped: EspansoSkip[] };
+      let parsed: EspansoImportResult;
       try {
         parsed = espansoYamlToSnippets(yamlText);
       } catch (err) {
@@ -221,12 +252,20 @@ export class EspansoSection {
         return;
       }
 
+      // ADR-0008: regex matches become pattern rules. The plan runs the S-015
+      // gate and the 100-rule cap before anything is written; what it leaves
+      // out (a duplicate, past the cap) is reported with the parser's skips.
+      const patternPlan = planPatternImport(parsed.patterns, groupSlug, this.plugin.settings);
+      const patternCount = patternPlan.add.length;
+      const allSkipped = [...parsed.skipped, ...asSkips(patternPlan)];
+      const hasSnippets = Object.keys(parsed.snippets).length > 0;
+
       // B-139: nothing importable — surface why and stop before any
       // validation/write. This is a distinct case from "the pasted
       // YAML had zero matches at all" (unchanged, falls through to
       // "Installed 0 snippets" below like before B-139).
-      if (parsed.skipped.length > 0 && Object.keys(parsed.snippets).length === 0) {
-        const msg = formatSkipSummary(0, parsed.skipped);
+      if (allSkipped.length > 0 && !hasSnippets && patternCount === 0) {
+        const msg = formatSkipSummary(0, allSkipped);
         espansoStatusEl.setText(msg);
         espansoStatusEl.show();
         new Notice(msg);
@@ -249,7 +288,12 @@ export class EspansoSection {
       // B-184: unlike community packs, an import only leaves out the
       // triggers another group already owns (listed as skipped) instead
       // of refusing everything.
-      const plan = planGroupedImport(parsed.snippets, groupSlug, this.plugin.settings);
+      // A file of regex matches only has no snippets to validate (the validator
+      // refuses an empty package); its rules were gated by the pattern plan.
+      const plan =
+        hasSnippets || patternCount === 0
+          ? planGroupedImport(parsed.snippets, groupSlug, this.plugin.settings)
+          : NO_SNIPPET_PLAN;
 
       if (!plan.validation.isValid) {
         const first = plan.validation.errors[0] ?? "Import failed validation";
@@ -264,7 +308,7 @@ export class EspansoSection {
         return;
       }
 
-      if (Object.keys(plan.importable).length === 0) {
+      if (Object.keys(plan.importable).length === 0 && patternCount === 0) {
         // Every parsed trigger belongs to another group: nothing to write.
         const msg = `Nothing to import: ${plan.skippedCollisions.length} trigger${
           plan.skippedCollisions.length === 1 ? "" : "s"
@@ -274,12 +318,12 @@ export class EspansoSection {
           .join(", ")}${plan.skippedCollisions.length > 3 ? ", …" : ""})`;
         // Also explain the other half: forms/scripts that were never parsed.
         const unsupportedNote =
-          parsed.skipped.length === 0
+          allSkipped.length === 0
             ? ""
-            : `. ${parsed.skipped.length} skipped as unsupported (forms/scripts): ${parsed.skipped
+            : `. ${allSkipped.length} skipped as unsupported (forms/scripts/regex): ${allSkipped
                 .slice(0, 3)
                 .map((sk) => sanitizeForNotice(sk.trigger, 60))
-                .join(", ")}${parsed.skipped.length > 3 ? ", …" : ""}`;
+                .join(", ")}${allSkipped.length > 3 ? ", …" : ""}`;
         const fullMsg = msg + unsupportedNote;
         espansoStatusEl.setText(fullMsg);
         espansoStatusEl.show();
@@ -291,7 +335,7 @@ export class EspansoSection {
       // parsed vs. got skipped" — and stays constant regardless of
       // what the user later chooses in the conflict modal. Keep it
       // decoupled from the ux#7 "what actually changed" count below.
-      const parsedCount = Object.keys(plan.importable).length;
+      const parsedCount = Object.keys(plan.importable).length + patternCount;
 
       // B-186: always preview, even with zero conflicts (same as the
       // Text Snippets import and PackageBrowser). The user sees what
@@ -307,20 +351,35 @@ export class EspansoSection {
       modal.onConfirm = async (resolved) => {
         // The modal only logs a rejected onConfirm, so surface it here.
         try {
-          // B-181: rolls the in-memory map back if the save rejects.
-          await commitSnippets(this.plugin.settings, resolved, () => this.plugin.saveSettings());
+          // ADR-0008: plan the rules again against the settings as they are
+          // now (the same gate and cap), and write snippets and rules with ONE
+          // save: a failed save puts both back.
+          const finalPatterns = planPatternImport(parsed.patterns, groupSlug, this.plugin.settings);
+          if (finalPatterns.add.length === 0) {
+            // B-181: rolls the in-memory map back if the save rejects.
+            await commitSnippets(this.plugin.settings, resolved, () => this.plugin.saveSettings());
+          } else {
+            await commitSnippetsAndPatterns(
+              this.plugin.settings,
+              resolved,
+              [...readPatterns(this.plugin.settings), ...finalPatterns.add],
+              () => this.plugin.saveSettings(),
+            );
+          }
           // Fold-in (ux#7): report what actually changed given the
           // user's per-conflict choices, not the full pack size — a
           // "keep everything" resolution used to still claim every
           // entry as "imported".
           const changedCount = countAppliedChanges(plan.diff, resolved);
+          // The rules are counted as planned just now: the list may have changed since the preview.
           this.reportInstalled(
             espansoStatusEl,
             changedCount,
-            parsedCount,
+            parsedCount - patternCount + finalPatterns.add.length,
             rawGroupLabel,
-            parsed.skipped,
+            [...parsed.skipped, ...asSkips(finalPatterns)],
             plan.skippedCollisions,
+            finalPatterns.add.length,
           );
         } catch (err) {
           // B-034 (finding #7): untrusted-YAML import path — sanitize
@@ -329,18 +388,23 @@ export class EspansoSection {
           new Notice(`Failed to install from YAML: ${sanitizeForNotice(message)}`);
         }
       };
+      // The rules are this import's other change: an empty snippet diff is not worth a line of its own.
+      modal.omitEmptySummary = patternCount > 0;
       modal.open();
       // B-139: the skip list must be visible in the preview, not just
       // the eventual success Notice — inject it as the modal's first
       // block so the user sees it BEFORE applying, without touching the
       // shared `PackagePreviewModal` class (also used by
       // `PackageBrowser`).
-      if (parsed.skipped.length > 0 || plan.skippedCollisions.length > 0) {
+      const groupOff = (this.plugin.settings.disabledGroups ?? []).includes(groupSlug);
+      const patternEl = renderPatternPreview(modal.contentEl, patternPlan, parsed.skipped, rawGroupLabel, groupOff);
+      if (patternEl) modal.contentEl.insertBefore(patternEl, modal.contentEl.firstChild);
+      if (allSkipped.length > 0 || plan.skippedCollisions.length > 0) {
         const skipEl = modal.contentEl.createDiv({
           cls: "snipsy-espanso-skip-status",
           attr: { "aria-live": "polite" },
         });
-        skipEl.setText(formatSkipSummary(parsedCount, parsed.skipped, plan.skippedCollisions));
+        skipEl.setText(formatSkipSummary(parsedCount, allSkipped, plan.skippedCollisions));
         modal.contentEl.insertBefore(skipEl, modal.contentEl.firstChild);
       }
     };
@@ -364,11 +428,20 @@ export class EspansoSection {
     groupLabel: string,
     skipped: EspansoSkip[],
     collided: CollisionSkip[] = [],
+    patternCount = 0,
   ) {
-    const base =
+    const snippetPart =
       changedCount === 0
         ? `No changes — "${groupLabel}" already matches your library`
         : `Installed ${changedCount} snippet${changedCount === 1 ? "" : "s"} into "${groupLabel}"`;
+    const patternPart = `Added ${patternCount} pattern rule${patternCount === 1 ? "" : "s"} to "${groupLabel}"`;
+    // Rules count as a change: with only rules landing, "No changes" would be false.
+    const base =
+      patternCount === 0
+        ? snippetPart
+        : changedCount === 0
+          ? patternPart
+          : `${snippetPart}. ${patternPart}`;
 
     if (skipped.length > 0 || collided.length > 0) {
       const msg = formatSkipSummary(parsedCount, skipped, collided);

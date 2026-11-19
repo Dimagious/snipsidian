@@ -54,6 +54,8 @@ export class PackagePreviewModal extends Modal {
     diff: DiffResult;
     choices = new Map<string, "keep" | "overwrite">();
     onConfirm?: (resolved: Record<string, string>) => void | Promise<void>;
+    /** The caller shows other changes of its own (the Espanso pattern rules): then "0 new snippets." is left out. */
+    omitEmptySummary = false;
 
     constructor(app: App, plugin: SnipSidianPlugin, title: string, diff: DiffResult) {
         super(app);
@@ -83,7 +85,9 @@ export class PackagePreviewModal extends Modal {
         if (conflictCount > 0) {
             parts.push(`${conflictCount} conflict${conflictCount === 1 ? "" : "s"}`);
         }
-        summary.createEl("p", { text: `${parts.join(", ")}.` });
+        if (!(this.omitEmptySummary && addedCount === 0 && conflictCount === 0)) {
+            summary.createEl("p", { text: `${parts.join(", ")}.` });
+        }
 
         if (this.diff.conflicts.length) {
             const conflictsHead = contentEl.createDiv({ cls: "snipsidian-conflicts-head" });

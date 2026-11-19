@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { espansoYamlToSnippets } from "./espanso";
+import { espansoYamlToSnippets, MAX_REGEX_MATCHES } from "./espanso";
 
 /**
  * Boundary tests for the Espanso YAML importer.
@@ -39,6 +39,7 @@ matches:
 `;
         expect(espansoYamlToSnippets(yaml)).toEqual({
             snippets: { brb: "be right back" },
+            patterns: [],
             skipped: [],
         });
     });
@@ -125,7 +126,7 @@ matches:
 
 describe("espansoYamlToSnippets — malformed inputs (importer must not crash)", () => {
     it("returns empty for empty string", () => {
-        expect(espansoYamlToSnippets("")).toEqual({ snippets: {}, skipped: [] });
+        expect(espansoYamlToSnippets("")).toEqual({ snippets: {}, patterns: [], skipped: [] });
     });
 
     it("returns empty for non-object YAML (null, scalar, array root)", () => {
@@ -133,9 +134,9 @@ describe("espansoYamlToSnippets — malformed inputs (importer must not crash)",
         // scalar root, an array for sequence root. None of these
         // match the shape we expect. The importer should treat them
         // as "no matches" rather than throw.
-        expect(espansoYamlToSnippets("null")).toEqual({ snippets: {}, skipped: [] });
-        expect(espansoYamlToSnippets("42")).toEqual({ snippets: {}, skipped: [] });
-        expect(espansoYamlToSnippets("[1, 2, 3]")).toEqual({ snippets: {}, skipped: [] });
+        expect(espansoYamlToSnippets("null")).toEqual({ snippets: {}, patterns: [], skipped: [] });
+        expect(espansoYamlToSnippets("42")).toEqual({ snippets: {}, patterns: [], skipped: [] });
+        expect(espansoYamlToSnippets("[1, 2, 3]")).toEqual({ snippets: {}, patterns: [], skipped: [] });
     });
 
     it("returns empty when `matches` is missing or wrong type", () => {
@@ -159,8 +160,8 @@ matches:
 `);
         expect(result.snippets).toEqual({ ok: "valid" });
         expect(result.skipped).toEqual([
-            { trigger: "num", reason: "has no replacement text Snipsy can read" },
-            { trigger: "nul", reason: "has no replacement text Snipsy can read" },
+            { kind: "literal", trigger: "num", reason: "has no replacement text Snipsy can read" },
+            { kind: "literal", trigger: "nul", reason: "has no replacement text Snipsy can read" },
         ]);
     });
 
@@ -249,7 +250,7 @@ matches:
         multiline: true
 `);
         expect(result.snippets).toEqual({});
-        expect(result.skipped).toEqual([{ trigger: "addr", reason: "uses a form" }]);
+        expect(result.skipped).toEqual([{ kind: "literal", trigger: "addr", reason: "uses a form" }]);
     });
 
     it("skips a match with a shell var, naming the var type in the reason", () => {
@@ -264,7 +265,7 @@ matches:
           cmd: "echo hi"
 `);
         expect(result.snippets).toEqual({});
-        expect(result.skipped).toEqual([{ trigger: "sh", reason: 'uses a "shell" variable' }]);
+        expect(result.skipped).toEqual([{ kind: "literal", trigger: "sh", reason: 'uses a "shell" variable' }]);
     });
 
     it("skips a match with a script var", () => {
@@ -278,7 +279,7 @@ matches:
         params:
           args: ["python3", "script.py"]
 `);
-        expect(result.skipped).toEqual([{ trigger: "sc", reason: 'uses a "script" variable' }]);
+        expect(result.skipped).toEqual([{ kind: "literal", trigger: "sc", reason: 'uses a "script" variable' }]);
     });
 
     it("skips a match with a choice var", () => {
@@ -292,18 +293,24 @@ matches:
         params:
           values: ["a", "b"]
 `);
-        expect(result.skipped).toEqual([{ trigger: "ch", reason: 'uses a "choice" variable' }]);
+        expect(result.skipped).toEqual([{ kind: "literal", trigger: "ch", reason: 'uses a "choice" variable' }]);
     });
 
-    it("skips a regex-trigger match, labeling it with the pattern", () => {
-        const result = espansoYamlToSnippets(`
+    it("a regex match is no longer skipped as unsupported: it becomes a pattern candidate (ADR-0008)", () => {
+        const result = espansoYamlToSnippets(String.raw`
 matches:
-  - regex: "(?P<num>\\\\d+)-test"
-    replace: "matched"
+  - regex: '(?P<num>\d+)-test'
+    replace: "matched {{num}}"
 `);
         expect(result.snippets).toEqual({});
-        expect(result.skipped).toEqual([
-            { trigger: "regex:(?P<num>\\d+)-test", reason: "uses a regex trigger" },
+        expect(result.skipped).toEqual([]);
+        expect(result.patterns).toEqual([
+            {
+                label: String.raw`regex:(?P<num>\d+)-test`,
+                source: String.raw`/(?<num>\d+)-test$/`,
+                replacement: "matched {{num}}",
+                mode: "instant",
+            },
         ]);
     });
 
@@ -314,7 +321,7 @@ matches:
     replace: "capitalized"
     propagate_case: true
 `);
-        expect(result.skipped).toEqual([{ trigger: "cap", reason: "uses case propagation" }]);
+        expect(result.skipped).toEqual([{ kind: "literal", trigger: "cap", reason: "uses case propagation" }]);
     });
 
     it("skips a match using uppercase_style", () => {
@@ -324,7 +331,7 @@ matches:
     replace: "capitalized"
     uppercase_style: "capitalize_first"
 `);
-        expect(result.skipped).toEqual([{ trigger: "cap2", reason: "uses case propagation" }]);
+        expect(result.skipped).toEqual([{ kind: "literal", trigger: "cap2", reason: "uses case propagation" }]);
     });
 
     it("skips an image match", () => {
@@ -334,7 +341,7 @@ matches:
     image_path: "./images/logo.png"
 `);
         expect(result.snippets).toEqual({});
-        expect(result.skipped).toEqual([{ trigger: "img", reason: "is an image match" }]);
+        expect(result.skipped).toEqual([{ kind: "literal", trigger: "img", reason: "is an image match" }]);
     });
 
     it("skips a markdown-only match", () => {
@@ -344,7 +351,7 @@ matches:
     markdown: "**bold**"
 `);
         expect(result.skipped).toEqual([
-            { trigger: "md", reason: "uses markdown/html content Snipsy can't map" },
+            { kind: "literal", trigger: "md", reason: "uses markdown/html content Snipsy can't map" },
         ]);
     });
 
@@ -355,7 +362,7 @@ matches:
     html: "<b>bold</b>"
 `);
         expect(result.skipped).toEqual([
-            { trigger: "ht", reason: "uses markdown/html content Snipsy can't map" },
+            { kind: "literal", trigger: "ht", reason: "uses markdown/html content Snipsy can't map" },
         ]);
     });
 
@@ -371,7 +378,7 @@ matches:
           choices: ["1", "2"]
 `);
         expect(result.skipped).toEqual([
-            { trigger: "rnd", reason: "uses variables Snipsy doesn't support" },
+            { kind: "literal", trigger: "rnd", reason: "uses variables Snipsy doesn't support" },
         ]);
     });
 
@@ -389,7 +396,7 @@ matches:
           format: "%H:%M"
 `);
         expect(result.skipped).toEqual([
-            { trigger: "two", reason: "uses variables Snipsy doesn't support" },
+            { kind: "literal", trigger: "two", reason: "uses variables Snipsy doesn't support" },
         ]);
     });
 });
@@ -415,6 +422,43 @@ matches:
 `);
         expect(result.snippets.cb).toBe("Copied: $clipboard");
         expect(result.skipped).toEqual([]);
+    });
+
+    it("maps `{{ clipboard }}` with spaces too, for plain triggers and regex matches alike", () => {
+        const result = espansoYamlToSnippets(`
+matches:
+  - trigger: ":cb"
+    replace: "Copied: {{ clipboard }} {{clipboard }}"
+  - regex: "cb2"
+    replace: "{{  clipboard}}"
+`);
+        expect(result.snippets.cb).toBe("Copied: $clipboard $clipboard");
+        expect(result.patterns[0]?.replacement).toBe("$clipboard");
+        expect(result.skipped).toEqual([]);
+    });
+
+    it("tags skips: regex matches `regex`, a literal trigger named `regex:foo` `literal`", () => {
+        const result = espansoYamlToSnippets(`
+matches:
+  - trigger: "regex:foo"
+    form: "[[x]]"
+  - regex: "a(b"
+    replace: "x"
+  - regex: "ok"
+    replace: "x"
+    vars:
+      - name: v
+        type: shell
+  - trigger: ":t"
+    regex: "both"
+    replace: "x"
+`);
+        expect(result.skipped.map((s) => [s.trigger, s.kind])).toEqual([
+            ["regex:foo", "literal"],
+            ["regex:a(b", "regex"],
+            ["regex:ok", "regex"],
+            ["t", "literal"],
+        ]);
     });
 
     it("maps both `$|$` and `{{clipboard}}` together in the same replacement", () => {
@@ -445,7 +489,7 @@ matches:
 `);
         expect(result.snippets).toEqual({});
         expect(result.skipped).toEqual([
-            { trigger: "today", reason: "uses variables Snipsy doesn't support" },
+            { kind: "literal", trigger: "today", reason: "uses variables Snipsy doesn't support" },
         ]);
     });
 
@@ -496,7 +540,7 @@ matches:
 `);
         expect(result.snippets).toEqual({});
         expect(result.skipped).toEqual([
-            { trigger: "eu", reason: "uses variables Snipsy doesn't support" },
+            { kind: "literal", trigger: "eu", reason: "uses variables Snipsy doesn't support" },
         ]);
     });
 
@@ -515,7 +559,7 @@ matches:
 `);
         expect(result.snippets).toEqual({});
         expect(result.skipped).toEqual([
-            { trigger: "precise", reason: "uses variables Snipsy doesn't support" },
+            { kind: "literal", trigger: "precise", reason: "uses variables Snipsy doesn't support" },
         ]);
     });
 
@@ -532,7 +576,7 @@ matches:
 `);
         expect(result.snippets).toEqual({});
         expect(result.skipped).toEqual([
-            { trigger: "fancy", reason: "uses variables Snipsy doesn't support" },
+            { kind: "literal", trigger: "fancy", reason: "uses variables Snipsy doesn't support" },
         ]);
     });
 
@@ -548,7 +592,7 @@ matches:
           format: "%A, %B %d"
 `);
         expect(result.skipped).toEqual([
-            { trigger: "verbose", reason: "uses variables Snipsy doesn't support" },
+            { kind: "literal", trigger: "verbose", reason: "uses variables Snipsy doesn't support" },
         ]);
     });
 
@@ -569,7 +613,7 @@ matches:
 `);
         expect(result.snippets).toEqual({});
         expect(result.skipped).toEqual([
-            { trigger: "unused", reason: "uses a date variable Snipsy can't map" },
+            { kind: "literal", trigger: "unused", reason: "uses a date variable Snipsy can't map" },
         ]);
     });
 });
@@ -598,8 +642,8 @@ matches:
 `);
         expect(result.snippets).toEqual({ brb: "be right back", omw: "on my way" });
         expect(result.skipped).toEqual([
-            { trigger: "addr", reason: "uses a form" },
-            { trigger: "sh", reason: 'uses a "shell" variable' },
+            { kind: "literal", trigger: "addr", reason: "uses a form" },
+            { kind: "literal", trigger: "sh", reason: 'uses a "shell" variable' },
         ]);
     });
 
@@ -626,5 +670,156 @@ matches:
 `);
         expect(result.snippets).toEqual({});
         expect(result.skipped).toHaveLength(2);
+    });
+});
+
+// ---- ADR-0008: regex matches become pattern candidates ----
+
+
+describe("espansoYamlToSnippets: regex matches (ADR-0008)", () => {
+    const yamlOf = (matches: string): string => `matches:\n${matches}`;
+
+    it("converts (?P<n>, maps {{name}} and appends the closing $", () => {
+        const r = espansoYamlToSnippets(
+            yamlOf(String.raw`  - regex: ':(?P<word>\w+):'
+    replace: "[{{word}}]"
+`),
+        );
+        expect(r.skipped).toEqual([]);
+        expect(r.patterns).toEqual([
+            { label: String.raw`regex::(?P<word>\w+):`, source: String.raw`/:(?<word>\w+):$/`, replacement: "[{{word}}]", mode: "instant" },
+        ]);
+    });
+
+    it("keeps an anchor that is already there and does not double it", () => {
+        const r = espansoYamlToSnippets(yamlOf(`  - regex: 'abc$'\n    replace: "x"\n`));
+        expect(r.patterns[0]?.source).toBe("/abc$/");
+    });
+
+    it("an escaped dollar sign at the end is text: the anchor is appended after it", () => {
+        const r = espansoYamlToSnippets(yamlOf(String.raw`  - regex: 'cost\$'
+    replace: "x"
+`));
+        expect(r.patterns[0]?.source).toBe(String.raw`/cost\$$/`);
+    });
+
+    it("a leading (?i) becomes the flag i", () => {
+        const r = espansoYamlToSnippets(yamlOf(`  - regex: '(?i)hello'\n    replace: "x"\n`));
+        expect(r.patterns[0]?.source).toBe("/hello$/i");
+    });
+
+    it("imports as After a separator, with a note, when only the instant limit is broken", () => {
+        const r = espansoYamlToSnippets(yamlOf(String.raw`  - regex: '(\d+)/(\d+)'
+    replace: "x"
+`));
+        expect(r.patterns[0]?.mode).toBe("separator");
+        expect(r.patterns[0]?.note).toContain("Imported as After a separator");
+    });
+
+    it("names the refusal of the gate in the skip list, with the Patterns page's sentence", () => {
+        const r = espansoYamlToSnippets(
+            yamlOf(String.raw`  - regex: '\p{L}+x'
+    replace: "a"
+  - regex: 'x(?=y)'
+    replace: "b"
+  - regex: '(a)\1'
+    replace: "c"
+  - regex: '(a+)+'
+    replace: "d"
+`),
+        );
+        expect(r.patterns).toEqual([]);
+        expect(r.skipped.map((s) => s.reason)).toEqual([
+            "Unicode property classes like \\p{L} aren't supported yet. Use \\w or a range such as [а-яё].",
+            "Lookahead like (?=x) isn't supported. Nothing follows the caret yet.",
+            "Backreferences like \\1 aren't supported.",
+            "A repeated group can't hold a repeat or a choice, like (a+)+. This can freeze typing. Use a class like [ab] instead.",
+        ]);
+        expect(r.skipped.map((s) => s.trigger)).toEqual([String.raw`regex:\p{L}+x`, "regex:x(?=y)", String.raw`regex:(a)\1`, "regex:(a+)+"]);
+    });
+
+    it("a regex match with vars, a form, a shell var, case propagation or an image stays skipped", () => {
+        const r = espansoYamlToSnippets(
+            yamlOf(`  - regex: 'a1'
+    replace: "{{d}}"
+    vars:
+      - name: d
+        type: date
+        params: { format: "%Y-%m-%d" }
+  - regex: 'a2'
+    replace: "x"
+    vars:
+      - name: s
+        type: shell
+        params: { cmd: "ls" }
+  - regex: 'a3'
+    form: "x"
+    form_fields: {}
+  - regex: 'a4'
+    replace: "x"
+    propagate_case: true
+  - regex: 'a5'
+    image_path: "./x.png"
+`),
+        );
+        expect(r.patterns).toEqual([]);
+        expect(r.skipped.map((s) => s.reason)).toEqual([
+            "uses variables Snipsy doesn't support",
+            'uses a "shell" variable',
+            "uses a form",
+            "uses case propagation",
+            "is an image match",
+        ]);
+    });
+
+    it("word, left_word and right_word on a regex match skip it: a pattern cannot honour them", () => {
+        const r = espansoYamlToSnippets(
+            yamlOf(`  - regex: 'a1'\n    replace: "x"\n    word: true\n  - regex: 'a2'\n    replace: "x"\n    left_word: true\n  - regex: 'a3'\n    replace: "x"\n    right_word: true\n  - regex: 'a4'\n    replace: "x"\n    word: false\n`),
+        );
+        expect(r.skipped.map((s) => s.trigger)).toEqual(["regex:a1", "regex:a2", "regex:a3"]);
+        expect(r.skipped.every((s) => s.reason.startsWith("uses word matching"))).toBe(true);
+        expect(r.patterns.map((p) => p.label)).toEqual(["regex:a4"]);
+    });
+
+    it("word: true on a plain trigger still imports as before (the literal side is unchanged)", () => {
+        const r = espansoYamlToSnippets(yamlOf(`  - trigger: ":brb"\n    replace: "be right back"\n    word: true\n`));
+        expect(r.snippets).toEqual({ brb: "be right back" });
+        expect(r.skipped).toEqual([]);
+    });
+
+    it("a match with both a trigger and a regex is skipped", () => {
+        const r = espansoYamlToSnippets(yamlOf(`  - trigger: ":a"\n    regex: 'b'\n    replace: "x"\n`));
+        expect(r.snippets).toEqual({});
+        expect(r.patterns).toEqual([]);
+        expect(r.skipped).toEqual([{ kind: "literal", trigger: "a", reason: "has both a trigger and a regex" }]);
+    });
+
+    it("{{clipboard}} and $|$ map as for literals; {{name}} that is no group is skipped", () => {
+        const r = espansoYamlToSnippets(
+            yamlOf(String.raw`  - regex: ':(?P<n>\d)'
+    replace: "{{clipboard}} {{n}} $|$"
+  - regex: ':(?P<m>\d)x'
+    replace: "{{other}}"
+`),
+        );
+        expect(r.patterns[0]?.replacement).toBe("$clipboard {{n}} $|");
+        expect(r.skipped).toEqual([{ kind: "regex", trigger: String.raw`regex::(?P<m>\d)x`, reason: "uses {{other}}, which is not written as {{name}} of a named group of the regex." }]);
+    });
+
+    it("literal and regex matches of one file are read side by side", () => {
+        const r = espansoYamlToSnippets(
+            yamlOf(`  - trigger: ":brb"\n    replace: "be right back"\n  - regex: ':d(?P<n>\\d)'\n    replace: "day {{n}}"\n`),
+        );
+        expect(r.snippets).toEqual({ brb: "be right back" });
+        expect(r.patterns).toHaveLength(1);
+        expect(r.skipped).toEqual([]);
+    });
+
+    it("converts at most MAX_REGEX_MATCHES regex matches of one file and names the rest without reading them", () => {
+        const many = Array.from({ length: MAX_REGEX_MATCHES + 5 }, (_, i) => `  - regex: 'x${i}'\n    replace: "r${i}"\n`).join("");
+        const r = espansoYamlToSnippets(yamlOf(many));
+        expect(r.patterns).toHaveLength(MAX_REGEX_MATCHES);
+        expect(r.skipped).toHaveLength(5);
+        expect(r.skipped[0]?.reason).toBe(`is past the ${MAX_REGEX_MATCHES} regex limit of one import`);
     });
 });

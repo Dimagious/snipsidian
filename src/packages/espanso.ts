@@ -2,6 +2,7 @@
 import * as YAML from "yaml";
 import type { EspansoDocument, EspansoMatch } from "../services/package-types";
 import { normalizeTrigger } from "../engine/triggers";
+import { convertEspansoRegex, type EspansoPatternCandidate } from "../core/espanso-regex";
 
 /** One match that couldn't be imported as-is, and why. Surfaced by
  *  the caller (`EspansoSection.ts`) so the user learns "N imported,
@@ -13,12 +14,23 @@ export interface EspansoSkip {
      *  placeholder when neither is present. */
     trigger: string;
     reason: string;
+    /** `regex` when the label stands for a `regex:` match (it is listed under Pattern rules), else `literal`. */
+    kind: "regex" | "literal";
 }
 
 export interface EspansoImportResult {
     snippets: Record<string, string>;
+    /** ADR-0008: `regex:` matches that passed the pattern gate, ready for `planPatternImport`. */
+    patterns: EspansoPatternCandidate[];
     skipped: EspansoSkip[];
 }
+
+/** At most this many `regex:` matches of one file are converted; the rest are skipped without being read. A
+ *  pattern import can hold 100 rules, so a file with thousands of regexes is not a library, it is an attack on
+ *  the importer (S-009: every import path has a limit). */
+export const MAX_REGEX_MATCHES = 1000;
+
+const CLIPBOARD_VAR_RE = /\{\{\s*clipboard\s*\}\}/g;
 
 /** Var types Espanso supports that Snipsy's static replace-text model
  *  fundamentally can't: they require running code, prompting the
@@ -61,8 +73,15 @@ function classifyMatch(m: EspansoMatch): Verdict {
     if (m.form !== undefined || m.form_fields !== undefined) {
         return { ok: false, reason: "uses a form" };
     }
-    if (typeof m.regex === "string") {
-        return { ok: false, reason: "uses a regex trigger" };
+    const isRegex = typeof m.regex === "string";
+    if (isRegex && (m.trigger !== undefined || m.triggers !== undefined)) {
+        return { ok: false, reason: "has both a trigger and a regex" };
+    }
+    // Espanso's `word`, `left_word` and `right_word` are boundary checks on the typed text before the trigger.
+    // A pattern has no such option, and wrapping the regex in `\b` is only the same when it starts and ends with
+    // a word character, which we cannot tell from here: so a regex that asks for one is skipped, not guessed.
+    if (isRegex && (m.word || m.left_word || m.right_word)) {
+        return { ok: false, reason: "uses word matching (word, left_word or right_word) that a pattern can't do" };
     }
     if (m.propagate_case || m.uppercase_style !== undefined) {
         return { ok: false, reason: "uses case propagation" };
@@ -90,6 +109,9 @@ function classifyMatch(m: EspansoMatch): Verdict {
                 return { ok: false, reason: `uses a "${v.type}" variable` };
             }
         }
+        // A regex match imports as a pattern whose `{{name}}` are its capture groups: a variable of the same
+        // name would be ambiguous, so any `vars:` on a regex match is a skip.
+        if (isRegex) return { ok: false, reason: "uses variables Snipsy doesn't support" };
 
         // The only var shape this importer maps automatically: exactly
         // one var, of type "date", with a trivial format, actually
@@ -114,7 +136,8 @@ function classifyMatch(m: EspansoMatch): Verdict {
     // its built-in `{{clipboard}}` magic variable both translate
     // directly to Snipsy placeholders with no ambiguity.
     replace = replace.split("$|$").join("$|");
-    replace = replace.split("{{clipboard}}").join("$clipboard");
+    // Espanso reads `{{ clipboard }}` (whitespace inside the braces) as the same variable.
+    replace = replace.replace(CLIPBOARD_VAR_RE, "$$clipboard");
 
     return { ok: true, replace };
 }
@@ -126,13 +149,17 @@ function classifyMatch(m: EspansoMatch): Verdict {
  *       replace: "be right back"
  *
  * B-139: matches using constructs Snipsy's static replace-text model
- * can't represent (forms, shell/script/choice vars, regex triggers,
- * case propagation, image matches, markdown/html-only content) are
+ * can't represent (forms, shell/script/choice vars, case propagation,
+ * image matches, markdown/html-only content) are
  * no longer imported as literal `{{corrupted}}` text — they're
  * skipped and reported via `skipped`, with three trivial free-win
  * mappings applied before anything is judged unsupported: Espanso's
  * `$|$` cursor placeholder → `$|`, `{{clipboard}}` → `$clipboard`,
  * and a single plain `date`-type var → `$date`/`$time`.
+ *
+ * ADR-0008: a `regex:` match imports as a pattern rule (`patterns`) when
+ * `convertEspansoRegex` accepts it; otherwise it is skipped with the
+ * reason the Patterns page would give.
  *
  * Trigger normalisation (leading/trailing colon strip + whitespace
  * trim) lives in `engine/triggers.ts:normalizeTrigger` so both this
@@ -142,8 +169,10 @@ function classifyMatch(m: EspansoMatch): Verdict {
 export function espansoYamlToSnippets(text: string): EspansoImportResult {
     const doc = YAML.parse(text) as EspansoDocument;
     const snippets: Record<string, string> = {};
+    const patterns: EspansoPatternCandidate[] = [];
     const skipped: EspansoSkip[] = [];
-    if (!doc || typeof doc !== "object") return { snippets, skipped };
+    if (!doc || typeof doc !== "object") return { snippets, patterns, skipped };
+    let regexSeen = 0;
 
     const arr = Array.isArray(doc.matches) ? doc.matches : [];
     for (const m of arr) {
@@ -167,7 +196,29 @@ export function espansoYamlToSnippets(text: string): EspansoImportResult {
             const label = rawLabel
                 ? (normalizeTrigger(rawLabel) || rawLabel)
                 : (typeof m.regex === "string" ? `regex:${m.regex}` : "(unnamed match)");
-            skipped.push({ trigger: label, reason: verdict.reason });
+            const kind = !rawLabel && typeof m.regex === "string" ? "regex" : "literal";
+            skipped.push({ trigger: label, reason: verdict.reason, kind });
+            continue;
+        }
+
+        if (typeof m.regex === "string") {
+            const label = `regex:${m.regex}`;
+            if (++regexSeen > MAX_REGEX_MATCHES) {
+                skipped.push({ trigger: label, reason: `is past the ${MAX_REGEX_MATCHES} regex limit of one import`, kind: "regex" });
+                continue;
+            }
+            const converted = convertEspansoRegex(m.regex, verdict.replace);
+            if (!converted.ok) {
+                skipped.push({ trigger: label, reason: converted.reason, kind: "regex" });
+                continue;
+            }
+            patterns.push({
+                label,
+                source: converted.source,
+                replacement: verdict.replace,
+                mode: converted.mode,
+                ...(converted.note === undefined ? {} : { note: converted.note }),
+            });
             continue;
         }
 
@@ -181,5 +232,5 @@ export function espansoYamlToSnippets(text: string): EspansoImportResult {
         }
     }
 
-    return { snippets, skipped };
+    return { snippets, patterns, skipped };
 }

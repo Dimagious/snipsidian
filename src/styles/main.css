@@ -289,6 +289,46 @@
   margin: 8px 0;
 }
 
+/* ---- Espanso import: pattern rules section of the preview (ADR-0008) ---- */
+/* Sits first in the preview modal, above the snippet diff. Rows and skips are
+   plain lists; the pattern is a code chip, the mode a muted aside. */
+.snipsidian-modal .snipsy-espanso-patterns {
+  background: var(--snipsy-bg-alt);
+  border: 1px solid var(--snipsy-border);
+  border-radius: var(--snipsy-radius);
+  padding: 6px 10px;
+  margin: 8px 0;
+}
+.snipsidian-modal .snipsy-espanso-patterns h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.snipsidian-modal .snipsy-espanso-patterns p {
+  margin: 4px 0;
+  font-size: 12.5px;
+  color: var(--snipsy-text-muted);
+}
+.snipsidian-modal .snipsy-espanso-pattern-rows,
+.snipsidian-modal .snipsy-espanso-pattern-skips {
+  margin: 4px 0;
+  padding-left: 18px;
+  max-height: 180px;
+  overflow-y: auto;
+  font-size: 12.5px;
+}
+.snipsidian-modal .snipsy-espanso-pattern-rows li,
+.snipsidian-modal .snipsy-espanso-pattern-skips li {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
+.snipsidian-modal .snipsy-espanso-pattern-rows small,
+.snipsidian-modal .snipsy-espanso-pattern-rows li > div {
+  color: var(--snipsy-text-muted);
+}
+.snipsidian-modal .snipsy-espanso-pattern-skips li {
+  color: var(--snipsy-text-muted);
+}
+
 /* ---- Search bar ---- */
 .snipsidian-settings .snipsy-search {
   position: relative;
