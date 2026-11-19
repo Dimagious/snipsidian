@@ -1,8 +1,12 @@
 import { describe, it, expect } from "vitest";
+import { fastestOf } from "../test/helpers";
 import {
     applyPlaceholders,
+    codeRanges,
     countTabstops,
     escapeLiteralTabstops,
+    findFormattedTokens,
+    findVariableTokens,
     mapTabstops,
     orderFieldHits,
     orderFields,
@@ -446,4 +450,107 @@ describe("expand: B-192 multi-line replacement", () => {
         expect(plan?.insert).toBe("a\n[](url)");
         expect(plan?.newCursor).toEqual({ lineDelta: 1, ch: 1 });
     });
+});
+
+describe("B-266: findVariableTokens / findFormattedTokens", () => {
+    it("lists what substituteVariables would replace, with the engine's word boundary", () => {
+        expect(findVariableTokens("a $date b $time $filename $clipboard")).toEqual(["$date", "$time", "$filename", "$clipboard"]);
+        expect(findVariableTokens("$dates $date_x $clipboards x$date")).toEqual(["$date"]);
+        expect(findVariableTokens("$|, $1, $$")).toEqual([]);
+    });
+
+    it("lists {{date}}, {{time}} and their formatted forms, nothing else", () => {
+        expect(findFormattedTokens("{{date}} {{time:HH}} {{date:}} {{date:YYYY-MM}}")).toEqual(["{{date}}", "{{time:HH}}", "{{date:}}", "{{date:YYYY-MM}}"]);
+        expect(findFormattedTokens("{{ date }} {{dates}} {{date:{x}}} {{clipboard}}")).toEqual([]);
+    });
+
+    it("agrees with the engine: every listed token is replaced, every unlisted one is not", async () => {
+        const ctx = { isInCode: false, isInMath: false, isInFrontmatter: false, now: new Date("2025-09-02T10:11:12"), filename: "f.md" };
+        const text = "$dates {{ date }} $date_x";
+        expect(findVariableTokens(text)).toEqual([]);
+        expect(findFormattedTokens(text)).toEqual([]);
+        expect((await applyPlaceholders(text, ctx)).text).toBe(text);
+        const live = "$date {{time:HH}}";
+        expect(findVariableTokens(live)).toHaveLength(1);
+        expect(findFormattedTokens(live)).toHaveLength(1);
+        expect((await applyPlaceholders(live, ctx)).text).not.toBe(live);
+    });
+});
+
+/** The quadratic implementation `codeRanges` replaced, kept as the reference its output must equal. */
+function referenceCodeRanges(text: string): Array<[number, number]> {
+    const ranges: Array<[number, number]> = [];
+    let offset = 0;
+    let fence: { start: number; marker: string } | null = null;
+    for (const line of text.split("\n")) {
+        const lineEnd = offset + line.length;
+        const m = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+        if (fence) {
+            if (m && m[1]?.[0] === fence.marker[0] && (m[1]?.length ?? 0) >= fence.marker.length) {
+                ranges.push([fence.start, lineEnd]);
+                fence = null;
+            }
+        } else if (m && m[1]) {
+            fence = { start: offset, marker: m[1] };
+        } else if (line.includes("`")) {
+            let i = 0;
+            while (i < line.length) {
+                if (line[i] !== "`") { i++; continue; }
+                let j = i;
+                while (line[j] === "`") j++;
+                const run = line.slice(i, j);
+                const close = line.indexOf(run, j);
+                let k = close;
+                while (k >= 0 && (line[k + run.length] === "`" || line[k - 1] === "`")) {
+                    k = line.indexOf(run, k + 1);
+                }
+                if (k >= 0) {
+                    ranges.push([offset + i, offset + k + run.length]);
+                    i = k + run.length;
+                } else {
+                    i = j;
+                }
+            }
+        }
+        offset = lineEnd + 1;
+    }
+    if (fence) ranges.push([fence.start, text.length]);
+    return ranges;
+}
+
+describe("codeRanges: linear, and identical to the quadratic version", () => {
+    it("matches the reference on 20000 generated texts (backticks, tildes, newlines, spaces, `$`)", () => {
+        // Deterministic LCG, so a failure reproduces.
+        let seed = 12345;
+        const next = (n: number): number => {
+            seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+            return (seed >>> 8) % n;
+        };
+        const alphabet = ["`", "`", "`", "``", "```", "~~~", "\n", "\n", " ", "   ", "a", "$", "$1", "$|"];
+        for (let t = 0; t < 20000; t++) {
+            let text = "";
+            const parts = next(24);
+            for (let i = 0; i < parts; i++) text += alphabet[next(alphabet.length)] ?? "";
+            expect(codeRanges(text), JSON.stringify(text)).toEqual(referenceCodeRanges(text));
+        }
+    });
+
+    it("handles the named cases like the reference", () => {
+        for (const text of ["", "`", "``a`", "`a``b`c`", "``a`b``", "a`b`c`d", "```\n`x`\n```", "~~~\n``\n~~~~", "  ```js\n$1\n", "`a\n`b`"]) {
+            expect(codeRanges(text), JSON.stringify(text)).toEqual(referenceCodeRanges(text));
+        }
+    });
+
+    it("a line of backtick runs of growing length (200k characters) is scanned in well under 200 ms; the quadratic version takes seconds", () => {
+        let line = "";
+        for (let len = 1; line.length < 200_000; len++) line += `${"`".repeat(len)} `;
+        const text = `${line}$`;
+        codeRanges(text.slice(0, 5_000)); // warm-up
+        const took = fastestOf(() => {
+            const started = performance.now();
+            codeRanges(text);
+            return performance.now() - started;
+        }, 200, 1_000);
+        expect(took).toBeLessThan(200);
+    }, 30_000);
 });

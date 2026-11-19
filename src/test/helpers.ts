@@ -14,3 +14,18 @@ export function nth<T>(items: ArrayLike<T>, index: number): T {
     }
     return item;
 }
+
+/**
+ * The fastest of up to `samples` runs of `run` (milliseconds, `run` returns its own timing), for a complexity
+ * check as an absolute bound at a size where the quadratic version takes seconds and the linear one milliseconds.
+ * A minimum survives a preempted sample; it stops at the first sample under `bound`, and at the first one over
+ * `hopeless` (a regression fails in one slow sample, not five).
+ */
+export function fastestOf(run: () => number, bound: number, hopeless: number, samples = 5): number {
+    let best = Infinity;
+    for (let i = 0; i < samples; i++) {
+        best = Math.min(best, run());
+        if (best < bound || best > hopeless) break;
+    }
+    return best;
+}

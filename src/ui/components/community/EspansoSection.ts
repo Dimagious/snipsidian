@@ -9,12 +9,13 @@ import {
   type GroupedImportPlan,
 } from "../../../core/install-plan";
 import { commitSnippets, commitSnippetsAndPatterns } from "../../../core/commit-snippets";
-import { planPatternImport, type PatternImportPlan } from "../../../core/espanso-pattern-plan";
+import { planPatternImport, REASON_DUPLICATE, REASON_OVER_LIMIT, type PatternImportPlan } from "../../../core/espanso-pattern-plan";
 import { readPatterns } from "../../../core/pattern-list";
 import { renderPatternPreview } from "./EspansoPatternPreview";
 import { slugifyGroup } from "../../../store/keys";
 import { GroupManager } from "../../utils/group-utils";
 import { renderSettingGroup } from "../../utils/setting-group";
+import { INSTALL_MAX_TOTAL_BYTES } from "../../../services/package-validator";
 import { sanitizeForNotice } from "../../../shared/notice-text";
 import { SETTING_TEXTAREA_CLASS } from "../../utils/style-hooks";
 
@@ -64,6 +65,17 @@ function isRegexSkip(s: EspansoSkip): boolean {
   return s.kind === "regex";
 }
 
+/** When every skip is the plan's own "already there" or "over the limit", the sentence says that instead of "can't use". */
+function planLeftOutSummary(skipped: EspansoSkip[]): string | undefined {
+  const duplicates = skipped.filter((s) => s.reason === REASON_DUPLICATE).length;
+  const overLimit = skipped.filter((s) => s.reason === REASON_OVER_LIMIT).length;
+  if (duplicates + overLimit !== skipped.length) return undefined;
+  const parts: string[] = [];
+  if (duplicates > 0) parts.push(`${duplicates} pattern ${duplicates === 1 ? "rule" : "rules"} already there`);
+  if (overLimit > 0) parts.push(`${overLimit} ${REASON_OVER_LIMIT.replace(/\.$/, "")}`);
+  return parts.join(", ");
+}
+
 /** A plan with nothing to write: used when a file holds pattern rules and no literal snippets. */
 const NO_SNIPPET_PLAN: GroupedImportPlan = {
   validation: { isValid: true, errors: [], warnings: [] },
@@ -85,7 +97,7 @@ function formatUnsupportedSummary(importedCount: number, skipped: EspansoSkip[])
   const names = skipped.length > 3 ? `${shown.join(", ")}, …` : shown.join(", ");
   if (importedCount === 0) {
     if (skipped.every(isRegexSkip)) {
-      return `Nothing to import: ${regexOnlySummary(skipped.length)} (${names})`;
+      return `Nothing to import: ${planLeftOutSummary(skipped) ?? regexOnlySummary(skipped.length)} (${names})`;
     }
     const plural = skipped.length === 1 ? "match uses" : "matches use";
     return `Nothing to import: ${skipped.length} ${plural} forms/scripts Snipsy doesn't support (${names})`;
@@ -222,6 +234,12 @@ export class EspansoSection {
       const yamlText = espansoTextarea.value;
       if (!yamlText?.trim()) {
         new Notice("Please paste YAML content first");
+        return;
+      }
+      // S-009: every import has a limit, and this one is hit before the parser runs. Same 2 MiB as an install.
+      const yamlBytes = new TextEncoder().encode(yamlText).length;
+      if (yamlBytes > INSTALL_MAX_TOTAL_BYTES) {
+        new Notice(`The pasted YAML is too large (${(yamlBytes / (1024 * 1024)).toFixed(1)} MiB). The limit is ${INSTALL_MAX_TOTAL_BYTES / (1024 * 1024)} MiB.`);
         return;
       }
 

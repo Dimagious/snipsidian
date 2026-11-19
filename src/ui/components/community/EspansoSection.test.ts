@@ -215,6 +215,32 @@ describe("EspansoSection — import flow (B-045)", () => {
         expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
     });
 
+    it("refuses pasted YAML of 2 MiB + 1 byte before parsing it, and accepts exactly 2 MiB", () => {
+        const before = JSON.stringify(plugin.settings.snippets);
+        const { yaml, importBtn } = mount();
+        const LIMIT = 2 * 1024 * 1024;
+        // Exactly `total` bytes (the YAML is ASCII): a comment line of filler, then the real match.
+        const filler = (total: number): string => `# ${"x".repeat(total - SIMPLE_YAML.length - 3)}\n${SIMPLE_YAML}`;
+        yaml.value = filler(LIMIT + 1);
+        importBtn.click();
+        expect(noticeCalls.some((m) => m.startsWith("The pasted YAML is too large"))).toBe(true);
+        expect(document.body.querySelector(".modal-button-container")).toBeNull();
+        expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+
+        noticeCalls.length = 0;
+        yaml.value = filler(LIMIT);
+        expect(new TextEncoder().encode(yaml.value).length).toBe(LIMIT);
+        importBtn.click();
+        expect(noticeCalls.some((m) => m.startsWith("The pasted YAML is too large"))).toBe(false);
+    });
+
+    it("counts bytes, not characters, against the limit", () => {
+        const { yaml, importBtn } = mount();
+        yaml.value = `# ${"é".repeat(1024 * 1024)}\n${SIMPLE_YAML}`; // 1 Mi characters, 2 MiB of bytes plus
+        importBtn.click();
+        expect(noticeCalls.some((m) => m.startsWith("The pasted YAML is too large"))).toBe(true);
+    });
+
     it("rejects group labels that slugify to empty with a Notice", () => {
         const before = JSON.stringify(plugin.settings.snippets);
         const { groupInput, yaml, importBtn } = mount();
@@ -1036,6 +1062,97 @@ describe("EspansoSection: regex matches become pattern rules (ADR-0008)", () => 
         const skips = patternSection()?.querySelector(".snipsy-espanso-pattern-skips");
         expect(skips).toBeNull();
         expect(patternSection()?.textContent).not.toContain("foo");
+    });
+
+    // The two rules of REGEX_ONLY, as the parser converts them: a second import of the file finds both there.
+    const BOTH_THERE = [
+        rule(1, { source: String.raw`/:(?<w>\w+):$/`, replacement: "[{{w}}]", group: "elsewhere" }),
+        rule(2, { source: String.raw`/dd(?<n>\d)$/i`, replacement: "day {{n}}", group: "elsewhere" }),
+    ];
+
+    it("importing the same regex-only file twice says the rules are already there, not that Snipsy can't use them", async () => {
+        setPatterns(BOTH_THERE);
+        const saveSpy = vi.spyOn(plugin, "saveSettings");
+        const { yaml, importBtn } = mount();
+        yaml.value = REGEX_ONLY;
+        importBtn.click();
+        await settle();
+        expect(noticeCalls).toEqual([
+            "Nothing to import: 2 pattern rules already there (regex::(?P<w>\\w+):, regex:(?i)dd(?P<n>\\d))",
+        ]);
+        expect(saveSpy).not.toHaveBeenCalled();
+    });
+
+    it("one rule already there is singular", async () => {
+        setPatterns([BOTH_THERE[0]]);
+        const { yaml, importBtn } = mount();
+        yaml.value = yamlOf(String.raw`  - regex: ':(?P<w>\w+):'
+    replace: "[{{w}}]"
+`);
+        importBtn.click();
+        await settle();
+        expect(noticeCalls[0]).toMatch(/^Nothing to import: 1 pattern rule already there \(/);
+    });
+
+    it("a full list says the rules are over the 100 rule limit", async () => {
+        setPatterns(Array.from({ length: 100 }, (_, i) => rule(i)));
+        const { yaml, importBtn } = mount();
+        yaml.value = REGEX_ONLY;
+        importBtn.click();
+        await settle();
+        expect(noticeCalls).toEqual([
+            "Nothing to import: 2 over the 100 rule limit (regex::(?P<w>\\w+):, regex:(?i)dd(?P<n>\\d))",
+        ]);
+    });
+
+    it("both reasons at once are both named", async () => {
+        setPatterns([...BOTH_THERE.slice(0, 1), ...Array.from({ length: 99 }, (_, i) => rule(i + 10))]);
+        const { yaml, importBtn } = mount();
+        yaml.value = REGEX_ONLY;
+        importBtn.click();
+        await settle();
+        expect(noticeCalls[0]).toMatch(/^Nothing to import: 1 pattern rule already there, 1 over the 100 rule limit \(/);
+    });
+
+    it("a parser refusal next to a duplicate keeps the general wording (not every skip is a duplicate)", async () => {
+        setPatterns(BOTH_THERE);
+        const { yaml, importBtn } = mount();
+        yaml.value = `${REGEX_ONLY}  - regex: 'x(?=y)'\n    replace: "a"\n`;
+        importBtn.click();
+        await settle();
+        expect(noticeCalls[0]).toMatch(/^Nothing to import: 3 regex matches Snipsy can't use as patterns \(/);
+    });
+
+    it("a lone literal trigger named regex:foo skipped for a form gets the forms/scripts message, not the regex one", async () => {
+        const { yaml, importBtn } = mount();
+        yaml.value = yamlOf(`  - trigger: "regex:foo"\n    form: "[[x]]"\n`);
+        importBtn.click();
+        await settle();
+        expect(noticeCalls).toEqual(["Nothing to import: 1 match uses forms/scripts Snipsy doesn't support (regex:foo)"]);
+    });
+
+    it("identical snippets and no rules keep the '0 new snippets.' summary in the preview", async () => {
+        plugin.settings.snippets["espanso-import/brb"] = "be right back";
+        plugin.settings.snippets["espanso-import/omw"] = "on my way";
+        const { groupInput, yaml, importBtn } = mount();
+        groupInput.value = "Espanso import";
+        yaml.value = SIMPLE_YAML;
+        importBtn.click();
+        await settle();
+        expect(document.body.querySelector(".snipsidian-modal")?.textContent).toContain("0 new snippets.");
+        expect(patternSection()).toBeNull();
+    });
+
+    it("a rule next to a snippet conflict still shows the conflict summary", async () => {
+        plugin.settings.snippets["espanso-import/brb"] = "something else";
+        const { groupInput, yaml, importBtn } = mount();
+        groupInput.value = "Espanso import";
+        yaml.value = MIXED;
+        importBtn.click();
+        await settle();
+        const text = document.body.querySelector(".snipsidian-modal")?.textContent ?? "";
+        expect(text).toContain("0 new snippets, 1 conflict.");
+        expect(patternSection()).not.toBeNull();
     });
 
     it("says the rules land in a group that is switched off when it is in disabledGroups", async () => {

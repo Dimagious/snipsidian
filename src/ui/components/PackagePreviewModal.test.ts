@@ -247,6 +247,13 @@ describe("PackagePreviewModal: omitEmptySummary", () => {
         expect(summaryText(modal)).not.toContain("new snippet");
     });
 
+    it("still shows the summary when there are conflicts, even with nothing new", () => {
+        const modal = new PackagePreviewModal(plugin.app as unknown as App, plugin as unknown as SnipSidianPlugin, "t", makeDiff(2));
+        modal.omitEmptySummary = true;
+        modal.open();
+        expect(summaryText(modal)).toContain("0 new snippets, 2 conflicts.");
+    });
+
     it("still shows the summary by default, and when the diff has something", () => {
         expect(summaryText(mount(makeDiff(0)))).toContain("0 new snippets.");
         const modal = new PackagePreviewModal(plugin.app as unknown as App, plugin as unknown as SnipSidianPlugin, "t", makeDiff(0, 2));

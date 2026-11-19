@@ -39,12 +39,20 @@ export type RegexConversion =
     | { ok: true; source: string; mode: PatternMode; note?: string }
     | { ok: false; reason: string };
 
+/** Espanso's word, as the Rust regex crate's `\w`: Alphabetic, Mark, Nd, Pc and Join_Control. The one definition of a variable name. */
+const WORD = "[\\p{Alphabetic}\\p{M}\\p{Nd}\\p{Pc}\\p{Join_Control}]+";
+const SPACE = "\\p{White_Space}*";
+/** Source of one reference; group 1 is the name (with its optional `.sub`). Whitespace runs are never nested or adjacent to a run of the same class, so matching stays linear. */
+export const ESPANSO_REF_SOURCE = `\\{\\{${SPACE}(${WORD}(?:\\.${WORD})?)${SPACE}\\}\\}`;
+/** A declared variable name is accepted only in the shape Espanso can reference. */
+export const ESPANSO_NAME_RE = new RegExp(`^${WORD}$`, "u");
 /**
- * Espanso's own shape of a variable in the replacement: `{{`, optional whitespace, a word (Unicode letters and digits,
- * `_`), an optional `.subname`, optional whitespace, `}}`. Anything of this shape is a variable to Espanso, so
+ * Espanso's own shape of a variable in the replacement: `{{`, optional Unicode whitespace, a word
+ * (Alphabetic, marks, decimal digits, connector punctuation such as `_`, joiners), an optional `.subname`, optional
+ * whitespace, `}}`. Anything of this shape is a variable to Espanso, so
  * anything of this shape that is not exactly `{{name}}` of a known group is refused.
  */
-const REPLACEMENT_REF_RE = /\{\{\s*[\p{L}\p{N}_]+(?:\.[\p{L}\p{N}_]+)?\s*\}\}/gu;
+const REPLACEMENT_REF_RE = new RegExp(ESPANSO_REF_SOURCE, "gu");
 const EXACT_REF_RE = /^\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}$/;
 const GROUP_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*/;
 

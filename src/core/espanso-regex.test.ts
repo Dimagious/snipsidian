@@ -104,6 +104,16 @@ describe("convertEspansoRegex: {{name}} in the replacement", () => {
         expect(refused(String.raw`(?P<имя>\w+)!`, "{{имя}}")).toContain("{{имя}}");
     });
 
+    it("U+0085 as whitespace, and combining marks or connector punctuation in the name, make a variable to Espanso: refused", () => {
+        const g = String.raw`(?P<name>\w+)!`;
+        expect(refused(g, "{{\u0085name}}")).toContain("not written as {{name}}");
+        expect(refused(g, "{{name\u0085}}")).toContain("not written as {{name}}");
+        // a combining acute after the `e`, and a tie `\u203F` (Pc) inside a name
+        expect(refused(g, "{{name\u0301}}")).toContain("not written as {{name}}");
+        expect(refused(g, "{{na\u203Fme}}")).toContain("not written as {{name}}");
+        expect(refused(g, "{{\u0301}}")).toContain("not written as {{name}}");
+    });
+
     it("the exact {{name}} still works next to text that merely has braces", () => {
         expect(ok(String.raw`(?P<name>\w+)!`, "Hello {{name}} {x} {{ }}").source).toBe(String.raw`/(?<name>\w+)!$/`);
     });

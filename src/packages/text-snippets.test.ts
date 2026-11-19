@@ -623,3 +623,13 @@ describe("textSnippetsDataToSnippets: word delimiters note", () => {
         expect(textSnippetsDataToSnippets(data("a : b", { wordDelimiters: "" })).notes).toHaveLength(1);
     });
 });
+
+describe("textSnippetsDataToSnippets: code ranges with many backtick runs", () => {
+    it("a record with backtick runs of growing length still turns its `$tb$` markers into stops", () => {
+        let line = "";
+        for (let len = 1; line.length < 9_000; len++) line += `${"`".repeat(len)} `;
+        const r = textSnippetsDataToSnippets(data(`t : ${line}$tb$ x $tb$`));
+        expect(r.snippets["t"]).toMatch(/\$1 x \$2$/);
+        expect(r.snippets["t"]?.startsWith("` ``")).toBe(true);
+    });
+});
