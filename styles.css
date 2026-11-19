@@ -1773,6 +1773,16 @@
 .snipsidian-settings .snipsy-pattern-editor input,
 .snipsidian-settings .snipsy-pattern-editor textarea,
 .snipsidian-settings .snipsy-pattern-editor select { width: 100%; }
+/* Obsidian's settings dropdown is a bare word with a chevron (no box, text on the right). Here it sits in a column
+   next to the Group input, so it gets the same box as a text input and reads left-aligned. */
+.snipsidian-settings .snipsy-pattern-editor select.dropdown {
+  height: var(--input-height);
+  padding: 0 var(--size-4-8) 0 var(--size-4-3);
+  text-align: start;
+  background-color: var(--background-modifier-form-field);
+  border: var(--input-border-width) solid var(--background-modifier-border);
+  border-radius: var(--input-radius);
+}
 .snipsidian-settings .snipsy-pattern-editor input[aria-invalid="true"],
 .snipsidian-settings .snipsy-pattern-editor textarea[aria-invalid="true"] { border-color: var(--snipsy-danger); }
 .snipsidian-settings .snipsy-pattern-editor .snipsidian-error:empty { display: none; }

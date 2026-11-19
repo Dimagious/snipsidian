@@ -177,6 +177,12 @@ describe("PatternsTab: adding and editing", () => {
         expect(modeSelect().value).toBe("instant");
     });
 
+    it("renders the Fires select with Obsidian's dropdown class so it is not a bare word", () => {
+        mount([rule("a")]);
+        button("Add rule").click();
+        expect(modeSelect().classList.contains("dropdown")).toBe(true);
+    });
+
     it("saves a new rule at the end of the list: enabled, Instant, with the typed pattern", async () => {
         mount([rule("a")]);
         button("Add rule").click();

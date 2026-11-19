@@ -87,6 +87,8 @@ real engine and tells you what fires. Expansion is one undo step, and it stays q
 math and frontmatter like any trigger. The [reference](https://github.com/Dimagious/snipsidian/blob/HEAD/docs/reference.md#patterns)
 has the syntax, the limits and everything that is refused.
 
+<img alt="On the Patterns page, pressing Add typography set adds 32 rules. In a note, typing 1/2 and a space gives ½, then typing a --> b gives a → b" src="docs/screens/patterns.gif" width="100%">
+
 ## Coming from another tool
 
 **Text Snippets.** Its last release was in May 2022. On the Packages page, press **Import** under

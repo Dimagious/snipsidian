@@ -6,7 +6,7 @@ import { stills } from "./capture-fixtures";
 const { test, expect, onlyWhen } = stills;
 
 /**
- * The site pictures: 8 screens in a light and a dark take, 16 files in `site/img`.
+ * The site pictures: 9 screens in a light and a dark take, 18 files in `site/img`.
  *
  * Taken from the running plugin, never from a mock, on the library in `capture-data.ts` and on the day in
  * `CAPTURE_NOW`. `demo.still` writes the PNGs to `.opdk/demo/stills` at 2x on any display, and `opdk demo`
@@ -92,9 +92,10 @@ async function pageRegion(page: Locator, last: Locator): Promise<Box> {
 }
 
 /** Opens a page of Snipsy's settings from the root list (Obsidian 1.13 and later: a row with a chevron). */
-async function openSettingsPage(win: Page, name: "Snippets" | "Packages"): Promise<void> {
+async function openSettingsPage(win: Page, name: "Snippets" | "Packages" | "Patterns"): Promise<void> {
     await win.locator(".setting-item.mod-navigable", { hasText: name }).first().click();
-    await expect(win.locator(".vertical-tab-content").getByText(name === "Snippets" ? "Add snippet" : "Community packages").first()).toBeVisible();
+    const marker = { Snippets: "Add snippet", Packages: "Community packages", Patterns: "Add rule" }[name];
+    await expect(win.locator(".vertical-tab-content").getByText(marker).first()).toBeVisible();
 }
 
 /** The Espanso file of the import picture: four matches, one of them a form, which the plugin leaves out. */
@@ -146,16 +147,23 @@ for (const mode of BOTH) {
         });
     });
 
-    test("settings: root and prefix", async ({ win, obsidian, demo }) => {
+    test("settings: root and prefix", async ({ app, win, obsidian, demo }) => {
         const shoot = shooter(win, obsidian, demo);
         await setUp(obsidian, (date) => demo.freezeTime(date));
+        // The Expansion group has six rows now and does not fit the usual 800 px: a taller window keeps the whole
+        // group inside the dialog, so the picture shows no edge of it.
+        await app.evaluate(({ BrowserWindow }) => {
+            BrowserWindow.getAllWindows()[0]?.setContentSize(1200, 1100);
+        });
+        await expect.poll(() => win.evaluate(() => window.innerHeight)).toBe(1100);
         await demo.themes([mode], async () => {
             const content = await obsidian.openSettings("snipsidian");
             await paintedAs(win, mode);
             await obsidian.settle();
             const entries = content.locator(".setting-group").first();
             const expansion = content.locator(".setting-group.snipsy-expansion");
-            const toggle = expansion.locator(".setting-item.mod-toggle").first().locator(".checkbox-container");
+            // The prefix switch, not the first one: Expand while typing and Expand on Tab come before it.
+            const toggle = expansion.locator(".setting-item.mod-toggle", { hasText: "Require a prefix before triggers" }).locator(".checkbox-container");
             // Off first, as it ships.
             await expect(toggle).not.toHaveClass(/is-enabled/);
             await shoot("settings-root", mode, { clip: await union(entries, expansion), padding: 8, ...STILL });
@@ -206,6 +214,37 @@ for (const mode of BOTH) {
             await shoot("add-snippet", mode, { clip: modal, padding: 24, ...STILL });
             await modal.getByRole("button", { name: "Cancel" }).click();
             await expect(modal).toHaveCount(0);
+            await obsidian.closeSettings();
+        });
+    });
+
+    test("settings: Patterns page, Try it on 1/23", async ({ win, obsidian, demo }) => {
+        const shoot = shooter(win, obsidian, demo);
+        await setUp(obsidian, (date) => demo.freezeTime(date));
+        await demo.themes([mode], async () => {
+            await obsidian.openSettings("snipsidian");
+            await paintedAs(win, mode);
+            await openSettingsPage(win, "Patterns");
+            await obsidian.settle();
+            const page = win.locator(".setting-page.vertical-tab-content");
+            await expect(page.locator(".snipsy-pattern-row")).toHaveCount(32);
+
+            // The first rule, 1/2, fires after a separator. Open it and try Instant: Try it shows why that fires early.
+            await page.locator(".snipsy-pattern-row").first().locator(".snipsy-pattern-main").click();
+            const editor = page.locator(".snipsy-pattern-editor");
+            await expect(editor).toBeVisible();
+            await editor.getByLabel("Fires", { exact: true }).selectOption("instant");
+            await editor.getByLabel("Try it", { exact: true }).fill("1/23");
+            await expect(editor.locator(".snipsy-tryit-result")).toHaveText("\u00bd3");
+            await expect(editor.locator(".snipsy-tryit-status")).toHaveText("Fired at 1/2, before 3. To type 1/23, choose After a separator.");
+            await win.mouse.move(2, 2);
+            await obsidian.settle();
+            // From the title bar to the bottom of the open rule.
+            await shoot("patterns", mode, { clip: await pageRegion(page, page.locator(".snipsy-pattern-row.is-open")), ...STILL });
+
+            // Nothing was saved: back to the shipped state for the other theme.
+            await editor.getByRole("button", { name: "Cancel" }).click();
+            await expect(editor).toHaveCount(0);
             await obsidian.closeSettings();
         });
     });

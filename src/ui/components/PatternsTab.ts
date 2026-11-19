@@ -468,7 +468,7 @@ export class PatternsTab {
 
         // Fires
         const fires = field("Fires", `${uid}-mode`);
-        const select = fires.wrap.createEl("select", { attr: { id: `${uid}-mode`, "aria-describedby": `${uid}-mode-desc ${uid}-typing` } });
+        const select = fires.wrap.createEl("select", { cls: "dropdown", attr: { id: `${uid}-mode`, "aria-describedby": `${uid}-mode-desc ${uid}-typing` } });
         for (const mode of ["instant", "separator"] as const) {
             select.createEl("option", { text: MODE_LABELS[mode].name, value: mode });
         }

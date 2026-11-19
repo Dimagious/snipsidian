@@ -36,3 +36,5 @@ dist/
 
 # opdk demo: raw stills of the capture run (npm run capture)
 .opdk/
+docs/screens/*.mp4
+docs/screens/*-poster.png

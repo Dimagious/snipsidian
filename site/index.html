@@ -839,7 +839,7 @@ footer.note-foot a { color: var(--muted); }
         <figure class="shot">
           <picture>
             <source data-dark srcset="img/settings-root-dark.png" media="(prefers-color-scheme: dark)">
-            <img src="img/settings-root-light.png" width="1432" height="916" loading="lazy" alt="Snipsy settings on Obsidian 1.13: Snippets and Packages entries with their counts, then the Expansion group with its three switches">
+            <img src="img/settings-root-light.png" width="1432" height="1408" loading="lazy" alt="Snipsy settings on Obsidian 1.13: Snippets, Patterns and Packages entries with their counts (Patterns: 32 rules), then the Expansion group with its switches">
           </picture>
           <figcaption>The Snipsy settings screen on Obsidian 1.13.</figcaption>
         </figure>
@@ -999,6 +999,10 @@ replacement: |
             </div>
           </div>
         </div>
+        <figure class="shot" style="margin-top:16px">
+          <video data-clip src="img/clip-patterns.mp4" poster="img/clip-patterns.jpg" width="800" height="500" muted loop playsinline preload="none" aria-label="On the Patterns page, Add typography set adds 32 rules. In a note, typing 1/2 and a space gives ½, and typing a --> b gives a → b."></video>
+          <figcaption>Add the typography set, then type 1/2 and a space, and --&gt;.</figcaption>
+        </figure>
         <p class="prose" style="margin-top:16px">In the replacement, <code>{{1}}</code> to <code>{{9}}</code> are what the groups matched, <code>{{0}}</code> the whole match and <code>{{name}}</code> a named group. <code>$1</code> is still a Tab stop, so the two never mix. Captured text goes in last and as plain text.</p>
         <ul class="nope" style="margin-top:12px">
           <li>Literal triggers go first, then rules from the top of the list. The first match wins.</li>
@@ -1010,6 +1014,13 @@ replacement: |
           <div class="callout-title"><svg><use href="#i-info"/></svg>Checked before they run</div>
           <p>A pattern has to end with <code>$</code>, and only the flag <code>i</code> is allowed. Shapes that can backtrack without limit, such as <code>(a+)+$</code>, are refused when you write them, with the reason. Backreferences, lookahead and Unicode property classes are refused too. A rule that turns out slow while you type is paused for the session. Up to 100 rules.</p>
         </div>
+        <figure class="shot">
+          <picture>
+            <source data-dark srcset="img/patterns-dark.png" media="(prefers-color-scheme: dark)">
+            <img src="img/patterns-light.png" width="1448" height="1308" loading="lazy" alt="The Patterns page with the first rule open: the pattern for 1/2, the replacement ½, Fires set to Instant, and Try it with 1/23 showing ½3 and the message that it fired at 1/2, before 3">
+          </picture>
+          <figcaption>Try it on 1/23 with the rule set to Instant: it fires at 1/2 and leaves the 3 behind. After a separator lets 1/23 finish.</figcaption>
+        </figure>
         <p class="prose" style="margin-top:14px">The exact rules and every refusal are in the <a href="https://github.com/Dimagious/snipsidian/blob/main/docs/reference.md#patterns">reference</a>.</p>
       </section>
 
@@ -1084,7 +1095,7 @@ replacement: |
         <figure class="shot">
           <picture>
             <source data-dark srcset="img/prefix-dark.png" media="(prefers-color-scheme: dark)">
-            <img src="img/prefix-light.png" width="1432" height="564" loading="lazy" alt="The Expansion settings: Require a prefix before triggers switched on, the prefix character set to a colon and Highlight expansions off">
+            <img src="img/prefix-light.png" width="1432" height="902" loading="lazy" alt="The Expansion settings: Expand while typing on, Expand on Tab off, Require a prefix before triggers switched on, the prefix character set to a colon and Highlight expansions off">
           </picture>
           <figcaption>General › Expansion with the prefix required and : as the prefix character.</figcaption>
         </figure>

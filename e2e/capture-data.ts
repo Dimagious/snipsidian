@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { normalizeTrigger } from "../src/engine/triggers";
+import { STARTER_RULES } from "../src/core/pattern-starter";
 import { defaultSnippetsAsGroup } from "../src/store/presets";
 import type { PackageItem } from "../src/services/community-packages";
 import type { SnipSidianSettings } from "../src/types";
@@ -80,8 +81,14 @@ function group(name: string, snippets: Record<string, string>): Record<string, s
     return Object.fromEntries(Object.entries(snippets).map(([trigger, text]) => [`${name}/${trigger}`, text]));
 }
 
-/** The library of the site pictures: the shipped defaults, a few groups of someone's own and the one installed pack.
- *  `Callouts` is muted, as the group screenshot shows. The groups are in the order the Insert snippet picture lists
+/** The typography starter set as the Patterns page stores it after "Add typography set": 32 rules, each on, with a
+ *  fixed id so a retake seeds the same list. */
+export function typographyRules(): NonNullable<SnipSidianSettings["patterns"]> {
+    return STARTER_RULES.map((rule, i) => ({ ...rule, id: `typography-${i + 1}`, enabled: true }));
+}
+
+/** The library of the site pictures: the shipped defaults, a few groups of someone's own, the one installed pack and
+ *  the typography set on the Patterns page. `Callouts` is muted, as the group screenshot shows. The groups are in the order the Insert snippet picture lists
  *  them (the picker keeps the store's order). */
 export function libraryForStills(): SnipSidianSettings {
     return {
@@ -111,6 +118,7 @@ export function libraryForStills(): SnipSidianSettings {
             }),
         },
         disabledGroups: ["callouts"],
+        patterns: typographyRules(),
         communityPackages: catalogCache(),
     };
 }
