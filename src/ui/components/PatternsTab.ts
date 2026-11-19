@@ -724,10 +724,9 @@ export class PatternsTab {
                 const existing = list[at];
                 let next: PatternRule[] | null = null;
                 if (existing !== undefined) {
-                    // What is stored decides `enabled`: an entry that had no id is shown as off, but saving it as it
-                    // was (on) is the person fixing it. Other fields of the stored rule stay (a newer version's).
-                    const storedEntry: unknown = readPatterns(this.plugin.settings)[at];
-                    const enabled = isRuleObject(storedEntry) ? Reflect.get(storedEntry, "enabled") === true : existing.enabled === true;
+                    // `existing` is what the row showed: an entry that had no id is off (`withUniqueIds`) and stays
+                    // off until the person turns it on. Other fields of the stored rule stay (a newer version's).
+                    const enabled = existing.enabled === true;
                     const merged: PatternRule = { ...existing, ...rule, enabled };
                     if (group === undefined) delete merged.group;
                     next = replaceRule(list, at, merged);
@@ -921,6 +920,11 @@ export class PatternsTab {
         const index = "id" in target ? locateRule(this.list(), target.id) : target.slot;
         if (index < 0 || index >= this.list().length) return;
         const entry: unknown = this.list()[index];
+        // A slot target is an entry that was not a rule; if a rule sits there now, the row is stale.
+        if (id === undefined && isRuleObject(entry)) {
+            new Notice("This rule is no longer in the list.");
+            return;
+        }
         const rawSource: unknown = isRuleObject(entry) ? Reflect.get(entry, "source") : undefined;
         const source = typeof rawSource === "string" ? rawSource : "";
         new ConfirmModal(this.app, {

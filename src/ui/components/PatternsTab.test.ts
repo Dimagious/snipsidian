@@ -1090,7 +1090,7 @@ describe("PatternsTab: entries a hand edit or sync can produce", () => {
         type(replacementInput(), "Y");
         await settle();
         await click(saveButton());
-        expect(stored()[0]).toMatchObject({ source: "/x$/", replacement: "Y", enabled: true });
+        expect(stored()[0]).toMatchObject({ source: "/x$/", replacement: "Y", enabled: false });
         expect(stored()[0]?.id).toMatch(/^p/);
         expect(stored()[1]).toEqual(rule("b"));
         expect(row(0).classList.contains("is-error")).toBe(false);
@@ -1181,23 +1181,40 @@ describe("PatternsTab: entries a hand edit or sync can produce", () => {
             expect(stored().map((r) => r.enabled)).toEqual([false, false, true]);
         });
 
-        it("saving an id-less rule in the editor keeps it on, as it was stored", async () => {
+        it("saving an id-less rule in the editor persists it off, as the row showed it", async () => {
             mount([idless("one"), rule("b")]);
+            expect(row(0).classList.contains("is-error")).toBe(true);
             await editAndSave(0, "EDITED");
-            await click(saveButton());
-            expect(stored()[0]).toMatchObject({ replacement: "EDITED", enabled: true });
-            expect(compilePatternRules(mock.settings.patterns).rules.map((r) => r.id)).toHaveLength(2);
-        });
-
-        it("saving an id-less rule that an earlier write already persisted as off keeps it off", async () => {
-            mount([idless("one"), rule("b")]);
-            await editAndSave(0, "EDITED");
-            const input = q<HTMLInputElement>("input", q(".snipsy-pattern-toggle", row(1)));
-            input.checked = false;
-            input.dispatchEvent(new Event("change", { bubbles: true }));
-            await settle();
             await click(saveButton());
             expect(stored()[0]).toMatchObject({ replacement: "EDITED", enabled: false });
+            expect(storedIds()[0]).toMatch(/^p/);
+            // The person turns it on afterwards.
+            expect(compilePatternRules(mock.settings.patterns).rules.map((r) => r.id)).toEqual(["b"]);
+        });
+
+        it("saving an id-less rule at slot 1 with an off rule at slot 0 persists that rule off and leaves slot 0 alone", async () => {
+            mount([rule("a", { enabled: false }), idless("one"), rule("c")]);
+            await editAndSave(1, "E");
+            await click(saveButton());
+            expect(stored().map((r) => r.enabled)).toEqual([false, false, true]);
+            expect(stored()[1]).toMatchObject({ replacement: "E" });
+        });
+
+        it("saving an id-less rule at slot 1 leaves an enabled rule at slot 0 on", async () => {
+            mount([rule("a"), idless("one")]);
+            await editAndSave(1, "F");
+            await click(saveButton());
+            expect(stored().map((r) => r.enabled)).toEqual([true, false]);
+        });
+
+        it("saving a rule that has an id keeps its stored enabled, on or off", async () => {
+            mount([rule("a", { enabled: false }), rule("b")]);
+            await editAndSave(0, "EDITED");
+            await click(saveButton());
+            expect(stored().map((r) => r.enabled)).toEqual([false, true]);
+            await editAndSave(1, "EDITED2");
+            await click(saveButton());
+            expect(stored().map((r) => r.enabled)).toEqual([false, true]);
         });
 
         it("the next write persists the ids, every entry distinct", async () => {
@@ -1230,6 +1247,38 @@ describe("PatternsTab: entries a hand edit or sync can produce", () => {
             saves.resolve(1);
             await settle();
             expect(storedIds()).toEqual(["a", "c"]);
+        });
+
+        it("the queued delete re-resolves by id: b moved up between opening the dialog and confirming", async () => {
+            mount([rule("a"), rule("b"), rule("c")]);
+            q(".snipsy-pattern-menu", row(1)).click();
+            menuItem("Delete rule")();
+            key(q(".snipsy-pattern-main", row(1)), "ArrowUp", { altKey: true });
+            await settle();
+            expect(storedIds()).toEqual(["b", "a", "c"]);
+            button("Delete", confirmModal()).click();
+            await settle();
+            expect(storedIds()).toEqual(["a", "c"]);
+        });
+
+        it("Delete on the row of a damaged entry does not offer to delete the rule that slid into its slot", async () => {
+            const x = rule("x");
+            mount([x, null as unknown as PatternRule, rule("b")]);
+            const saves = deferSaves();
+            const staleDamaged = row(1);
+            q(".snipsy-pattern-menu", row(0)).click();
+            menuItem("Delete rule")();
+            button("Delete", confirmModal()).click();
+            await settle();
+            // Stored: [null, b] with the save pending; the page still shows the old row 1 (the damaged entry), but
+            // slot 1 now holds b.
+            expect(stored()).toHaveLength(2);
+            key(q(".snipsy-pattern-main", staleDamaged), "Delete");
+            expect(document.body.querySelector(".snipsidian-confirm-modal")).toBeNull();
+            saves.resolve(0);
+            await settle();
+            expect(stored()).toHaveLength(2);
+            expect(stored().map((r) => r?.id)).toEqual([undefined, "b"]);
         });
 
         it("the menu Delete on a row still showing b deletes b while a's delete is pending", async () => {
