@@ -868,6 +868,9 @@ export class ImportPreviewModal extends Modal {
         if (diff.unchangedCount) parts.push(`${diff.unchangedCount} unchanged`);
         const rules = this.patternPlan?.rows.length ?? 0;
         if (rules > 0) parts.push(`${rules} pattern rule${rules === 1 ? "" : "s"}`);
+        // Replace deletes the stored rules even when the file brings none that can be kept.
+        const removedRules = this.mode === "replace" ? (this.patternPlan?.removed ?? 0) : 0;
+        if (removedRules > 0) parts.push(`${removedRules} pattern rule${removedRules === 1 ? "" : "s"} removed`);
 
         if (parts.length === 0) {
             el.createSpan({ text: "Nothing will change." });
@@ -925,7 +928,12 @@ export class ImportPreviewModal extends Modal {
             // Count what will actually be written (rejected keys are not).
             const importCount =
                 diff.added.length + diff.conflicts.length + diff.unchangedCount + (this.patternPlan?.rows.length ?? 0);
-            btn.textContent = `Replace all (${importCount})`;
+            // Nothing written but stored rules deleted: "(0)" would call a destructive Replace a no-op.
+            const removedRules = this.patternPlan?.removed ?? 0;
+            btn.textContent =
+                importCount === 0 && removedRules > 0
+                    ? `Replace all (${removedRules} removed)`
+                    : `Replace all (${importCount})`;
             // Danger affordance: red CTA. Designer Q5 explicitly does NOT
             // want a second-confirm dialog — the visual + the `removed`
             // list in the diff is the affordance.

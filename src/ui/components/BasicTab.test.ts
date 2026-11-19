@@ -993,6 +993,24 @@ describe("BasicTab: JSON backup of pattern rules", () => {
         expect(noticeCalls).toContain("Merged 1 snippet and 1 pattern rule");
     });
 
+    it("Apply plans again against the settings as they are now: a list filled after the pick gets nothing added", async () => {
+        const { root } = mount();
+        await pick(root, { "snipsy patterns": JSON.stringify([rule(500)]) });
+        const full = Array.from({ length: 100 }, (_, i) => rule(i));
+        plugin.settings.patterns = full;
+        await apply("merge");
+        expect(plugin.settings.patterns).toHaveLength(100);
+        expect(plugin.settings.patterns?.some((r) => r.id === "r500")).toBe(false);
+    });
+
+    it("Apply plans again: a rule added after the pick is deduped, not stored twice", async () => {
+        const { root } = mount();
+        await pick(root, { "snipsy patterns": JSON.stringify([rule(1)]) });
+        plugin.settings.patterns = [rule(1, { id: "mine" })];
+        await apply("merge");
+        expect(plugin.settings.patterns).toEqual([rule(1, { id: "mine" })]);
+    });
+
     it("a file without rules never touches the rules (Merge and Replace)", async () => {
         const existing = [rule(1)];
         plugin.settings.patterns = existing;

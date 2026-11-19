@@ -32,6 +32,9 @@ export const MAX_INCOMING_PATTERNS_EXAMINED = MAX_PATTERN_RULES * 5;
 /** What the Export button writes: the snippets as they were, plus the stored rules (as stored) when there are any. */
 export function buildBackupObject(settings: Pick<SnipSidianSettings, "snippets" | "patterns">): Record<string, string> {
     const backup: Record<string, string> = { ...settings.snippets };
+    // A snippet that already sits under our own key (a new backup imported by a Snipsy before 1.7.0) is stale text,
+    // never the rules: drop it first so it is not exported as rules and does not break Snipsy's own import.
+    delete backup[PATTERNS_EXPORT_KEY];
     const rules = readPatterns(settings);
     if (rules.length > 0) backup[PATTERNS_EXPORT_KEY] = JSON.stringify(rules);
     return backup;
@@ -68,6 +71,7 @@ export function readBackupFile(parsed: unknown): BackupFile {
             if (!Array.isArray(decoded)) return { ok: false, message: INVALID_PATTERNS_MESSAGE };
             patterns = decoded as unknown[];
         } else if (key === "patterns" && Array.isArray(value)) {
+            // The `snipsy patterns` entry is the format Snipsy writes: it wins over a top-level array whatever the order.
             patterns ??= value as unknown[];
         } else {
             rest.push([key, value]);

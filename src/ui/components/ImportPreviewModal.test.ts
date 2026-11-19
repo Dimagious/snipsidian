@@ -342,6 +342,36 @@ describe("ImportPreviewModal: pattern rules of a JSON backup", () => {
         expect(section(modal)?.querySelector("b")).toBeNull();
     });
 
+    it("Replace that deletes stored rules is not 'Nothing will change.' even when the file keeps none", () => {
+        const onConfirm = vi.fn<ImportConfirm>();
+        const modal = new ImportPreviewModal(app, {
+            current: {},
+            incoming: {},
+            patterns: { plan: (mode) => planJsonPatternImport([{ ...rule(9), source: "/(a+)+$/" }], mode, { patterns: [rule(1), rule(2)] }) },
+            onConfirm,
+        });
+        modal.open();
+        const summary = (): string | undefined => modal.contentEl.querySelector(".snipsy-import-summary")?.textContent ?? undefined;
+        expect(summary()).toBe("Nothing will change.");
+        pickMode(modal, "replace");
+        expect(summary()).toBe("2 pattern rules removed");
+        expect(applyLabel(modal)).toBe("Replace all (2 removed)");
+        pickMode(modal, "merge");
+        expect(summary()).toBe("Nothing will change.");
+        expect(applyLabel(modal)).toBe("Apply");
+    });
+
+    it("the Merge radio re-plans: the rows and the button follow the mode after Replace", () => {
+        const { modal } = mountWithRules([rule(1), rule(2)], [rule(1)]);
+        expect(applyLabel(modal)).toBe("Apply merge (1)");
+        pickMode(modal, "replace");
+        expect(applyLabel(modal)).toBe("Replace all (3)");
+        pickMode(modal, "merge");
+        expect(applyLabel(modal)).toBe("Apply merge (1)");
+        expect(section(modal)?.querySelectorAll(".snipsy-espanso-pattern-rows li")).toHaveLength(1);
+        expect(modal.contentEl.querySelector(".snipsy-import-summary")?.textContent).not.toContain("removed");
+    });
+
     it("a file without rules shows no pattern section and the old Replace hint", () => {
         const { modal } = mount({ current: { a: "1", b: "2" }, incoming: { a: "1" } });
         expect(section(modal)).toBeNull();

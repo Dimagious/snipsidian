@@ -40,6 +40,17 @@ describe("buildBackupObject", () => {
         expect(buildBackupObject({ snippets: { a: "1" }, patterns: [] })).toEqual({ a: "1" });
     });
 
+    it("a stale snippet under the rules key is dropped when no rules are stored", () => {
+        const backup = buildBackupObject({ snippets: { a: "1", [PATTERNS_EXPORT_KEY]: "stale text" } });
+        expect(backup).toEqual({ a: "1" });
+    });
+
+    it("a stale snippet under the rules key never stands in for the rules", () => {
+        const backup = buildBackupObject({ snippets: { a: "1", [PATTERNS_EXPORT_KEY]: "stale text" }, patterns: [rule(1)] });
+        expect(JSON.parse(backup[PATTERNS_EXPORT_KEY] ?? "")).toEqual([rule(1)]);
+        expect(readBackupFile(JSON.parse(JSON.stringify(backup)))).toEqual({ ok: true, snippets: { a: "1" }, patterns: [rule(1)] });
+    });
+
     it("leaves out a stored value that is not a list", () => {
         const settings = { snippets: { a: "1" }, patterns: "junk" as unknown as PatternRule[] };
         expect(buildBackupObject(settings)).toEqual({ a: "1" });
@@ -67,6 +78,14 @@ describe("readBackupFile", () => {
 
     it("reads a hand-written top-level patterns array", () => {
         expect(readBackupFile({ a: "1", patterns: [rule(1)] })).toEqual({ ok: true, snippets: { a: "1" }, patterns: [rule(1)] });
+    });
+
+    it("the snipsy patterns entry wins over a top-level patterns array, in either order", () => {
+        const text = JSON.stringify([rule(1)]);
+        const keyFirst = readBackupFile({ [PATTERNS_EXPORT_KEY]: text, patterns: [rule(2)] });
+        const arrayFirst = readBackupFile({ patterns: [rule(2)], [PATTERNS_EXPORT_KEY]: text });
+        expect(keyFirst).toEqual({ ok: true, snippets: {}, patterns: [rule(1)] });
+        expect(arrayFirst).toEqual({ ok: true, snippets: {}, patterns: [rule(1)] });
     });
 
     it("a string under patterns is a snippet, not a rule list", () => {
