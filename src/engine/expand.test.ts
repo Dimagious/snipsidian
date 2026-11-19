@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { expand, expandInstant } from "./expand";
+import { expand, expandInstant, expandPatternHit } from "./expand";
 import { compilePatternRules, matchPatterns } from "./patterns";
 import type { CompiledRule } from "./patterns";
 import type { Dict, ExpandContext, PatternRule } from "./types";
@@ -301,6 +301,24 @@ describe("expandInstant (ADR-0008)", () => {
         await expect(expandInstant("a ->", { ...pctx, isInCode: true }, hit)).resolves.toBeNull();
         expect(exec).toHaveBeenCalledTimes(1);
     });
+});
+
+describe("expandPatternHit (the Tab key and the command hand over the hit they found)", () => {
+    const rule = patterns({ source: String.raw`/\bdd(\d+)$/`, replacement: "day {{1}}", mode: "separator" });
+    const input = { textBefore: "on dd5", textAfter: "", lastTyped: "", sepCh: 6 };
+    const hit = matchPatterns("on dd5", rule, "separator");
+
+    it("plans the replacement and tags it as a pattern plan (its own undo step)", async () => {
+        if (!hit) throw new Error("no hit");
+        await expect(expandPatternHit(input, pctx, hit)).resolves.toMatchObject({ kind: "pattern", fromCh: 3, toCh: 6, insert: "day 5" });
+    });
+
+    for (const flag of ["isInCode", "isInMath", "isInFrontmatter"] as const) {
+        it(`returns null when ${flag} is set`, async () => {
+            if (!hit) throw new Error("no hit");
+            await expect(expandPatternHit(input, { ...pctx, [flag]: true }, hit)).resolves.toBeNull();
+        });
+    }
 });
 
 describe("expand: the last surrogate net runs in every caller (S-015, round 9)", () => {

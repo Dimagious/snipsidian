@@ -127,6 +127,8 @@ test.describe("[B-243] tab stops", () => {
 
     test("leaving the editor for a moment (a ribbon click) keeps the session", async ({ win, obsidian }) => {
         await obsidian.editor().type("lnk ");
+        // The expansion is async: wait for it before leaving the editor.
+        await expect.poll(() => obsidian.editor().text()).toContain("](");
         await win.locator(".workspace-ribbon").first().click();
         await expect(win.locator(".cm-content .snipsy-field-empty")).toHaveCount(2);
         await obsidian.runCommand("snipsidian:next-field");

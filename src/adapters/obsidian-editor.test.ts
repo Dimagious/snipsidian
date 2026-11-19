@@ -1783,6 +1783,7 @@ describe("adapters/obsidian-editor: B-255 canExpandAtCursor", () => {
 describe("adapters/obsidian-editor: manual expansion with pattern rules (B-255 + ADR-0008)", () => {
     const now = new Date("2025-09-02T10:11:12Z");
     const date = rules({ source: String.raw`/\bdd(\d+)$/`, replacement: "day {{1}}", mode: "separator" });
+    const compileDate = (): ReturnType<typeof rules> => rules({ source: String.raw`/\bdd(\d+)$/`, replacement: "day {{1}}", mode: "separator" });
     const dict: Dict = { brb: "be right back" };
 
     function at(text: string, ch = text.length, selection = ""): MockEditor {
@@ -1852,9 +1853,11 @@ describe("adapters/obsidian-editor: manual expansion with pattern rules (B-255 +
     });
 
     describe("rules run once per Tab (the check's hit is handed to the expansion)", () => {
-        const ruleSet = rules({ source: String.raw`/\bdd(\d+)$/`, replacement: "day {{1}}", mode: "separator" });
+        // Compiled per test: the health counters (runs, switchedOff) are state, so no test can see another's.
+        const compile = (): ReturnType<typeof rules> => rules({ source: String.raw`/\bdd(\d+)$/`, replacement: "day {{1}}", mode: "separator" });
 
         it("check plus expansion with `prepared` is one run of the rule", async () => {
+            const ruleSet = compile();
             const ed = at("on dd5");
             const found = canExpandAtCursor(asEditor(ed), dict, undefined, ruleSet);
             expect(found).toBeDefined();
@@ -1864,6 +1867,7 @@ describe("adapters/obsidian-editor: manual expansion with pattern rules (B-255 +
         });
 
         it("a rule the first run switched off cannot make the expansion find nothing", async () => {
+            const ruleSet = compile();
             const ed = at("on dd5");
             const found = canExpandAtCursor(asEditor(ed), dict, undefined, ruleSet);
             // What a second run would see: the guard (strikes, 8 ms budget) took the rule out after the check.
@@ -1885,6 +1889,55 @@ describe("adapters/obsidian-editor: manual expansion with pattern rules (B-255 +
             expect(ed.getLine(0)).toBe("say be right back");
             expect(both[0]?.health.runs).toBe(0);
         });
+    });
+
+    describe("the context guard of a rule hit (no `prepared`: the command and the alias)", () => {
+        const cases: Array<[string, () => MockEditor]> = [
+            ["inline code", () => at("`on dd5", 7)],
+            [
+                "a fenced block",
+                () => {
+                    const ed = new MockEditor("```\non dd5\n```");
+                    ed.setCursor({ line: 1, ch: 6 });
+                    return ed;
+                },
+            ],
+            [
+                "frontmatter",
+                () => {
+                    const ed = new MockEditor("---\ntitle: dd5\n---\n");
+                    ed.setCursor({ line: 1, ch: 11 });
+                    return ed;
+                },
+            ],
+        ];
+
+        for (const manual of [true, false]) {
+            for (const [name, make] of cases) {
+                it(`writes nothing in ${name} (manual: ${manual})`, async () => {
+                    const ed = make();
+                    const before = ed.lines.join("\n");
+                    const result = await tryExpandAtCursor(asEditor(ed), dict, { now, manual, patterns: compileDate() });
+                    expect(result).toBeUndefined();
+                    expect(ed.lines.join("\n")).toBe(before);
+                });
+            }
+        }
+
+        it("control: the same rule expands outside code", async () => {
+            const ed = at("on dd5");
+            expect(await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: compileDate() })).toMatchObject({ insert: "day 5" });
+        });
+    });
+
+    it("a prepared rule hit is written through the CM6 view as its own undo step (PATTERN_USER_EVENT)", async () => {
+        const ruleSet = compileDate();
+        const { editor, specs } = withView(at("on dd5"));
+        const found = canExpandAtCursor(asEditor(editor), dict, undefined, ruleSet);
+        await tryExpandAtCursor(asEditor(editor), dict, { now, manual: true, patterns: ruleSet, prepared: found });
+        expect(editor.getLine(0)).toBe("on day 5");
+        expect(specs).toHaveLength(1);
+        expect(specs[0]?.userEvent).toBe(PATTERN_USER_EVENT);
     });
 });
 
