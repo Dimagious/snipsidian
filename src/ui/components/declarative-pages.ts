@@ -3,11 +3,14 @@ import type { SettingDefinitionPage } from "obsidian";
 import type SnipSidianPlugin from "../../main";
 import type { SnippetsTab } from "./SnippetsTab";
 import type { CommunityTab } from "./CommunityTab";
+import type { PatternsTab } from "./PatternsTab";
 import { formatSnippetsSummary } from "../../store/snippets";
+import { formatPatternsSummary, patternsUnreadable, readPatterns } from "../../core/pattern-list";
 import { countInstalledPackages, formatInstalledPackagesSummary } from "../../core/install-plan";
 
 export interface DeclarativePages {
     snippets: SettingDefinitionPage;
+    patterns: SettingDefinitionPage;
     packages: SettingDefinitionPage;
 }
 
@@ -55,6 +58,7 @@ export function createDeclarativePages(
     plugin: SnipSidianPlugin,
     snippetsTab: SnippetsTab,
     communityTab: CommunityTab,
+    patternsTab: PatternsTab,
 ): DeclarativePages | null {
     if (requireApiVersion("1.13.0")) {
         class SnippetsPage extends SettingPage {
@@ -64,6 +68,16 @@ export function createDeclarativePages(
             }
             hide(): void {
                 // Intentionally empty — see the module doc above.
+            }
+        }
+
+        class PatternsPage extends SettingPage {
+            display(): void {
+                this.containerEl.addClass("snipsidian-settings");
+                patternsTab.render(this.containerEl);
+            }
+            hide(): void {
+                // Intentionally empty: the draft and the Try it line live in `patternsTab`, which outlives this page.
             }
         }
 
@@ -88,6 +102,18 @@ export function createDeclarativePages(
                 // `formatSnippetsSummary` (store/snippets.ts).
                 displayValue: () => formatSnippetsSummary(plugin.settings),
                 page: () => new SnippetsPage(),
+            },
+            patterns: {
+                type: "page",
+                name: "Patterns",
+                desc: "Replace text that matches a regular expression, like 1/2 with ½.",
+                // `displayValue` and `status` are 1.13.1 fields: 1.13.0 ignores them.
+                displayValue: () =>
+                    patternsUnreadable(plugin.settings)
+                        ? "Could not be read"
+                        : formatPatternsSummary(readPatterns(plugin.settings).length, patternsTab.errorCount()),
+                status: () => (patternsUnreadable(plugin.settings) || patternsTab.errorCount() > 0 ? "warning" : null),
+                page: () => new PatternsPage(),
             },
             packages: {
                 type: "page",

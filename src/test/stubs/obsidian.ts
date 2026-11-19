@@ -571,6 +571,36 @@ export class ButtonComponent {
     }
 }
 
+/** `Menu` stub: records its items so tests can read the labels and click one (`Menu.last` is the latest menu shown). */
+export class MenuItem {
+    title = "";
+    icon = "";
+    disabled = false;
+    warning = false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test stub
+    callback: (evt?: any) => void = () => undefined;
+    setTitle(title: string) { this.title = title; return this; }
+    setIcon(icon: string) { this.icon = icon; return this; }
+    setDisabled(disabled: boolean) { this.disabled = disabled; return this; }
+    setWarning(warning: boolean) { this.warning = warning; return this; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test stub
+    onClick(cb: (evt?: any) => void) { this.callback = cb; return this; }
+}
+export class Menu {
+    static last: Menu | null = null;
+    items: MenuItem[] = [];
+    addItem(cb: (item: MenuItem) => void) {
+        const item = new MenuItem();
+        cb(item);
+        this.items.push(item);
+        return this;
+    }
+    addSeparator() { return this; }
+    showAtMouseEvent(_evt: unknown) { Menu.last = this; return this; }
+    showAtPosition(_pos: unknown) { Menu.last = this; return this; }
+    hide() { return this; }
+}
+
 // ---------- Platform / runtime ----------
 
 export const Platform = {

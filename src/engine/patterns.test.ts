@@ -195,7 +195,7 @@ describe("patterns: source format and flags", () => {
 
     it.each(["u", "iu", "ui"])("refuses the u flag (/%s), in both modes, with the same sentence-case reason", (flags) => {
         for (const mode of ["separator", "instant"] as const) {
-            expect(check(src("abc$", flags), mode), `${flags} ${mode}`).toEqual({ ok: false, reason: U_REASON });
+            expect(check(src("abc$", flags), mode), `${flags} ${mode}`).toMatchObject({ ok: false, reason: U_REASON });
         }
         expect(U_REASON).not.toMatch(/[\u2013\u2014]/);
         expect(compileRule(rule(src("abc$", flags)))).toEqual({ ok: false, reason: U_REASON });
@@ -209,7 +209,7 @@ describe("patterns: source format and flags", () => {
         ["a round 5 property class under iu", String.raw`\p{L}{1,4}-\d{2}-\d{2}$`, "iu"],
         ["\\u{...} under u", String.raw`\u{1F600}x$`, "u"],
     ])("refuses %s for the flag, whatever the body", (_label, body, flags) => {
-        expect(check(src(body, flags))).toEqual({ ok: false, reason: U_REASON });
+        expect(check(src(body, flags))).toMatchObject({ ok: false, reason: U_REASON });
     });
 
     it.each(["g", "y", "m", "s", "d", "v"])("refuses the flag %s", (flag) => {
@@ -830,7 +830,7 @@ describe("patterns: escapes are an allowlist (S-015, round 2)", () => {
             const result = check(src(body));
             expect(result.ok, body).toBe(false);
         }
-        expect(check(src(String.raw`\u{1F600}$`))).toEqual({ ok: false, reason: "This escape isn't supported in patterns: \\u" });
+        expect(check(src(String.raw`\u{1F600}$`))).toMatchObject({ ok: false, reason: "This escape isn't supported in patterns: \\u" });
     });
 
     // The bug class this closes: the parser read `\041` as `\0` + `4` + `1`, so the end-character test said the match
@@ -1069,14 +1069,14 @@ describe("patterns: no astral character inside a class (S-015, round 7)", () => 
     });
 
     it("says what to do, in sentence case with no dash", () => {
-        expect(check(pat("[^😀]x"))).toEqual({ ok: false, reason: REASON });
+        expect(check(pat("[^😀]x"))).toMatchObject({ ok: false, reason: REASON });
         expect(REASON).toMatch(/^[A-Z]/);
         expect(REASON).not.toMatch(/[\u2013\u2014]/);
     });
 
     it("a lone surrogate written as a character in a class is refused as well", () => {
-        expect(check(pat(`[a${String.fromCharCode(0xd83d)}b]x`))).toEqual({ ok: false, reason: REASON });
-        expect(check(pat(`[a${String.fromCharCode(0xde00)}]x`))).toEqual({ ok: false, reason: REASON });
+        expect(check(pat(`[a${String.fromCharCode(0xd83d)}b]x`))).toMatchObject({ ok: false, reason: REASON });
+        expect(check(pat(`[a${String.fromCharCode(0xde00)}]x`))).toMatchObject({ ok: false, reason: REASON });
     });
 
     it("a surrogate escape in a class is refused by the escape allowlist", () => {
@@ -1108,7 +1108,7 @@ describe("patterns: no astral character inside a class (S-015, round 7)", () => 
 
     it("a class that would have been cheap or expensive under u is refused all the same (the round 6 repro, now for its content)", () => {
         const many = Array.from({ length: 24 }, (_, i) => String.fromCodePoint(0x10000 + i * 0x400 + 7)).join("");
-        expect(check(pat(`[^${many}]{1,4}-\\d{2}-\\d{2}zq`, "i"))).toEqual({ ok: false, reason: REASON });
+        expect(check(pat(`[^${many}]{1,4}-\\d{2}-\\d{2}zq`, "i"))).toMatchObject({ ok: false, reason: REASON });
     });
 });
 
@@ -1375,7 +1375,7 @@ describe("patterns: a quantifier after an emoji, and an escaped half (S-015, rou
 
     it.each(["/a😀?b$/", "/😀+x$/", "/x😀*$/", "/😀{2}$/", "/😀{1,3}x$/", "/😀+?x$/", "/a😀🙏?$/"])("%s is refused with the group hint", (source) => {
         for (const mode of ["separator", "instant"] as const) {
-            expect(check(source, mode), `${source} ${mode}`).toEqual({ ok: false, reason: QUANTIFIER });
+            expect(check(source, mode), `${source} ${mode}`).toMatchObject({ ok: false, reason: QUANTIFIER });
         }
     });
 
@@ -1414,7 +1414,7 @@ describe("patterns: a quantifier after an emoji, and an escaped half (S-015, rou
     it("an escaped emoji after a bad range still names the escape, not the range (round 9)", () => {
         // `[z-a\😀]` fails `new RegExp` with "Range out of order": the escaped-emoji reason is the useful one.
         for (const source of ["/[z-a\\😀]$/", "/x[z-a\\😀]$/"]) {
-            expect(check(source), source).toEqual({ ok: false, reason: "A backslash can't go before an emoji. Write the emoji as plain text." });
+            expect(check(source), source).toMatchObject({ ok: false, reason: "A backslash can't go before an emoji. Write the emoji as plain text." });
         }
     });
 

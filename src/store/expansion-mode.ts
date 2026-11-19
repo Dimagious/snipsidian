@@ -6,6 +6,16 @@ import type { SnipSidianSettings } from "../types";
  * was (typing expands, Tab does not).
  */
 
+/**
+ * B-137: the prefix character in effect (`undefined` = prefix mode off). Anything but `:` or `;` falls back to `:`,
+ * so corrupt or foreign saved data cannot silently kill expansion in prefix mode.
+ */
+export function effectivePrefix(settings: Pick<SnipSidianSettings, "expansion">): string | undefined {
+    if (!settings.expansion?.requirePrefix) return undefined;
+    const char = settings.expansion.prefixChar;
+    return char === ":" || char === ";" ? char : ":";
+}
+
 /** Does typing a separator after a trigger expand it? Unset = yes. */
 export function expandsOnType(settings: Pick<SnipSidianSettings, "expansion">): boolean {
     return settings.expansion?.onType !== false;

@@ -3,7 +3,7 @@ import type { SnipSidianSettings } from "../../types";
 /** Tab identifiers used inside the new 1.1.0 IA. Storage may still
  *  contain pre-1.1.0 IDs (`basic` / `community` / `feedback`) — those
  *  are migrated transparently in `loadActiveTab()`. */
-export type TabId = "snippets" | "packages" | "general" | "about";
+export type TabId = "snippets" | "patterns" | "packages" | "general" | "about";
 
 /** Migration map from pre-1.1.0 stored IDs to the new IA labels.
  *  - old `basic` (General tab) → new `general` (position 3)
@@ -20,6 +20,7 @@ const LEGACY_TAB_ID_MAP: Record<string, TabId> = {
 
 const VALID_TAB_IDS: ReadonlySet<TabId> = new Set<TabId>([
     "snippets",
+    "patterns",
     "packages",
     "general",
     "about",

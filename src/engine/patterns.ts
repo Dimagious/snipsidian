@@ -95,11 +95,62 @@ const MAX_BOUNDED_CHOICES: readonly number[] = [1024, 16, 4];
 /** Compile cache bound: far above 100 rules, so only a stream of edits ever hits it. */
 const MAX_CACHE_ENTRIES = 500;
 
-/** A refusal with a reason a person can read (sentence case, shown by the editor later). */
+/**
+ * One stable code per kind of refusal `checkPattern` can return (ADR-0008, Patterns page): the editor words each one
+ * itself, so the text in `reason` can change without breaking it. The page keeps a `Record` over this list, so a new
+ * code does not compile until it has a message.
+ */
+export const PATTERN_REASON_CODES = [
+    "too_long",
+    "shape",
+    "flag",
+    "flag_twice",
+    "invalid_regex",
+    "nothing_to_repeat",
+    "lone_backslash",
+    "backreference",
+    "lookahead",
+    "property_escape",
+    "astral_in_class",
+    "emoji_quantifier",
+    "escaped_emoji",
+    "repeated_emoji_alternation",
+    "unsupported_escape",
+    "class_not_closed",
+    "group_name_not_closed",
+    "group_name_backslash",
+    "group_syntax",
+    "group_not_closed",
+    "unbalanced_paren",
+    "missing_end_anchor",
+    "reserved_group_name",
+    "lookbehind_quantifier",
+    "repeated_group",
+    "lookbehind_size",
+    "too_many_unbounded",
+    "instant_unbounded",
+    "too_many_choices",
+    "empty_match",
+] as const;
+export type PatternReasonCode = (typeof PATTERN_REASON_CODES)[number];
+
+/** What a message may need: the flag, the escape as written, a group name, a count and the limit it broke, an engine message. */
+export type PatternReasonParams = {
+    flag?: string;
+    escape?: string;
+    name?: string;
+    count?: number;
+    limit?: number;
+    detail?: string;
+};
+
+/** A refusal with a reason a person can read (sentence case) and a stable code for the editor. */
 class Refusal extends Error {
-    /** Set when the refusal is the unbounded-quantifier cap: an instant rule words it differently. */
+    /** `unbounded` is set when the refusal is the unbounded-quantifier cap: an instant rule words it differently. */
     constructor(
         message: string,
+        readonly code: PatternReasonCode,
+        readonly params: PatternReasonParams = {},
         readonly unbounded?: number,
     ) {
         super(message);
@@ -151,7 +202,8 @@ function unsupportedEscape(src: string, backslashAt: number, length?: number): R
     let end = backslashAt + 2;
     if (length !== undefined) end = backslashAt + length;
     else if (e >= "0" && e <= "9") while (/[0-9]/.test(src[end] ?? "")) end++;
-    return new Refusal(`This escape isn't supported in patterns: ${src.slice(backslashAt, end)}`);
+    const escape = src.slice(backslashAt, end);
+    return new Refusal(`This escape isn't supported in patterns: ${escape}`, "unsupported_escape", { escape });
 }
 
 class Parser {
@@ -211,7 +263,7 @@ class Parser {
         // then many low halves): refuse it rather than match something no one meant (round 8).
         if (quantified && node.kind === "atom" && node.text.length === 1 && isLowSurrogate(node.text.charCodeAt(0))) {
             const before = this.src.charCodeAt(atomStart - 1);
-            if (atomStart > 0 && isHighSurrogate(before)) throw new Refusal(REASON_EMOJI_QUANTIFIER);
+            if (atomStart > 0 && isHighSurrogate(before)) throw new Refusal(REASON_EMOJI_QUANTIFIER, "emoji_quantifier");
         }
         return { node, min, max, quantified };
     }
@@ -234,7 +286,7 @@ class Parser {
             case "*":
             case "+":
             case "?":
-                throw new Refusal("A quantifier has nothing to repeat.");
+                throw new Refusal("A quantifier has nothing to repeat.", "nothing_to_repeat");
             default:
                 // Literal, `.`, or a `{` that is not a quantifier. Without `u` an astral character is two atoms (its
                 // code units), and a quantifier after it repeats the second one only: as the engine reads it.
@@ -263,11 +315,11 @@ class Parser {
      */
     private skipEscape(inClass: boolean): void {
         const e = this.src[this.pos++];
-        if (e === undefined) throw new Refusal("The pattern ends with a lone backslash.");
+        if (e === undefined) throw new Refusal("The pattern ends with a lone backslash.", "lone_backslash");
         // An identity escape of a surrogate half (round 8): the pair would be split into an atom and a stray half.
-        if (isSurrogate(e.charCodeAt(0))) throw new Refusal(REASON_ESCAPED_ASTRAL);
-        if (!inClass && e >= "1" && e <= "9") throw new Refusal(REASON_BACKREF);
-        if (!inClass && e === "k" && this.src[this.pos] === "<") throw new Refusal(REASON_BACKREF);
+        if (isSurrogate(e.charCodeAt(0))) throw new Refusal(REASON_ESCAPED_ASTRAL, "escaped_emoji");
+        if (!inClass && e >= "1" && e <= "9") throw new Refusal(REASON_BACKREF, "backreference");
+        if (!inClass && e === "k" && this.src[this.pos] === "<") throw new Refusal(REASON_BACKREF, "backreference");
         if (e === "0") {
             // `\0` is NUL only when no digit follows; `\041` is legacy octal.
             if (/[0-9]/.test(this.src[this.pos] ?? "")) throw unsupportedEscape(this.src, this.pos - 2);
@@ -280,7 +332,7 @@ class Parser {
         } else if (e === "u") {
             this.skipHex(4, true);
         } else if (e === "p" || e === "P") {
-            throw new Refusal(REASON_PROPERTY);
+            throw new Refusal(REASON_PROPERTY, "property_escape");
         } else if (/[A-Za-z]/.test(e)) {
             // Every other letter: `\c`, `\a`, `\e`, `\k`, `\B` in a class.
             throw unsupportedEscape(this.src, this.pos - 2);
@@ -311,9 +363,9 @@ class Parser {
             const c = this.src[this.pos++];
             if (c === "]") return;
             if (c === "\\") this.skipEscape(true);
-            else if (c !== undefined && isSurrogate(c.charCodeAt(0))) throw new Refusal(REASON_ASTRAL_CLASS);
+            else if (c !== undefined && isSurrogate(c.charCodeAt(0))) throw new Refusal(REASON_ASTRAL_CLASS, "astral_in_class");
         }
-        throw new Refusal("A character class is not closed.");
+        throw new Refusal("A character class is not closed.", "class_not_closed");
     }
 
     /** `this.pos` is just after the `(`. */
@@ -324,7 +376,7 @@ class Parser {
             if (next === ":") {
                 this.pos += 2;
             } else if (next === "=" || next === "!") {
-                throw new Refusal(REASON_LOOKAHEAD);
+                throw new Refusal(REASON_LOOKAHEAD, "lookahead");
             } else if (next === "<") {
                 const kind = this.src[this.pos + 2];
                 if (kind === "=" || kind === "!") {
@@ -332,19 +384,19 @@ class Parser {
                     this.pos += 3;
                 } else {
                     const end = this.src.indexOf(">", this.pos + 2);
-                    if (end < 0) throw new Refusal("A group name is not closed.");
+                    if (end < 0) throw new Refusal("A group name is not closed.", "group_name_not_closed");
                     const name = this.src.slice(this.pos + 2, end);
                     // An escape in a name (`\u0064ate`) would hide a reserved name from the check below.
-                    if (name.includes("\\")) throw new Refusal("A group name can't contain a backslash.");
+                    if (name.includes("\\")) throw new Refusal("A group name can't contain a backslash.", "group_name_backslash");
                     this.names.push(name);
                     this.pos = end + 1;
                 }
             } else {
-                throw new Refusal("This group syntax is not supported.");
+                throw new Refusal("This group syntax is not supported.", "group_syntax");
             }
         }
         const alts = this.parseAlternatives();
-        if (this.src[this.pos] !== ")") throw new Refusal("A group is not closed.");
+        if (this.src[this.pos] !== ")") throw new Refusal("A group is not closed.", "group_not_closed");
         this.pos++;
         return { kind: "group", behind, alts };
     }
@@ -402,11 +454,11 @@ function analyze(alts: readonly Term[][], names: readonly string[]): Analysis {
     const lastAlt = alts[alts.length - 1];
     const last = lastAlt?.[lastAlt.length - 1];
     if (!last || last.node.kind !== "assert" || last.node.anchor !== "eol" || last.quantified) {
-        throw new Refusal("The pattern must end with $ (not escaped), so it matches right before the caret.");
+        throw new Refusal("The pattern must end with $ (not escaped), so it matches right before the caret.", "missing_end_anchor");
     }
 
     for (const name of names) {
-        if (RESERVED_GROUP_NAMES.has(name)) throw new Refusal(`The group name "${name}" is reserved.`);
+        if (RESERVED_GROUP_NAMES.has(name)) throw new Refusal(`The group name "${name}" is reserved.`, "reserved_group_name", { name });
     }
 
     let unbounded = 0;
@@ -419,15 +471,17 @@ function analyze(alts: readonly Term[][], names: readonly string[]): Analysis {
         // Alternation is a choice point as well: `(?:a|)` x30 hung `exec` (S-015, checker round 1).
         if (t.node.alts.length > 1) boundedChoices = Math.min(boundedChoices * t.node.alts.length, 1e9);
         if (t.node.behind && hasQuantifier(t.node.alts)) {
-            throw new Refusal("A lookbehind can't contain a quantifier (*, +, ?, {n,m}). Keep it a fixed length.");
+            throw new Refusal("A lookbehind can't contain a quantifier (*, +, ?, {n,m}). Keep it a fixed length.", "lookbehind_quantifier");
         }
         if (!t.node.behind && t.max > 1 && (hasQuantifier(t.node.alts) || hasAlternation(t.node.alts))) {
             const emoji = someTerm(t.node.alts, (inner) => inner.node.kind === "atom" && isSurrogate(inner.node.text.charCodeAt(0)));
+            const emojiChoice = emoji && hasAlternation(t.node.alts);
             throw new Refusal(
-                emoji && hasAlternation(t.node.alts)
+                emojiChoice
                     ? REASON_REPEATED_EMOJI_ALTERNATION
                     : "A repeated group can't contain a quantifier or an alternation, because matching can become very slow. " +
                           "Use a character class like [ab] or take the inner quantifier out.",
+                emojiChoice ? "repeated_emoji_alternation" : "repeated_group",
             );
         }
         return false;
@@ -438,11 +492,15 @@ function analyze(alts: readonly Term[][], names: readonly string[]): Analysis {
         throw new Refusal(
             `A pattern can have at most ${LOOKBEHIND_ATOM_LIMIT} characters or groups inside its lookbehinds (all of them together), ` +
                 "because a lookbehind is checked again at every step of the matching. Shorten it.",
+            "lookbehind_size",
+            { limit: LOOKBEHIND_ATOM_LIMIT },
         );
     }
     if (unbounded > MAX_UNBOUNDED_QUANTIFIERS) {
         throw new Refusal(
             `At most ${MAX_UNBOUNDED_QUANTIFIERS} unbounded quantifiers (*, +, {n,}) are allowed; this pattern has ${unbounded}.`,
+            "too_many_unbounded",
+            { count: unbounded, limit: MAX_UNBOUNDED_QUANTIFIERS },
             unbounded,
         );
     }
@@ -450,10 +508,11 @@ function analyze(alts: readonly Term[][], names: readonly string[]): Analysis {
         throw new Refusal(
             "The pattern has too many optional or ranged parts (?, {n,m}) next to its other quantifiers, so matching could become slow. " +
                 "Remove some of them.",
+            "too_many_choices",
         );
     }
     if (minLength(alts) === 0) {
-        throw new Refusal("The pattern can match an empty string, so it would fire on every keystroke.");
+        throw new Refusal("The pattern can match an empty string, so it would fire on every keystroke.", "empty_match");
     }
     return { usesBol: someTerm(alts, (t) => t.node.kind === "assert" && t.node.anchor === "bol"), unbounded };
 }
@@ -521,25 +580,31 @@ function buildEndTest(alts: readonly Term[][], flags: string): RegExp | null {
 // ---------------------------------------------------------------------------
 
 type CompiledCore = { re: RegExp; usesBol: boolean; unbounded: number; endTest: RegExp | null };
-type CacheEntry = { core: CompiledCore } | { reason: string; unbounded?: number };
+type Refused = { reason: string; code: PatternReasonCode; params: PatternReasonParams; unbounded?: number };
+type CacheEntry = { core: CompiledCore } | Refused;
 
 const cache = new Map<string, CacheEntry>();
 
 /** `/body$/flags` -> `{ body, flags }`. Only `i` is allowed (round 7: `u` is refused, see `REASON_UNICODE_FLAG`). */
 function parseSource(source: string): { body: string; flags: string } {
     if (source.length > MAX_PATTERN_BODY + 8) {
-        throw new Refusal(`The pattern is longer than ${MAX_PATTERN_BODY} characters.`);
+        // The count is the body, as in the check below (not the slashes and flags around it).
+        const closing = source.startsWith("/") ? source.lastIndexOf("/") : -1;
+        const count = closing > 0 ? closing - 1 : source.length;
+        throw new Refusal(`The pattern is longer than ${MAX_PATTERN_BODY} characters.`, "too_long", { count, limit: MAX_PATTERN_BODY });
     }
     const m = /^\/([\s\S]+)\/([a-z]*)$/.exec(source);
-    if (!m) throw new Refusal("Write the pattern as /pattern$/, with the flag i after the last slash if you need it.");
+    if (!m) throw new Refusal("Write the pattern as /pattern$/, with the flag i after the last slash if you need it.", "shape");
     const body = m[1] ?? "";
     const flags = m[2] ?? "";
-    if (body.length > MAX_PATTERN_BODY) throw new Refusal(`The pattern is longer than ${MAX_PATTERN_BODY} characters.`);
+    if (body.length > MAX_PATTERN_BODY) {
+        throw new Refusal(`The pattern is longer than ${MAX_PATTERN_BODY} characters.`, "too_long", { count: body.length, limit: MAX_PATTERN_BODY });
+    }
     const seen = new Set<string>();
     for (const flag of flags) {
-        if (flag === "u") throw new Refusal(REASON_UNICODE_FLAG);
-        if (flag !== "i") throw new Refusal(`The flag "${flag}" is not supported. Only i is.`);
-        if (seen.has(flag)) throw new Refusal(`The flag "${flag}" is written twice.`);
+        if (flag === "u") throw new Refusal(REASON_UNICODE_FLAG, "flag", { flag });
+        if (flag !== "i") throw new Refusal(`The flag "${flag}" is not supported. Only i is.`, "flag", { flag });
+        if (seen.has(flag)) throw new Refusal(`The flag "${flag}" is written twice.`, "flag_twice", { flag });
         seen.add(flag);
     }
     return { body, flags };
@@ -560,11 +625,12 @@ function buildCore(source: string): CompiledCore {
         } catch (parseErr) {
             if (parseErr instanceof Refusal && (parseErr.message === REASON_ASTRAL_CLASS || parseErr.message === REASON_ESCAPED_ASTRAL)) throw parseErr;
         }
-        throw new Refusal(err instanceof Error ? err.message : "The pattern does not compile.");
+        const detail = err instanceof Error ? err.message : "The pattern does not compile.";
+        throw new Refusal(detail, "invalid_regex", { detail });
     }
     const parser = new Parser(body);
     const alts = parser.parseAlternatives();
-    if (parser.pos < body.length) throw new Refusal("The pattern has an unbalanced parenthesis.");
+    if (parser.pos < body.length) throw new Refusal("The pattern has an unbalanced parenthesis.", "unbalanced_paren");
     const { usesBol, unbounded } = analyze(alts, parser.names);
     // `$` only binds the last alternative of `cat|dog$`: wrap the body so every alternative ends at the caret.
     // `g` is only there for `lastIndex`: the matcher starts at the second character of a cut window, so `\b` and
@@ -581,18 +647,25 @@ function compileSource(source: string): CacheEntry {
         entry = { core: buildCore(source) };
     } catch (err) {
         if (!(err instanceof Refusal)) throw err;
-        entry = { reason: err.message, unbounded: err.unbounded };
+        entry = { reason: err.message, code: err.code, params: err.params, unbounded: err.unbounded };
     }
     if (cache.size >= MAX_CACHE_ENTRIES) cache.clear();
     cache.set(source, entry);
     return entry;
 }
 
-function instantRefusal(unbounded: number): string {
-    return (
-        `An instant rule can have at most ${MAX_INSTANT_UNBOUNDED_QUANTIFIERS} unbounded quantifier (*, +, {n,}); ` +
-        `this pattern has ${unbounded}. Switch the rule to "After a separator" to use up to ${MAX_UNBOUNDED_QUANTIFIERS}.`
-    );
+function instantRefusal(unbounded: number): Refused {
+    return {
+        reason:
+            `An instant rule can have at most ${MAX_INSTANT_UNBOUNDED_QUANTIFIERS} unbounded quantifier (*, +, {n,}); ` +
+            `this pattern has ${unbounded}. Switch the rule to "After a separator" to use up to ${MAX_UNBOUNDED_QUANTIFIERS}.`,
+        // Over the separator limit too: the code says so, the text above keeps its wording.
+        code: unbounded > MAX_UNBOUNDED_QUANTIFIERS ? "too_many_unbounded" : "instant_unbounded",
+        params:
+            unbounded > MAX_UNBOUNDED_QUANTIFIERS
+                ? { count: unbounded, limit: MAX_UNBOUNDED_QUANTIFIERS }
+                : { count: unbounded, limit: MAX_INSTANT_UNBOUNDED_QUANTIFIERS },
+    };
 }
 
 /** The cached source check plus the limit of the rule's mode (the cache is by source, so the mode is applied on top). */
@@ -600,13 +673,13 @@ function resolveSource(source: string, mode: PatternMode): CacheEntry {
     const entry = compileSource(source);
     if (mode !== "instant") return entry;
     if ("core" in entry) {
-        return entry.core.unbounded > MAX_INSTANT_UNBOUNDED_QUANTIFIERS ? { reason: instantRefusal(entry.core.unbounded) } : entry;
+        return entry.core.unbounded > MAX_INSTANT_UNBOUNDED_QUANTIFIERS ? instantRefusal(entry.core.unbounded) : entry;
     }
     // Too many for either mode: say what the instant limit is, not the separator one.
-    return entry.unbounded === undefined ? entry : { reason: instantRefusal(entry.unbounded) };
+    return entry.unbounded === undefined ? entry : instantRefusal(entry.unbounded);
 }
 
-export type PatternCheck = { ok: true } | { ok: false; reason: string };
+export type PatternCheck = { ok: true } | { ok: false; reason: string; code: PatternReasonCode; params: PatternReasonParams };
 
 /**
  * Runs the full S-015 check on a `/body$/flags` source for a rule of `mode` (for editors and import paths that
@@ -614,7 +687,7 @@ export type PatternCheck = { ok: true } | { ok: false; reason: string };
  */
 export function checkPattern(source: string, mode: PatternMode): PatternCheck {
     const entry = resolveSource(source, mode);
-    return "core" in entry ? { ok: true } : { ok: false, reason: entry.reason };
+    return "core" in entry ? { ok: true } : { ok: false, reason: entry.reason, code: entry.code, params: entry.params };
 }
 
 /** A rule that passed the gate. The only way to get one is `compileRule`. */
@@ -788,7 +861,7 @@ function isSurrogate(code: number): boolean {
 }
 
 /** A high half not followed by a low one, or a low half not preceded by a high one. */
-function hasLoneSurrogate(text: string): boolean {
+export function hasLoneSurrogate(text: string): boolean {
     for (let i = 0; i < text.length; i++) {
         const code = text.charCodeAt(i);
         if (isHighSurrogate(code)) {

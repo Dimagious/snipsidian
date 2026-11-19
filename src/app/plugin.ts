@@ -6,7 +6,7 @@ import type { SnipSidianSettings } from "../types";
 import { getDict, getAllSnippetsFlat } from "../store/snippets";
 import { getCompiledPatterns, patternsSignature } from "../store/patterns";
 import { patternHealth, type CompiledPatterns, type PatternHealth } from "../engine/patterns";
-import { expandsOnTab, expandsOnType } from "../store/expansion-mode";
+import { effectivePrefix, expandsOnTab, expandsOnType } from "../store/expansion-mode";
 import { isTextSnippetsData } from "../store/migrations";
 import { TEXT_SNIPPETS_PLUGIN_ID } from "../packages/text-snippets";
 import { backupOriginalData, migrateTextSnippetsData, protectUnknownData } from "./text-snippets-migration";
@@ -58,14 +58,9 @@ export default class HotstringsPlugin extends Plugin {
         // B-137: `getPrefix` resolves the effective prefix char at
         // call time from live settings — `undefined` (mode off)
         // unless the user has opted in via the General tab.
-        const getPrefix = (): string | undefined => {
-            if (!this.settings.expansion?.requirePrefix) return undefined;
-            const char = this.settings.expansion.prefixChar;
-            // Hardening: clamp to the supported set — corrupt or
-            // foreign saved data (anything other than ":" or ";")
-            // must not silently kill all expansion in prefix mode.
-            return char === ":" || char === ";" ? char : ":";
-        };
+        // Hardening (in `effectivePrefix`): corrupt or foreign saved data
+        // must not silently kill all expansion in prefix mode.
+        const getPrefix = (): string | undefined => effectivePrefix(this.settings);
         this.registerEditorExtension(
             buildExpansionExtension(
                 this.app,

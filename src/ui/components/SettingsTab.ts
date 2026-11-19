@@ -2,6 +2,7 @@ import { App, PluginSettingTab, requireApiVersion, type SettingDefinitionItem } 
 import type SnipSidianPlugin from "../../main";
 import { BasicTab } from "./BasicTab";
 import { SnippetsTab } from "./SnippetsTab";
+import { PatternsTab } from "./PatternsTab";
 import { FeedbackTab } from "./FeedbackTab";
 import { CommunityTab } from "./CommunityTab";
 import { UIStateManager, type TabId } from "../utils/ui-state";
@@ -17,6 +18,7 @@ import { createControlHost, type ControlHost } from "../utils/settings-control-p
  *  label change doesn't require renaming the files. */
 const TABS: ReadonlyArray<{ id: TabId; label: string }> = [
     { id: "snippets", label: "Snippets" },
+    { id: "patterns", label: "Patterns" },
     { id: "packages", label: "Packages" },
     { id: "general", label: "General" },
     { id: "about", label: "About" },
@@ -27,6 +29,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
     private uiState: UIStateManager;
     private basicTab: BasicTab;
     private snippetsTab: SnippetsTab;
+    private patternsTab: PatternsTab;
     private feedbackTab: FeedbackTab;
     private communityTab: CommunityTab;
     private controlHost: ControlHost;
@@ -37,6 +40,7 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         this.uiState = new UIStateManager(this.plugin.settings, () => this.plugin.saveSettings());
         this.basicTab = new BasicTab(app, plugin, () => this.refreshDeclarative());
         this.snippetsTab = new SnippetsTab(app, plugin);
+        this.patternsTab = new PatternsTab(app, plugin);
         this.feedbackTab = new FeedbackTab(app, plugin);
         this.communityTab = new CommunityTab(app, plugin);
         this.controlHost = createControlHost(plugin);
@@ -67,12 +71,13 @@ export class SnipSidianSettingTab extends PluginSettingTab {
      * the two behaviours apart.
      */
     getSettingDefinitions(): SettingDefinitionItem[] {
-        const pages = createDeclarativePages(this.plugin, this.snippetsTab, this.communityTab);
+        const pages = createDeclarativePages(this.plugin, this.snippetsTab, this.communityTab, this.patternsTab);
         if (!pages) return [];
 
         const meta = this.feedbackTab.collectMetaForDefinitions();
         return [
             pages.snippets,
+            pages.patterns,
             pages.packages,
             ...buildGeneralDefinitions(this.plugin, this.basicTab.definitionHandlers()),
             ...buildAboutDefinitions(meta, this.feedbackTab.definitionHandlers()),
@@ -230,6 +235,9 @@ export class SnipSidianSettingTab extends PluginSettingTab {
         switch (id) {
             case "snippets":
                 this.snippetsTab.render(container);
+                break;
+            case "patterns":
+                this.patternsTab.render(container);
                 break;
             case "packages":
                 void this.communityTab.render(container);

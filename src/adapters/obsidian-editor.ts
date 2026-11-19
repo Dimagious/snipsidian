@@ -30,7 +30,7 @@ interface MomentLike {
  * (and 5 with `esModuleInterop`) does not treat as callable, so the community scanner reported the call as unsafe
  * (K-058). Read at call time, so a module mock without `moment` does not break importing this file.
  */
-function formatWithMoment(date: Date, format: string): string {
+export function formatWithMoment(date: Date, format: string): string {
     return (moment as unknown as (input: Date) => MomentLike)(date).format(format);
 }
 

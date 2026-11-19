@@ -93,7 +93,7 @@ describe("SnipSidianSettingTab — version gating (B-151/ADR-0007)", () => {
         const labels = Array.from(containerEl.querySelectorAll(".snipsy-tab")).map(
             (el) => el.textContent,
         );
-        expect(labels).toEqual(["Snippets", "Packages", "General", "About"]);
+        expect(labels).toEqual(["Snippets", "Patterns", "Packages", "General", "About"]);
     });
 
     it("1.13+: getSettingDefinitions() returns a non-empty declarative tree", () => {
@@ -111,7 +111,7 @@ describe("SnipSidianSettingTab — version gating (B-151/ADR-0007)", () => {
         expect(JSON.stringify(tab.plugin.settings)).toBe(before);
     });
 
-    it("display() still renders all four tab-strip entries below 1.13, even after getSettingDefinitions() ran first", () => {
+    it("display() still renders all five tab-strip entries below 1.13, even after getSettingDefinitions() ran first", () => {
         __setRequireApiVersionResult(false);
         const { tab, containerEl } = mount();
         // Obsidian calls getSettingDefinitions() once for search
@@ -122,7 +122,18 @@ describe("SnipSidianSettingTab — version gating (B-151/ADR-0007)", () => {
         const labels = Array.from(containerEl.querySelectorAll(".snipsy-tab")).map(
             (el) => el.textContent,
         );
-        expect(labels).toEqual(["Snippets", "Packages", "General", "About"]);
+        expect(labels).toEqual(["Snippets", "Patterns", "Packages", "General", "About"]);
+    });
+
+    it("below 1.13 the Patterns tab mounts the Patterns page", () => {
+        __setRequireApiVersionResult(false);
+        const { tab, containerEl } = mount();
+        tab.display();
+        const patternsBtn = Array.from(containerEl.querySelectorAll<HTMLButtonElement>(".snipsy-tab")).find((b) => b.textContent === "Patterns");
+        patternsBtn?.click();
+        expect(containerEl.querySelector('[id="snipsy-panel-patterns"]')).not.toBeNull();
+        expect(containerEl.querySelector(".snipsy-patterns-empty")).not.toBeNull();
+        expect(patternsBtn?.getAttribute("aria-selected")).toBe("true");
     });
 
     it("display() renders a tabpanel so at least one sub-tab's content is mounted, below 1.13", () => {
@@ -144,7 +155,7 @@ describe("SnipSidianSettingTab — declarative definition tree shape (1.13+)", (
         return tab.getSettingDefinitions();
     }
 
-    it("root items are, in order: Snippets page, Packages page, then the General and About groups", () => {
+    it("root items are, in order: Snippets page, Patterns page, Packages page, then the General and About groups", () => {
         const items = defs();
         const shape = items.map((i) => {
             if (isPageItem(i)) return { type: i.type, name: i.name, heading: undefined };
@@ -153,6 +164,7 @@ describe("SnipSidianSettingTab — declarative definition tree shape (1.13+)", (
         });
         expect(shape).toEqual([
             { type: "page", name: "Snippets", heading: undefined },
+            { type: "page", name: "Patterns", heading: undefined },
             { type: "page", name: "Packages", heading: undefined },
             { type: "group", name: undefined, heading: "Expansion" },
             { type: "group", name: undefined, heading: "Commands" },
@@ -167,7 +179,7 @@ describe("SnipSidianSettingTab — declarative definition tree shape (1.13+)", (
     it("the Snippets and Packages pages carry a `page` factory and a function-form displayValue", () => {
         const items = defs();
         const snippetsPage = items[0];
-        const packagesPage = items[1];
+        const packagesPage = items[2];
         if (!snippetsPage || !isPageItem(snippetsPage)) throw new Error("Snippets page not found");
         if (!packagesPage || !isPageItem(packagesPage)) throw new Error("Packages page not found");
         expect(typeof snippetsPage.page).toBe("function");
