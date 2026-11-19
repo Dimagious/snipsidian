@@ -4,7 +4,9 @@ import { SnipSidianSettingTab } from "../ui/settings";
 import { defaultSnippetsAsGroup } from "../store/presets";
 import type { SnipSidianSettings } from "../types";
 import { getDict, getAllSnippetsFlat } from "../store/snippets";
-import { expandsOnTab, expandsOnType } from "../store/expansion-mode";
+import { getCompiledPatterns, patternsSignature } from "../store/patterns";
+import { patternHealth, type CompiledPatterns, type PatternHealth } from "../engine/patterns";
+import { effectivePrefix, expandsOnTab, expandsOnType } from "../store/expansion-mode";
 import { isTextSnippetsData } from "../store/migrations";
 import { TEXT_SNIPPETS_PLUGIN_ID } from "../packages/text-snippets";
 import { backupOriginalData, migrateTextSnippetsData, protectUnknownData } from "./text-snippets-migration";
@@ -16,6 +18,27 @@ import { expandTriggerAtCursor, jumpToNextField } from "./field-commands";
 
 export default class HotstringsPlugin extends Plugin {
     settings!: SnipSidianSettings;
+    /** ADR-0008: compiled pattern rules of the current settings; dropped when settings are loaded or the rules change. */
+    private compiledPatterns: CompiledPatterns | undefined;
+    /** `patternsSignature` of the settings `compiledPatterns` was built from. */
+    private compiledSignature: string | undefined;
+
+    private getPatterns(): CompiledPatterns {
+        if (!this.compiledPatterns) {
+            this.compiledPatterns = getCompiledPatterns(this.settings);
+            this.compiledSignature = patternsSignature(this.settings);
+        }
+        return this.compiledPatterns;
+    }
+
+    /**
+     * ADR-0008: what the runtime guard saw on the live compiled rules (switched-off rules, deadline cuts), for the
+     * Patterns page. Reads the cached instance the hot path uses, never a fresh compile. Session only.
+     */
+    patternHealth(): PatternHealth {
+        return patternHealth(this.getPatterns());
+    }
+
     /** B-254: original Text Snippets file text while it has no backup yet. */
     private unsavedOriginal: string | null = null;
     /** One "changes are not being saved" Notice per session (backup failing). */
@@ -23,6 +46,7 @@ export default class HotstringsPlugin extends Plugin {
 
     async onload() {
         await this.loadSettings();
+        this.reportRefusedPatterns();
 
         // B-149: registered as a CM6 editor extension (gated on
         // genuine-typing `userEvent`s — see `change-source-gate.ts`)
@@ -34,14 +58,9 @@ export default class HotstringsPlugin extends Plugin {
         // B-137: `getPrefix` resolves the effective prefix char at
         // call time from live settings — `undefined` (mode off)
         // unless the user has opted in via the General tab.
-        const getPrefix = (): string | undefined => {
-            if (!this.settings.expansion?.requirePrefix) return undefined;
-            const char = this.settings.expansion.prefixChar;
-            // Hardening: clamp to the supported set — corrupt or
-            // foreign saved data (anything other than ":" or ";")
-            // must not silently kill all expansion in prefix mode.
-            return char === ":" || char === ";" ? char : ":";
-        };
+        // Hardening (in `effectivePrefix`): corrupt or foreign saved data
+        // must not silently kill all expansion in prefix mode.
+        const getPrefix = (): string | undefined => effectivePrefix(this.settings);
         this.registerEditorExtension(
             buildExpansionExtension(
                 this.app,
@@ -49,6 +68,8 @@ export default class HotstringsPlugin extends Plugin {
                 getPrefix,
                 // B-176: read at use time, so toggling needs no reload.
                 () => this.settings.expansion?.highlight === true,
+                // ADR-0008: rebuilt only when settings are saved, not per keystroke.
+                () => this.getPatterns(),
                 // B-255: both read at use time, so toggling needs no reload.
                 () => expandsOnType(this.settings),
                 () => expandsOnTab(this.settings),
@@ -83,7 +104,14 @@ export default class HotstringsPlugin extends Plugin {
         });
 
         const runExpandTrigger = (editor: Editor, manual = false): void => {
-            expandTriggerAtCursor(this.app, editor, () => getDict(this.settings), getPrefix, { manual }).catch((err: unknown) => {
+            expandTriggerAtCursor(
+                this.app,
+                editor,
+                () => getDict(this.settings),
+                getPrefix,
+                () => this.getPatterns(),
+                { manual },
+            ).catch((err: unknown) => {
                 console.error("[snipsy] expand-trigger error", err);
             });
         };
@@ -140,6 +168,7 @@ export default class HotstringsPlugin extends Plugin {
     }
 
     async loadSettings() {
+        this.compiledPatterns = undefined;
         const loaded: unknown = await this.loadData();
         if (isTextSnippetsData(loaded)) {
             // B-254: a Text Snippets data.json (`snippets` is a string list,
@@ -190,12 +219,32 @@ export default class HotstringsPlugin extends Plugin {
         }
     }
 
+    /**
+     * ADR-0008: runs the saved pattern rules through the S-015 gate once at
+     * load and reports each refused rule, so a bad rule from a synced or
+     * hand-edited data.json is visible in the console. The rule is disabled
+     * alone; the others keep working.
+     */
+    private reportRefusedPatterns(): void {
+        for (const { id, reason } of this.getPatterns().errors) {
+            console.warn("[snipsy] pattern rule disabled", { id, reason });
+        }
+    }
+
     /** The plugin's own folder (where `data.json` lives). */
     private pluginDir(): string {
         return this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`;
     }
 
     async saveSettings() {
+        // Every settings change goes through here (the UI saves after each edit, the community cache saves after
+        // each fetch). Recompile on the next keystroke only when the rules or the muted groups changed: an unrelated
+        // save must not reset what the runtime guard learned (strikes, switch-offs). Before the backup guard below:
+        // a refused save leaves the settings changed in memory, and rules compiled from the old ones must not go on
+        // running.
+        if (this.compiledPatterns && patternsSignature(this.settings) !== this.compiledSignature) {
+            this.compiledPatterns = undefined;
+        }
         // B-254: never overwrite the Text Snippets file while its backup is
         // missing: retry the backup first; a failure refuses the save.
         if (this.unsavedOriginal !== null) {

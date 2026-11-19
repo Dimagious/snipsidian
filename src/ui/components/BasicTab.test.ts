@@ -32,6 +32,7 @@ import { defaultSnippetsAsGroup, DEFAULT_SNIPPETS_GROUP } from "../../store/pres
 import { Platform } from "obsidian";
 import type { App } from "obsidian";
 import type SnipSidianPlugin from "../../main";
+import type { PatternRule } from "../../engine/types";
 
 /**
  * Mount tests for the General tab.
@@ -885,5 +886,211 @@ describe("BasicTab — rollback when saveSettings rejects (B-181)", () => {
         expect(previous).toEqual({ keep: "me" });
         expect(noticeCalls).toContain("Restore failed: disk full");
         expect(onChange).not.toHaveBeenCalled();
+    });
+});
+
+// ---- ADR-0008: JSON backup includes pattern rules ----
+describe("BasicTab: JSON backup of pattern rules", () => {
+    const originalIsDesktop = Platform.isDesktop;
+    afterEach(() => {
+        Platform.isDesktop = originalIsDesktop;
+    });
+
+    const rule = (n: number, extra: Record<string, unknown> = {}) =>
+        ({ id: `r${n}`, source: `/x${n}$/`, replacement: `y${n}`, enabled: true, mode: "instant", ...extra }) as PatternRule;
+
+    async function pick(root: HTMLElement, payload: unknown): Promise<void> {
+        const createElSpy = vi.spyOn(globalThis as unknown as { createEl: typeof createEl }, "createEl");
+        buttonInRow(rowByTitle(root, "Import snippets"), "Import JSON").click();
+        const input = createElSpy.mock.results.find((r) => (r.value as HTMLElement).tagName === "INPUT")!.value as HTMLInputElement;
+        Object.defineProperty(input, "files", { value: [{ text: async () => JSON.stringify(payload) }], configurable: true });
+        await input.onchange!({ target: input } as unknown as Event);
+        await Promise.resolve();
+    }
+
+    async function apply(mode: "merge" | "replace"): Promise<void> {
+        if (mode === "replace") {
+            const radio = document.querySelector('input[name="snipsy-import-mode"][value="replace"]') as HTMLInputElement;
+            radio.checked = true;
+            radio.dispatchEvent(new Event("change"));
+        }
+        noticeCalls.length = 0;
+        (document.querySelector(".modal-button-container .mod-cta") as HTMLButtonElement).click();
+        await vi.waitFor(() => expect(noticeCalls.length).toBeGreaterThan(0));
+    }
+
+    async function exportedFile(root: HTMLElement): Promise<Record<string, string>> {
+        Platform.isDesktop = true;
+        let blob: Blob | undefined;
+        URL.createObjectURL = vi.fn((b: Blob) => {
+            blob = b;
+            return "blob:mock";
+        });
+        URL.revokeObjectURL = vi.fn();
+        buttonInRow(rowByTitle(root, "Export snippets"), "Export JSON").click();
+        await vi.waitFor(() => expect(blob).toBeDefined());
+        const text = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+            reader.onerror = () => reject(new Error("read failed"));
+            reader.readAsText(blob!);
+        });
+        return JSON.parse(text) as Record<string, string>;
+    }
+
+    it("the Backup rows say snippets and patterns", () => {
+        const { root } = mount();
+        expect(rowByTitle(root, "Export snippets").querySelector(".setting-item-description")?.textContent).toBe(
+            "Download your snippets and patterns as JSON.",
+        );
+        expect(rowByTitle(root, "Import snippets").querySelector(".setting-item-description")?.textContent).toBe(
+            "Preview a JSON file with snippets and patterns before merge or replace.",
+        );
+    });
+
+    it("export keeps the snippets where they were and adds the stored rules, unknown fields included", async () => {
+        plugin.settings.snippets = { a: "1" };
+        plugin.settings.patterns = [rule(1, { futureField: 7 })];
+        const { root } = mount();
+        const file = await exportedFile(root);
+        expect(file.a).toBe("1");
+        expect(JSON.parse(file["snipsy patterns"] ?? "")).toEqual([rule(1, { futureField: 7 })]);
+    });
+
+    it("export without rules is exactly the snippet map (as before)", async () => {
+        plugin.settings.snippets = { a: "1" };
+        const { root } = mount();
+        expect(await exportedFile(root)).toEqual({ a: "1" });
+    });
+
+    it("round trip: export, wipe, Import (Replace) gives back identical rules", async () => {
+        const rules = [rule(1, { futureField: { deep: [1] }, group: "g" }), rule(2, { enabled: false, mode: "separator" })];
+        plugin.settings.snippets = { a: "1" };
+        plugin.settings.patterns = rules;
+        const { root } = mount();
+        const file = await exportedFile(root);
+
+        plugin.settings.snippets = {};
+        plugin.settings.patterns = undefined;
+        await pick(root, file);
+        await apply("replace");
+
+        expect(plugin.settings.patterns).toEqual(rules);
+        expect(plugin.settings.snippets).toEqual({ a: "1" });
+        expect(plugin._saveCalls.length).toBe(1);
+        expect(noticeCalls).toContain("Replaced library with 1 snippet and 2 pattern rules");
+    });
+
+    it("Merge adds only the rules not there yet and leaves existing ones as they are", async () => {
+        const existing = [rule(1)];
+        plugin.settings.patterns = existing;
+        const { root } = mount();
+        await pick(root, { s: "v", "snipsy patterns": JSON.stringify([rule(1), rule(2)]) });
+        await apply("merge");
+
+        expect(plugin.settings.patterns).toEqual([rule(1), rule(2)]);
+        expect(plugin.settings.patterns?.[0]).toBe(existing[0]);
+        expect(noticeCalls).toContain("Merged 1 snippet and 1 pattern rule");
+    });
+
+    it("Apply plans again against the settings as they are now: a list filled after the pick gets nothing added", async () => {
+        const { root } = mount();
+        await pick(root, { "snipsy patterns": JSON.stringify([rule(500)]) });
+        const full = Array.from({ length: 100 }, (_, i) => rule(i));
+        plugin.settings.patterns = full;
+        await apply("merge");
+        expect(plugin.settings.patterns).toHaveLength(100);
+        expect(plugin.settings.patterns?.some((r) => r.id === "r500")).toBe(false);
+    });
+
+    it("Apply plans again: a rule added after the pick is deduped, not stored twice", async () => {
+        const { root } = mount();
+        await pick(root, { "snipsy patterns": JSON.stringify([rule(1)]) });
+        plugin.settings.patterns = [rule(1, { id: "mine" })];
+        await apply("merge");
+        expect(plugin.settings.patterns).toEqual([rule(1, { id: "mine" })]);
+    });
+
+    it("a file without rules never touches the rules (Merge and Replace)", async () => {
+        const existing = [rule(1)];
+        plugin.settings.patterns = existing;
+        const { root } = mount();
+        await pick(root, { s: "v" });
+        await apply("replace");
+        expect(plugin.settings.patterns).toBe(existing);
+        expect(document.querySelector(".snipsy-import-patterns")).toBeNull();
+    });
+
+    it("a refused rule is left out and named, the rest imports; counted in the Notice", async () => {
+        const { root } = mount();
+        await pick(root, { "snipsy patterns": JSON.stringify([rule(1), rule(2, { source: "/(a+)+$/" })]) });
+        expect(document.querySelector(".snipsy-import-patterns .snipsy-espanso-pattern-skips")?.textContent).toContain(
+            "/(a+)+$/ Skipped: A repeated group can't hold a repeat or a choice",
+        );
+        await apply("merge");
+        expect(plugin.settings.patterns).toEqual([rule(1)]);
+        expect(noticeCalls).toContain("Merged 0 snippets and 1 pattern rule (1 skipped)");
+    });
+
+    it("500 rules in a file store at most 100", async () => {
+        const { root } = mount();
+        await pick(root, { "snipsy patterns": JSON.stringify(Array.from({ length: 500 }, (_, i) => rule(i))) });
+        await apply("replace");
+        expect(plugin.settings.patterns).toHaveLength(100);
+    });
+
+    it("a rule without an id is stored switched off", async () => {
+        const { id: _drop, ...noId } = rule(1);
+        const { root } = mount();
+        await pick(root, { "snipsy patterns": JSON.stringify([noId]) });
+        await apply("merge");
+        expect(plugin.settings.patterns).toHaveLength(1);
+        expect(plugin.settings.patterns?.[0]).toMatchObject({ source: "/x1$/", enabled: false });
+        expect(typeof plugin.settings.patterns?.[0]?.id).toBe("string");
+    });
+
+    it("a stored value that is not a list is not overwritten; the snippets still import", async () => {
+        const junk = { not: "a list" } as unknown as PatternRule[];
+        plugin.settings.patterns = junk;
+        const { root } = mount();
+        await pick(root, { s: "v", "snipsy patterns": JSON.stringify([rule(1)]) });
+        await apply("replace");
+        expect(plugin.settings.patterns).toBe(junk);
+        expect(plugin.settings.snippets).toEqual({ s: "v" });
+    });
+
+    it("an old-format file (no rules) imports exactly as before", async () => {
+        plugin.settings.snippets = { keep: "me" };
+        const { root } = mount();
+        await pick(root, { hello: "world" });
+        await apply("merge");
+        expect(plugin.settings.snippets).toEqual({ keep: "me", hello: "world" });
+        expect(plugin.settings.patterns).toBeUndefined();
+        expect(noticeCalls).toContain("Merged 1 snippet");
+    });
+
+    it("rolls both lists back when the save rejects", async () => {
+        const snippets = { keep: "me" };
+        const rules = [rule(1)];
+        plugin.settings.snippets = snippets;
+        plugin.settings.patterns = rules;
+        plugin.saveSettings = vi.fn().mockRejectedValue(new Error("disk full"));
+        const onChange = vi.fn();
+        const { root } = mount(onChange);
+        await pick(root, { s: "v", "snipsy patterns": JSON.stringify([rule(2)]) });
+        await apply("replace");
+        expect(plugin.settings.snippets).toBe(snippets);
+        expect(plugin.settings.patterns).toBe(rules);
+        expect(noticeCalls).toContain("Import failed: disk full");
+        expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it("a rule list that cannot be read stops the import with a Notice and writes nothing", async () => {
+        plugin.settings.snippets = { keep: "me" };
+        const { root } = mount();
+        await pick(root, { s: "v", "snipsy patterns": "{not json" });
+        expect(noticeCalls).toContain("Invalid JSON: the pattern rules in this file are not a list");
+        expect(document.querySelector(".modal-button-container")).toBeNull();
+        expect(plugin.settings.snippets).toEqual({ keep: "me" });
     });
 });

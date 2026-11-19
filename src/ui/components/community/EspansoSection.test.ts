@@ -28,6 +28,7 @@ import { makeMockPlugin } from "../../../test/factories/plugin";
 import { EspansoSection } from "./EspansoSection";
 import type { App } from "obsidian";
 import type SnipSidianPlugin from "../../../main";
+import type { PatternRule } from "../../../engine/types";
 
 /**
  * Mount tests for the Espanso-import section — focused on the
@@ -135,7 +136,7 @@ describe("EspansoSection — render", () => {
         const { root } = mount();
         const intro = root.querySelector(".setting-item-description") as HTMLElement;
         expect(intro.textContent).toBe(
-            "Paste package YAML. Plain text triggers become snippets; forms and scripts are skipped. Find packages on the Espanso hub.",
+            "Paste package YAML. Plain text triggers become snippets and regex triggers become pattern rules; forms and scripts are skipped. Find packages on the Espanso hub.",
         );
         expect(intro.textContent).not.toContain("—");
         const link = intro.querySelector("a");
@@ -212,6 +213,32 @@ describe("EspansoSection — import flow (B-045)", () => {
 
         expect(noticeCalls).toContain("Please paste YAML content first");
         expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+    });
+
+    it("refuses pasted YAML of 2 MiB + 1 byte before parsing it, and accepts exactly 2 MiB", () => {
+        const before = JSON.stringify(plugin.settings.snippets);
+        const { yaml, importBtn } = mount();
+        const LIMIT = 2 * 1024 * 1024;
+        // Exactly `total` bytes (the YAML is ASCII): a comment line of filler, then the real match.
+        const filler = (total: number): string => `# ${"x".repeat(total - SIMPLE_YAML.length - 3)}\n${SIMPLE_YAML}`;
+        yaml.value = filler(LIMIT + 1);
+        importBtn.click();
+        expect(noticeCalls.some((m) => m.startsWith("The pasted YAML is too large"))).toBe(true);
+        expect(document.body.querySelector(".modal-button-container")).toBeNull();
+        expect(JSON.stringify(plugin.settings.snippets)).toBe(before);
+
+        noticeCalls.length = 0;
+        yaml.value = filler(LIMIT);
+        expect(new TextEncoder().encode(yaml.value).length).toBe(LIMIT);
+        importBtn.click();
+        expect(noticeCalls.some((m) => m.startsWith("The pasted YAML is too large"))).toBe(false);
+    });
+
+    it("counts bytes, not characters, against the limit", () => {
+        const { yaml, importBtn } = mount();
+        yaml.value = `# ${"é".repeat(1024 * 1024)}\n${SIMPLE_YAML}`; // 1 Mi characters, 2 MiB of bytes plus
+        importBtn.click();
+        expect(noticeCalls.some((m) => m.startsWith("The pasted YAML is too large"))).toBe(true);
     });
 
     it("rejects group labels that slugify to empty with a Notice", () => {
@@ -726,5 +753,416 @@ describe("EspansoSection: always previews before writing (B-186)", () => {
         expect(info?.textContent).toContain("brb");
         expect(info?.textContent).toContain("addr");
         expect(plugin.settings.snippets["espanso-import/omw"]).toBeUndefined();
+    });
+});
+
+// ---- ADR-0008: regex matches import as pattern rules ----
+
+describe("EspansoSection: regex matches become pattern rules (ADR-0008)", () => {
+    const yamlOf = (matches: string): string => `matches:\n${matches}`;
+    const REGEX_ONLY = yamlOf(String.raw`  - regex: ':(?P<w>\w+):'
+    replace: "[{{w}}]"
+  - regex: '(?i)dd(?P<n>\d)'
+    replace: "day {{n}}"
+`);
+    const MIXED = yamlOf(String.raw`  - trigger: ":brb"
+    replace: "be right back"
+  - regex: ':(?P<w>\w+):'
+    replace: "[{{w}}]"
+`);
+
+    function patternSection(): HTMLElement | null {
+        return document.body.querySelector(".snipsidian-modal .snipsy-espanso-patterns");
+    }
+
+    /** Seeds the stored list; a function so the property keeps its declared type for the assertions below. */
+    function setPatterns(value: unknown): void {
+        plugin.settings.patterns = value as PatternRule[];
+    }
+
+    function rule(n: number, extra: Record<string, unknown> = {}): Record<string, unknown> {
+        return { id: `old${n}`, source: `/old${n}$/`, replacement: `O${n}`, enabled: true, mode: "instant", ...extra };
+    }
+
+    it("a mixed file: the preview lists the rule, Apply stores snippet and rule with ONE save", async () => {
+        const saveSpy = vi.spyOn(plugin, "saveSettings");
+        const { yaml, importBtn } = mount();
+        yaml.value = MIXED;
+        importBtn.click();
+        await settle();
+
+        const section = patternSection();
+        expect(section?.textContent).toContain("Pattern rules");
+        expect(section?.querySelector("code")?.textContent).toBe(String.raw`/:(?<w>\w+):$/`);
+        expect(section?.textContent).toContain("[{{w}}]");
+        expect(section?.textContent).toContain("(Instant)");
+        expect(section?.textContent).toContain('1 rule will be added to the end of the Patterns list, switched on, in the group "Espanso import"');
+        // the rules come first in the preview, above the snippet summary
+        expect(section?.parentElement?.firstElementChild).toBe(section);
+        // nothing is written before Apply
+        expect(plugin.settings.patterns).toBeUndefined();
+
+        applyPreview();
+        await settle();
+
+        expect(saveSpy).toHaveBeenCalledTimes(1);
+        expect(plugin.settings.snippets["espanso-import/brb"]).toBe("be right back");
+        expect(plugin.settings.patterns).toHaveLength(1);
+        const stored = plugin.settings.patterns?.[0];
+        expect(stored).toMatchObject({ source: String.raw`/:(?<w>\w+):$/`, replacement: "[{{w}}]", enabled: true, mode: "instant", group: "espanso-import" });
+        expect(typeof stored?.id).toBe("string");
+        expect(noticeCalls).toContain('Installed 1 snippet into "Espanso import". Added 1 pattern rule to "Espanso import"');
+    });
+
+    it("a file of regex matches only still opens the preview (no 'package has no snippets' refusal) and writes only rules", async () => {
+        const { yaml, importBtn } = mount();
+        yaml.value = REGEX_ONLY;
+        importBtn.click();
+        await settle();
+        expect(document.body.querySelector(".modal-button-container")).not.toBeNull();
+        expect(noticeCalls).toEqual([]);
+
+        applyPreview();
+        await settle();
+
+        expect(plugin.settings.snippets).toEqual({});
+        expect(plugin.settings.patterns?.map((r) => r.source)).toEqual([String.raw`/:(?<w>\w+):$/`, String.raw`/dd(?<n>\d)$/i`]);
+        // rules landed: "No changes" would be false
+        expect(noticeCalls).toEqual(['Added 2 pattern rules to "Espanso import"']);
+    });
+
+    it("the rules take the slug of the group name, like the snippets do", async () => {
+        const { groupInput, yaml, importBtn } = mount();
+        groupInput.value = "My Pack";
+        yaml.value = MIXED;
+        importBtn.click();
+        applyPreview();
+        await settle();
+        expect(plugin.settings.patterns?.[0]?.group).toBe("my-pack");
+        expect(plugin.settings.snippets["my-pack/brb"]).toBe("be right back");
+    });
+
+    it("appends after the rules that are already there, leaving them untouched", async () => {
+        const have = [rule(1), rule(2)];
+        setPatterns(have);
+        const { yaml, importBtn } = mount();
+        yaml.value = REGEX_ONLY;
+        importBtn.click();
+        applyPreview();
+        await settle();
+        expect(plugin.settings.patterns?.map((r) => r.id)).toEqual(["old1", "old2", expect.any(String), expect.any(String)]);
+        expect(plugin.settings.patterns?.slice(0, 2)).toEqual(have);
+    });
+
+    it("Cancel writes nothing and does not save", async () => {
+        const saveSpy = vi.spyOn(plugin, "saveSettings");
+        const { yaml, importBtn } = mount();
+        yaml.value = MIXED;
+        importBtn.click();
+        cancelPreview();
+        await settle();
+        expect(plugin.settings.patterns).toBeUndefined();
+        expect(plugin.settings.snippets).toEqual({});
+        expect(saveSpy).not.toHaveBeenCalled();
+    });
+
+    it("a failed save leaves NEITHER the snippets NOR the rules live (nothing half-written)", async () => {
+        const previousSnippets = plugin.settings.snippets;
+        const previousPatterns = [rule(1)];
+        setPatterns(previousPatterns);
+        plugin.saveSettings = vi.fn().mockRejectedValue(new Error("disk full"));
+        const { yaml, importBtn } = mount();
+        yaml.value = MIXED;
+        importBtn.click();
+        applyPreview();
+        await settle();
+
+        expect(plugin.settings.snippets).toBe(previousSnippets);
+        expect(plugin.settings.snippets).toEqual({});
+        expect(plugin.settings.patterns).toBe(previousPatterns);
+        expect(noticeCalls).toContain("Failed to install from YAML: disk full");
+    });
+
+    it("a failed save with no rules before restores 'no rules', not an empty list", async () => {
+        plugin.saveSettings = vi.fn().mockRejectedValue(new Error("disk full"));
+        const { yaml, importBtn } = mount();
+        yaml.value = REGEX_ONLY;
+        importBtn.click();
+        applyPreview();
+        await settle();
+        expect(plugin.settings.patterns).toBeUndefined();
+    });
+
+    it("an invalid snippet part refuses the whole import: no rule is written either", async () => {
+        const saveSpy = vi.spyOn(plugin, "saveSettings");
+        const { yaml, importBtn } = mount();
+        yaml.value = yamlOf(String.raw`  - trigger: ":bad trigger!"
+    replace: "x"
+  - regex: ':(?P<w>\w+):'
+    replace: "[{{w}}]"
+`);
+        importBtn.click();
+        await settle();
+        expect(noticeCalls.some((m) => m.startsWith("Cannot import Espanso package"))).toBe(true);
+        expect(document.body.querySelector(".modal-button-container")).toBeNull();
+        expect(saveSpy).not.toHaveBeenCalled();
+        expect(plugin.settings.patterns).toBeUndefined();
+    });
+
+    it("names a refused regex in the preview with the Patterns page's sentence, and in the status line", async () => {
+        const { yaml, importBtn } = mount();
+        yaml.value = yamlOf(String.raw`  - regex: ':(?P<w>\w+):'
+    replace: "[{{w}}]"
+  - regex: '\p{L}+x'
+    replace: "no"
+`);
+        importBtn.click();
+        await settle();
+        const skips = patternSection()?.querySelector(".snipsy-espanso-pattern-skips");
+        expect(skips?.textContent).toContain(String.raw`regex:\p{L}+x`);
+        expect(skips?.textContent).toContain("Skipped: Unicode property classes like \\p{L} aren't supported yet.");
+        const status = document.body.querySelector(".snipsidian-modal .snipsy-espanso-skip-status");
+        expect(status?.textContent).toContain("1 imported, 1 skipped");
+    });
+
+    it("shows a note on a rule that fell back to After a separator", async () => {
+        const { yaml, importBtn } = mount();
+        yaml.value = yamlOf(String.raw`  - regex: '(\d+)/(\d+)'
+    replace: "x"
+`);
+        importBtn.click();
+        await settle();
+        const section = patternSection();
+        expect(section?.textContent).toContain("(After a separator)");
+        expect(section?.textContent).toContain("Imported as After a separator: an instant rule can have at most 1 open-ended repeat");
+        applyPreview();
+        await settle();
+        expect(plugin.settings.patterns?.[0]?.mode).toBe("separator");
+    });
+
+    it("only refused regex matches: says so, opens no preview, writes and saves nothing", async () => {
+        const saveSpy = vi.spyOn(plugin, "saveSettings");
+        const { yaml, importBtn } = mount();
+        yaml.value = yamlOf(String.raw`  - regex: 'x(?=y)'
+    replace: "a"
+`);
+        importBtn.click();
+        await settle();
+        expect(noticeCalls).toEqual(["Nothing to import: 1 regex match Snipsy can't use as patterns (regex:x(?=y))"]);
+        expect(document.body.querySelector(".modal-button-container")).toBeNull();
+        expect(saveSpy).not.toHaveBeenCalled();
+    });
+
+    it("a rule that is already there is left out and named", async () => {
+        setPatterns([rule(1, { source: String.raw`/:(?<w>\w+):$/`, replacement: "[{{w}}]", group: "elsewhere" })]);
+        const { yaml, importBtn } = mount();
+        yaml.value = REGEX_ONLY;
+        importBtn.click();
+        await settle();
+        expect(patternSection()?.querySelector(".snipsy-espanso-pattern-skips")?.textContent).toContain("Skipped: already there.");
+        applyPreview();
+        await settle();
+        expect(plugin.settings.patterns).toHaveLength(2);
+    });
+
+    it("past the 100 rule cap: the rules that do not fit are named 'over the 100 rule limit.' and the rest lands", async () => {
+        setPatterns(Array.from({ length: 99 }, (_, i) => rule(i)));
+        const { yaml, importBtn } = mount();
+        yaml.value = REGEX_ONLY;
+        importBtn.click();
+        await settle();
+        expect(patternSection()?.querySelector(".snipsy-espanso-pattern-skips")?.textContent).toContain("Skipped: over the 100 rule limit.");
+        applyPreview();
+        await settle();
+        expect(plugin.settings.patterns).toHaveLength(100);
+    });
+
+    it("plans again when Apply is pressed: rules added meanwhile still cannot push the list past the cap", async () => {
+        const { yaml, importBtn } = mount();
+        yaml.value = REGEX_ONLY;
+        importBtn.click();
+        await settle();
+        // the preview promised two rules; before Apply the list fills up to 99
+        setPatterns(Array.from({ length: 99 }, (_, i) => rule(i)));
+        applyPreview();
+        await settle();
+        expect(plugin.settings.patterns).toHaveLength(100);
+        expect(noticeCalls).toEqual([
+            'Added 1 pattern rule to "Espanso import". 1 imported, 1 skipped: regex:(?i)dd(?P<n>\\d).',
+        ]);
+    });
+
+    it("an unreadable stored pattern value is never overwritten", async () => {
+        setPatterns("junk");
+        const saveSpy = vi.spyOn(plugin, "saveSettings");
+        const { yaml, importBtn } = mount();
+        yaml.value = REGEX_ONLY;
+        importBtn.click();
+        await settle();
+        expect(plugin.settings.patterns).toBe("junk");
+        expect(saveSpy).not.toHaveBeenCalled();
+        expect(noticeCalls.some((m) => m.startsWith("Nothing to import"))).toBe(true);
+    });
+
+    it("a group name over 50 characters imports no rules", async () => {
+        const { groupInput, yaml, importBtn } = mount();
+        groupInput.value = "g".repeat(60);
+        yaml.value = REGEX_ONLY;
+        importBtn.click();
+        await settle();
+        expect(plugin.settings.patterns).toBeUndefined();
+        expect(noticeCalls.some((m) => m.startsWith("Nothing to import"))).toBe(true);
+    });
+
+    it("lists at most 50 rows per list in the preview and counts the rest, while Apply still writes up to the cap", async () => {
+        const many = Array.from({ length: 120 }, (_, i) => `  - regex: 'x${i}'\n    replace: "r${i}"\n`).join("");
+        const { yaml, importBtn } = mount();
+        yaml.value = yamlOf(many);
+        importBtn.click();
+        await settle();
+        const added = patternSection()?.querySelectorAll(".snipsy-espanso-pattern-rows li") ?? [];
+        const left = patternSection()?.querySelectorAll(".snipsy-espanso-pattern-skips li") ?? [];
+        expect(added).toHaveLength(51);
+        expect(added[50]?.textContent).toBe("and 50 more");
+        // 20 left out (over the cap): fewer than the row limit, so no "and N more" line
+        expect(left).toHaveLength(20);
+        applyPreview();
+        await settle();
+        expect(plugin.settings.patterns).toHaveLength(100);
+    });
+
+    it("pasted text is shown as text: markup and control characters in a regex or replacement create no elements", async () => {
+        const { yaml, importBtn } = mount();
+        yaml.value = yamlOf(`  - regex: 'a<img src=x onerror=alert(1)>'\n    replace: "<b>bold</b>\\u0007"\n`);
+        importBtn.click();
+        await settle();
+        const section = patternSection();
+        expect(section?.querySelector("img")).toBeNull();
+        expect(section?.querySelector("b")).toBeNull();
+        expect(section?.textContent).not.toContain("\u0007");
+    });
+    it("a regex-only file shows no '0 new snippets.' line under Pattern rules", async () => {
+        const { yaml, importBtn } = mount();
+        yaml.value = REGEX_ONLY;
+        importBtn.click();
+        await settle();
+        expect(document.body.querySelector(".snipsidian-modal")?.textContent).not.toContain("new snippet");
+        expect(patternSection()).not.toBeNull();
+    });
+
+    it("a literal trigger named regex:foo skipped for a form is not listed under Pattern rules", async () => {
+        const { yaml, importBtn } = mount();
+        yaml.value = yamlOf(String.raw`  - trigger: "regex:foo"
+    form: "[[x]]"
+  - regex: ':(?P<w>\w+):'
+    replace: "[{{w}}]"
+`);
+        importBtn.click();
+        await settle();
+        const skips = patternSection()?.querySelector(".snipsy-espanso-pattern-skips");
+        expect(skips).toBeNull();
+        expect(patternSection()?.textContent).not.toContain("foo");
+    });
+
+    // The two rules of REGEX_ONLY, as the parser converts them: a second import of the file finds both there.
+    const BOTH_THERE = [
+        rule(1, { source: String.raw`/:(?<w>\w+):$/`, replacement: "[{{w}}]", group: "elsewhere" }),
+        rule(2, { source: String.raw`/dd(?<n>\d)$/i`, replacement: "day {{n}}", group: "elsewhere" }),
+    ];
+
+    it("importing the same regex-only file twice says the rules are already there, not that Snipsy can't use them", async () => {
+        setPatterns(BOTH_THERE);
+        const saveSpy = vi.spyOn(plugin, "saveSettings");
+        const { yaml, importBtn } = mount();
+        yaml.value = REGEX_ONLY;
+        importBtn.click();
+        await settle();
+        expect(noticeCalls).toEqual([
+            "Nothing to import: 2 pattern rules already there (regex::(?P<w>\\w+):, regex:(?i)dd(?P<n>\\d))",
+        ]);
+        expect(saveSpy).not.toHaveBeenCalled();
+    });
+
+    it("one rule already there is singular", async () => {
+        setPatterns([BOTH_THERE[0]]);
+        const { yaml, importBtn } = mount();
+        yaml.value = yamlOf(String.raw`  - regex: ':(?P<w>\w+):'
+    replace: "[{{w}}]"
+`);
+        importBtn.click();
+        await settle();
+        expect(noticeCalls[0]).toMatch(/^Nothing to import: 1 pattern rule already there \(/);
+    });
+
+    it("a full list says the rules are over the 100 rule limit", async () => {
+        setPatterns(Array.from({ length: 100 }, (_, i) => rule(i)));
+        const { yaml, importBtn } = mount();
+        yaml.value = REGEX_ONLY;
+        importBtn.click();
+        await settle();
+        expect(noticeCalls).toEqual([
+            "Nothing to import: 2 over the 100 rule limit (regex::(?P<w>\\w+):, regex:(?i)dd(?P<n>\\d))",
+        ]);
+    });
+
+    it("both reasons at once are both named", async () => {
+        setPatterns([...BOTH_THERE.slice(0, 1), ...Array.from({ length: 99 }, (_, i) => rule(i + 10))]);
+        const { yaml, importBtn } = mount();
+        yaml.value = REGEX_ONLY;
+        importBtn.click();
+        await settle();
+        expect(noticeCalls[0]).toMatch(/^Nothing to import: 1 pattern rule already there, 1 over the 100 rule limit \(/);
+    });
+
+    it("a parser refusal next to a duplicate keeps the general wording (not every skip is a duplicate)", async () => {
+        setPatterns(BOTH_THERE);
+        const { yaml, importBtn } = mount();
+        yaml.value = `${REGEX_ONLY}  - regex: 'x(?=y)'\n    replace: "a"\n`;
+        importBtn.click();
+        await settle();
+        expect(noticeCalls[0]).toMatch(/^Nothing to import: 3 regex matches Snipsy can't use as patterns \(/);
+    });
+
+    it("a lone literal trigger named regex:foo skipped for a form gets the forms/scripts message, not the regex one", async () => {
+        const { yaml, importBtn } = mount();
+        yaml.value = yamlOf(`  - trigger: "regex:foo"\n    form: "[[x]]"\n`);
+        importBtn.click();
+        await settle();
+        expect(noticeCalls).toEqual(["Nothing to import: 1 match uses forms/scripts Snipsy doesn't support (regex:foo)"]);
+    });
+
+    it("identical snippets and no rules keep the '0 new snippets.' summary in the preview", async () => {
+        plugin.settings.snippets["espanso-import/brb"] = "be right back";
+        plugin.settings.snippets["espanso-import/omw"] = "on my way";
+        const { groupInput, yaml, importBtn } = mount();
+        groupInput.value = "Espanso import";
+        yaml.value = SIMPLE_YAML;
+        importBtn.click();
+        await settle();
+        expect(document.body.querySelector(".snipsidian-modal")?.textContent).toContain("0 new snippets.");
+        expect(patternSection()).toBeNull();
+    });
+
+    it("a rule next to a snippet conflict still shows the conflict summary", async () => {
+        plugin.settings.snippets["espanso-import/brb"] = "something else";
+        const { groupInput, yaml, importBtn } = mount();
+        groupInput.value = "Espanso import";
+        yaml.value = MIXED;
+        importBtn.click();
+        await settle();
+        const text = document.body.querySelector(".snipsidian-modal")?.textContent ?? "";
+        expect(text).toContain("0 new snippets, 1 conflict.");
+        expect(patternSection()).not.toBeNull();
+    });
+
+    it("says the rules land in a group that is switched off when it is in disabledGroups", async () => {
+        plugin.settings.disabledGroups = ["espanso-import"];
+        const { yaml, importBtn } = mount();
+        yaml.value = REGEX_ONLY;
+        importBtn.click();
+        await settle();
+        const text = patternSection()?.textContent ?? "";
+        expect(text).toContain("That group is switched off");
+        expect(text).not.toContain("switched on");
     });
 });

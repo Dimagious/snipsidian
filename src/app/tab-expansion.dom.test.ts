@@ -4,6 +4,8 @@ import { EditorView } from "@codemirror/view";
 import type { App, Editor, EditorPosition } from "obsidian";
 import { buildExpansionExtension } from "./cm6-bridge";
 import { hasFieldSession } from "../adapters/field-session";
+import { compilePatternRules, NO_PATTERNS, type CompiledPatterns } from "../engine/patterns";
+import type { PatternRule } from "../engine/types";
 
 /**
  * B-255, the Tab key end to end: a REAL `EditorView` with the real expansion
@@ -58,6 +60,19 @@ function editorOver(view: EditorView): Editor {
 interface Opts {
     onTab?: boolean;
     prefix?: string;
+    /** ADR-0008 pattern rules (compiled once per mount). */
+    patterns?: Array<Partial<PatternRule> & { source: string; replacement: string }>;
+    /** An already compiled set (to read its rule health afterwards), instead of `patterns`. */
+    compiled?: () => CompiledPatterns;
+    /** "Expand while typing" (default off here: only Tab is under test). */
+    onType?: boolean;
+}
+
+function compile(rules: Opts["patterns"]): CompiledPatterns {
+    if (!rules) return NO_PATTERNS;
+    const set = compilePatternRules(rules.map((r, i) => ({ id: `r${i}`, enabled: true, mode: "separator", ...r })));
+    expect(set.errors).toEqual([]);
+    return set;
 }
 
 function mount(doc: string, anchor: number, head = anchor, opts: Opts = {}): EditorView {
@@ -65,6 +80,8 @@ function mount(doc: string, anchor: number, head = anchor, opts: Opts = {}): Edi
     const app = {
         workspace: { get activeEditor() { return { editor, file: { name: "note.md" } }; } },
     } as unknown as App;
+    const patterns = compile(opts.patterns);
+    const compiled = opts.compiled ?? ((): CompiledPatterns => patterns);
     const view = new EditorView({
         state: EditorState.create({
             doc,
@@ -75,7 +92,8 @@ function mount(doc: string, anchor: number, head = anchor, opts: Opts = {}): Edi
                     () => DICT,
                     () => opts.prefix,
                     () => false,
-                    () => false, // typing never expands: only Tab is under test
+                    compiled,
+                    () => opts.onType ?? false, // typing does not expand unless a test asks: only Tab is under test
                     () => opts.onTab ?? true,
                 ),
             ],
@@ -165,5 +183,136 @@ describe("Tab through a real EditorView (B-255)", () => {
         expect(pressTab(view)).toBe(true);
         expect(view.state.selection.main.head).toBe(3);
         expect(view.state.doc.toString()).toBe("[]()");
+    });
+
+    describe("with pattern rules (ADR-0008)", () => {
+        const date = { source: String.raw`/\bdd(\d+)$/`, replacement: "day {{1}}" };
+
+        it("a separator rule matching before the caret takes the Tab and expands", async () => {
+            const view = mount("on dd5", 6, 6, { patterns: [date] });
+            expect(pressTab(view)).toBe(true);
+            await vi.waitFor(() => expect(view.state.doc.toString()).toBe("on day 5"));
+            expect(view.state.selection.main.head).toBe(8);
+        });
+
+        it("a Tab with no literal trigger and no rule match is not consumed (indent keeps it)", async () => {
+            const view = mount("on hello", 8, 8, { patterns: [date] });
+            expect(pressTab(view)).toBe(false);
+            await new Promise((r) => setTimeout(r, 0));
+            expect(view.state.doc.toString()).toBe("on hello");
+        });
+
+        it("a literal trigger wins over a rule that also matches", async () => {
+            const view = mount("say brb", 7, 7, { patterns: [{ source: "/brb$/", replacement: "PATTERN" }] });
+            expect(pressTab(view)).toBe(true);
+            await vi.waitFor(() => expect(view.state.doc.toString()).toBe("say be right back"));
+        });
+
+        it("takes the whole word around a caret inside it, rule included", async () => {
+            const view = mount("on dd5 now", 5, 5, { patterns: [date] });
+            expect(pressTab(view)).toBe(true);
+            await vi.waitFor(() => expect(view.state.doc.toString()).toBe("on day 5 now"));
+        });
+
+        it("never takes an auto-pair closer: the bracket after the caret stays, as with Expand trigger at cursor", async () => {
+            // Typing `(c` in Obsidian leaves `(c|)`. An instant rule on the typing path would swallow that `)`; Tab
+            // reads no pair state, so the user's bracket is kept.
+            const view = mount("x (c)", 4, 4, { patterns: [{ source: String.raw`/\(c$/`, replacement: "\u00a9" }] });
+            expect(pressTab(view)).toBe(true);
+            await vi.waitFor(() => expect(view.state.doc.toString()).toBe("x \u00a9)"));
+        });
+
+        it("a selection is never matched against rules (only a literal trigger is replaced)", async () => {
+            const view = mount("on dd5", 3, 6, { patterns: [date] });
+            expect(pressTab(view)).toBe(false);
+            await new Promise((r) => setTimeout(r, 0));
+            expect(view.state.doc.toString()).toBe("on dd5");
+        });
+
+        it("an instant-only rule is skipped on Tab: the key is not consumed (indent keeps it) and nothing is written", async () => {
+            const view = mount("a ->", 4, 4, { patterns: [{ source: "/->$/", replacement: "\u2192", mode: "instant" }] });
+            expect(pressTab(view)).toBe(false);
+            await new Promise((r) => setTimeout(r, 0));
+            expect(view.state.doc.toString()).toBe("a ->");
+            // Control: the same rule as a separator rule does take the key.
+            const sep = mount("a ->", 4, 4, { patterns: [{ source: "/->$/", replacement: "\u2192", mode: "separator" }] });
+            expect(pressTab(sep)).toBe(true);
+            await vi.waitFor(() => expect(sep.state.doc.toString()).toBe("a \u2192"));
+        });
+
+        it("the rules run once per Tab (health.runs counts one)", async () => {
+            const set = compile([date]);
+            const view = mount("on dd5", 6, 6, { compiled: () => set });
+            expect(pressTab(view)).toBe(true);
+            await vi.waitFor(() => expect(view.state.doc.toString()).toBe("on day 5"));
+            expect(set.rules[0]?.health.runs).toBe(1);
+        });
+
+        it("a rule the guard takes out after the check cannot swallow the Tab: the checked hit is expanded", async () => {
+            const set = compile([date]);
+            // What the guard (strikes, 8 ms budget) can do after the check ran the rule: from its first run on the
+            // rule reads as switched off. A second run would find nothing, with the key already consumed.
+            const health = set.rules[0]?.health;
+            if (!health) throw new Error("rule missing");
+            Object.defineProperty(health, "switchedOff", {
+                get: () => (health.runs >= 1 ? "Switched off: test." : undefined),
+                configurable: true,
+            });
+            const view = mount("on dd5", 6, 6, { compiled: () => set });
+            expect(pressTab(view)).toBe(true);
+            await vi.waitFor(() => expect(view.state.doc.toString()).toBe("on day 5"));
+            expect(health.runs).toBe(1);
+        });
+
+        // Owner decision: a match that starts after the caret would replace a tail the caret is not in.
+        const tail = { source: String.raw`/dd(\d+)$/`, replacement: "day {{1}}" };
+
+        it("a caret inside a word does not take a rule that matches only the tail after it (Tab passes through)", async () => {
+            const view = mount("abcdd5 x", 1, 1, { patterns: [tail] });
+            expect(pressTab(view)).toBe(false);
+            await new Promise((r) => setTimeout(r, 0));
+            expect(view.state.doc.toString()).toBe("abcdd5 x");
+            expect(view.state.selection.main.head).toBe(1);
+        });
+
+        it("a caret inside the match still expands it", async () => {
+            const view = mount("abcdd5 x", 4, 4, { patterns: [tail] });
+            expect(pressTab(view)).toBe(true);
+            await vi.waitFor(() => expect(view.state.doc.toString()).toBe("abcday 5 x"));
+        });
+
+        it("inside an open field session Tab still jumps fields; rules do not start a new expansion", async () => {
+            const view = mount("lnk dd5", 3, 3, { patterns: [date] });
+            expect(pressTab(view)).toBe(true);
+            await vi.waitFor(() => expect(hasFieldSession(view.state)).toBe(true));
+            expect(view.state.selection.main.head).toBe(1);
+            // The field text sits right before ... a rule match elsewhere on the line must not steal the key.
+            expect(pressTab(view)).toBe(true);
+            expect(view.state.selection.main.head).toBe(3);
+            expect(view.state.doc.toString()).toBe("[]() dd5");
+        });
+    });
+});
+
+describe("typing through the built extension honours Expand while typing (B-255)", () => {
+    /** A typed space after the caret text, the way CM6's own input handler tags it. */
+    function typeSpace(view: EditorView): void {
+        view.focus();
+        const at = view.state.doc.length;
+        view.dispatch({ changes: { from: at, insert: " " }, selection: { anchor: at + 1 }, userEvent: "input.type" });
+    }
+
+    it("control: with typing on, `brb` + space expands", async () => {
+        const view = mount("brb", 3, 3, { onType: true });
+        typeSpace(view);
+        await vi.waitFor(() => expect(view.state.doc.toString()).toBe("be right back "));
+    });
+
+    it("with typing off the same keystroke expands nothing (the setting reaches the composition-retry plugin)", async () => {
+        const view = mount("brb", 3, 3, { onType: false });
+        typeSpace(view);
+        // An expansion lands after the update (a microtask and more): give it every chance, then check.
+        await new Promise((r) => setTimeout(r, 20));
+        expect(view.state.doc.toString()).toBe("brb ");
     });
 });

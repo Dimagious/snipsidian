@@ -1,9 +1,11 @@
 # Snipsy
 
 Snipsy is a text-expansion plugin for Obsidian: type a trigger and a space,
-get the text. Hotstrings, fields you fill with Tab ($1, $2), a searchable
-snippet picker, community packages, and imports from Espanso and the Text
-Snippets plugin (tab stops and non-Latin triggers included). Commands:
+get the text. Hotstrings, regex patterns you add (1/2 becomes ½, captures as {{1}},
+checked before they run), fields you fill with Tab ($1, $2), a searchable
+snippet picker, community packages, and imports from Espanso (regex matches
+included) and the Text Snippets plugin (tab stops and non-Latin triggers
+included). Commands:
 Insert snippet, Add snippet from selection, Expand trigger at cursor, Next
 field, Open settings. It knows where markdown is code, so it stays quiet in
 code blocks, inline code, math and frontmatter.

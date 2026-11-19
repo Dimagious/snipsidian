@@ -95,6 +95,7 @@ class Harness {
         separator: string;
         original: string;
         cursor?: number;
+        restoreCaret?: number;
     }): void {
         this.dispatch({
             changes: { from: opts.from, to: opts.to, insert: opts.insert },
@@ -105,6 +106,7 @@ class Harness {
             insert: opts.insert,
             original: opts.original,
             separator: opts.separator,
+            ...(opts.restoreCaret !== undefined ? { restoreCaret: opts.restoreCaret } : {}),
         });
     }
 
@@ -118,6 +120,41 @@ function brb(): Harness {
     h.expand({ from: 0, to: 3, insert: "be right back", separator: " ", original: "brb" });
     return h;
 }
+
+describe("expansion-mark: an auto-paired closer went with the opener (ADR-0008)", () => {
+    // `x :(` with auto-pair is `x :()`, caret between; the rule replaced the whole pair with one character.
+    function sad(restoreCaret?: number): Harness {
+        const h = new Harness("x :()", 4);
+        h.expand({ from: 2, to: 5, insert: "\u2639", separator: "", original: ":()", cursor: 3, restoreCaret });
+        return h;
+    }
+
+    it("Backspace puts the caret between the restored pair, so the next character lands inside it", () => {
+        const h = sad(2);
+        expect(h.backspace()).toBe(true);
+        expect(h.text).toBe("x :()");
+        expect(h.head).toBe(4);
+        h.dispatch({ changes: { from: h.head, insert: "a" }, userEvent: "input.type" });
+        expect(h.text).toBe("x :(a)");
+    });
+
+    it("a restore caret outside the restored text is ignored: the caret goes after it", () => {
+        for (const bad of [-1, 4, 99, 1.5, Number.NaN]) {
+            const h = sad(bad);
+            expect(h.mark?.restoreCaret).toBeUndefined();
+            h.backspace();
+            expect(h.text).toBe("x :()");
+            expect(h.head).toBe(5);
+        }
+    });
+
+    it("without a restore caret the caret still goes after the restored text (every other expansion)", () => {
+        const h = sad();
+        h.backspace();
+        expect(h.text).toBe("x :()");
+        expect(h.head).toBe(5);
+    });
+});
 
 describe("expansion-mark: mark creation", () => {
     it("records the range, the caret and the text to restore", () => {
@@ -303,6 +340,54 @@ describe("expansion-mark: Backspace restores trigger + separator", () => {
         h.dispatch({ selection: { anchor: 3 } });
         expect(h.mark).toBeNull();
         expect(h.backspace()).toBe(false);
+    });
+});
+
+describe("expansion-mark: instant pattern expansions (empty separator, ADR-0008)", () => {
+    // `1/2` typed, the pattern replaced it at once: no separator, the caret sits right after the insert.
+    function half(): Harness {
+        const h = new Harness("x 1/2", 5);
+        h.expand({ from: 2, to: 5, insert: "\u00bd", separator: "", original: "1/2", cursor: 3 });
+        return h;
+    }
+
+    it("marks the inserted text and keeps the window open at the caret", () => {
+        const h = half();
+        expect(h.text).toBe("x \u00bd");
+        expect(h.mark).toMatchObject({ from: 2, to: 3, end: 3, cursor: 3, restore: "1/2" });
+    });
+
+    it("Backspace puts back exactly what was typed and does not re-expand it", () => {
+        const h = half();
+        expect(h.backspace()).toBe(true);
+        expect(h.text).toBe("x 1/2");
+        expect(h.head).toBe(5);
+        expect(h.mark).toBeNull();
+        const event = h.transactions[h.transactions.length - 1]?.annotation(Transaction.userEvent);
+        expect(isTypingUserEvent(event)).toBe(false);
+    });
+
+    it("typing the next character closes the window", () => {
+        const h = half();
+        h.dispatch({ changes: { from: 3, insert: "x" }, selection: { anchor: 4 }, userEvent: "input.type" });
+        expect(h.mark).toBeNull();
+        expect(h.backspace()).toBe(false);
+    });
+
+    it("no mark when the document does not hold the insert any more", () => {
+        const h = new Harness("x 1/2", 5);
+        h.dispatch({ changes: { from: 2, to: 5, insert: "\u00bd" }, selection: { anchor: 3 } });
+        markExpansion(h, { from: 2, insert: "something else", original: "1/2", separator: "" });
+        expect(h.mark).toBeNull();
+    });
+
+    it("$| inside the insert: the window is open at the caret and Backspace restores the typed text", () => {
+        const h = new Harness("box", 3);
+        h.expand({ from: 0, to: 3, insert: "[  ]", separator: "", original: "box", cursor: 2 });
+        expect(h.mark?.cursor).toBe(2);
+        h.backspace();
+        expect(h.text).toBe("box");
+        expect(h.head).toBe(3);
     });
 });
 

@@ -53,7 +53,14 @@ vi.mock("./cm6-bridge", () => ({
 }));
 
 // B-243/B-244 command bodies are covered in field-commands.test.ts.
-type ExpandTriggerArgs = [app: unknown, editor: unknown, getSnippets: () => Record<string, string>, getPrefix: () => string | undefined, options?: { manual?: boolean }];
+type ExpandTriggerArgs = [
+    app: unknown,
+    editor: unknown,
+    getSnippets: () => Record<string, string>,
+    getPrefix: () => string | undefined,
+    getPatterns?: () => { rules: ReadonlyArray<{ id: string }> },
+    options?: { manual?: boolean },
+];
 const expandTrigger = vi.hoisted(() => vi.fn<(...args: ExpandTriggerArgs) => Promise<void>>());
 const jumpNext = vi.hoisted(() => vi.fn<(...args: unknown[]) => boolean>());
 vi.mock("./field-commands", () => ({
@@ -140,6 +147,7 @@ describe("app/plugin", () => {
 
         expect(buildExpansionExtension).toHaveBeenCalledWith(
             app,
+            expect.any(Function),
             expect.any(Function),
             expect.any(Function),
             expect.any(Function),
@@ -362,6 +370,148 @@ describe("app/plugin", () => {
             expect(getHighlight()).toBe(false);
             plugin.settings.expansion = { highlight: true };
             expect(getHighlight()).toBe(true);
+        });
+    });
+
+    describe("patterns wiring (ADR-0008)", () => {
+        async function getPatternsArg(saved: object | undefined): Promise<{ plugin: InstanceType<typeof PluginClass>; get: () => ReturnType<NonNullable<Parameters<typeof buildExpansionExtension>[4]>> }> {
+            const plugin = makePlugin(makeApp());
+            vi.spyOn(plugin, "loadData").mockResolvedValue(saved);
+            await plugin.onload();
+            const get = lastBuildArgs()[4];
+            if (!get) throw new Error("buildExpansionExtension was called without getPatterns");
+            return { plugin, get };
+        }
+
+        it("hands the bridge the compiled rules of the live settings", async () => {
+            const { plugin, get } = await getPatternsArg({ snippets: { a: "b" } });
+            expect(get().rules).toEqual([]);
+            plugin.settings.patterns = [{ id: "p", source: "/a$/", replacement: "x", enabled: true, mode: "instant" }];
+            await plugin.saveSettings();
+            expect(get().rules.map((r) => r.id)).toEqual(["p"]);
+        });
+
+        it("compiles once per settings change, not once per call", async () => {
+            const { plugin, get } = await getPatternsArg({
+                snippets: { a: "b" },
+                patterns: [{ id: "p", source: "/a$/", replacement: "x", enabled: true, mode: "instant" }],
+            });
+            const first = get();
+            expect(get()).toBe(first);
+            expect(get()).toBe(first);
+            plugin.settings.patterns = [{ id: "q", source: "/b$/", replacement: "y", enabled: true, mode: "instant" }];
+            await plugin.saveSettings();
+            expect(get()).not.toBe(first);
+            expect(get().rules.map((r) => r.id)).toEqual(["q"]);
+        });
+
+        it("a save that changes no pattern keeps the compiled set, and with it what the runtime guard learned", async () => {
+            const { plugin, get } = await getPatternsArg({
+                snippets: { a: "b" },
+                patterns: [{ id: "p", source: "/a$/", replacement: "x", enabled: true, mode: "instant" }],
+            });
+            const first = get();
+            // e.g. the community cache saves the settings on every fetch
+            plugin.settings.snippets = { ...plugin.settings.snippets, c: "d" };
+            await plugin.saveSettings();
+            await plugin.saveSettings();
+            expect(get()).toBe(first);
+        });
+
+        it("a changed rule, a toggled rule or a muted group recompiles", async () => {
+            const { plugin, get } = await getPatternsArg({
+                snippets: { a: "b" },
+                patterns: [{ id: "p", source: "/a$/", replacement: "x", enabled: true, mode: "instant", group: "g" }],
+            });
+            let last = get();
+            const expectFresh = (): void => {
+                const next = get();
+                expect(next).not.toBe(last);
+                last = next;
+            };
+            const rule = plugin.settings.patterns?.[0];
+            if (!rule) throw new Error("no rule");
+            rule.replacement = "z"; // edited in place, then saved
+            await plugin.saveSettings();
+            expectFresh();
+            rule.enabled = false;
+            await plugin.saveSettings();
+            expectFresh();
+            expect(get().rules).toEqual([]);
+            rule.enabled = true;
+            await plugin.saveSettings();
+            expectFresh();
+            plugin.settings.disabledGroups = ["g"];
+            await plugin.saveSettings();
+            expectFresh();
+            expect(get().rules).toEqual([]);
+        });
+
+        it("patternHealth() reads the live compiled set: a switch-off shows up, and an unrelated save does not erase it", async () => {
+            vi.spyOn(console, "warn").mockImplementation(() => {});
+            try {
+                const { plugin, get } = await getPatternsArg({
+                    snippets: { a: "b" },
+                    patterns: [{ id: "p", source: "/a$/", replacement: "x", enabled: true, mode: "instant" }],
+                });
+                expect(plugin.patternHealth()).toEqual({ switchedOff: [], deadlineHits: 0 });
+                const rule = get().rules[0];
+                if (!rule) throw new Error("no rule");
+                rule.health.switchedOff = "Switched off: slow on this note.";
+                rule.health.deadlineCuts = 2;
+                await plugin.saveSettings();
+                expect(plugin.patternHealth()).toEqual({
+                    switchedOff: [{ id: "p", reason: "Switched off: slow on this note." }],
+                    deadlineHits: 2,
+                });
+            } finally {
+                vi.restoreAllMocks();
+            }
+        });
+
+        it("patternHealth() with no patterns is clean", async () => {
+            const { plugin } = await getPatternsArg({ snippets: { a: "b" } });
+            expect(plugin.patternHealth()).toEqual({ switchedOff: [], deadlineHits: 0 });
+        });
+
+        it("a refused rule in data.json is reported once at load and does not stop the others", async () => {
+            const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+            try {
+                const { get } = await getPatternsArg({
+                    snippets: { a: "b" },
+                    patterns: [
+                        { id: "bad", source: "/(a+)+$/", replacement: "x", enabled: true, mode: "instant" },
+                        { id: "good", source: "/b$/", replacement: "y", enabled: true, mode: "separator" },
+                    ],
+                });
+                expect(get().rules.map((r) => r.id)).toEqual(["good"]);
+                expect(warn).toHaveBeenCalledTimes(1);
+                const call: unknown[] = nth(warn.mock.calls, 0);
+                expect(call[0]).toBe("[snipsy] pattern rule disabled");
+                expect(call[1]).toMatchObject({ id: "bad" });
+                expect(JSON.stringify(call[1])).toMatch(/repeated group/i);
+            } finally {
+                warn.mockRestore();
+            }
+        });
+
+        it("saved patterns survive a settings round trip untouched", async () => {
+            const patterns = [{ id: "p", source: "/a$/", replacement: "x", enabled: true, mode: "instant" }];
+            const { plugin } = await getPatternsArg({ snippets: { a: "b" }, patterns });
+            expect(plugin.settings.patterns).toEqual(patterns);
+        });
+
+        it("the expand-trigger command passes the patterns on", async () => {
+            const plugin = makePlugin(makeApp());
+            vi.spyOn(plugin, "loadData").mockResolvedValue({
+                snippets: { a: "b" },
+                patterns: [{ id: "p", source: "/a$/", replacement: "x", enabled: true, mode: "separator" }],
+            });
+            await plugin.onload();
+            const cmd = commandById("expand-trigger");
+            cmd.editorCallback?.(asEditor(makeMockEditor({ text: "a" })), { app: makeApp(), file: null, hoverPopover: null });
+            const getPatterns = nth(expandTrigger.mock.calls, 0)[4];
+            expect(getPatterns?.().rules.map((r) => r.id)).toEqual(["p"]);
         });
     });
 
@@ -674,7 +824,7 @@ describe("app/plugin", () => {
         it("onType / onTab are read live from settings (default: typing on, Tab off)", async () => {
             const plugin = makePlugin(makeApp());
             await plugin.onload();
-            const [, , , , getOnType, getOnTab] = lastBuildArgs();
+            const [, , , , , getOnType, getOnTab] = lastBuildArgs();
             expect(getOnType?.()).toBe(true);
             expect(getOnTab?.()).toBe(false);
             plugin.settings.expansion = { onType: false, onTab: true };
@@ -703,10 +853,82 @@ describe("app/plugin", () => {
             commandById("text-snippets").editorCallback?.(editor, ctx);
             expect(expandTrigger).toHaveBeenCalledTimes(1);
             expect(nth(expandTrigger.mock.calls, 0)[1]).toBe(editor);
-            expect(nth(expandTrigger.mock.calls, 0)[4]).toEqual({ manual: true });
+            expect(nth(expandTrigger.mock.calls, 0)[5]).toEqual({ manual: true });
 
             commandById("expand-trigger").editorCallback?.(editor, ctx);
-            expect(nth(expandTrigger.mock.calls, 1)[4]).toEqual({ manual: false });
+            expect(nth(expandTrigger.mock.calls, 1)[5]).toEqual({ manual: false });
+        });
+
+        it("the alias and expand-trigger both get the live pattern rules (ADR-0008 with B-255)", async () => {
+            expandTrigger.mockResolvedValue(undefined);
+            const { plugin } = compatPlugin(COMPAT_MANIFEST);
+            load(plugin, {
+                snippets: { brb: "be right back" },
+                patterns: [{ id: "p", source: "/a$/", replacement: "x", enabled: true, mode: "separator" }],
+            });
+            await plugin.onload();
+            const editor = asEditor(makeMockEditor());
+            const ctx: MarkdownFileInfo = { app: makeApp(), file: null, hoverPopover: null };
+            commandById("text-snippets").editorCallback?.(editor, ctx);
+            commandById("expand-trigger").editorCallback?.(editor, ctx);
+            for (const call of [0, 1]) {
+                expect(nth(expandTrigger.mock.calls, call)[4]?.().rules.map((r) => r.id)).toEqual(["p"]);
+            }
+        });
+
+        it("the patterns reach the extension next to the onType / onTab getters", async () => {
+            const { plugin } = compatPlugin(COMPAT_MANIFEST);
+            load(plugin, {
+                snippets: {},
+                patterns: [{ id: "p", source: "/a$/", replacement: "x", enabled: true, mode: "separator" }],
+            });
+            await plugin.onload();
+            const [, , , , getPatterns, getOnType, getOnTab] = lastBuildArgs();
+            expect(getPatterns?.().rules.map((r) => r.id)).toEqual(["p"]);
+            expect(getOnType?.()).toBe(true);
+            expect(getOnTab?.()).toBe(false);
+        });
+
+        it("a fresh compat install keeps the pattern rules data.json already carried", async () => {
+            const { plugin } = compatPlugin(COMPAT_MANIFEST);
+            const rule = { id: "p", source: "/a$/", replacement: "x", enabled: true, mode: "separator" as const };
+            const saveData = load(plugin, { patterns: [rule] });
+            await plugin.loadSettings();
+            expect(plugin.settings.patterns).toEqual([rule]);
+            expect(plugin.settings.snippets).toEqual({});
+            expect(saveData).toHaveBeenCalledWith(expect.objectContaining({ patterns: [rule] }));
+        });
+
+        it("reloading settings drops the compiled rules, so the next read compiles the loaded ones", async () => {
+            const { plugin } = compatPlugin(COMPAT_MANIFEST);
+            const rule = (id: string) => ({ id, source: "/a$/", replacement: "x", enabled: true, mode: "separator" as const });
+            const data = load(plugin, { snippets: { a: "b" }, patterns: [rule("old")] });
+            await plugin.onload();
+            const getPatterns = lastBuildArgs()[4];
+            expect(getPatterns?.().rules.map((r) => r.id)).toEqual(["old"]);
+            data.mockClear();
+            vi.spyOn(plugin, "loadData").mockResolvedValue({ snippets: { a: "b" }, patterns: [rule("new")] });
+            await plugin.loadSettings();
+            expect(getPatterns?.().rules.map((r) => r.id)).toEqual(["new"]);
+        });
+
+        // The settings in memory changed even when the backup guard refuses the write: rules compiled from the old
+        // ones must not go on running.
+        it("a save the backup guard refuses still drops the compiled rules that no longer match the settings", async () => {
+            const adapter = new FakeAdapter();
+            const { plugin } = compatPlugin(COMPAT_MANIFEST, adapter);
+            const rule = (id: string) => ({ id, source: "/a$/", replacement: "x", enabled: true, mode: "separator" as const });
+            load(plugin, { snippets: { a: "b" }, patterns: [rule("old")] });
+            await plugin.onload();
+            const getPatterns = lastBuildArgs()[4];
+            expect(getPatterns?.().rules.map((r) => r.id)).toEqual(["old"]);
+
+            // An unconvertible original is still unsaved (see above): the next save is refused until it is backed up.
+            adapter.failWrite = true;
+            (plugin as unknown as { unsavedOriginal: string | null }).unsavedOriginal = ORIGINAL;
+            plugin.settings.patterns = [rule("new")];
+            await expect(plugin.saveSettings()).rejects.toThrow("disk full");
+            expect(getPatterns?.().rules.map((r) => r.id)).toEqual(["new"]);
         });
 
         it("under snipsidian there is no text-snippets command and no default hotkeys", async () => {

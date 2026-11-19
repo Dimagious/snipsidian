@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { expandsOnTab, expandsOnType } from "./expansion-mode";
+import { effectivePrefix, expandsOnTab, expandsOnType } from "./expansion-mode";
 
 describe("store/expansion-mode (B-255)", () => {
     it("defaults keep existing installs unchanged: typing on, Tab off", () => {
@@ -30,5 +30,22 @@ describe("store/expansion-mode (B-255)", () => {
         expect([expandsOnType(manual), expandsOnTab(manual)]).toEqual([false, true]);
         const neither = { expansion: { onType: false, onTab: false } };
         expect([expandsOnType(neither), expandsOnTab(neither)]).toEqual([false, false]);
+    });
+});
+
+describe("effectivePrefix", () => {
+    it("is undefined while prefix mode is off, whatever the character says", () => {
+        expect(effectivePrefix({})).toBeUndefined();
+        expect(effectivePrefix({ expansion: { requirePrefix: false, prefixChar: ";" } })).toBeUndefined();
+    });
+
+    it("is the saved character when it is one of the two supported", () => {
+        expect(effectivePrefix({ expansion: { requirePrefix: true, prefixChar: ";" } })).toBe(";");
+        expect(effectivePrefix({ expansion: { requirePrefix: true, prefixChar: ":" } })).toBe(":");
+    });
+
+    it("falls back to a colon for unset or corrupt data", () => {
+        expect(effectivePrefix({ expansion: { requirePrefix: true } })).toBe(":");
+        expect(effectivePrefix({ expansion: { requirePrefix: true, prefixChar: "x" } })).toBe(":");
     });
 });

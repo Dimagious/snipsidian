@@ -353,6 +353,46 @@
   margin: 8px 0;
 }
 
+/* ---- Espanso import: pattern rules section of the preview (ADR-0008) ---- */
+/* Sits first in the preview modal, above the snippet diff. Rows and skips are
+   plain lists; the pattern is a code chip, the mode a muted aside. */
+.snipsidian-modal .snipsy-espanso-patterns {
+  background: var(--snipsy-bg-alt);
+  border: 1px solid var(--snipsy-border);
+  border-radius: var(--snipsy-radius);
+  padding: 6px 10px;
+  margin: 8px 0;
+}
+.snipsidian-modal .snipsy-espanso-patterns h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.snipsidian-modal .snipsy-espanso-patterns p {
+  margin: 4px 0;
+  font-size: 12.5px;
+  color: var(--snipsy-text-muted);
+}
+.snipsidian-modal .snipsy-espanso-pattern-rows,
+.snipsidian-modal .snipsy-espanso-pattern-skips {
+  margin: 4px 0;
+  padding-left: 18px;
+  max-height: 180px;
+  overflow-y: auto;
+  font-size: 12.5px;
+}
+.snipsidian-modal .snipsy-espanso-pattern-rows li,
+.snipsidian-modal .snipsy-espanso-pattern-skips li {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
+.snipsidian-modal .snipsy-espanso-pattern-rows small,
+.snipsidian-modal .snipsy-espanso-pattern-rows li > div {
+  color: var(--snipsy-text-muted);
+}
+.snipsidian-modal .snipsy-espanso-pattern-skips li {
+  color: var(--snipsy-text-muted);
+}
+
 /* ---- Search bar ---- */
 .snipsidian-settings .snipsy-search {
   position: relative;
@@ -1624,3 +1664,174 @@
    already the default (opacity: 1) everywhere except under the
    `(hover: hover) and (pointer: fine)` gate above, which only ever
    applies on devices that genuinely have hover. */
+
+/* ============================================================
+   Patterns page (ADR-0008). Rows copy the snippet list: a flat
+   list, no group headers (order is the priority). The three off
+   states are never struck through: muted text plus a flair that
+   says it in words.
+   ============================================================ */
+.snipsidian-settings .snipsy-mono { font-family: var(--snipsy-mono); }
+.snipsidian-settings .snipsy-pattern-list { display: flex; flex-direction: column; margin: 4px 0 12px; }
+.snipsidian-settings .snipsy-pattern-row {
+  border-radius: var(--snipsy-radius);
+  border-bottom: 1px solid var(--snipsy-divider);
+}
+.snipsidian-settings .snipsy-pattern-row:last-child { border-bottom: 0; }
+.snipsidian-settings .snipsy-pattern-row.is-open {
+  background: var(--snipsy-bg);
+  border: 1px solid var(--snipsy-border);
+  margin: 4px 0;
+}
+.snipsidian-settings .snipsy-pattern-row.is-drop-target { box-shadow: 0 -2px 0 var(--snipsy-accent); }
+.snipsidian-settings .snipsy-pattern-head {
+  display: grid;
+  grid-template-columns: auto 22px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+}
+.snipsidian-settings .snipsy-pattern-row.is-new .snipsy-pattern-head { grid-template-columns: 22px minmax(0, 1fr); }
+.snipsidian-settings .snipsy-pattern-handle {
+  display: inline-flex;
+  color: var(--snipsy-text-faint);
+  cursor: grab;
+}
+.snipsidian-settings .snipsy-pattern-num {
+  font-size: 12px;
+  color: var(--snipsy-text-faint);
+  text-align: right;
+}
+.snipsidian-settings .snipsy-pattern-main {
+  appearance: none;
+  display: block;
+  min-width: 0;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 2px 4px;
+  height: auto;
+  color: var(--snipsy-text);
+  cursor: pointer;
+  border-radius: var(--snipsy-radius);
+}
+.snipsidian-settings .snipsy-pattern-main:hover { background: var(--snipsy-hover); }
+.snipsidian-settings .snipsy-pattern-main:focus-visible { outline: 2px solid var(--snipsy-accent); outline-offset: 1px; }
+.snipsidian-settings .snipsy-pattern-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.snipsidian-settings .snipsy-pattern-src,
+.snipsidian-settings .snipsy-pattern-rep {
+  font-family: var(--snipsy-mono);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.snipsidian-settings .snipsy-pattern-rep { color: var(--snipsy-text-muted); flex: 1 1 0; }
+.snipsidian-settings .snipsy-pattern-src { flex: 0 1 auto; max-width: 60%; }
+.snipsidian-settings .snipsy-pattern-arrow { color: var(--snipsy-text-faint); flex: none; }
+.snipsidian-settings .snipsy-pattern-rep .nl { color: var(--snipsy-text-faint); padding: 0 1px; }
+.snipsidian-settings .snipsy-pattern-meta { font-size: 12px; color: var(--snipsy-text-faint); }
+.snipsidian-settings .snipsy-pattern-flair {
+  flex: none;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--snipsy-hover);
+  color: var(--snipsy-text-muted);
+}
+.snipsidian-settings .snipsy-pattern-flair.is-error { color: var(--snipsy-danger); border: 1px solid var(--snipsy-danger); background: transparent; }
+.snipsidian-settings .snipsy-pattern-row.is-off .snipsy-pattern-src,
+.snipsidian-settings .snipsy-pattern-row.is-off .snipsy-pattern-rep,
+.snipsidian-settings .snipsy-pattern-row.is-group-off .snipsy-pattern-src,
+.snipsidian-settings .snipsy-pattern-row.is-group-off .snipsy-pattern-rep,
+.snipsidian-settings .snipsy-pattern-row.is-paused .snipsy-pattern-src,
+.snipsidian-settings .snipsy-pattern-row.is-paused .snipsy-pattern-rep { opacity: 0.6; }
+.snipsidian-settings .snipsy-pattern-note {
+  padding: 0 8px 8px 38px;
+  font-size: 12.5px;
+  color: var(--snipsy-text-muted);
+}
+.snipsidian-settings .snipsy-pattern-note.is-error { color: var(--snipsy-danger); }
+.snipsidian-settings .snipsy-pattern-new-title { font-weight: 500; }
+
+.snipsidian-settings .snipsy-pattern-editor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+  padding: 4px 12px 12px;
+}
+.snipsidian-settings .snipsy-pattern-editor .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.snipsidian-settings .snipsy-pattern-editor .field.is-full { grid-column: 1 / -1; }
+.snipsidian-settings .snipsy-pattern-editor label {
+  font-size: 12.5px;
+  color: var(--snipsy-text-muted);
+  font-weight: 500;
+}
+.snipsidian-settings .snipsy-pattern-editor input,
+.snipsidian-settings .snipsy-pattern-editor textarea,
+.snipsidian-settings .snipsy-pattern-editor select { width: 100%; }
+/* Obsidian's settings dropdown is a bare word with a chevron (no box, text on the right). Here it sits in a column
+   next to the Group input, so it gets the same box as a text input and reads left-aligned. */
+.snipsidian-settings .snipsy-pattern-editor select.dropdown {
+  height: var(--input-height);
+  padding: 0 var(--size-4-8) 0 var(--size-4-3);
+  text-align: start;
+  background-color: var(--background-modifier-form-field);
+  border: var(--input-border-width) solid var(--background-modifier-border);
+  border-radius: var(--input-radius);
+}
+.snipsidian-settings .snipsy-pattern-editor input[aria-invalid="true"],
+.snipsidian-settings .snipsy-pattern-editor textarea[aria-invalid="true"] { border-color: var(--snipsy-danger); }
+.snipsidian-settings .snipsy-pattern-editor .snipsidian-error:empty { display: none; }
+.snipsidian-settings .snipsy-pattern-editor .snipsy-pattern-note { padding: 0; }
+.snipsidian-settings .snipsy-pattern-editor .snipsy-pattern-note:empty { display: none; }
+.snipsidian-settings .snipsy-pattern-warnings:empty { display: none; }
+.snipsidian-settings .snipsy-pattern-footer {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.snipsidian-settings .snipsy-pattern-footer-spacer { flex: 1 1 auto; }
+
+.snipsidian-settings .snipsy-tryit-result {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--snipsy-border);
+  border-radius: var(--snipsy-radius);
+  background: var(--snipsy-bg-alt);
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.snipsidian-settings .snipsy-tryit-result.is-hidden { display: none; }
+.snipsidian-settings .snipsy-tryit-replaced {
+  background: var(--snipsy-accent-soft);
+  outline: 1px solid var(--snipsy-accent);
+  border-radius: 2px;
+}
+.snipsidian-settings .snipsy-tryit-field { color: var(--snipsy-accent); font-size: 11px; vertical-align: super; }
+.snipsidian-settings .snipsy-tryit-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  margin: 0 1px;
+  vertical-align: text-bottom;
+  background: var(--snipsy-accent);
+}
+.snipsidian-settings .snipsy-patterns-starter { border-top: 1px solid var(--snipsy-divider); }
+
+/* Narrow pane or phone: two-line rows, fields stacked, Save first and full width, targets of 44 px. */
+@container snipsy-pane (max-width: 480px) {
+  .snipsidian-settings .snipsy-pattern-editor { grid-template-columns: 1fr; }
+  .snipsidian-settings .snipsy-pattern-footer { flex-direction: column-reverse; align-items: stretch; }
+  .snipsidian-settings .snipsy-pattern-footer-spacer { display: none; }
+}
+.is-mobile .snipsidian-settings .snipsy-pattern-head { grid-template-columns: 22px minmax(0, 1fr) auto auto; }
+.is-mobile .snipsidian-settings .snipsy-pattern-main { min-height: 44px; }
+.is-mobile .snipsidian-settings .snipsy-pattern-menu,
+.is-mobile .snipsidian-settings .snipsy-pattern-toggle { min-width: 44px; min-height: 44px; }
+.is-mobile .snipsidian-settings .snipsy-pattern-footer button { min-height: 44px; }

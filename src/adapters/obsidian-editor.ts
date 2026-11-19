@@ -12,10 +12,12 @@ import {
 import { clock } from "./clock";
 import { readClipboardSafe } from "./clipboard";
 import { expand } from "../engine";
+import { expandInstant, expandPatternHit } from "../engine/expand";
 import { shouldExpandHere } from "../engine/guards";
 import { findTrigger } from "../engine/match";
+import { matchPatterns, matchPatternsInOrder, type CompiledRule, type PatternMatch } from "../engine/patterns";
 import type { Dict, EditPlan, ExpandContext, ExpandInput, FieldStops } from "../engine/types";
-import { isSeparator } from "../shared/delimiters";
+import { DEFAULT_DELIMITERS, isSeparator } from "../shared/delimiters";
 import { isInFencedCode, isInInlineCode, isInMath, isInYamlFrontmatter } from "../shared/markdown";
 
 /** The part of moment Snipsy uses. */
@@ -28,7 +30,7 @@ interface MomentLike {
  * (and 5 with `esModuleInterop`) does not treat as callable, so the community scanner reported the call as unsafe
  * (K-058). Read at call time, so a module mock without `moment` does not break importing this file.
  */
-function formatWithMoment(date: Date, format: string): string {
+export function formatWithMoment(date: Date, format: string): string {
     return (moment as unknown as (input: Date) => MomentLike)(date).format(format);
 }
 
@@ -114,12 +116,39 @@ export function makeContext(
  * might do in response to `replaceRange`) and skip the reposition —
  * not the text edit — when it isn't on `line`.
  */
-export function applyEditPlan(editor: Editor, plan: EditPlan, line: number) {
+/**
+ * `userEvent` of a pattern expansion (ADR-0008). Not typing (the B-149 gate
+ * rejects it, so the inserted text is never re-scanned) and not matched by
+ * CM6 history's `/^(input\.type|delete)($|\.)/` join rule, so it is its own
+ * undo step: Cmd/Ctrl+Z gives back exactly what was typed. Literal expansions
+ * are written untagged and CM6 joins them into the typing group (B-132).
+ */
+export const PATTERN_USER_EVENT = "snipsy.expand";
+
+export function applyEditPlan(
+    editor: Editor,
+    plan: EditPlan,
+    line: number,
+    /** The replaced range reaches past the caret (an auto-paired closer went with the opener): the caret would
+     *  map to the start of the insert, so it is put after it explicitly. */
+    caretAfterInsert = false,
+) {
     const userStillOnTargetLine = editor.getCursor().line === line;
 
     const from: EditorPosition = { line, ch: plan.fromCh };
     const to: EditorPosition = { line, ch: plan.toCh };
-    editor.replaceRange(plan.insert, from, to);
+    // `editor.cm` is absent on a legacy editor: the plain write is the fallback.
+    if (plan.kind === "pattern" && editor.cm) {
+        editor.cm.dispatch({
+            changes: { from: editor.posToOffset(from), to: editor.posToOffset(to), insert: plan.insert },
+            ...(caretAfterInsert
+                ? { selection: { anchor: editor.posToOffset(from) + normalizedLength(plan.insert) } }
+                : {}),
+            userEvent: PATTERN_USER_EVENT,
+        });
+    } else {
+        editor.replaceRange(plan.insert, from, to);
+    }
     if (plan.newCursor !== undefined && userStillOnTargetLine) {
         editor.setCursor({
             line: line + plan.newCursor.lineDelta,
@@ -157,6 +186,20 @@ export type ExpansionResult = {
     /** B-243: the fields of the inserted text (document offsets), when the
      *  snippet has two or more. The caller opens the field session. */
     session?: FieldStops;
+    /** An auto-paired closer went with the replaced opener (`original` includes it): where the caret goes when the
+     *  expansion is undone, as an offset into `original` (between the pair, not after it). */
+    restoreCaret?: number;
+};
+
+/**
+ * ADR-0008: the closer the editor's auto-pair inserted in one update, tied to where it sits: the caret right after
+ * the opener and the line as it read then. A fallback attempt that re-reads the live caret after an await must not
+ * take a closer that is not this one (a `)` the user typed or clicked next to).
+ */
+export type PairedCloser = {
+    closer: string;
+    caret: EditorPosition;
+    lineText: string;
 };
 
 /** CM6 turns `\r\n` / `\r` in inserted text into `\n`; offsets must follow. */
@@ -185,6 +228,14 @@ export async function tryExpandAtSeparator(
         readClipboard?: () => Promise<string>;
         /** B-137: see `ExpandInput.prefix`. `undefined` = mode off. */
         prefix?: string;
+        /** ADR-0008: compiled pattern rules, tried after a literal miss, top to bottom. */
+        patterns?: readonly CompiledRule[];
+        /** ADR-0008: the update was a single typed character: instant rules may match through the typed
+         *  separator. Ignored for Enter (the caret is on the next line). */
+        instant?: boolean;
+        /** ADR-0008: the closer the editor's auto-pair inserted right after the caret in this update. An instant
+         *  rule that replaces the opener removes it too (see `expandAndApply`). */
+        pairCloser?: PairedCloser;
     }
 ): Promise<ExpansionResult | undefined> {
     const cursor = editor.getCursor();
@@ -226,7 +277,16 @@ export async function tryExpandAtSeparator(
     const input = makeExpandInput(editor, sepCh, lastTyped, targetLine, deps.prefix);
     const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, targetLine, ctxCh);
 
-    return expandAndApply(editor, dict, input, ctx, targetLine, lineText, lastTyped, cursor);
+    const patterns = deps.patterns ?? [];
+    return expandAndApply(
+        editor,
+        () => expand(input, dict, ctx, DEFAULT_DELIMITERS, patterns, deps.instant === true && !isNewlineSeparator),
+        targetLine,
+        lineText,
+        lastTyped,
+        cursor,
+        deps.pairCloser,
+    );
 }
 
 /**
@@ -235,21 +295,49 @@ export async function tryExpandAtSeparator(
  */
 async function expandAndApply(
     editor: Editor,
-    dict: Dict,
-    input: ExpandInput,
-    ctx: ExpandContext,
+    resolvePlan: () => Promise<EditPlan | null>,
     targetLine: number,
     lineText: string,
     separator: string,
     /** The live caret when the expansion started. */
     cursorAtStart: EditorPosition,
+    /** The auto-paired closer right after the caret, when the update that started this inserted a pair. */
+    pairCloser?: PairedCloser,
     /** The selected text when it started (`""` = none): "stayed" needs both. */
     selectionAtStart = "",
     /** B-255 manual mode (selection / mid-word): put the caret after the new text. */
     moveCaretToEnd = false,
 ): Promise<ExpansionResult | undefined> {
-    const plan = await expand(input, dict, ctx);
-    if (!plan) return undefined;
+    const resolved = await resolvePlan();
+    if (!resolved) return undefined;
+    // ADR-0008: an instant rule that replaced the opener of a just-inserted pair (`:(` to a sad face) would leave
+    // the editor's closer behind (`face)`): the result must equal what the same typing gives with auto-pair off, so
+    // the closer goes in the same write (one undo step restores the pair). Only the closer that update inserted,
+    // still directly after the caret, and only for a plan that replaced text ending exactly at the caret. That is a
+    // pattern rule (a literal trigger ends before its separator, and a pattern match is never empty), so no further
+    // check on the plan's kind or length is needed. The Expand-at-cursor path (`tryExpandAtCursor`) also produces a
+    // literal plan ending at the caret; it is safe only because it passes no `pairCloser`.
+    const closerAtStart =
+        pairCloser !== undefined &&
+        editor.cm !== undefined &&
+        resolved.toCh === cursorAtStart.ch &&
+        // The closer belongs to this exact spot: the caret is where the update left it and the line is as it was
+        // (a stale attempt, the user typing or clicking elsewhere, never takes a closer of theirs).
+        samePos(cursorAtStart, pairCloser.caret) &&
+        lineText === pairCloser.lineText &&
+        lineText.charAt(resolved.toCh) === pairCloser.closer;
+    // B-147: the user may have moved during the (clipboard) await. A field session pulls the caret into the first
+    // field, so it opens only when the caret is still where the expansion started (same rule as the pickers).
+    const stayed = samePos(editor.getCursor(), cursorAtStart) && editor.getSelection() === selectionAtStart;
+    // Fail closed: after an await the closer may have been stepped over or typed past (a selection-only change that
+    // leaves the line intact), so it is taken only when the caret has not moved at all.
+    // The two pre-await snapshots (`lineText`, the pair's line) say nothing about the closer NOW: a forward Delete
+    // on it during the await, with an identical character behind it, would make the slice check pass and eat the
+    // next one. So the closer goes only when the live line is still exactly the snapshot; a caret that has not
+    // moved over a changed line means the note changed under us, and nothing is written.
+    if (closerAtStart && stayed && (editor.getLine(targetLine) ?? "") !== lineText) return undefined;
+    const takesCloser = closerAtStart && stayed;
+    const plan = takesCloser ? { ...resolved, toCh: resolved.toCh + 1 } : resolved;
 
     // Cheap staleness guard: if the text the plan expects to replace
     // (the trigger + separator, as it read before the await) no
@@ -262,24 +350,29 @@ async function expandAndApply(
     if (actualSlice !== expectedSlice) return undefined;
 
     const from = editor.posToOffset({ line: targetLine, ch: plan.fromCh });
-    // B-147: the user may have moved during the (clipboard) await. A field
-    // session pulls the caret into the first field, so it opens only when the
-    // caret is still where the expansion started (same rule as the pickers).
-    const stayed = samePos(editor.getCursor(), cursorAtStart) && editor.getSelection() === selectionAtStart;
     // A field plan carries a fallback caret (the first field); when the user
     // moved, that must not pull the caret back either.
-    applyEditPlan(editor, plan.fields && !stayed ? { ...plan, newCursor: undefined } : plan, targetLine);
+    applyEditPlan(
+        editor,
+        plan.fields && !stayed ? { ...plan, newCursor: undefined } : plan,
+        targetLine,
+        takesCloser,
+    );
     // The replaced range held the caret or the selection; park the caret
     // after the new text unless a field session or `$|` places it.
     if (moveCaretToEnd && stayed && !plan.fields && plan.newCursor === undefined) {
         editor.setCursor(advancePosition({ line: targetLine, ch: plan.fromCh }, plan.insert));
     }
+    // An instant rule that matched through the typed separator replaced it: nothing of it follows the insert.
+    const keptSeparator = plan.consumesSeparator ? "" : separator;
     const result: ExpansionResult = {
         from,
         insert: plan.insert,
         original: expectedSlice,
-        separator,
+        separator: keptSeparator,
     };
+    // Backspace undo puts the caret between the restored pair, as Cmd+Z does.
+    if (takesCloser) result.restoreCaret = expectedSlice.length - 1;
     if (plan.fields && stayed) {
         // Without `$|` the last Tab lands right after the inserted text plus the
         // separator, where the caret sits with no fields (B-182). A session opens
@@ -291,7 +384,7 @@ async function expandAndApply(
         const final =
             plan.final !== undefined
                 ? from + normalizedLength(plan.insert.slice(0, plan.final))
-                : from + normalizedLength(plan.insert) + normalizedLength(separator);
+                : from + normalizedLength(plan.insert) + normalizedLength(keptSeparator);
         const stops = toDocStops(from, plan.insert, plan.fields, plan.docOrder, 0);
         result.session = { ...stops, final };
     }
@@ -318,13 +411,34 @@ export async function tryExpandAtCursor(
         now: Date;
         readClipboard?: () => Promise<string>;
         prefix?: string;
+        /** ADR-0008: compiled pattern rules (separator mode is tried). */
+        patterns?: readonly CompiledRule[];
         manual?: boolean;
+        /**
+         * What `canExpandAtCursor` just found (the Tab key): used as is, so the rules are not run a second time and
+         * the decision to take the key cannot differ from the expansion. Only valid in the same synchronous turn
+         * (the editor must not have changed since).
+         */
+        prepared?: CursorExpansion;
     },
 ): Promise<ExpansionResult | undefined> {
-    const at = cursorExpansionInput(editor, dict, deps.prefix, deps.manual === true);
+    const at = deps.prepared ?? planCursorExpansion(editor, dict, deps.prefix, deps.patterns ?? [], deps.manual === true);
     if (!at) return undefined;
     const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, at.cursor.line, at.input.sepCh);
-    return expandAndApply(editor, dict, at.input, ctx, at.cursor.line, at.lineText, "", at.cursor, at.selection, at.moveCaretToEnd);
+    const hit = at.hit;
+    // No `pairCloser`: a command or Tab never takes an auto-paired closer (only the typing path knows one was inserted).
+    return expandAndApply(
+        editor,
+        // A literal trigger runs through `expand` without rules (it found it already); a rule hit is expanded as found.
+        () => (hit ? expandPatternHit(at.input, ctx, hit) : expand(at.input, dict, ctx)),
+        at.cursor.line,
+        at.lineText,
+        "",
+        at.cursor,
+        undefined,
+        at.selection,
+        at.moveCaretToEnd,
+    );
 }
 
 /**
@@ -332,13 +446,58 @@ export async function tryExpandAtCursor(
  * mode: would the expand path find a snippet right now (same input helper,
  * same guards, nothing is resolved or written)? The Tab key needs the answer
  * at once, to decide whether it is taken or passed on to indent.
+ *
+ * Returns what it found (`undefined` = nothing): the caller hands it to
+ * `tryExpandAtCursor` as `prepared`, so a pattern rule runs once per Tab.
  */
-export function canExpandAtCursor(editor: Editor, dict: Dict, prefix?: string): boolean {
-    const at = cursorExpansionInput(editor, dict, prefix, true);
-    if (!at) return false;
-    const ctx = makeContext(editor, undefined, clock.now(), undefined, at.cursor.line, at.input.sepCh);
-    return shouldExpandHere(ctx) && findTrigger(at.input, dict) !== null;
+export function canExpandAtCursor(
+    editor: Editor,
+    dict: Dict,
+    prefix?: string,
+    /** ADR-0008: compiled pattern rules; a literal trigger wins, then the rules in list order (as `expand` does). */
+    patterns: readonly CompiledRule[] = [],
+): CursorExpansion | undefined {
+    // The line alone first (cheap): the context below scans the note for frontmatter, fences and math.
+    const plan = planCursorExpansion(editor, dict, prefix, patterns, true);
+    if (!plan) return undefined;
+    const ctx = makeContext(editor, undefined, clock.now(), undefined, plan.cursor.line, plan.input.sepCh);
+    return shouldExpandHere(ctx) ? plan : undefined;
 }
+
+/** What expanding at the caret found: the input, plus the literal trigger or the rule hit (never both). */
+export type CursorExpansion = CursorInput & {
+    /** A literal trigger ends the candidate (it wins over any rule). */
+    literal: boolean;
+    /** ADR-0008: the separator rule that matched when there is no literal trigger. */
+    hit?: PatternMatch;
+};
+
+/**
+ * The line-only part of "is there something to expand at the caret": the input, then a literal trigger, then
+ * (manual path and the command) the separator rules top to bottom. No Markdown context, no async.
+ */
+function planCursorExpansion(
+    editor: Editor,
+    dict: Dict,
+    prefix: string | undefined,
+    patterns: readonly CompiledRule[],
+    manual: boolean,
+): CursorExpansion | undefined {
+    const at = cursorExpansionInput(editor, dict, prefix, manual);
+    if (!at) return undefined;
+    if (findTrigger(at.input, dict) !== null) return { ...at, literal: true };
+    // A selection reaches here only as a literal trigger (`cursorExpansionInput` takes nothing else), which won
+    // above; kept as defence: a rule never reads a selection. Instant rules are not tried (no typed character).
+    if (at.selection || patterns.length === 0) return undefined;
+    const hit = matchPatternsInOrder({ beforeSeparator: at.input.textBefore }, patterns);
+    if (!hit) return undefined;
+    // A caret inside a word takes the line up to the word's end: a match that starts after the caret would replace
+    // a tail the caret is not in (`abc|dd5` is fine, `a|bcdd5` for `dd\d+$` is not), so it does not count.
+    if (at.moveCaretToEnd && hit.index > at.cursor.ch) return undefined;
+    return { ...at, literal: false, hit };
+}
+
+type CursorInput = { input: ExpandInput; cursor: EditorPosition; lineText: string; selection: string; moveCaretToEnd: boolean };
 
 /**
  * The input for expanding at the caret, or `undefined` when nothing can match
@@ -358,7 +517,7 @@ function cursorExpansionInput(
     dict: Dict,
     prefix: string | undefined,
     manual: boolean,
-): { input: ExpandInput; cursor: EditorPosition; lineText: string; selection: string; moveCaretToEnd: boolean } | undefined {
+): CursorInput | undefined {
     const selection = editor.getSelection();
     const cursor = editor.getCursor();
     const lineText = editor.getLine(cursor.line) ?? "";
@@ -405,6 +564,49 @@ function cursorExpansionInput(
         return undefined;
     }
     return { input: build(sepCh), cursor, lineText, selection: "", moveCaretToEnd };
+}
+
+/**
+ * ADR-0008, instant mode: tries the `instant` pattern rules on the line up to
+ * the caret, right after a typed character (the caller has checked the change
+ * source: typing only, one character, one caret). Nothing happens with a
+ * selection or at the start of a line. Same guards as typing; the match has to
+ * end exactly at the caret.
+ */
+export async function tryExpandInstant(
+    editor: Editor,
+    patterns: readonly CompiledRule[],
+    deps: {
+        filename?: string;
+        now: Date;
+        readClipboard?: () => Promise<string>;
+        /** The closer the editor's auto-pair inserted right after the caret in this update. */
+        pairCloser?: PairedCloser;
+    },
+): Promise<ExpansionResult | undefined> {
+    if (editor.getSelection()) return undefined;
+    const cursor = editor.getCursor();
+    if (cursor.ch === 0) return undefined;
+    const lineText = editor.getLine(cursor.line) ?? "";
+    const textBefore = lineText.slice(0, cursor.ch);
+    // A typed separator is `tryExpandAtSeparator`'s: it tries literal triggers, then every rule in list order
+    // (instant ones through the separator), so the order stays one order.
+    if (DEFAULT_DELIMITERS.includes(textBefore.charAt(textBefore.length - 1))) return undefined;
+    // This runs after EVERY typed character: look at the tail first and build the context (it scans the note for
+    // frontmatter, fences and math) only for a match.
+    // The match is handed on, so the rule's regex runs once per hit.
+    const hit = matchPatterns(textBefore, patterns, "instant");
+    if (!hit) return undefined;
+    const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, cursor.line, cursor.ch);
+    return expandAndApply(
+        editor,
+        () => expandInstant(textBefore, ctx, hit),
+        cursor.line,
+        lineText,
+        "",
+        cursor,
+        deps.pairCloser,
+    );
 }
 
 /** B-197: what the picker paths need to run the full placeholder pipeline. */

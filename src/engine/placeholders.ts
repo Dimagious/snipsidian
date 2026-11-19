@@ -29,23 +29,30 @@ export function codeRanges(text: string): Array<[number, number]> {
         } else if (m && m[1]) {
             fence = { start: offset, marker: m[1] };
         } else if (line.includes("`")) {
-            let i = 0;
-            while (i < line.length) {
+            // Backtick runs of the line, each opened by the next run of exactly the same length (linear).
+            const runs: Array<{ start: number; len: number }> = [];
+            for (let i = 0; i < line.length;) {
                 if (line[i] !== "`") { i++; continue; }
                 let j = i;
                 while (line[j] === "`") j++;
-                const run = line.slice(i, j);
-                const close = line.indexOf(run, j);
-                // The closing run must be exactly as long as the opening one.
-                let k = close;
-                while (k >= 0 && (line[k + run.length] === "`" || line[k - 1] === "`")) {
-                    k = line.indexOf(run, k + 1);
-                }
-                if (k >= 0) {
-                    ranges.push([offset + i, offset + k + run.length]);
-                    i = k + run.length;
+                runs.push({ start: i, len: j - i });
+                i = j;
+            }
+            const nextSame: number[] = new Array<number>(runs.length).fill(-1);
+            const lastOfLen = new Map<number, number>();
+            for (let idx = runs.length - 1; idx >= 0; idx--) {
+                const len = runs[idx]?.len ?? 0;
+                nextSame[idx] = lastOfLen.get(len) ?? -1;
+                lastOfLen.set(len, idx);
+            }
+            for (let idx = 0; idx < runs.length;) {
+                const open = runs[idx];
+                const close = runs[nextSame[idx] ?? -1];
+                if (open && close) {
+                    ranges.push([offset + open.start, offset + close.start + close.len]);
+                    idx = (nextSame[idx] ?? idx) + 1;
                 } else {
-                    i = j;
+                    idx++;
                 }
             }
         }
@@ -194,6 +201,20 @@ const MARKER_CHARS_RE = /[\uE002-\uE004]/g;
 
 /** B-166: `{{date}}`, `{{time}}`, `{{date:FMT}}`, `{{time:FMT}}` (core Templates syntax). */
 const FORMATTED_RE = /\{\{(date|time)(?::([^{}]*))?\}\}/g;
+
+/**
+ * B-266: the placeholders `substituteVariables` would replace in `text`, for an importer that must not let foreign
+ * text be read as one: `$date`, `$time`, `$filename`, `$clipboard` (word boundary after, as in the engine) and the
+ * `{{date}}` / `{{time}}` / `{{date:FMT}}` / `{{time:FMT}}` forms. Keep in step with `substituteVariables`.
+ */
+export function findVariableTokens(text: string): string[] {
+    return Array.from(text.matchAll(/\$(?:date|time|filename|clipboard)\b/g), (m) => m[0]);
+}
+
+export function findFormattedTokens(text: string): string[] {
+    return Array.from(text.matchAll(new RegExp(FORMATTED_RE.source, "g")), (m) => m[0]);
+}
+
 const DEFAULT_DATE_FORMAT = "YYYY-MM-DD";
 const DEFAULT_TIME_FORMAT = "HH:mm";
 

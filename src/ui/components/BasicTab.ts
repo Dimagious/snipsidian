@@ -1,12 +1,12 @@
 import { App, Notice, Platform } from "obsidian";
 import type SnipSidianPlugin from "../../main";
 import type { HotkeysTabHandle } from "../../types";
-import { isRecordOfString } from "../../shared/guards";
 import { ImportPreviewModal } from "./Modals";
 import { currentValuesForRejected, filterImportKeys } from "../../services/import-diff";
 import { DEFAULT_SNIPPETS_GROUP, planRestoreDefaults } from "../../store/presets";
 import { joinKey } from "../../store/keys";
-import { commitSnippets } from "../../core/commit-snippets";
+import { commitSnippets, commitSnippetsAndPatterns } from "../../core/commit-snippets";
+import { buildBackupObject, planJsonPatternImport, readBackupFile } from "../../core/json-backup";
 import { validatePackageForInstall } from "../../services/package-validator";
 import { sanitizeForNotice } from "../../shared/notice-text";
 import { renderDefinitionGroups } from "../utils/setting-definitions";
@@ -167,7 +167,7 @@ export class BasicTab {
      * path unchanged; mobile writes the export into the vault instead.
      */
     private async exportJson() {
-        const data = JSON.stringify(this.plugin.settings.snippets, null, 2);
+        const data = JSON.stringify(buildBackupObject(this.plugin.settings), null, 2);
 
         if (!Platform.isDesktop) {
             await this.exportJsonToVaultOrClipboard(data);
@@ -232,19 +232,26 @@ export class BasicTab {
             try {
                 const text = await file.text();
                 const parsed: unknown = JSON.parse(text);
-                if (!isRecordOfString(parsed)) {
-                    new Notice(
-                        "Invalid JSON: must be an object of { trigger: replacement } strings",
-                    );
+                const backup = readBackupFile(parsed);
+                if (!backup.ok) {
+                    new Notice(backup.message);
                     return;
                 }
+                const incomingRules = backup.patterns;
 
                 // B-177: only keys that pass the trigger/replacement checks
                 // are ever written; the modal lists the rest with reasons.
-                const { accepted, rejected } = filterImportKeys(parsed);
+                const { accepted, rejected } = filterImportKeys(backup.snippets);
                 new ImportPreviewModal(this.app, {
                     current: this.plugin.settings.snippets,
-                    incoming: parsed,
+                    incoming: backup.snippets,
+                    ...(incomingRules === null
+                        ? {}
+                        : {
+                              patterns: {
+                                  plan: (mode) => planJsonPatternImport(incomingRules, mode, this.plugin.settings),
+                              },
+                          }),
                     onConfirm: async (mode) => {
                         const next =
                             mode === "replace"
@@ -256,24 +263,45 @@ export class BasicTab {
                                       ...accepted,
                                   }
                                 : { ...this.plugin.settings.snippets, ...accepted };
+                        // The rules are planned again against the settings as they are now (the S-009 gate and the
+                        // 100 rule cap run here, not only in the preview).
+                        const rulePlan =
+                            incomingRules === null
+                                ? null
+                                : planJsonPatternImport(incomingRules, mode, this.plugin.settings);
                         try {
                             // B-181: rolls the in-memory map back if the save
                             // rejects (the modal only console.errors a rejection).
-                            await commitSnippets(this.plugin.settings, next, () =>
-                                this.plugin.saveSettings(),
-                            );
+                            if (rulePlan?.next) {
+                                await commitSnippetsAndPatterns(
+                                    this.plugin.settings,
+                                    next,
+                                    rulePlan.next,
+                                    () => this.plugin.saveSettings(),
+                                );
+                            } else {
+                                await commitSnippets(this.plugin.settings, next, () =>
+                                    this.plugin.saveSettings(),
+                                );
+                            }
                         } catch (err) {
                             const message = err instanceof Error ? err.message : String(err);
                             new Notice(`Import failed: ${sanitizeForNotice(message)}`);
                             return;
                         }
                         const count = Object.keys(accepted).length;
-                        const skippedNote =
-                            rejected.length > 0 ? ` (${rejected.length} skipped)` : "";
+                        const ruleCount = rulePlan?.next ? rulePlan.rows.length : 0;
+                        const skippedCount = rejected.length + (rulePlan?.skipped.length ?? 0);
+                        const skippedNote = skippedCount > 0 ? ` (${skippedCount} skipped)` : "";
+                        const snippetsText = `${count} snippet${count === 1 ? "" : "s"}`;
+                        const withRules =
+                            rulePlan?.next
+                                ? ` and ${ruleCount} pattern rule${ruleCount === 1 ? "" : "s"}`
+                                : "";
                         new Notice(
                             mode === "replace"
-                                ? `Replaced library with ${count} snippet${count === 1 ? "" : "s"}${skippedNote}`
-                                : `Merged ${count} snippet${count === 1 ? "" : "s"}${skippedNote}`,
+                                ? `Replaced library with ${snippetsText}${withRules}${skippedNote}`
+                                : `Merged ${snippetsText}${withRules}${skippedNote}`,
                         );
                         this.onDeclarativeChange?.();
                     },

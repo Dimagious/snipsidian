@@ -80,6 +80,8 @@ export function makeMockPlugin(opts: {
     activeEditor?: MockEditor | null;
     /** The manifest id the plugin ships under (the same build has two). */
     pluginId?: string;
+    /** What the runtime guard reports (rules switched off for the session), for the Patterns page. */
+    switchedOff?: Array<{ id: string; reason: string }>;
 } = {}) {
     const settings: SnipSidianSettings = {
         ...makeDefaultSettings(),
@@ -98,6 +100,7 @@ export function makeMockPlugin(opts: {
             dir: `.obsidian/plugins/${opts.pluginId ?? "snipsidian"}`,
             version: opts.pluginVersion ?? "1.1.1",
         },
+        patternHealth: () => ({ switchedOff: opts.switchedOff ?? [], deadlineHits: 0 }),
         saveSettings: async () => {
             // Snapshot the settings at save time so tests can assert
             // the exact state that was written (vs the current

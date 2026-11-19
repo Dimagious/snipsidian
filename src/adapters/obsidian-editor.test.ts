@@ -12,8 +12,9 @@ vi.mock("obsidian", async () => {
     };
 });
 
-import { makeExpandInput, makeContext, applyEditPlan, tryExpandAtSeparator, tryExpandAtCursor, canExpandAtCursor, insertSnippetAtCursor, wrapSelectionWithSnippet } from "./obsidian-editor";
-import type { Dict } from "../engine/types";
+import { makeExpandInput, makeContext, applyEditPlan, tryExpandAtSeparator, tryExpandAtCursor, tryExpandInstant, canExpandAtCursor, insertSnippetAtCursor, wrapSelectionWithSnippet, PATTERN_USER_EVENT, type PairedCloser } from "./obsidian-editor";
+import { compilePatternRules } from "../engine/patterns";
+import type { Dict, PatternRule } from "../engine/types";
 import { MockEditor, asEditor } from "../test/factories/editor";
 
 describe("adapters/obsidian-editor: makeExpandInput", () => {
@@ -1074,6 +1075,573 @@ describe("adapters/obsidian-editor: B-243 field stops from the picker paths", ()
     });
 });
 
+
+// ADR-0008 patterns ---------------------------------------------------------
+
+function rules(...list: Array<Partial<PatternRule> & { source: string }>) {
+    const set = compilePatternRules(list.map((r, i) => ({ id: `r${i}`, replacement: "x", enabled: true, mode: "instant", ...r })));
+    expect(set.errors).toEqual([]);
+    return set.rules;
+}
+
+/** A stand-in for the CM6 view behind `editor.cm`: it records the specs and applies them to the mock. */
+function withView(ed: MockEditor) {
+    type Spec = { changes: { from: number; to: number; insert: string }; selection?: { anchor: number }; userEvent?: string };
+    const specs: Spec[] = [];
+    const view = {
+        dispatch: (spec: Spec) => {
+            specs.push(spec);
+            const caretAtEnd = ed.getCursor().ch === spec.changes.to;
+            ed.replaceRange(spec.changes.insert, { line: 0, ch: spec.changes.from }, { line: 0, ch: spec.changes.to });
+            // CM6 maps a caret at the end of a replaced range to the end of the insert.
+            if (caretAtEnd) ed.setCursor({ line: 0, ch: spec.changes.from + spec.changes.insert.length });
+            if (spec.selection) ed.setCursor({ line: 0, ch: spec.selection.anchor });
+        },
+    };
+    return { editor: Object.assign(ed, { cm: view }), specs };
+}
+
+const pdeps = { filename: "note.md", now: new Date("2025-09-02T10:11:12") };
+
+describe("adapters/obsidian-editor: applyEditPlan, pattern plans (own undo step)", () => {
+    const plan = { kind: "pattern" as const, fromCh: 2, toCh: 5, insert: "X" };
+
+    it("writes through the CM6 view with a non-typing, non-joinable userEvent", () => {
+        const ed = new MockEditor("a 1/2");
+        const { editor, specs } = withView(ed);
+        applyEditPlan(asEditor(editor), plan, 0);
+        expect(ed.getLine(0)).toBe("a X");
+        expect(specs).toEqual([{ changes: { from: 2, to: 5, insert: "X" }, userEvent: PATTERN_USER_EVENT }]);
+        // not typing (the bridge must not re-scan it) and not joined into CM6's typing group
+        expect(PATTERN_USER_EVENT).not.toMatch(/^(input|delete)/);
+        expect(PATTERN_USER_EVENT).not.toMatch(/^(input\.type|delete)($|\.)/);
+    });
+
+    it("falls back to replaceRange on a legacy editor without a CM6 view", () => {
+        const ed = new MockEditor("a 1/2");
+        applyEditPlan(asEditor(ed), plan, 0);
+        expect(ed.getLine(0)).toBe("a X");
+    });
+
+    it("a literal plan stays on replaceRange, byte for byte as before", () => {
+        const ed = new MockEditor("a 1/2");
+        const { editor, specs } = withView(ed);
+        applyEditPlan(asEditor(editor), { fromCh: 2, toCh: 5, insert: "X" }, 0);
+        expect(ed.getLine(0)).toBe("a X");
+        expect(specs).toEqual([]);
+    });
+});
+
+describe("adapters/obsidian-editor: separator-mode patterns", () => {
+    const fraction = rules({ source: String.raw`/(\d+)\/(\d+)$/`, replacement: "{{1}}\u2044{{2}}", mode: "separator" });
+
+    function typedSpace(text: string): MockEditor {
+        const ed = new MockEditor(text);
+        ed.setCursor({ line: 0, ch: text.length });
+        return ed;
+    }
+
+    it("expands on the separator, keeps it, and reports what was typed", async () => {
+        const ed = typedSpace("take 3/4 ");
+        const { editor, specs } = withView(ed);
+        const result = await tryExpandAtSeparator(asEditor(editor), {}, { ...pdeps, patterns: fraction });
+        expect(ed.getLine(0)).toBe("take 3\u20444 ");
+        expect(result).toEqual({ from: 5, insert: "3\u20444", original: "3/4", separator: " " });
+        expect(specs[0]?.userEvent).toBe(PATTERN_USER_EVENT);
+    });
+
+    it("a literal trigger wins and is still written untagged", async () => {
+        const ed = typedSpace("brb ");
+        const { editor, specs } = withView(ed);
+        const result = await tryExpandAtSeparator(asEditor(editor), { brb: "be right back" }, { ...pdeps, patterns: rules({ source: "/brb$/", replacement: "PATTERN", mode: "separator" }) });
+        expect(ed.getLine(0)).toBe("be right back ");
+        expect(result?.original).toBe("brb");
+        expect(specs).toEqual([]);
+    });
+
+    it("without patterns nothing changes", async () => {
+        const ed = typedSpace("take 3/4 ");
+        expect(await tryExpandAtSeparator(asEditor(ed), {}, pdeps)).toBeUndefined();
+        expect(ed.getLine(0)).toBe("take 3/4 ");
+    });
+
+    it("the Enter separator works for patterns too", async () => {
+        const ed = new MockEditor("mtg Bob\n");
+        ed.setCursor({ line: 1, ch: 0 });
+        const result = await tryExpandAtSeparator(asEditor(ed), {}, {
+            ...pdeps,
+            patterns: rules({ source: String.raw`/mtg (\w+)$/`, replacement: "With {{1}}", mode: "separator" }),
+        });
+        expect(ed.getLine(0)).toBe("With Bob");
+        expect(result).toMatchObject({ original: "mtg Bob", separator: "\n" });
+    });
+
+    it("a pattern in a code span does not expand", async () => {
+        const ed = typedSpace("`take 3/4 ");
+        expect(await tryExpandAtSeparator(asEditor(ed), {}, { ...pdeps, patterns: fraction })).toBeUndefined();
+    });
+
+    it("the staleness guard still protects a pattern edit (the note changed while it was resolved)", async () => {
+        const ed = typedSpace("take 3/4 ");
+        const rulesWithClipboard = rules({ source: String.raw`/(\d+)\/(\d+)$/`, replacement: "$clipboard", mode: "separator" });
+        const result = await tryExpandAtSeparator(asEditor(ed), {}, {
+            ...pdeps,
+            patterns: rulesWithClipboard,
+            readClipboard: async () => {
+                ed.lines[0] = "take 9/9 ";
+                return "CLIP";
+            },
+        });
+        expect(result).toBeUndefined();
+        expect(ed.getLine(0)).toBe("take 9/9 ");
+    });
+
+    it("\"Expand trigger at cursor\" runs separator-mode patterns, not instant ones", async () => {
+        const ed = new MockEditor("take 3/4");
+        ed.setCursor({ line: 0, ch: 8 });
+        const both = rules(
+            { source: String.raw`/(\d{1,2})\/(\d{1,2})$/`, replacement: "INSTANT", mode: "instant" },
+            { source: String.raw`/(\d+)\/(\d+)$/`, replacement: "{{1}}\u2044{{2}}", mode: "separator" },
+        );
+        const result = await tryExpandAtCursor(asEditor(ed), {}, { ...pdeps, patterns: both });
+        expect(ed.getLine(0)).toBe("take 3\u20444");
+        expect(result).toMatchObject({ from: 5, original: "3/4", separator: "" });
+    });
+});
+
+describe("adapters/obsidian-editor: instant rules on a typed separator (one order for all rules)", () => {
+    const dots = { source: String.raw`/\.\.\.$/`, replacement: "\u2026", mode: "instant" } as const;
+    const bracket = { source: String.raw`/(\w+)\.\.$/`, replacement: "[{{1}}]", mode: "separator" } as const;
+
+    function typed(text: string): MockEditor {
+        const ed = new MockEditor(text);
+        ed.setCursor({ line: 0, ch: text.length });
+        return ed;
+    }
+
+    it("foo... types foo\u2026 when the instant rule is listed first, and the result carries no separator", async () => {
+        const ed = typed("foo...");
+        const { editor, specs } = withView(ed);
+        const result = await tryExpandAtSeparator(asEditor(editor), {}, { ...pdeps, patterns: rules(dots, bracket), instant: true });
+        expect(ed.getLine(0)).toBe("foo\u2026");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 4 });
+        expect(result).toEqual({ from: 3, insert: "\u2026", original: "...", separator: "" });
+        expect(specs).toEqual([{ changes: { from: 3, to: 6, insert: "\u2026" }, userEvent: PATTERN_USER_EVENT }]);
+    });
+
+    it("the separator rule listed first takes it, and the separator stays", async () => {
+        const ed = typed("foo...");
+        const result = await tryExpandAtSeparator(asEditor(ed), {}, { ...pdeps, patterns: rules(bracket, dots), instant: true });
+        expect(ed.getLine(0)).toBe("[foo].");
+        expect(result).toMatchObject({ original: "foo..", separator: "." });
+    });
+
+    it("without the instant flag (not a single typed character) instant rules stay out", async () => {
+        const ed = typed("foo...");
+        expect(await tryExpandAtSeparator(asEditor(ed), {}, { ...pdeps, patterns: rules(dots) })).toBeUndefined();
+        expect(ed.getLine(0)).toBe("foo...");
+    });
+
+    it("Enter never runs an instant rule, whatever the flag says", async () => {
+        const ed = new MockEditor("foo...\n");
+        ed.setCursor({ line: 1, ch: 0 });
+        expect(await tryExpandAtSeparator(asEditor(ed), {}, { ...pdeps, patterns: rules(dots), instant: true })).toBeUndefined();
+        expect(ed.getLine(0)).toBe("foo...");
+    });
+
+    it("a field session after an instant expansion on a separator ends right after the insert", async () => {
+        const ed = typed("a...");
+        const result = await tryExpandAtSeparator(asEditor(ed), {}, {
+            ...pdeps,
+            patterns: rules({ source: String.raw`/\.\.\.$/`, replacement: "[$1][$2]", mode: "instant" }),
+            instant: true,
+        });
+        expect(ed.getLine(0)).toBe("a[][]");
+        expect(result?.session).toEqual({ fields: [2, 4], docOrder: [0, 1], final: 5 });
+    });
+
+    it("tryExpandInstant leaves a typed separator to the separator path", async () => {
+        const ed = typed("foo...");
+        expect(await tryExpandInstant(asEditor(ed), rules(dots), pdeps)).toBeUndefined();
+        expect(ed.getLine(0)).toBe("foo...");
+    });
+});
+
+describe("adapters/obsidian-editor: tryExpandInstant", () => {
+    const arrow = rules({ source: "/->$/", replacement: "\u2192" });
+
+    function at(text: string, ch = text.length): MockEditor {
+        const ed = new MockEditor(text);
+        ed.setCursor({ line: 0, ch });
+        return ed;
+    }
+
+    it("replaces the match that ends at the caret and puts the caret after it", async () => {
+        const ed = at("a ->");
+        const { editor, specs } = withView(ed);
+        const result = await tryExpandInstant(asEditor(editor), arrow, pdeps);
+        expect(ed.getLine(0)).toBe("a \u2192");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 3 });
+        expect(result).toEqual({ from: 2, insert: "\u2192", original: "->", separator: "" });
+        expect(specs).toEqual([{ changes: { from: 2, to: 4, insert: "\u2192" }, userEvent: PATTERN_USER_EVENT }]);
+    });
+
+    it("a hit runs the rule's regex once: the plan is built from the match found first", async () => {
+        const [rule] = arrow;
+        if (!rule) throw new Error("no rule");
+        const exec = vi.spyOn(rule.re, "exec");
+        const ed = at("a ->");
+        await tryExpandInstant(asEditor(ed), arrow, pdeps);
+        expect(ed.getLine(0)).toBe("a \u2192");
+        expect(exec).toHaveBeenCalledTimes(1);
+        // A guarded hit (inside inline code) is matched once too, then dropped.
+        exec.mockClear();
+        await tryExpandInstant(asEditor(at("`a ->` b", 5)), arrow, pdeps);
+        expect(exec).toHaveBeenCalledTimes(1);
+        exec.mockRestore();
+    });
+
+    it("text after the caret stays", async () => {
+        const ed = at("a -> b", 4);
+        await tryExpandInstant(asEditor(ed), arrow, pdeps);
+        expect(ed.getLine(0)).toBe("a \u2192 b");
+    });
+
+    it("nothing happens at the start of a line, with a selection, or with no match", async () => {
+        expect(await tryExpandInstant(asEditor(at("->", 0)), arrow, pdeps)).toBeUndefined();
+        const selected = at("a ->");
+        selected.selection = "->";
+        expect(await tryExpandInstant(asEditor(selected), arrow, pdeps)).toBeUndefined();
+        expect(selected.getLine(0)).toBe("a ->");
+        const plain = at("a -");
+        expect(await tryExpandInstant(asEditor(plain), arrow, pdeps)).toBeUndefined();
+        expect(plain.getLine(0)).toBe("a -");
+    });
+
+    it("guards: not in inline code, a fenced block, math or frontmatter", async () => {
+        const inline = at("`a ->` b", 5);
+        expect(await tryExpandInstant(asEditor(inline), arrow, pdeps)).toBeUndefined();
+        expect(inline.getLine(0)).toBe("`a ->` b");
+        const fence = new MockEditor("```\na ->\n```");
+        fence.setCursor({ line: 1, ch: 4 });
+        expect(await tryExpandInstant(asEditor(fence), arrow, pdeps)).toBeUndefined();
+        const front = new MockEditor("---\ntitle: ->\n---\n");
+        front.setCursor({ line: 1, ch: 10 });
+        expect(await tryExpandInstant(asEditor(front), arrow, pdeps)).toBeUndefined();
+        const math = at("$a ->", 5);
+        expect(await tryExpandInstant(asEditor(math), arrow, pdeps)).toBeUndefined();
+    });
+
+    it("$| puts the caret inside the insert", async () => {
+        const ed = at("box");
+        await tryExpandInstant(asEditor(ed), rules({ source: "/box$/", replacement: "[ $| ]" }), pdeps);
+        expect(ed.getLine(0)).toBe("[  ]");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 2 });
+    });
+
+    it("fields: the caret goes to the first field and the session starts with document offsets", async () => {
+        const ed = at("x lnk");
+        const result = await tryExpandInstant(asEditor(ed), rules({ source: "/lnk$/", replacement: "[$1]($2)" }), pdeps);
+        expect(ed.getLine(0)).toBe("x []()");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 3 });
+        // no `$|`: the last Tab lands after the insert (there is no separator)
+        expect(result?.session).toEqual({ fields: [3, 5], docOrder: [0, 1], final: 6 });
+    });
+
+    it("a captured $1 is not a field", async () => {
+        const ed = at("x v$1");
+        const result = await tryExpandInstant(asEditor(ed), rules({ source: String.raw`/v(\S+)$/`, replacement: "<{{1}}>" }), pdeps);
+        expect(ed.getLine(0)).toBe("x <$1>");
+        expect(result?.session).toBeUndefined();
+    });
+
+    it("a field session does not pull the caret when the user moved during an async clipboard read (B-147)", async () => {
+        const ed = at("x clip y z", 6);
+        const { editor } = withView(ed);
+        const result = await tryExpandInstant(asEditor(editor), rules({ source: "/clip$/", replacement: "$clipboard $1 $2" }), {
+            ...pdeps,
+            readClipboard: async () => {
+                ed.setCursor({ line: 0, ch: 10 }); // the user clicked elsewhere
+                return "CLIP";
+            },
+        });
+        expect(ed.getLine(0)).toBe("x CLIP   y z");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 10 + "CLIP  ".length - "clip".length });
+        expect(result?.session).toBeUndefined();
+        expect(result?.original).toBe("clip");
+    });
+
+    it("refuses to overwrite when the line changed under it", async () => {
+        const ed = at("x clip");
+        const result = await tryExpandInstant(asEditor(ed), rules({ source: "/clip$/", replacement: "$clipboard" }), {
+            ...pdeps,
+            readClipboard: async () => {
+                ed.lines[0] = "x CHANGED";
+                return "CLIP";
+            },
+        });
+        expect(result).toBeUndefined();
+        expect(ed.getLine(0)).toBe("x CHANGED");
+    });
+});
+
+describe("adapters/obsidian-editor: an instant rule that replaces the opener of an auto-paired closer (ADR-0008)", () => {
+    // `x :(` typed with "Auto pair brackets": the editor wrote `()`, caret between. With auto-pair off the same typing
+    // gives `x \u2639`, so the closer goes with the opener, in the same write.
+    const sad = rules({ source: String.raw`/:\($/`, replacement: "\u2639", mode: "instant" });
+    const star = rules({ source: String.raw`/\*$/`, replacement: "\u2022", mode: "instant" });
+
+    function at(text: string, ch: number): MockEditor {
+        const ed = new MockEditor(text);
+        ed.setCursor({ line: 0, ch });
+        return ed;
+    }
+
+    /** What the bridge hands over: the closer, with the caret and the line as the pair insert left them. */
+    function pair(closer: string, ed: MockEditor): PairedCloser {
+        return { closer, caret: ed.getCursor(), lineText: ed.getLine(0) };
+    }
+
+    it("a rule typed through a separator opener (`(`) takes the closer in one write and leaves the caret after the insert", async () => {
+        const { editor, specs } = withView(at("x :()", 4));
+        const result = await tryExpandAtSeparator(asEditor(editor), {}, { ...pdeps, patterns: sad, instant: true, pairCloser: pair(")", editor) });
+        expect(editor.getLine(0)).toBe("x \u2639");
+        expect(specs).toEqual([
+            { changes: { from: 2, to: 5, insert: "\u2639" }, selection: { anchor: 3 }, userEvent: PATTERN_USER_EVENT },
+        ]);
+        expect(editor.getCursor()).toEqual({ line: 0, ch: 3 });
+        // what a highlight / Backspace undo restores is the whole pair
+        expect(result).toEqual({ from: 2, insert: "\u2639", original: ":()", separator: "", restoreCaret: 2 });
+    });
+
+    it("the same typing without a known auto-pair closer leaves it alone (nothing else to go by)", async () => {
+        const { editor, specs } = withView(at("x :()", 4));
+        await tryExpandAtSeparator(asEditor(editor), {}, { ...pdeps, patterns: sad, instant: true });
+        expect(editor.getLine(0)).toBe("x \u2639)");
+        expect(specs[0]?.changes).toEqual({ from: 2, to: 4, insert: "\u2639" });
+        expect(specs[0]?.selection).toBeUndefined();
+    });
+
+    it("a rule on a non-separator opener (`*` of `**`) takes the closer too", async () => {
+        const { editor, specs } = withView(at("x **", 3));
+        await tryExpandInstant(asEditor(editor), star, { ...pdeps, pairCloser: pair("*", editor) });
+        expect(editor.getLine(0)).toBe("x \u2022");
+        expect(specs[0]).toMatchObject({ changes: { from: 2, to: 4, insert: "\u2022" }, selection: { anchor: 3 } });
+    });
+
+    it("only the closer of that update: another character after the caret stays", async () => {
+        const { editor } = withView(at("x :(a)", 4));
+        await tryExpandAtSeparator(asEditor(editor), {}, { ...pdeps, patterns: sad, instant: true, pairCloser: pair(")", editor) });
+        expect(editor.getLine(0)).toBe("x \u2639a)");
+    });
+
+    it("a different closer than the one inserted stays", async () => {
+        const { editor } = withView(at("x :(]", 4));
+        await tryExpandAtSeparator(asEditor(editor), {}, { ...pdeps, patterns: sad, instant: true, pairCloser: pair(")", editor) });
+        expect(editor.getLine(0)).toBe("x \u2639]");
+    });
+
+    it("a separator-mode rule typed through `(` keeps the opener, so the pair stays whole", async () => {
+        const { editor } = withView(at("x :a()", 5));
+        const sepRule = rules({ source: String.raw`/:a$/`, replacement: "A", mode: "separator" });
+        await tryExpandAtSeparator(asEditor(editor), {}, { ...pdeps, patterns: sepRule, instant: true, pairCloser: pair(")", editor) });
+        expect(editor.getLine(0)).toBe("x A()");
+    });
+
+    it("a literal trigger before `(` keeps the pair as before", async () => {
+        const { editor } = withView(at("brb()", 4));
+        await tryExpandAtSeparator(asEditor(editor), { brb: "be right back" }, { ...pdeps, patterns: sad, instant: true, pairCloser: pair(")", editor) });
+        expect(editor.getLine(0)).toBe("be right back()");
+    });
+
+    it("the legacy editor without a CM6 view is left as it was (the plain write cannot place the caret)", async () => {
+        const ed = at("x :()", 4);
+        await tryExpandAtSeparator(asEditor(ed), {}, { ...pdeps, patterns: sad, instant: true, pairCloser: pair(")", ed) });
+        expect(ed.getLine(0)).toBe("x \u2639)");
+    });
+
+    it("a separator rule typed through a self-paired opener (`\"` of `\"\"`) does not take the closer: it ends before the caret", async () => {
+        // `x :a""`, caret between the quotes: the rule ends before the typed `"`, so the second `"` is not its closer
+        const { editor } = withView(at('x :a""', 5));
+        const sepRule = rules({ source: String.raw`/:a$/`, replacement: "A", mode: "separator" });
+        await tryExpandAtSeparator(asEditor(editor), {}, { ...pdeps, patterns: sepRule, instant: true, pairCloser: pair('"', editor) });
+        expect(editor.getLine(0)).toBe('x A""');
+    });
+
+    const clip = rules({ source: String.raw`/:\($/`, replacement: "$clipboard", mode: "instant" });
+
+    it("the caret moving during the await does not pull it back, and the closer stays (fail closed)", async () => {
+        const ed = at("x :()", 4);
+        const { editor, specs } = withView(ed);
+        const result = await tryExpandAtSeparator(asEditor(editor), {}, {
+            ...pdeps,
+            patterns: clip,
+            instant: true,
+            pairCloser: pair(")", editor),
+            readClipboard: async () => {
+                ed.setCursor({ line: 0, ch: 1 });
+                return "CLIP";
+            },
+        });
+        expect(editor.getLine(0)).toBe("x CLIP)");
+        expect(specs[0]?.selection).toBeUndefined();
+        expect(editor.getCursor()).toEqual({ line: 0, ch: 1 });
+        expect(result?.restoreCaret).toBeUndefined();
+    });
+
+    it("a `)` typed over the closer during the await stays, with no restore caret", async () => {
+        const ed = at("x :()", 4);
+        const { editor } = withView(ed);
+        const result = await tryExpandAtSeparator(asEditor(editor), {}, {
+            ...pdeps,
+            patterns: clip,
+            instant: true,
+            pairCloser: pair(")", editor),
+            readClipboard: async () => {
+                ed.setCursor({ line: 0, ch: 5 }); // step-over: selection only, the line is untouched
+                return "CLIP";
+            },
+        });
+        expect(editor.getLine(0)).toBe("x CLIP)");
+        expect(result?.restoreCaret).toBeUndefined();
+    });
+
+    it("`) ` typed during the await keeps both characters", async () => {
+        const ed = at("x :()", 4);
+        const { editor } = withView(ed);
+        const result = await tryExpandAtSeparator(asEditor(editor), {}, {
+            ...pdeps,
+            patterns: clip,
+            instant: true,
+            pairCloser: pair(")", editor),
+            readClipboard: async () => {
+                ed.lines[0] = "x :() ";
+                ed.setCursor({ line: 0, ch: 6 });
+                return "CLIP";
+            },
+        });
+        expect(editor.getLine(0)).toBe("x CLIP) ");
+        expect(result?.restoreCaret).toBeUndefined();
+    });
+
+    it("Expand at cursor never takes a closer, even with `)` right after the caret", async () => {
+        const ed = at("x :)", 3);
+        const { editor } = withView(ed);
+        const rule = rules({ source: String.raw`/:$/`, replacement: "E", mode: "separator" });
+        await tryExpandAtCursor(asEditor(editor), {}, { ...pdeps, patterns: rule });
+        expect(editor.getLine(0)).toBe("x E)");
+    });
+
+    it("a closer recorded for a different caret is left alone (the fallback after a stale first attempt re-reads the caret)", async () => {
+        // Rule A (clipboard) is stale after the user rewrote the opener and clicked between `zx` and their own `)`; rule B then
+        // fires on the live caret and must not take that `)`.
+        const ed = at("x :() f(zx)", 4);
+        const { editor } = withView(ed);
+        const both = rules(
+            { source: String.raw`/:\($/`, replacement: "$clipboard", mode: "instant" },
+            { source: String.raw`/zx$/`, replacement: "\u2192", mode: "instant" },
+        );
+        const deps = {
+            ...pdeps,
+            pairCloser: pair(")", editor),
+            readClipboard: async () => {
+                ed.lines[0] = "x a() f(zx)";
+                ed.setCursor({ line: 0, ch: 10 });
+                return "CLIP";
+            },
+        };
+        const first = await tryExpandAtSeparator(asEditor(editor), {}, { ...deps, patterns: both, instant: true });
+        expect(first).toBeUndefined();
+        const second = await tryExpandInstant(asEditor(editor), both, deps);
+        expect(editor.getLine(0)).toBe("x a() f(\u2192)");
+        expect(second?.restoreCaret).toBeUndefined();
+    });
+
+    it("a closer recorded for another caret position is left alone, with the line unchanged", async () => {
+        const { editor } = withView(at("x :()", 4));
+        const stale: PairedCloser = { closer: ")", caret: { line: 0, ch: 3 }, lineText: "x :()" };
+        await tryExpandAtSeparator(asEditor(editor), {}, { ...pdeps, patterns: sad, instant: true, pairCloser: stale });
+        expect(editor.getLine(0)).toBe("x \u2639)");
+    });
+
+    it("a closer recorded for another version of the line is left alone, even with the caret at the same spot", async () => {
+        const { editor } = withView(at("x **", 3));
+        const stale: PairedCloser = { closer: "*", caret: { line: 0, ch: 3 }, lineText: "y **" };
+        await tryExpandInstant(asEditor(editor), star, { ...pdeps, pairCloser: stale });
+        expect(editor.getLine(0)).toBe("x \u2022*");
+    });
+
+    it("a forward Delete on the closer during the await, with an identical character behind it, writes nothing (first attempt)", async () => {
+        const ed = at("(x :())", 5);
+        const { editor, specs } = withView(ed);
+        const result = await tryExpandAtSeparator(asEditor(editor), {}, {
+            ...pdeps,
+            patterns: clip,
+            instant: true,
+            pairCloser: pair(")", ed),
+            readClipboard: async () => {
+                ed.lines[0] = "(x :()"; // the caret stays at 5
+                return "CLIP";
+            },
+        });
+        expect(result).toBeUndefined();
+        expect(specs).toEqual([]);
+        expect(ed.getLine(0)).toBe("(x :()");
+    });
+
+    it("a forward Delete on the closer during the await, with an identical character behind it, writes nothing (instant path)", async () => {
+        const ed = at("*x ***", 4);
+        const { editor, specs } = withView(ed);
+        const clipStar = rules({ source: String.raw`/\*$/`, replacement: "$clipboard", mode: "instant" });
+        const result = await tryExpandInstant(asEditor(editor), clipStar, {
+            ...pdeps,
+            pairCloser: pair("*", ed),
+            readClipboard: async () => {
+                ed.lines[0] = "*x **";
+                return "CLIP";
+            },
+        });
+        expect(result).toBeUndefined();
+        expect(specs).toEqual([]);
+        expect(ed.getLine(0)).toBe("*x **");
+    });
+
+    it("a selection at apply time with the head at the origin does not take the closer", async () => {
+        const ed = at("x :()", 4);
+        const { editor } = withView(ed);
+        const result = await tryExpandAtSeparator(asEditor(editor), {}, {
+            ...pdeps,
+            patterns: clip,
+            instant: true,
+            pairCloser: pair(")", ed),
+            readClipboard: async () => {
+                ed.selection = "sel"; // a selection whose head is still at the origin: the caret did not move
+                return "CLIP";
+            },
+        });
+        expect(editor.getLine(0)).toBe("x CLIP)");
+        expect(result?.restoreCaret).toBeUndefined();
+    });
+
+    it("a note that changed while the closer was being resolved is not overwritten", async () => {
+        const ed = at("x :()", 4);
+        const { editor } = withView(ed);
+        const clip = rules({ source: String.raw`/:\($/`, replacement: "$clipboard", mode: "instant" });
+        const result = await tryExpandAtSeparator(asEditor(editor), {}, {
+            ...pdeps,
+            patterns: clip,
+            instant: true,
+            pairCloser: pair(")", ed),
+            readClipboard: async () => {
+                ed.lines[0] = "x :(a";
+                return "CLIP";
+            },
+        });
+        expect(result).toBeUndefined();
+        expect(ed.getLine(0)).toBe("x :(a");
+    });
+});
+
 describe("adapters/obsidian-editor: B-255 canExpandAtCursor", () => {
     const dict: Dict = { brb: "be right back", fn: "function $|()" };
 
@@ -1085,35 +1653,48 @@ describe("adapters/obsidian-editor: B-255 canExpandAtCursor", () => {
     }
 
     it("is true for a trigger right before the caret", () => {
-        expect(canExpandAtCursor(asEditor(at("say brb")), dict)).toBe(true);
-        expect(canExpandAtCursor(asEditor(at("brb tail", 3)), dict)).toBe(true);
+        expect(canExpandAtCursor(asEditor(at("say brb")), dict)).toBeDefined();
+        expect(canExpandAtCursor(asEditor(at("brb tail", 3)), dict)).toBeDefined();
     });
 
     it("is false with no trigger, an unknown word, or a caret at column 0", () => {
-        expect(canExpandAtCursor(asEditor(at("say hello")), dict)).toBe(false);
-        expect(canExpandAtCursor(asEditor(at("")), dict)).toBe(false);
-        expect(canExpandAtCursor(asEditor(at("brb", 0)), dict)).toBe(false);
+        expect(canExpandAtCursor(asEditor(at("say hello")), dict)).toBeUndefined();
+        expect(canExpandAtCursor(asEditor(at("")), dict)).toBeUndefined();
+        expect(canExpandAtCursor(asEditor(at("brb", 0)), dict)).toBeUndefined();
     });
 
     it("is false inside a word that is no trigger, with a selection that is no trigger, and in code", () => {
-        expect(canExpandAtCursor(asEditor(at("brbx", 3)), dict)).toBe(false);
-        expect(canExpandAtCursor(asEditor(at("hello world", 5, "hello")), dict)).toBe(false);
-        expect(canExpandAtCursor(asEditor(at("`brb")), dict)).toBe(false);
+        expect(canExpandAtCursor(asEditor(at("brbx", 3)), dict)).toBeUndefined();
+        expect(canExpandAtCursor(asEditor(at("hello world", 5, "hello")), dict)).toBeUndefined();
+        expect(canExpandAtCursor(asEditor(at("`brb")), dict)).toBeUndefined();
     });
 
     // Parity with the original plugin: both inputs agree with the expand path.
     it("is true for a selection that is exactly a trigger, and for a caret inside a trigger word", () => {
-        expect(canExpandAtCursor(asEditor(at("say brb", 7, "brb")), dict)).toBe(true);
-        expect(canExpandAtCursor(asEditor(at("say brb now", 6)), dict)).toBe(true);
+        expect(canExpandAtCursor(asEditor(at("say brb", 7, "brb")), dict)).toBeDefined();
+        expect(canExpandAtCursor(asEditor(at("say brb now", 6)), dict)).toBeDefined();
     });
 
     it("is false for a caret at the START of a word (Tab keeps indenting there)", () => {
-        expect(canExpandAtCursor(asEditor(at("say brb", 4)), dict)).toBe(false);
+        expect(canExpandAtCursor(asEditor(at("say brb", 4)), dict)).toBeUndefined();
     });
 
     it("honours prefix mode like the command does", () => {
-        expect(canExpandAtCursor(asEditor(at("brb")), dict, ":")).toBe(false);
-        expect(canExpandAtCursor(asEditor(at(":brb")), dict, ":")).toBe(true);
+        expect(canExpandAtCursor(asEditor(at("brb")), dict, ":")).toBeUndefined();
+        expect(canExpandAtCursor(asEditor(at(":brb")), dict, ":")).toBeDefined();
+    });
+
+    // Tab runs this on every press: the note scan for frontmatter, fences and math (it reads `lastLine`) is only for
+    // a line that has something to expand.
+    it("looks at the note (frontmatter, fences, math) only when the line has a candidate", () => {
+        const scans = (ed: MockEditor): number => {
+            const spy = vi.spyOn(ed, "lastLine");
+            canExpandAtCursor(asEditor(ed), dict);
+            return spy.mock.calls.length;
+        };
+        expect(scans(at("say hello"))).toBe(0);
+        expect(scans(at("   "))).toBe(0);
+        expect(scans(at("say brb"))).toBeGreaterThan(0);
     });
 
     it("does not resolve or write anything", () => {
@@ -1123,7 +1704,240 @@ describe("adapters/obsidian-editor: B-255 canExpandAtCursor", () => {
     });
 
     it("never matches an inherited Object.prototype key (S-008)", () => {
-        expect(canExpandAtCursor(asEditor(at("constructor")), {})).toBe(false);
+        expect(canExpandAtCursor(asEditor(at("constructor")), {})).toBeUndefined();
+    });
+
+    describe("with pattern rules (ADR-0008)", () => {
+        const date = rules({ source: String.raw`/\bdd(\d+)$/`, mode: "separator" });
+
+        it("is true for a rule that matches the line before the caret, false without the rules", () => {
+            expect(canExpandAtCursor(asEditor(at("on dd5")), dict, undefined, date)).toBeDefined();
+            expect(canExpandAtCursor(asEditor(at("on dd5")), dict)).toBeUndefined();
+        });
+
+        it("is false when no rule matches, and for the empty rule list", () => {
+            expect(canExpandAtCursor(asEditor(at("on hello")), dict, undefined, date)).toBeUndefined();
+            expect(canExpandAtCursor(asEditor(at("on dd5")), dict, undefined, [])).toBeUndefined();
+        });
+
+        it("a caret inside the word is judged on the word up to its end, as the expand path does", () => {
+            expect(canExpandAtCursor(asEditor(at("on dd5 now", 5)), dict, undefined, date)).toBeDefined();
+        });
+
+        it("a selection is never matched against rules, only literal triggers count", () => {
+            expect(canExpandAtCursor(asEditor(at("on dd5", 6, "dd5")), dict, undefined, date)).toBeUndefined();
+            expect(canExpandAtCursor(asEditor(at("say brb", 7, "brb")), dict, undefined, date)).toBeDefined();
+        });
+
+        it("the guards still apply: no match in inline code", () => {
+            expect(canExpandAtCursor(asEditor(at("`on dd5")), dict, undefined, date)).toBeUndefined();
+        });
+
+        it("instant rules are skipped: Tab has no typed character to complete", () => {
+            const arrow = rules({ source: "/->$/", mode: "instant" });
+            expect(canExpandAtCursor(asEditor(at("a ->")), dict, undefined, arrow)).toBeUndefined();
+            // The same text through a separator rule is found, so the skip is about the mode.
+            const sep = rules({ source: "/->$/", mode: "separator" });
+            expect(canExpandAtCursor(asEditor(at("a ->")), dict, undefined, sep)).toBeDefined();
+        });
+
+        it("hands back what it found: the literal trigger, or the rule hit", () => {
+            const lit = canExpandAtCursor(asEditor(at("say brb")), dict, undefined, date);
+            expect(lit).toMatchObject({ literal: true });
+            expect(lit?.hit).toBeUndefined();
+            const hit = canExpandAtCursor(asEditor(at("on dd5")), dict, undefined, date);
+            expect(hit).toMatchObject({ literal: false, hit: { index: 3, captures: ["dd5", "5"] } });
+        });
+
+        // Owner decision: a match that starts after the caret would replace a tail the caret is not in.
+        describe("a caret inside a word (the match must start at or before the caret)", () => {
+            const tail = rules({ source: String.raw`/dd(\d+)$/`, mode: "separator" });
+
+            it("a match that starts after the caret does not count", () => {
+                expect(canExpandAtCursor(asEditor(at("abcdd5 x", 1)), dict, undefined, tail)).toBeUndefined();
+                expect(canExpandAtCursor(asEditor(at("abcdd5 x", 2)), dict, undefined, tail)).toBeUndefined();
+            });
+
+            it("a match that starts exactly at the caret, or spans it, counts", () => {
+                expect(canExpandAtCursor(asEditor(at("abcdd5 x", 3)), dict, undefined, tail)).toBeDefined();
+                expect(canExpandAtCursor(asEditor(at("abcdd5 x", 4)), dict, undefined, tail)).toBeDefined();
+            });
+
+            it("at the end of the word (not inside it) the rule is judged as before", () => {
+                expect(canExpandAtCursor(asEditor(at("abcdd5 x", 6)), dict, undefined, tail)).toBeDefined();
+            });
+
+            it("a literal trigger inside the word is unchanged", () => {
+                expect(canExpandAtCursor(asEditor(at("say brb now", 5)), dict, undefined, tail)).toBeDefined();
+            });
+        });
+
+        it("does not write anything", () => {
+            const ed = at("on dd5");
+            canExpandAtCursor(asEditor(ed), dict, undefined, date);
+            expect(ed.getLine(0)).toBe("on dd5");
+        });
+    });
+});
+
+describe("adapters/obsidian-editor: manual expansion with pattern rules (B-255 + ADR-0008)", () => {
+    const now = new Date("2025-09-02T10:11:12Z");
+    const date = rules({ source: String.raw`/\bdd(\d+)$/`, replacement: "day {{1}}", mode: "separator" });
+    const compileDate = (): ReturnType<typeof rules> => rules({ source: String.raw`/\bdd(\d+)$/`, replacement: "day {{1}}", mode: "separator" });
+    const dict: Dict = { brb: "be right back" };
+
+    function at(text: string, ch = text.length, selection = ""): MockEditor {
+        const ed = new MockEditor(text);
+        ed.setCursor({ line: 0, ch });
+        ed.selection = selection;
+        return ed;
+    }
+
+    it("a rule expands at the caret on the manual path", async () => {
+        const ed = at("on dd5");
+        const result = await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: date });
+        expect(ed.getLine(0)).toBe("on day 5");
+        expect(result).toMatchObject({ original: "dd5", insert: "day 5", separator: "" });
+    });
+
+    it("a caret inside the word takes the whole word and parks after the new text", async () => {
+        const ed = at("on dd5 now", 5);
+        await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: date });
+        expect(ed.getLine(0)).toBe("on day 5 now");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: 8 });
+    });
+
+    it("a literal trigger wins over a rule that matches the same text", async () => {
+        const both = rules({ source: "/brb$/", replacement: "PATTERN", mode: "separator" });
+        const ed = at("say brb");
+        await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: both });
+        expect(ed.getLine(0)).toBe("say be right back");
+    });
+
+    it("a selection is replaced only as a literal trigger, rules do not see it", async () => {
+        const ed = at("on dd5", 6, "dd5");
+        expect(await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: date })).toBeUndefined();
+        expect(ed.getLine(0)).toBe("on dd5");
+    });
+
+    // The command and Tab never know about an auto-paired closer: with the same rule an instant typing path would take
+    // the `)`; here it stays.
+    it("never takes the bracket after the caret (no pairCloser on this path)", async () => {
+        const opener = rules({ source: String.raw`/\(c$/`, replacement: "\u00a9", mode: "separator" });
+        const ed = at("x (c)", 4);
+        await tryExpandAtCursor(asEditor(ed), dict, { now, patterns: opener });
+        expect(ed.getLine(0)).toBe("x \u00a9)");
+    });
+
+    it("without `manual` a rule inside a word does nothing, as before", async () => {
+        const ed = at("on dd5 now", 5);
+        expect(await tryExpandAtCursor(asEditor(ed), dict, { now, patterns: date })).toBeUndefined();
+    });
+
+    describe("a caret inside a word: the match must start at or before the caret (command and Tab alike)", () => {
+        const tail = rules({ source: String.raw`/dd(\d+)$/`, replacement: "day {{1}}", mode: "separator" });
+
+        it("a tail the caret is not in is left alone: nothing changes, the caret stays", async () => {
+            const ed = at("abcdd5 x", 1);
+            expect(await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: tail })).toBeUndefined();
+            expect(ed.getLine(0)).toBe("abcdd5 x");
+            expect(ed.getCursor()).toEqual({ line: 0, ch: 1 });
+        });
+
+        it("a match that spans the caret still expands and parks the caret after the new text", async () => {
+            const ed = at("abcdd5 x", 4);
+            await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: tail });
+            expect(ed.getLine(0)).toBe("abcday 5 x");
+            expect(ed.getCursor()).toEqual({ line: 0, ch: 8 });
+        });
+    });
+
+    describe("rules run once per Tab (the check's hit is handed to the expansion)", () => {
+        // Compiled per test: the health counters (runs, switchedOff) are state, so no test can see another's.
+        const compile = (): ReturnType<typeof rules> => rules({ source: String.raw`/\bdd(\d+)$/`, replacement: "day {{1}}", mode: "separator" });
+
+        it("check plus expansion with `prepared` is one run of the rule", async () => {
+            const ruleSet = compile();
+            const ed = at("on dd5");
+            const found = canExpandAtCursor(asEditor(ed), dict, undefined, ruleSet);
+            expect(found).toBeDefined();
+            await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: ruleSet, prepared: found });
+            expect(ed.getLine(0)).toBe("on day 5");
+            expect(ruleSet[0]?.health.runs).toBe(1);
+        });
+
+        it("a rule the first run switched off cannot make the expansion find nothing", async () => {
+            const ruleSet = compile();
+            const ed = at("on dd5");
+            const found = canExpandAtCursor(asEditor(ed), dict, undefined, ruleSet);
+            // What a second run would see: the guard (strikes, 8 ms budget) took the rule out after the check.
+            const rule = ruleSet[0];
+            if (rule) rule.health.switchedOff = "Switched off: test.";
+            await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: ruleSet, prepared: found });
+            expect(ed.getLine(0)).toBe("on day 5");
+            // Control: without the handed hit the same switched-off rule finds nothing, so the test is not vacuous.
+            const again = at("on dd5");
+            expect(await tryExpandAtCursor(asEditor(again), dict, { now, manual: true, patterns: ruleSet })).toBeUndefined();
+        });
+
+        it("a literal trigger handed over expands without the rules being consulted", async () => {
+            const both = rules({ source: "/brb$/", replacement: "PATTERN", mode: "separator" });
+            const ed = at("say brb");
+            const found = canExpandAtCursor(asEditor(ed), dict, undefined, both);
+            expect(both[0]?.health.runs).toBe(0);
+            await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: both, prepared: found });
+            expect(ed.getLine(0)).toBe("say be right back");
+            expect(both[0]?.health.runs).toBe(0);
+        });
+    });
+
+    describe("the context guard of a rule hit (no `prepared`: the command and the alias)", () => {
+        const cases: Array<[string, () => MockEditor]> = [
+            ["inline code", () => at("`on dd5", 7)],
+            [
+                "a fenced block",
+                () => {
+                    const ed = new MockEditor("```\non dd5\n```");
+                    ed.setCursor({ line: 1, ch: 6 });
+                    return ed;
+                },
+            ],
+            [
+                "frontmatter",
+                () => {
+                    const ed = new MockEditor("---\ntitle: dd5\n---\n");
+                    ed.setCursor({ line: 1, ch: 11 });
+                    return ed;
+                },
+            ],
+        ];
+
+        for (const manual of [true, false]) {
+            for (const [name, make] of cases) {
+                it(`writes nothing in ${name} (manual: ${manual})`, async () => {
+                    const ed = make();
+                    const before = ed.lines.join("\n");
+                    const result = await tryExpandAtCursor(asEditor(ed), dict, { now, manual, patterns: compileDate() });
+                    expect(result).toBeUndefined();
+                    expect(ed.lines.join("\n")).toBe(before);
+                });
+            }
+        }
+
+        it("control: the same rule expands outside code", async () => {
+            const ed = at("on dd5");
+            expect(await tryExpandAtCursor(asEditor(ed), dict, { now, manual: true, patterns: compileDate() })).toMatchObject({ insert: "day 5" });
+        });
+    });
+
+    it("a prepared rule hit is written through the CM6 view as its own undo step (PATTERN_USER_EVENT)", async () => {
+        const ruleSet = compileDate();
+        const { editor, specs } = withView(at("on dd5"));
+        const found = canExpandAtCursor(asEditor(editor), dict, undefined, ruleSet);
+        await tryExpandAtCursor(asEditor(editor), dict, { now, manual: true, patterns: ruleSet, prepared: found });
+        expect(editor.getLine(0)).toBe("on day 5");
+        expect(specs).toHaveLength(1);
+        expect(specs[0]?.userEvent).toBe(PATTERN_USER_EVENT);
     });
 });
 
