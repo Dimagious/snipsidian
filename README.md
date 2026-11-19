@@ -11,7 +11,8 @@
 [![Stars](https://img.shields.io/github/stars/Dimagious/snipsidian?color=0f9d7a)](https://github.com/Dimagious/snipsidian/stargazers)
 
 Type `todo` and a space, get a task. Snipsy turns short triggers into text as you write in
-Obsidian. **No scripting, and no templates to learn.**
+Obsidian, and a regex pattern you add can turn `1/2` and a space into ½. **No scripting, and no templates to
+learn.**
 
 <img alt="Typing h2, todo, today and note, each followed by a space, turns them into a heading, a task, today's date and a callout" src="docs/screens/hero.gif" width="100%">
 
@@ -27,6 +28,8 @@ note, type `todo` and a space.
 - **Only your typing fires it.** Paste, undo, another plugin's edit and IME composition expand
   nothing.
 - **It works on your phone.** Same snippets, same picker.
+- **Regex patterns are checked before they run.** A pattern that could backtrack without limit is
+  refused when you write it, and a rule that turns out slow is switched off.
 
 <img alt="Typing todo and a space expands into a task in the note, and stays as plain todo inside a code block" src="docs/screens/markdown-aware.gif" width="100%">
 
@@ -65,6 +68,25 @@ field, so there is no highlight and Backspace is a normal Backspace).
 
 <img alt="On a phone, typing todo and a space turns the line into a task. The toolbar button opens Insert snippet, and picking today adds the date after Call Sam" src="docs/screens/phone.gif" width="49%">
 
+## Patterns
+
+A trigger is a fixed word. A pattern is a regular expression that must end at the caret, so it
+can match a shape: `1/2`, `-->`, `:work:`. Add one in **Settings → Snipsy → Patterns**, or add
+the typography set there for 32 ready rules (fractions, arrows, `≠`, `≤`, `≥`, `±`, `…`).
+
+| Pattern | Replacement | You type | You get |
+|---|---|---|---|
+| `/\b1\/2$/` | `½` | `1/2` and a space | `½` |
+| `/-->$/` | `→` | `-->` | `→`, at once |
+| `/:(\w+):$/` | `#{{1}}` | `:work:` and a space | `#work` |
+
+Each rule is **Instant** (fires as soon as the text matches) or **After a separator** (fires on a
+space, Enter or punctuation, so `1/23` can still be typed). `{{1}}` is what the first group
+matched, `{{name}}` a named group. The **Try it** field in the editor replays a line through the
+real engine and tells you what fires. Expansion is one undo step, and it stays quiet in code,
+math and frontmatter like any trigger. The [reference](https://github.com/Dimagious/snipsidian/blob/HEAD/docs/reference.md#patterns)
+has the syntax, the limits and everything that is refused.
+
 ## Coming from another tool
 
 **Text Snippets.** Its last release was in May 2022. On the Packages page, press **Import** under
@@ -76,8 +98,12 @@ expansion yourself, bind **Expand trigger at cursor** to the key you used there.
 
 <img alt="Pressing Import on the Packages page opens a preview of four new snippets. After Apply, typing sig and a space expands into a signature" src="docs/screens/text-snippets-import.gif" width="100%">
 
-**Espanso.** Paste the YAML of a package and name a group. Forms, scripts and other things Snipsy
-can't represent are skipped and named.
+**Espanso.** Paste the YAML of a package and name a group. `regex:` matches become pattern rules.
+Forms, scripts and other things Snipsy can't represent are skipped and named.
+
+**Substitutions.** Its rules, like `1/2` into ½, can be written as patterns here, and the typography
+set is ported from its 32 default rules. There is no importer for its settings yet. Copy a rule by
+hand and write `{{1}}` where it used `$1`.
 
 **Other system-wide expanders.** Espanso, Raycast, Keyboard Maestro and AutoHotkey work in every
 app, and Snipsy works only in Obsidian. Pick Snipsy for Markdown awareness and the same snippets on
@@ -116,8 +142,9 @@ The [reference](https://github.com/Dimagious/snipsidian/blob/HEAD/docs/reference
 
 - **JavaScript or dynamic templates:** use [Templater](https://github.com/SilentVoid13/Templater).
 - **Expansion outside Obsidian:** use [Espanso](https://espanso.org/).
-- **Regex triggers, or replacing text inside a word** (`y^2` into `y²`): use
-  [Substitutions](https://github.com/BambusControl/obsidian-substitutions).
+- **Patterns with backreferences, lookahead or Unicode property classes (`\p{L}`).** The
+  [reference](https://github.com/Dimagious/snipsidian/blob/HEAD/docs/reference.md#what-a-pattern-cannot-be)
+  lists what a pattern cannot be, and why.
 
 ## Privacy
 

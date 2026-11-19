@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Snipsy</title>
-<meta name="description" content="Snipsy is an Obsidian plugin: type todo and a space, get a checkbox. Hotstrings for Obsidian, markdown-aware, no scripting.">
+<meta name="description" content="Snipsy is an Obsidian plugin: type todo and a space, get a checkbox, or add a regex pattern and 1/2 becomes ½. Hotstrings and regex patterns, markdown-aware, no scripting.">
 <link rel="canonical" href="https://dimagious.github.io/snipsidian/">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='7' fill='%230b8466'/%3E%3Crect x='7' y='8' width='8' height='3' rx='1.5' fill='%23fff' fill-opacity='.6'/%3E%3Cpath d='M18.5 7l3 2.5-3 2.5' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3Crect x='7' y='15' width='18' height='3' rx='1.5' fill='%23fff'/%3E%3Crect x='7' y='21' width='10' height='3' rx='1.5' fill='%23fff'/%3E%3Crect x='19.5' y='19.5' width='2' height='6' rx='1' fill='%23fff'/%3E%3C/svg%3E">
@@ -12,7 +12,7 @@
 <meta property="og:site_name" content="Snipsy">
 <meta property="og:url" content="https://dimagious.github.io/snipsidian/">
 <meta property="og:title" content="Snipsy: hotstrings for Obsidian">
-<meta property="og:description" content="Type todo and a space, get a checkbox. Markdown-aware, no scripting.">
+<meta property="og:description" content="Type todo and a space, get a checkbox. Regex patterns too. Markdown-aware, no scripting.">
 <meta property="og:image" content="https://dimagious.github.io/snipsidian/img/social-preview.png">
 <meta property="og:image:width" content="1280">
 <meta property="og:image:height" content="640">
@@ -21,7 +21,7 @@
 <meta name="twitter:image" content="https://dimagious.github.io/snipsidian/img/social-preview.png">
 <meta name="twitter:image:alt" content="Snipsy: typing note and a space turns into a Note callout. Type a trigger and a space. Get the text.">
 <meta name="twitter:title" content="Snipsy: hotstrings for Obsidian">
-<meta name="twitter:description" content="Type todo and a space, get a checkbox. Markdown-aware, no scripting.">
+<meta name="twitter:description" content="Type todo and a space, get a checkbox. Regex patterns too. Markdown-aware, no scripting.">
 <style>
 /* ---------- self-hosted fonts: Inter and JetBrains Mono, latin, woff2 only ---------- */
 /* From @fontsource/inter and @fontsource/jetbrains-mono (SIL Open Font License 1.1,
@@ -662,6 +662,7 @@ footer.note-foot a { color: var(--muted); }
           <li><a href="#first"><svg width="14" height="14"><use href="#i-file"/></svg>Your first snippet<span class="ext">.md</span></a></li>
           <li><a href="#placeholders"><svg width="14" height="14"><use href="#i-file"/></svg>Placeholders<span class="ext">.md</span></a></li>
           <li><a href="#groups"><svg width="14" height="14"><use href="#i-file"/></svg>Groups<span class="ext">.md</span></a></li>
+          <li><a href="#patterns"><svg width="14" height="14"><use href="#i-file"/></svg>Patterns<span class="ext">.md</span></a></li>
         </ul>
       </li>
       <li>
@@ -725,7 +726,7 @@ footer.note-foot a { color: var(--muted); }
           <div class="prop"><div class="k"><svg><use href="#i-text"/></svg>license</div><div class="v">MIT</div></div>
         </div>
 
-        <p class="lede">Type <code>todo</code> and a space, get <code>- [ ]</code>. Hotstrings for Obsidian, markdown-aware, no scripting.</p>
+        <p class="lede">Type <code>todo</code> and a space, get <code>- [ ]</code>. Hotstrings and regex patterns for Obsidian, markdown-aware, no scripting.</p>
 
         <div class="actions">
           <a class="btn primary" href="#install"><svg><use href="#i-plug"/></svg>Get it from Community plugins</a>
@@ -761,6 +762,7 @@ footer.note-foot a { color: var(--muted); }
           <a href="#defaults"><b>Defaults</b><span>Sixteen triggers for tasks, headings, callouts, tables and dates</span></a>
           <a href="#placeholders"><b>Placeholders</b><span>Caret position, date, time, file name, clipboard</span></a>
           <a href="#groups"><b>Groups</b><span>Mute a whole group with one toggle</span></a>
+          <a href="#patterns"><b>Patterns</b><span>Regex triggers: <code>1/2</code> becomes ½, with a Try it field</span></a>
           <a href="#prefix"><b>Prefix mode</b><span>Only <code>:todo</code> expands, plain <code>todo</code> stays a word</span></a>
           <a href="#catalog"><b>Community catalog</b><span>Thirteen packs, one click each, preview before writing</span></a>
           <a href="#espanso"><b>Espanso import</b><span>Paste a <code>.yml</code>, see what came across and what did not</span></a>
@@ -974,6 +976,43 @@ replacement: |
         </figure>
       </section>
 
+      <!-- ============ Writing snippets/Patterns.md ============ -->
+      <section class="file" id="patterns" data-title="Patterns" data-path="Writing snippets / Patterns">
+        <div class="crumb">Writing snippets/Patterns.md</div>
+        <h2>Patterns</h2>
+        <p class="prose">A trigger is a fixed word. A pattern is a regular expression that has to end at the caret, so it can match a shape: <code>1/2</code>, <code>--&gt;</code>, <code>:work:</code>. <span class="path">Settings<i>›</i>Snipsy<i>›</i>Patterns</span> lists the rules, and each one is <b>Instant</b> (fires as soon as the text matches) or <b>After a separator</b> (fires on a space, Enter or punctuation, so <code>1/23</code> can still be typed).</p>
+        <div class="pair side">
+          <div class="codeblock" data-code>
+            <div class="bar"><span>patterns</span><button class="copy" type="button">Copy</button></div>
+<pre><code class="yaml-plain">/\b1\/2$/        →  ½
+/--&gt;$/           →  →
+/:(\w+):$/       →  #{{1}}
+/mtg (\w+)$/i    →  Meeting with {{1}} at $1 about $2</code></pre>
+          </div>
+          <div>
+            <div class="renders">you type</div>
+            <div class="chips" style="flex-direction:column;align-items:flex-start;margin:0">
+              <span class="chip"><code class="tr">1/2␣</code><span class="ar">→</span><span class="rs">½␣</span></span>
+              <span class="chip"><code class="tr">--&gt;</code><span class="ar">→</span><span class="rs">→</span></span>
+              <span class="chip"><code class="tr">:work:␣</code><span class="ar">→</span><span class="rs">#work␣</span></span>
+              <span class="chip"><code class="tr">mtg Bob␣</code><span class="ar">→</span><span class="rs">Meeting with Bob at <span class="ph">$1</span> about <span class="ph">$2</span></span></span>
+            </div>
+          </div>
+        </div>
+        <p class="prose" style="margin-top:16px">In the replacement, <code>{{1}}</code> to <code>{{9}}</code> are what the groups matched, <code>{{0}}</code> the whole match and <code>{{name}}</code> a named group. <code>$1</code> is still a Tab stop, so the two never mix. Captured text goes in last and as plain text.</p>
+        <ul class="nope" style="margin-top:12px">
+          <li>Literal triggers go first, then rules from the top of the list. The first match wins.</li>
+          <li>The expansion is one undo step, and it stays quiet in code, math and frontmatter.</li>
+          <li><b>Try it</b> replays a line through the real engine and tells you what fires, and when an instant rule fires too early.</li>
+          <li><b>Add typography set</b> adds 32 rules: fractions, arrows, <code>≠</code>, <code>≤</code>, <code>≥</code>, <code>±</code>, <code>…</code> and more.</li>
+        </ul>
+        <div class="callout note">
+          <div class="callout-title"><svg><use href="#i-info"/></svg>Checked before they run</div>
+          <p>A pattern has to end with <code>$</code>, and only the flag <code>i</code> is allowed. Shapes that can backtrack without limit, such as <code>(a+)+$</code>, are refused when you write them, with the reason. Backreferences, lookahead and Unicode property classes are refused too. A rule that turns out slow while you type is paused for the session. Up to 100 rules.</p>
+        </div>
+        <p class="prose" style="margin-top:14px">The exact rules and every refusal are in the <a href="https://github.com/Dimagious/snipsidian/blob/main/docs/reference.md#patterns">reference</a>.</p>
+      </section>
+
       <!-- ============ Behaviour/How expansion works.md ============ -->
       <section class="file" id="expansion" data-title="How expansion works" data-path="Behaviour / How expansion works">
         <div class="crumb">Behaviour/How expansion works.md</div>
@@ -1129,7 +1168,8 @@ replacement: |
             </div>
           </div>
         </div>
-        <p class="prose"><code>$|$</code> becomes <code>$|</code>, <code>{{clipboard}}</code> becomes <code>$clipboard</code>, and a plain date variable becomes <code>$date</code> or <code>$time</code>. Forms, scripts, shell commands, regex triggers and images have no Snipsy equivalent. They are skipped and listed by name, instead of arriving broken. The same size limits apply as for a catalog install.</p>
+        <p class="prose"><code>$|$</code> becomes <code>$|</code>, <code>{{clipboard}}</code> becomes <code>$clipboard</code>, and a plain date variable becomes <code>$date</code> or <code>$time</code>. Forms, scripts, shell commands and images have no Snipsy equivalent. They are skipped and listed by name, instead of arriving broken. The same size limits apply as for a catalog install.</p>
+        <p class="prose"><code>regex:</code> matches become <a href="#patterns">pattern rules</a>. The preview lists them in their own section with the pattern, the replacement and the mode, or the reason one was left out. <code>(?P&lt;name&gt;</code> becomes <code>(?&lt;name&gt;</code> and <code>{{name}}</code> is the capture of that name. A rule that uses a feature patterns refuse, such as lookahead or a backreference, is skipped and named. Espanso reads <code>\w</code> and <code>\d</code> as Unicode and a pattern as ASCII, so a rule can match differently on non-ASCII letters.</p>
         <figure class="shot">
           <picture>
             <source data-dark srcset="img/espanso-dark.png" media="(prefers-color-scheme: dark)">
@@ -1173,7 +1213,7 @@ mtg : Meeting with $tb$ at $tb$
       <section class="file" id="backup" data-title="Backup" data-path="Packages / Backup">
         <div class="crumb">Packages/Backup.md</div>
         <h2>Backup</h2>
-        <p class="prose"><b>Export snippets</b> and <b>Import snippets</b> in Snipsy's settings move your snippets as one JSON file. On mobile, export writes <code>snipsidian-snippets.json</code> to the root of the vault, and falls back to the clipboard when it cannot.</p>
+        <p class="prose"><b>Export snippets</b> and <b>Import snippets</b> in Snipsy's settings move your snippets and your pattern rules as one JSON file. Merge adds the rules you do not have yet, Replace all swaps the whole list. Older Snipsy versions import the snippets and do not get the rules. On mobile, export writes <code>snipsidian-snippets.json</code> to the root of the vault, and falls back to the clipboard when it cannot.</p>
       </section>
 
       <!-- ============ Privacy.md ============ -->
@@ -1197,6 +1237,7 @@ mtg : Meeting with $tb$ at $tb$
           <li>templates with JavaScript (see <a href="https://github.com/SilentVoid13/Templater">Templater</a>)</li>
           <li>expansion outside Obsidian, in every app (see <a href="https://espanso.org">Espanso</a>)</li>
           <li>a snippet library you search but never type (see Snippets Manager)</li>
+          <li>patterns with backreferences, lookahead or Unicode property classes (see <a href="#patterns">Patterns</a>)</li>
           <li>scripting of any kind</li>
         </ul>
         <p style="margin-top:14px" class="prose">If one of these stops you, <a href="https://github.com/Dimagious/snipsidian/issues">say what you tried</a>.</p>
@@ -1210,6 +1251,10 @@ mtg : Meeting with $tb$ at $tb$
         <details class="callout">
           <summary class="callout-title"><svg><use href="#i-help"/></svg>Does it work on my phone?<svg class="chev"><use href="#i-right"/></svg></summary>
           <p>Yes. The plugin is not desktop-only. Triggers expand on mobile the same way, and the picker can sit on the editor toolbar. <a href="#phone">On a phone</a>.</p>
+        </details>
+        <details class="callout">
+          <summary class="callout-title"><svg><use href="#i-help"/></svg>Can I use regular expressions?<svg class="chev"><use href="#i-right"/></svg></summary>
+          <p>Yes. Add a rule under <span class="path">Settings<i>›</i>Snipsy<i>›</i>Patterns</span>: <code>/\b1\/2$/</code> turns <code>1/2</code> and a space into ½. Try it shows what fires before you save. <a href="#patterns">Patterns</a>.</p>
         </details>
         <details class="callout">
           <summary class="callout-title"><svg><use href="#i-help"/></svg>Will it fire in my code blocks?<svg class="chev"><use href="#i-right"/></svg></summary>
