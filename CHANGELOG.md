@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A support link in the plugin's listing (`fundingUrl` in `manifest.json`), pointing at Buy Me a Coffee, as Dashy and Garmy have.
+
 ## [1.9.0] - 2026-11-18
 
 ### Added
