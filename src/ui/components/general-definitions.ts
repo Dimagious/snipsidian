@@ -122,14 +122,14 @@ export function buildGeneralDefinitions(
     const backupItems = [
         {
             name: "Export snippets",
-            desc: "Download your library as JSON.",
+            desc: "Download your snippets and patterns as JSON.",
             aliases: ["export", "backup"],
             buttonText: "Export JSON",
             action: () => void handlers.exportJson(),
         } satisfies SnipsyActionDef,
         {
             name: "Import snippets",
-            desc: "Preview a JSON file before merge or replace.",
+            desc: "Preview a JSON file with snippets and patterns before merge or replace.",
             aliases: ["import", "json"],
             buttonText: "Import JSON",
             action: () => handlers.startImport(),

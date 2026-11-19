@@ -114,6 +114,14 @@ describe("PatternsTab: page structure", () => {
         expect(q(".snipsy-patterns-starter .setting-item-name").textContent).toBe("Typography set");
     });
 
+    it("ends with the footer that says backups include patterns and where Espanso regex imports", () => {
+        const expected = "Backups in General include your patterns. Espanso regex entries import from Packages.";
+        mount([rule("a")]);
+        expect(q(".snipsy-patterns-footer").textContent).toBe(expected);
+        mount(undefined);
+        expect(q(".snipsy-patterns-footer").textContent).toBe(expected);
+    });
+
     it("shows the empty state with the starter offer when there are no rules", () => {
         mount(undefined);
         const empty = q(".snipsy-patterns-empty");

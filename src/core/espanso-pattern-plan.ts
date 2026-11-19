@@ -39,11 +39,11 @@ export type PatternImportPlan = {
     skipped: PatternSkipRow[];
 };
 
-function field(rule: unknown, key: string): unknown {
+export function field(rule: unknown, key: string): unknown {
     return typeof rule === "object" && rule !== null ? Reflect.get(rule, key) : undefined;
 }
 
-function dedupeKey(source: unknown, replacement: unknown): string | undefined {
+export function dedupeKey(source: unknown, replacement: unknown): string | undefined {
     return typeof source === "string" && typeof replacement === "string" ? JSON.stringify([source, replacement]) : undefined;
 }
 

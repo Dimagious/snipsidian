@@ -3,6 +3,8 @@ import type SnipSidianPlugin from "../../main";
 import { DiffResult } from "../../store/diff";
 import { displayGroupTitle, slugifyGroup, splitKey } from "../../store/keys";
 import { computeImportDiff } from "../../services/import-diff";
+import type { JsonPatternPlan } from "../../core/json-backup";
+import { renderJsonPatternPreview } from "./JsonPatternPreview";
 import { normalizeTrigger } from "../../engine/triggers";
 import { SETTING_TEXTAREA_CLASS } from "../utils/style-hooks";
 import { renderPlaceholderHint } from "../utils/placeholder-hint";
@@ -714,9 +716,23 @@ export class ImportPreviewModal extends Modal {
             current: Record<string, string>;
             incoming: Record<string, string>;
             onConfirm: (mode: "merge" | "replace") => void | Promise<void>;
+            /** JSON backup: the file's pattern rules, planned for a mode against the current list. Absent = no rules. */
+            patterns?: { plan: (mode: "merge" | "replace") => JsonPatternPlan };
         },
     ) {
         super(app);
+    }
+
+    /** The pattern plan for the chosen mode; `null` when the file holds no rules. Set by `replan()`. */
+    private patternPlan: JsonPatternPlan | null = null;
+
+    private replan(): void {
+        this.patternPlan = this.opts.patterns ? this.opts.patterns.plan(this.mode) : null;
+    }
+
+    private refreshPatterns(el: HTMLElement): void {
+        el.empty();
+        if (this.patternPlan) renderJsonPatternPreview(el, this.patternPlan, this.mode);
     }
 
     onOpen(): void {
@@ -726,6 +742,7 @@ export class ImportPreviewModal extends Modal {
         contentEl.addClass("snipsidian-import-modal");
 
         const diff = computeImportDiff(this.opts.current, this.opts.incoming);
+        this.replan();
 
         // Mode picker — merge first because it's the safe default.
         const modeRow = contentEl.createDiv({ cls: "snipsy-import-mode" });
@@ -738,6 +755,8 @@ export class ImportPreviewModal extends Modal {
             radio.addEventListener("change", () => {
                 if (radio.checked) {
                     this.mode = "merge";
+                    this.replan();
+                    this.refreshPatterns(patternsEl);
                     this.refreshDiffList(listEl, diff);
                     this.refreshSummary(summaryEl, diff);
                     this.refreshApplyButton(applyBtn, diff);
@@ -757,6 +776,8 @@ export class ImportPreviewModal extends Modal {
             radio.addEventListener("change", () => {
                 if (radio.checked) {
                     this.mode = "replace";
+                    this.replan();
+                    this.refreshPatterns(patternsEl);
                     this.refreshDiffList(listEl, diff);
                     this.refreshSummary(summaryEl, diff);
                     this.refreshApplyButton(applyBtn, diff);
@@ -765,10 +786,7 @@ export class ImportPreviewModal extends Modal {
             label.createSpan({ text: "Replace all" });
             label.createSpan({
                 cls: "snipsy-import-mode-hint snipsy-import-mode-hint-danger",
-                text:
-                    diff.removed.length > 0
-                        ? `Delete ${diff.removed.length} existing snippet${diff.removed.length === 1 ? "" : "s"}, then import.`
-                        : "Replace existing snippets with the import.",
+                text: this.replaceHint(diff),
             });
         });
 
@@ -777,6 +795,10 @@ export class ImportPreviewModal extends Modal {
 
         const listEl = contentEl.createDiv({ cls: "snipsy-import-list" });
         this.refreshDiffList(listEl, diff);
+
+        // JSON backup: the file's pattern rules, re-planned whenever the mode changes.
+        const patternsEl = contentEl.createDiv({ cls: "snipsy-import-patterns-host" });
+        this.refreshPatterns(patternsEl);
 
         // B-177: keys the import refuses to write, shown in both modes.
         if (diff.rejected.length > 0) {
@@ -816,6 +838,22 @@ export class ImportPreviewModal extends Modal {
         };
     }
 
+    /** The Replace option's hint. Names the pattern rules only when the file carries them. */
+    private replaceHint(diff: ReturnType<typeof computeImportDiff>): string {
+        const withRules = this.opts.patterns !== undefined;
+        const removedRules = this.opts.patterns ? this.opts.patterns.plan("replace").removed : 0;
+        const plural = (n: number, noun: string): string => `${n} ${noun}${n === 1 ? "" : "s"}`;
+        if (diff.removed.length === 0 && removedRules === 0) {
+            return withRules
+                ? "Replace existing snippets and pattern rules with the import."
+                : "Replace existing snippets with the import.";
+        }
+        const parts: string[] = [];
+        if (diff.removed.length > 0) parts.push(plural(diff.removed.length, "existing snippet"));
+        if (removedRules > 0) parts.push(plural(removedRules, "pattern rule"));
+        return `Delete ${parts.join(" and ")}, then import.`;
+    }
+
     private refreshSummary(
         el: HTMLElement,
         diff: ReturnType<typeof computeImportDiff>,
@@ -828,6 +866,8 @@ export class ImportPreviewModal extends Modal {
             parts.push(`${diff.removed.length} removed`);
         }
         if (diff.unchangedCount) parts.push(`${diff.unchangedCount} unchanged`);
+        const rules = this.patternPlan?.rows.length ?? 0;
+        if (rules > 0) parts.push(`${rules} pattern rule${rules === 1 ? "" : "s"}`);
 
         if (parts.length === 0) {
             el.createSpan({ text: "Nothing will change." });
@@ -883,14 +923,15 @@ export class ImportPreviewModal extends Modal {
     ) {
         if (this.mode === "replace") {
             // Count what will actually be written (rejected keys are not).
-            const importCount = diff.added.length + diff.conflicts.length + diff.unchangedCount;
+            const importCount =
+                diff.added.length + diff.conflicts.length + diff.unchangedCount + (this.patternPlan?.rows.length ?? 0);
             btn.textContent = `Replace all (${importCount})`;
             // Danger affordance: red CTA. Designer Q5 explicitly does NOT
             // want a second-confirm dialog — the visual + the `removed`
             // list in the diff is the affordance.
             btn.addClass("mod-warning");
         } else {
-            const willChange = diff.added.length + diff.conflicts.length;
+            const willChange = diff.added.length + diff.conflicts.length + (this.patternPlan?.rows.length ?? 0);
             btn.textContent = willChange === 0 ? "Apply" : `Apply merge (${willChange})`;
             btn.removeClass("mod-warning");
         }

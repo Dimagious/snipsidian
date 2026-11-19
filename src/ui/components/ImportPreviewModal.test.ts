@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
 import { makeMockApp } from "../../test/factories/plugin";
 import { ImportPreviewModal } from "./Modals";
 import type { App } from "obsidian";
+import { planJsonPatternImport } from "../../core/json-backup";
+import type { PatternRule } from "../../engine/types";
 
 /**
  * Mount tests for ImportPreviewModal — the user-facing fix for B-038
@@ -280,5 +282,74 @@ describe("ImportPreviewModal: rejected keys (B-177)", () => {
     it("does not render a rejected section when every key is valid", () => {
         const { modal } = mount({ incoming: { ok: "fine" } });
         expect(modal.contentEl.querySelector(".snipsy-import-rejected")).toBeNull();
+    });
+});
+
+describe("ImportPreviewModal: pattern rules of a JSON backup", () => {
+    const rule = (n: number): PatternRule => ({ id: `r${n}`, source: `/x${n}$/`, replacement: `y${n}`, enabled: true, mode: "instant" });
+
+    function mountWithRules(incoming: unknown[], existing: PatternRule[] = []): { modal: ImportPreviewModal; onConfirm: ConfirmMock } {
+        const onConfirm = vi.fn<ImportConfirm>();
+        const modal = new ImportPreviewModal(app, {
+            current: { a: "1" },
+            incoming: { a: "1" },
+            patterns: { plan: (mode) => planJsonPatternImport(incoming, mode, { patterns: existing }) },
+            onConfirm,
+        });
+        modal.open();
+        return { modal, onConfirm };
+    }
+    const section = (modal: ImportPreviewModal): HTMLElement | null => modal.contentEl.querySelector(".snipsy-import-patterns");
+    const hint = (modal: ImportPreviewModal): string | undefined =>
+        modal.contentEl.querySelector(".snipsy-import-mode-hint-danger")?.textContent ?? undefined;
+    const applyLabel = (modal: ImportPreviewModal): string | undefined =>
+        modal.contentEl.querySelector(".modal-button-container .mod-cta")?.textContent ?? undefined;
+
+    it("lists the rules that will be added (Merge) with the existing ones counted as already there", () => {
+        const { modal } = mountWithRules([rule(1), rule(2)], [rule(1)]);
+        const el = section(modal);
+        expect(el?.querySelector("h3")?.textContent).toBe("Pattern rules");
+        expect(el?.querySelector("p")?.textContent).toBe("1 rule will be added to the end of the Patterns list. 1 already there.");
+        expect(el?.querySelectorAll(".snipsy-espanso-pattern-rows li")).toHaveLength(1);
+        expect(el?.querySelector(".snipsy-espanso-pattern-rows code")?.textContent).toBe("/x2$/");
+        expect(applyLabel(modal)).toBe("Apply merge (1)");
+    });
+
+    it("re-plans when the mode flips: Replace names what it deletes, in the hint, the section and the button", () => {
+        const { modal } = mountWithRules([rule(5)], [rule(1), rule(2)]);
+        expect(hint(modal)).toBe("Delete 2 pattern rules, then import.");
+        pickMode(modal, "replace");
+        expect(section(modal)?.querySelector("p")?.textContent).toBe("1 rule will replace the Patterns list. The 2 rules you have now will be deleted.");
+        expect(section(modal)?.querySelector(".snipsy-espanso-pattern-rows code")?.textContent).toBe("/x5$/");
+        expect(applyLabel(modal)).toBe("Replace all (2)");
+        pickMode(modal, "merge");
+        expect(section(modal)?.querySelector("p")?.textContent).toContain("will be added to the end");
+    });
+
+    it("names a rule left out with its reason", () => {
+        const { modal } = mountWithRules([rule(1), { ...rule(2), source: "/(a+)+$/" }]);
+        const skips = section(modal)?.querySelector(".snipsy-espanso-pattern-skips");
+        expect(skips?.textContent).toContain("/(a+)+$/ Skipped: A repeated group can't hold a repeat or a choice");
+        expect(section(modal)?.textContent).toContain("1 rule left out:");
+    });
+
+    it("shows at most 50 rows and counts the rest; text from the file is never HTML", () => {
+        const many = Array.from({ length: 100 }, (_, i) => ({ ...rule(i), replacement: "<b>x</b>" }));
+        const { modal } = mountWithRules(many);
+        const rows = section(modal)?.querySelectorAll(".snipsy-espanso-pattern-rows li") ?? [];
+        expect(rows).toHaveLength(51);
+        expect(rows[50]?.textContent).toBe("and 50 more");
+        expect(section(modal)?.querySelector("b")).toBeNull();
+    });
+
+    it("a file without rules shows no pattern section and the old Replace hint", () => {
+        const { modal } = mount({ current: { a: "1", b: "2" }, incoming: { a: "1" } });
+        expect(section(modal)).toBeNull();
+        expect(hint(modal)).toBe("Delete 1 existing snippet, then import.");
+    });
+
+    it("with rules in the file the Replace hint names both when nothing is deleted", () => {
+        const { modal } = mountWithRules([rule(1)]);
+        expect(hint(modal)).toBe("Replace existing snippets and pattern rules with the import.");
     });
 });

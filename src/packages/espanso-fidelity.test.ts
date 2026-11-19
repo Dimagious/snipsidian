@@ -310,7 +310,15 @@ describe("B-266 declared names: only Espanso's reference shape maps, and never t
 
 describe("B-266 a mapped token followed directly by a date, time or word character", () => {
     it("`{{clipboard}}{{d}}` is skipped (`$clipboard2025-...` would be dead text)", () => {
-        expect(skipOf(literal("{{clipboard}}{{d}}", DATE_VAR)).reason).toContain("clipboard variable");
+        expect(skipOf(literal("{{clipboard}}{{d}}", DATE_VAR)).reason).toBe(
+            "has a date or time right after the clipboard variable, which Snipsy would read as part of the placeholder name",
+        );
+    });
+
+    it("`{{clipboard}}{{d}}` with a `%H:%M` variable is skipped as well (the time branch of the check)", () => {
+        expect(skipOf(literal("{{clipboard}}{{d}}", TIME_VAR)).reason).toBe(
+            "has a date or time right after the clipboard variable, which Snipsy would read as part of the placeholder name",
+        );
     });
 
     it("`{{clipboard}} {{d}}` with text in between imports", async () => {
@@ -330,7 +338,7 @@ describe("B-266 a mapped token followed directly by a date, time or word charact
         expect((await insertedLiteral(literal("{{d}}{{d}}!", DATE_VAR))).text).toBe("2025-09-022025-09-02!");
     });
 
-    it("`{{t}}{{t}}` with a `%H:%M` variable imports as `$time$time`", async () => {
+    it("`{{d}}{{d}}` with a `%H:%M` variable imports as `$time$time`", async () => {
         const yaml = literal("{{d}}{{d}}", TIME_VAR);
         expect(espansoYamlToSnippets(yaml).snippets).toEqual({ t: "$time$time" });
         expect((await insertedLiteral(yaml)).text).toBe("10:1110:11");
@@ -342,7 +350,7 @@ describe("B-266 a mapped token followed directly by a date, time or word charact
         expect((await insertedLiteral(yaml)).text).toBe("2025-09-02CLIP");
     });
 
-    it("`{{t}}{{t}}a` with a `%H:%M` variable is skipped as well", () => {
+    it("`{{d}}{{d}}a` with a `%H:%M` variable is skipped as well", () => {
         expect(skipOf(literal("{{d}}{{d}}a", TIME_VAR)).reason).toContain("right after the time variable");
     });
 

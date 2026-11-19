@@ -119,7 +119,8 @@ function quoteOriginal(text: string, segs: Seg[], s: number, e: number): string 
  *     Espanso and the engine has no escape for them: the match is skipped.
  *   - The engine ends `$clipboard` and `$date` at a word boundary and fills `{{date}}` / `{{time}}` first, so a
  *     word character after the token, or the digits of a date or time that follows a clipboard token directly,
- *     would make it dead text (`{{d}}{{d}}` alone is fine: `$date$date` fills both). The delimitable `{{date}}` / `{{time}}` render locale digits in some locales, so: skipped.
+ *     would make it dead text (`{{d}}{{d}}` alone is fine: `$date$date` fills both). The delimitable `{{date}}` /
+ *     `{{time}}` render locale digits in some locales, so: skipped.
  *   - A plain `\$1` already is the engine's escape (it would lose the backslash), and `\{\{` / `\}\}` is unescaped
  *     by Espanso: both are skipped.
  */

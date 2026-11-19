@@ -43,6 +43,7 @@ import { ConfirmModal } from "./Modals";
 
 export const INSTANT_NEEDS_TYPING =
     "Instant rules need Expand while typing, which is off. Choose After a separator to use it with Tab.";
+export const PATTERNS_FOOTER = "Backups in General include your patterns. Espanso regex entries import from Packages.";
 export const PATTERNS_INTRO = "They run top to bottom and the first match wins. Snippets are tried first.";
 export const PATTERN_DESC = "Write it between slashes and end with $. Flag i is allowed.";
 export const CAPTURE_HINT = "{{1}} inserts what group 1 matched, {{name}} a named group. $1 is a Tab stop, as in snippets.";
@@ -265,6 +266,7 @@ export class PatternsTab {
         }
 
         this.renderStarterRow(wrap);
+        wrap.createDiv({ cls: "snipsy-hint snipsy-patterns-footer", text: PATTERNS_FOOTER });
 
         this.liveEl = wrap.createDiv({ cls: "snipsy-visually-hidden", attr: { "aria-live": "polite", role: "status" } });
         this.applyPendingFocus(wrap);
