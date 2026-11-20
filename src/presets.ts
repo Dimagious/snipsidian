@@ -2,7 +2,10 @@
 // `settings.snippets` exactly once, on first install (`loadSettings` in
 // src/app/plugin.ts). After that the user's data.json owns the map —
 // deleting or renaming a default must stick across restarts (B-130,
-// issues #55/#56), so never re-merge these on load.
+// issues #55/#56), so never re-merge these on load. The one exception (B-217):
+// when a default's value is FIXED, the old value goes into SUPERSEDED_DEFAULTS
+// (src/core/defaults-upgrade.ts), and a stored copy that still equals it exactly
+// is replaced on load.
 //
 // Trigger keys avoid the leading `:` prefix on purpose: `:` is a
 // delimiter in Snipsy's engine (`src/shared/delimiters.ts`), so a
@@ -38,8 +41,11 @@ export const DEFAULT_SNIPPETS: Record<string, string> = {
   // type the callout body (regression covered by E2E B-010).
   note: "> [!note]\n> $|",
 
-  // Tables — 3×3 scaffold; cursor in first body cell
-  table: "| H1 | H2 | H3 |\n| --- | --- | --- |\n| $| | | |",
+  // Tables — 3×3 scaffold (header + 2 body rows); cursor in the first body cell.
+  // The trailing "\n" is load-bearing (B-208): the separator the user typed lands
+  // after the expansion, and a space after the last pipe makes Live Preview render a
+  // 4th column. With the newline it lands on the line below the table instead.
+  table: "| H1 | H2 | H3 |\n| --- | --- | --- |\n| $| | | |\n| | | |\n",
 
   // Dynamic — $date / $time get substituted at expansion time
   // (see `src/engine/placeholders.ts`).

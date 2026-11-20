@@ -1062,8 +1062,10 @@ export function matchPatterns(
 // Replacement: {{0}} {{1}}..{{9}} {{name}}
 // ---------------------------------------------------------------------------
 
+/* `title` and `notedate` are reserved group names (RESERVED_GROUP_NAMES), so {{title}} / {{notedate:FMT}} in a
+   replacement are never captures: they reach the placeholder pass (B-204, B-218). */
 const CAPTURE_REF_RE = /\{\{(\d|[A-Za-z_][A-Za-z0-9_]*)\}\}/g;
-/** Private-use range used for sentinels (the placeholder markers live at U+E000-U+E004). */
+/** Private-use range used for sentinels (the placeholder markers live at U+E000-U+E005). */
 const SENTINEL_FIRST = 0xe100;
 const SENTINEL_LAST = 0xf8ff;
 
@@ -1089,10 +1091,12 @@ function pickSentinelBase(text: string, count: number): number | undefined {
 function scrubContext(ctx: ExpandContext, base: number, count: number): ExpandContext {
     const re = new RegExp(`[\\u${base.toString(16)}-\\u${(base + count - 1).toString(16)}]`, "g");
     const scrub = (value: string): string => value.replace(re, "");
-    const { formatDate, readClipboard } = ctx;
+    const { formatDate, formatNoteDate, readClipboard } = ctx;
     return {
         ...ctx,
         filename: ctx.filename === undefined ? undefined : scrub(ctx.filename),
+        basename: ctx.basename === undefined ? undefined : scrub(ctx.basename),
+        formatNoteDate: formatNoteDate ? (format) => scrub(formatNoteDate(format)) : undefined,
         formatDate: formatDate ? (date, format) => scrub(formatDate(date, format)) : undefined,
         readClipboard: readClipboard ? async () => scrub(await readClipboard()) : undefined,
     };

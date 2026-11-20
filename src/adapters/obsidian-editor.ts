@@ -11,6 +11,7 @@ import {
 } from "../engine/placeholders";
 import { clock } from "./clock";
 import { readClipboardSafe } from "./clipboard";
+import { formatNoteDate } from "./daily-notes";
 import { expand } from "../engine";
 import { expandInstant, expandPatternHit } from "../engine/expand";
 import { shouldExpandHere } from "../engine/guards";
@@ -64,6 +65,8 @@ export function makeContext(
      *  wherever the cursor ended up after Enter. */
     line?: number,
     ch?: number,
+    /** B-204 / B-218: the note's name without its extension, for `{{title}}` and `{{notedate:FMT}}`. */
+    basename?: string,
 ): ExpandContext {
     const cursor = editor.getCursor();
     const targetLine = line ?? cursor.line;
@@ -82,8 +85,10 @@ export function makeContext(
         isInMath: isMath,
         isInFrontmatter: isFront,
         filename,
+        basename,
         now,
         formatDate: formatWithMoment,
+        formatNoteDate: (format) => formatNoteDate(basename, format),
         readClipboard
     };
 }
@@ -224,6 +229,7 @@ export async function tryExpandAtSeparator(
     dict: Dict,
     deps: {
         filename?: string;
+        basename?: string;
         now: Date;
         readClipboard?: () => Promise<string>;
         /** B-137: see `ExpandInput.prefix`. `undefined` = mode off. */
@@ -287,7 +293,7 @@ export async function tryExpandAtSeparator(
     // apply the plan to THIS line, not whatever line the cursor ends
     // up on after the await.
     const input = makeExpandInput(editor, sepCh, lastTyped, targetLine, deps.prefix);
-    const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, targetLine, ctxCh);
+    const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, targetLine, ctxCh, deps.basename);
 
     const patterns = deps.patterns ?? [];
     return expandAndApply(
@@ -420,6 +426,7 @@ export async function tryExpandAtCursor(
     dict: Dict,
     deps: {
         filename?: string;
+        basename?: string;
         now: Date;
         readClipboard?: () => Promise<string>;
         prefix?: string;
@@ -436,7 +443,7 @@ export async function tryExpandAtCursor(
 ): Promise<ExpansionResult | undefined> {
     const at = deps.prepared ?? planCursorExpansion(editor, dict, deps.prefix, deps.patterns ?? [], deps.manual === true);
     if (!at) return undefined;
-    const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, at.cursor.line, at.input.sepCh);
+    const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, at.cursor.line, at.input.sepCh, deps.basename);
     const hit = at.hit;
     // No `pairCloser`: a command or Tab never takes an auto-paired closer (only the typing path knows one was inserted).
     return expandAndApply(
@@ -590,6 +597,7 @@ export async function tryExpandInstant(
     patterns: readonly CompiledRule[],
     deps: {
         filename?: string;
+        basename?: string;
         now: Date;
         readClipboard?: () => Promise<string>;
         /** The closer the editor's auto-pair inserted right after the caret in this update. */
@@ -609,7 +617,7 @@ export async function tryExpandInstant(
     // The match is handed on, so the rule's regex runs once per hit.
     const hit = matchPatterns(textBefore, patterns, "instant");
     if (!hit) return undefined;
-    const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, cursor.line, cursor.ch);
+    const ctx = makeContext(editor, deps.filename, deps.now, deps.readClipboard, cursor.line, cursor.ch, deps.basename);
     return expandAndApply(
         editor,
         () => expandInstant(textBefore, ctx, hit),
@@ -624,12 +632,13 @@ export async function tryExpandInstant(
 /** B-197: what the picker paths need to run the full placeholder pipeline. */
 export type SnippetInsertDeps = {
     filename?: string;
+    basename?: string;
     now?: Date;
     readClipboard?: () => Promise<string>;
 };
 
 function pickerContext(editor: Editor, deps: SnippetInsertDeps): ExpandContext {
-    return makeContext(editor, deps.filename, deps.now ?? clock.now(), deps.readClipboard ?? readClipboardSafe);
+    return makeContext(editor, deps.filename, deps.now ?? clock.now(), deps.readClipboard ?? readClipboardSafe, undefined, undefined, deps.basename);
 }
 
 function samePos(a: EditorPosition, b: EditorPosition): boolean {
@@ -685,10 +694,11 @@ export async function insertSnippetAtCursor(
     const lineStillThere = (): boolean =>
         cursor.line <= editor.lastLine() && editor.getLine(cursor.line) === capturedLine;
     const prepared = prepareTabstops(replacement);
-    const resolved = await substituteVariables(prepared.text, pickerContext(editor, deps), prepared.fields);
+    const verbatim: string[] = [];
+    const resolved = await substituteVariables(prepared.text, pickerContext(editor, deps), prepared.fields, verbatim);
 
     // Handle cursor position after insertion
-    const scan = scanMarkers(resolved, prepared.fields, true);
+    const scan = scanMarkers(resolved, prepared.fields, true, verbatim);
     const cleanReplacement = scan.text;
     const { offsets: fields, docOrder } = orderFieldHits(scan.fields);
     // Without `$|` the first field is where the caret goes if no session starts.
@@ -772,7 +782,9 @@ export async function wrapSelectionWithSnippet(
         return withFields ? fieldMarker(n) : "";
     });
 
-    template = await substituteVariables(template, pickerContext(editor, deps), withFields);
+    // B-204 / B-218: `{{title}}` / `{{notedate}}` values stay out of the `$|` search; the walk below writes them in.
+    const verbatim: string[] = [];
+    template = await substituteVariables(template, pickerContext(editor, deps), withFields, verbatim);
 
     const cursorMatch = template.indexOf("$|");
     if (cursorMatch >= 0) {
@@ -791,9 +803,7 @@ export async function wrapSelectionWithSnippet(
     // re-scanned), so it is inserted verbatim (`$2`, `$&`, `$date`, even a
     // marker lookalike), and every offset below counts its length.
     const walk = new RegExp(
-        withFields
-            ? `${SELECTION_SLOT}|${CURSOR_SENTINEL}|\\uE002([1-9])\\uE003`
-            : `${SELECTION_SLOT}|${CURSOR_SENTINEL}`,
+        `${SELECTION_SLOT}|${CURSOR_SENTINEL}` + (withFields ? "|\\uE002(?<field>[1-9])\\uE003" : "") + (verbatim.length > 0 ? "|\\uE005(?<verb>\\d+)\\uE005" : ""),
         "g",
     );
     let finalText = "";
@@ -804,8 +814,12 @@ export async function wrapSelectionWithSnippet(
     for (let m = walk.exec(template); m; m = walk.exec(template)) {
         finalText += template.slice(last, m.index);
         last = m.index + m[0].length;
-        if (m[1] !== undefined) {
-            hits.push({ n: Number(m[1]), offset: finalText.length });
+        const field = m.groups?.["field"];
+        const verb = m.groups?.["verb"];
+        if (verb !== undefined) {
+            finalText += verbatim[Number(verb)] ?? m[0];
+        } else if (field !== undefined) {
+            hits.push({ n: Number(field), offset: finalText.length });
         } else if (m[0] === CURSOR_SENTINEL) {
             cursorOffset = finalText.length;
         } else if (!selectionDone) {

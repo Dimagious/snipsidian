@@ -5,10 +5,15 @@ export type ExpandContext = {
     isInMath: boolean;          
     isInFrontmatter: boolean;
     filename?: string;
+    /** B-204: the note's name without its extension, for `{{title}}`. Absent = no active file. */
+    basename?: string;
     now: Date;
     /** B-166: formats `now` with a moment-style format string for `{{date:FMT}}`
      *  / `{{time:FMT}}`. Injected by the adapter (engine stays Obsidian-free). */
     formatDate?: (date: Date, format: string) => string;
+    /** B-218: formats the date parsed from the note's name for `{{notedate:FMT}}` (the parse format is the Daily
+     *  notes one; the adapter knows it). Returns "" when the note has no date name. Injected like `formatDate`. */
+    formatNoteDate?: (format: string) => string;
     readClipboard?: () => Promise<string>;
 };
 

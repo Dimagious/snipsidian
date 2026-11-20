@@ -136,6 +136,8 @@ Delete any of them. **Settings → Snipsy → Restore default snippets** brings 
 | `$date` · `$time` | today · now |
 | `{{date:dddd, D MMMM}}` | your own [Moment.js format](https://momentjs.com/docs/#/displaying/format/) |
 | `$filename` | the note's file name, with its extension |
+| `{{title}}` | the note's name without its extension; empty when no note is open |
+| `{{notedate:FORMAT}}` | the date in the note's name (a diary note), written in `FORMAT`, e.g. `{{notedate:GGGG-[W]WW}}` in `2026-12-31` gives `2026-W53`. The name is read with the core Daily notes date format; empty when it is not a date |
 | `$clipboard` | what is on your clipboard |
 
 The [reference](https://github.com/Dimagious/snipsidian/blob/HEAD/docs/reference.md#placeholders) has the exact rules.

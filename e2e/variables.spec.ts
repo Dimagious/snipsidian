@@ -30,6 +30,13 @@ test.describe("variable substitution in real expansion", () => {
         expect(text).not.toContain("datestamp");
     });
 
+    test("`{{title}}` is the open note's name without its extension (B-204)", async ({ obsidian }) => {
+        // The pristine vault opens `Welcome.md`. `$filename` keeps the extension, `{{title}}` drops it.
+        await seedSnippets(obsidian, { ttl: "{{title}}|$filename" });
+        await obsidian.editor().type("ttl ");
+        expect(await obsidian.editor().text()).toBe("Welcome|Welcome.md ");
+    });
+
     test("`$|` cursor marker substitutes AFTER `$date` (B-011 regression)", async ({ obsidian }) => {
         // The bug: the marker offset was computed against the raw
         // template, so once `$date` was substituted (length-changing

@@ -211,7 +211,7 @@ function translateReplacement(text: string, declared: Declared | undefined, isRe
     if (formatted !== undefined) {
         const s = plain.indexOf(formatted);
         const shown = quoteOriginal(text, segs, s, s + formatted.length) || formatted;
-        return { ok: false, reason: `contains "${clip(shown)}" as plain text, which Snipsy would fill in with the date or time` };
+        return { ok: false, reason: `contains "${clip(shown)}" as plain text, which Snipsy would fill in with the date, the time or the note's name` };
     }
 
     const escaped = escapeLiteralTabstops(out);

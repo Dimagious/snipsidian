@@ -8,7 +8,7 @@ import { DEFAULT_DELIMITERS } from "../shared/delimiters";
  * ADR-0008, Patterns page: "Try it". Replays a typed line one character at a time through the REAL engine
  * (`findTrigger`, `matchPatternsInOrder`, `matchPatterns`, `expand`, `expandInstant`), the way the editor adapters
  * call it, so the answer is the one a note would give. Pure: the clipboard is never read (`$clipboard` and
- * `$filename` come back as their own names), the note is not touched.
+ * `$filename`, `{{title}}` and `{{notedate:FMT}}` come back as their own names), the note is not touched.
  *
  * What the replay does, per character:
  *   - a separator (`DEFAULT_DELIMITERS`): literal snippets first (with the prefix setting), then the rules top to
@@ -99,8 +99,10 @@ async function replay(input: TryItInput): Promise<Run> {
         isInMath: false,
         isInFrontmatter: false,
         filename: "$filename",
+        basename: "{{title}}",
         now: input.now,
         formatDate: input.formatDate,
+        formatNoteDate: (format) => `{{notedate:${format}}}`,
         // The clipboard is never read here: the token stands for it.
         readClipboard: () => Promise.resolve("$clipboard"),
     };

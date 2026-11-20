@@ -39,11 +39,12 @@ beforeEach(() => {
 function mount(opts: {
     snippets: SnippetItem[];
     selection?: string;
+    activeFile?: { name: string; basename: string };
 }) {
     const editor = opts.selection !== undefined
         ? makeMockEditor({ text: "hello world", selection: opts.selection })
         : makeMockEditor({ text: "hello world" });
-    app = makeMockApp({ activeEditor: editor }) as unknown as App;
+    app = makeMockApp({ activeEditor: editor, activeFile: opts.activeFile }) as unknown as App;
     const api = new SnippetPickerService(opts.snippets);
     const modal = new SnippetPickerModal(app, api);
     modal.open();
@@ -359,5 +360,34 @@ describe("SnippetPickerModal: B-243 field sessions after insert", () => {
         });
         await pressEnter(modal);
         expect(editor.value()).toBe("hello world[]()");
+    });
+});
+
+describe("SnippetPickerModal: B-204 the note's basename reaches the placeholder pipeline", () => {
+    async function pressEnter(modal: SnippetPickerModal): Promise<void> {
+        // The insert is async; the modal closes once it has settled.
+        const closeSpy = vi.spyOn(modal, "close");
+        const input = modal.contentEl.querySelector("input[role=\"combobox\"]");
+        input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+        await vi.waitFor(() => expect(closeSpy).toHaveBeenCalled());
+    }
+
+    it("insert: {{title}} is the open note's name without its extension", async () => {
+        const { modal, editor } = mount({
+            snippets: [makeSnippet({ trigger: ":t", replacement: "{{title}}|$filename" })],
+            activeFile: { name: "Plan.md", basename: "Plan" },
+        });
+        await pressEnter(modal);
+        expect(editor.value()).toBe("hello worldPlan|Plan.md");
+    });
+
+    it("wrap: {{title}} is substituted around the selection", async () => {
+        const { modal, editor } = mount({
+            snippets: [makeSnippet({ trigger: ":t", replacement: "{{title}}: $1" })],
+            selection: "hello",
+            activeFile: { name: "Plan.md", basename: "Plan" },
+        });
+        await pressEnter(modal);
+        expect(editor.value()).toContain("Plan: hello");
     });
 });

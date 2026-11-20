@@ -78,6 +78,12 @@ vi.mock("../ui/components/AddFromSelection", () => ({
     openAddSnippetFromSelection: (...args: unknown[]) => openAddFromSelection(...args),
 }));
 
+// B-218: the Daily notes format cache is covered in adapters/daily-notes.test.ts.
+const watchDailyNotes = vi.hoisted(() => vi.fn<(...args: unknown[]) => void>());
+vi.mock("../adapters/daily-notes", () => ({
+    watchDailyNotesFormat: (...args: unknown[]) => watchDailyNotes(...args),
+}));
+
 // Dynamic imports AFTER mocks to ensure they take effect
 const { default: PluginClass } = await import("./plugin");
 const { buildExpansionExtension } = await import("./cm6-bridge");
@@ -573,6 +579,110 @@ describe("app/plugin", () => {
         expect(saveData).toHaveBeenCalledWith(plugin.settings);
     });
 
+    describe("B-217 fixed defaults reach existing installs", () => {
+        const OLD_TABLE = "| H1 | H2 | H3 |\n| --- | --- | --- |\n| $| | | |";
+
+        async function load(snippets: Record<string, string>) {
+            const plugin = makePlugin();
+            vi.spyOn(plugin, "loadData").mockResolvedValue({ snippets: { ...snippets }, ui: { activeTab: "community" } });
+            const saveData = vi.spyOn(plugin, "saveData");
+            await plugin.loadSettings();
+            return { plugin, saveData };
+        }
+
+        it("upgrades an untouched grouped default and saves once", async () => {
+            const { plugin, saveData } = await load({ "defaults/table": OLD_TABLE, "defaults/todo": "- [ ] $|" });
+            expect(plugin.settings.snippets["defaults/table"]).toBe(DEFAULT_SNIPPETS.table);
+            expect(plugin.settings.snippets["defaults/todo"]).toBe("- [ ] $|");
+            expect(plugin.settings.ui?.activeTab).toBe("community");
+            expect(saveData).toHaveBeenCalledTimes(1);
+            expect(saveData).toHaveBeenCalledWith(plugin.settings);
+        });
+
+        it("upgrades a legacy bare `table`", async () => {
+            const { plugin } = await load({ table: OLD_TABLE });
+            expect(plugin.settings.snippets.table).toBe(DEFAULT_SNIPPETS.table);
+        });
+
+        it("leaves a user-edited table alone; the marker is set in memory and the file is not rewritten for it", async () => {
+            const { plugin, saveData } = await load({ "defaults/table": OLD_TABLE + "\nmine" });
+            expect(plugin.settings.snippets["defaults/table"]).toBe(OLD_TABLE + "\nmine");
+            expect(plugin.settings.defaultsUpgraded).toEqual(["table@1.11.0"]);
+            expect(saveData).not.toHaveBeenCalled();
+        });
+
+        it("the in-memory marker goes to disk with the next ordinary save", async () => {
+            const { plugin, saveData } = await load({ "defaults/table": "mine" });
+            await plugin.saveSettings();
+            expect(saveData).toHaveBeenCalledWith(expect.objectContaining({ defaultsUpgraded: ["table@1.11.0"] }));
+        });
+
+        it("does not bring back a deleted or renamed default", async () => {
+            const { plugin } = await load({ "defaults/todo": "- [ ] $|", "defaults/tbl": OLD_TABLE });
+            expect(plugin.settings.snippets).toEqual({ "defaults/todo": "- [ ] $|", "defaults/tbl": OLD_TABLE });
+        });
+
+        it("marks the upgrade, so a value the user sets back to the old text is not overwritten again", async () => {
+            const first = await load({ "defaults/table": OLD_TABLE });
+            expect(first.plugin.settings.defaultsUpgraded).toEqual(["table@1.11.0"]);
+            // The user restores the old text (an old backup, a hand edit); the marker rides along in data.json.
+            const restored = { ...first.plugin.settings.snippets, "defaults/table": OLD_TABLE };
+            const plugin = makePlugin();
+            vi.spyOn(plugin, "loadData").mockResolvedValue({ snippets: restored, defaultsUpgraded: ["table@1.11.0"] });
+            const saveData = vi.spyOn(plugin, "saveData");
+            await plugin.loadSettings();
+            expect(plugin.settings.snippets["defaults/table"]).toBe(OLD_TABLE);
+            expect(saveData).not.toHaveBeenCalled();
+        });
+
+        it("a data.json with a garbage marker is treated as none applied", async () => {
+            const plugin = makePlugin();
+            vi.spyOn(plugin, "loadData").mockResolvedValue({ snippets: { table: OLD_TABLE }, defaultsUpgraded: "nope" });
+            await plugin.loadSettings();
+            expect(plugin.settings.snippets.table).toBe(DEFAULT_SNIPPETS.table);
+            expect(plugin.settings.defaultsUpgraded).toEqual(["table@1.11.0"]);
+        });
+
+        it("a fresh install is seeded with the fixed table and marked, so nothing is ever upgraded", async () => {
+            const plugin = makePlugin();
+            vi.spyOn(plugin, "loadData").mockResolvedValue(null);
+            const saveData = vi.spyOn(plugin, "saveData");
+            await plugin.loadSettings();
+            expect(plugin.settings.snippets["defaults/table"]).toBe(DEFAULT_SNIPPETS.table);
+            expect(plugin.settings.defaultsUpgraded).toEqual(["table@1.11.0"]);
+            expect(saveData).toHaveBeenCalledTimes(1);
+            expect(saveData).toHaveBeenCalledWith(expect.objectContaining({ defaultsUpgraded: ["table@1.11.0"] }));
+        });
+
+        it("a failing save does not make loadSettings reject; the upgrade stays in memory and is warned about", async () => {
+            const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+            const plugin = makePlugin();
+            vi.spyOn(plugin, "loadData").mockResolvedValue({ snippets: { "defaults/table": OLD_TABLE } });
+            vi.spyOn(plugin, "saveData").mockRejectedValue(new Error("disk full"));
+            await expect(plugin.loadSettings()).resolves.toBeUndefined();
+            expect(plugin.settings.snippets["defaults/table"]).toBe(DEFAULT_SNIPPETS.table);
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining("could not save the upgraded default snippets"), expect.any(Error));
+        });
+
+        it("is idempotent: the next load finds nothing to do", async () => {
+            const first = await load({ "defaults/table": OLD_TABLE });
+            const plugin = makePlugin();
+            vi.spyOn(plugin, "loadData").mockResolvedValue({ ...first.plugin.settings });
+            const saveData = vi.spyOn(plugin, "saveData");
+            await plugin.loadSettings();
+            const second = { plugin, saveData };
+            expect(second.plugin.settings.snippets).toEqual(first.plugin.settings.snippets);
+            expect(second.saveData).not.toHaveBeenCalled();
+        });
+    });
+
+    it("B-218: onload starts the Daily notes format watch", async () => {
+        const plugin = makePlugin();
+        vi.spyOn(plugin, "loadData").mockResolvedValue(null);
+        await plugin.onload();
+        expect(watchDailyNotes).toHaveBeenCalledWith(plugin);
+    });
+
     it("preserves non-snippet fields (ui, communityPackages) from data.json", async () => {
         const app = makeApp();
         const plugin = makePlugin(app);
@@ -809,7 +919,8 @@ describe("app/plugin", () => {
             const { plugin } = compatPlugin(COMPAT_MANIFEST);
             const saveData = load(plugin, { snippets: { todo: "- [ ]" } });
             await plugin.loadSettings();
-            expect(plugin.settings).toEqual({ snippets: { todo: "- [ ]" } });
+            // Only B-217's in-memory marker is added; the file is not rewritten.
+            expect(plugin.settings).toEqual({ snippets: { todo: "- [ ]" }, defaultsUpgraded: ["table@1.11.0"] });
             expect(saveData).not.toHaveBeenCalled();
         });
 

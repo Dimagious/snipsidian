@@ -288,6 +288,8 @@ function runExpansion(
     const editor = fileInfo?.editor;
     if (!editor) return;
     const filename = fileInfo.file?.name;
+    // B-204 / B-218: `{{title}}` and `{{notedate:FMT}}` read the name without its extension.
+    const basename = fileInfo.file?.basename;
 
     // B-020: surface engine errors instead of silently swallowing
     // them. A broken snippet (e.g. an invalid `$date` format or a
@@ -306,7 +308,7 @@ function runExpansion(
         opts.pairCloser === undefined || caret === undefined
             ? undefined
             : { closer: opts.pairCloser, caret, lineText: editor.getLine(caret.line) ?? "" };
-    const deps = { filename, now: clock.now(), readClipboard: readClipboardSafe, pairCloser };
+    const deps = { filename, basename, now: clock.now(), readClipboard: readClipboardSafe, pairCloser };
     // Literal triggers first, then the pattern rules strictly top to bottom
     // whatever their mode (ADR-0008, one order): on a typed separator that is
     // all inside `tryExpandAtSeparator` (a separator rule reads the line before

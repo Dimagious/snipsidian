@@ -339,8 +339,8 @@ describe("applyPlaceholders: B-166 {{date}} / {{time}}", () => {
     });
 
     it("unknown tokens are left as is", async () => {
-        expect((await run("{{foo}} {{date2}} {{ date }} {{title}}", { formatDate: fake })).text)
-            .toBe("{{foo}} {{date2}} {{ date }} {{title}}");
+        expect((await run("{{foo}} {{date2}} {{ date }} {{title:x}} {{Title}}", { formatDate: fake })).text)
+            .toBe("{{foo}} {{date2}} {{ date }} {{title:x}} {{Title}}");
     });
 
     it("without a formatter a custom format is left untouched, defaults still work", async () => {
@@ -367,6 +367,121 @@ describe("applyPlaceholders: B-166 {{date}} / {{time}}", () => {
 
     it("existing $date / $time are unchanged", async () => {
         expect((await run("$date $time", { formatDate: fake })).text).toBe("2025-09-02 10:11");
+    });
+});
+
+describe("applyPlaceholders: B-204 {{title}} and B-218 {{notedate:FMT}}", () => {
+    const base = { isInCode: false, isInMath: false, isInFrontmatter: false, now: new Date("2025-09-02T10:11:12") };
+    const run = (s: string, extra: object = {}) => applyPlaceholders(s, { ...base, ...extra });
+    const noteDate = (format: string): string => `<${format}>`;
+
+    it("{{title}} is the note's basename; $filename keeps its extension", async () => {
+        const r = await run("# {{title}} / $filename", { filename: "Plan.md", basename: "Plan" });
+        expect(r.text).toBe("# Plan / Plan.md");
+    });
+
+    it("keeps the dots of the name (the extension is already gone)", async () => {
+        expect((await run("{{title}}", { filename: "v1.2 notes.md", basename: "v1.2 notes" })).text).toBe("v1.2 notes");
+    });
+
+    it("no active file: {{title}} is an empty string", async () => {
+        expect((await run("[{{title}}]")).text).toBe("[]");
+    });
+
+    it("{{title}} before $| puts the caret after the substituted name", async () => {
+        const r = await run("# {{title}}: $|", { basename: "Long note name" });
+        expect(r.text).toBe("# Long note name: ");
+        expect(r.cursorDelta).toBe("# Long note name: ".length);
+    });
+
+    it("{{title}} used twice, and a value with $ is inserted verbatim", async () => {
+        expect((await run("{{title}}+{{title}}", { basename: "a$&b" })).text).toBe("a$&b+a$&b");
+    });
+
+    it("field markers in the name cannot forge a tab stop (B-243)", async () => {
+        const r = await run("$1 $2 {{title}}", { basename: "x\uE002" + "1\uE003y" });
+        expect(r.fields).toEqual([0, 1]);
+        expect(r.text).toBe("  x1y");
+    });
+
+    it("{{title:x}} (no format exists) is left as text", async () => {
+        expect((await run("{{title:x}}", { basename: "n" })).text).toBe("{{title:x}}");
+    });
+
+    it("{{notedate:FMT}} passes the format; empty or missing FMT means YYYY-MM-DD", async () => {
+        const r = await run("{{notedate:GGGG-[W]WW}} {{notedate}} {{notedate:}}", { formatNoteDate: noteDate });
+        expect(r.text).toBe("<GGGG-[W]WW> <YYYY-MM-DD> <YYYY-MM-DD>");
+    });
+
+    it("{{notedate:FMT}} without the injected formatter is left untouched", async () => {
+        expect((await run("{{notedate:YYYY}}")).text).toBe("{{notedate:YYYY}}");
+    });
+
+    it("{{notedate:FMT}} output is inserted verbatim ($ is not a replace pattern)", async () => {
+        expect((await run("{{notedate:x}}", { formatNoteDate: () => "$& $1" })).text).toBe("$& $1");
+    });
+
+    describe("the inserted name is verbatim: later passes never read it", () => {
+        const clip = { readClipboard: () => Promise.resolve("SECRET") };
+
+        it("a note named `Budget $date` is not turned into a date", async () => {
+            expect((await run("{{title}}", { basename: "Budget $date" })).text).toBe("Budget $date");
+        });
+
+        it("a note named `pw $clipboard` does not leak the clipboard", async () => {
+            expect((await run("{{title}}", { basename: "pw $clipboard", ...clip })).text).toBe("pw $clipboard");
+        });
+
+        it("a note named `a $| b` does not move the caret", async () => {
+            const r = await run("{{title}}!$|", { basename: "a $| b" });
+            expect(r.text).toBe("a $| b!");
+            expect(r.cursorDelta).toBe("a $| b!".length);
+        });
+
+        it("`$filename` and `$time` in the name stay text", async () => {
+            expect((await run("{{title}}", { basename: "$filename $time", filename: "X.md" })).text).toBe("$filename $time");
+        });
+
+        it("`$1` in the name is not a tab stop", async () => {
+            const r = await run("{{title}} $|", { basename: "cost $1" });
+            expect(r.text).toBe("cost $1 ");
+            expect(r.fields).toBeUndefined();
+            const two = await run("$1 $2 {{title}}", { basename: "$1" });
+            expect(two.text).toBe("  $1");
+            expect(two.fields).toEqual([0, 1]);
+        });
+
+        it("`{{date}}` in the name stays text", async () => {
+            expect((await run("{{title}}", { basename: "{{date}}", formatDate: () => "DATE" })).text).toBe("{{date}}");
+        });
+
+        it("{{notedate}} output with `$date`, `$clipboard` and `$|` stays text", async () => {
+            const r = await run("{{notedate:x}}|$|", { formatNoteDate: () => "$date $clipboard $|", ...clip });
+            expect(r.text).toBe("$date $clipboard $||");
+            expect(r.cursorDelta).toBe("$date $clipboard $||".length);
+        });
+
+        it("a clipboard carrying the verbatim marker cannot pull the title in", async () => {
+            const r = await run("{{title}}-$clipboard", { basename: "Plan", readClipboard: () => Promise.resolve("\uE0050\uE005") });
+            expect(r.text).toBe("Plan-0");
+        });
+
+        it("a file name or a date format output carrying the marker cannot pull the title in", async () => {
+            const forged = "\uE0050\uE005";
+            const r = await run("{{title}}|$filename|{{date:x}}|{{notedate:y}}", {
+                basename: "Plan",
+                filename: forged,
+                formatDate: () => forged,
+                formatNoteDate: () => forged,
+            });
+            expect(r.text).toBe("Plan|0|0|0");
+        });
+
+        it("fields after the name are offset by the name's real length", async () => {
+            const r = await run("{{title}}$1 $2", { basename: "$|" });
+            expect(r.text).toBe("$| ");
+            expect(r.fields).toEqual([2, 3]);
+        });
     });
 });
 
@@ -462,6 +577,7 @@ describe("B-266: findVariableTokens / findFormattedTokens", () => {
     it("lists {{date}}, {{time}} and their formatted forms, nothing else", () => {
         expect(findFormattedTokens("{{date}} {{time:HH}} {{date:}} {{date:YYYY-MM}}")).toEqual(["{{date}}", "{{time:HH}}", "{{date:}}", "{{date:YYYY-MM}}"]);
         expect(findFormattedTokens("{{ date }} {{dates}} {{date:{x}}} {{clipboard}}")).toEqual([]);
+        expect(findFormattedTokens("{{title}} {{notedate}} {{notedate:GGGG-[W]WW}} {{title:x}}")).toEqual(["{{title}}", "{{notedate}}", "{{notedate:GGGG-[W]WW}}"]);
     });
 
     it("agrees with the engine: every listed token is replaced, every unlisted one is not", async () => {

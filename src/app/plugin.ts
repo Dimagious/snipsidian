@@ -14,6 +14,8 @@ import { sanitizeForNotice } from "../shared/notice-text";
 import { SnippetPickerService } from "../core/snippet-picker";
 import { openSnippetPickerModal } from "../ui/components/SnippetPickerModal";
 import { openAddSnippetFromSelection } from "../ui/components/AddFromSelection";
+import { allDefaultsUpgradeIds, planDefaultsUpgrade, readAppliedUpgrades } from "../core/defaults-upgrade";
+import { watchDailyNotesFormat } from "../adapters/daily-notes";
 import { expandTriggerAtCursor, jumpToNextField } from "./field-commands";
 
 export default class HotstringsPlugin extends Plugin {
@@ -47,6 +49,8 @@ export default class HotstringsPlugin extends Plugin {
     async onload() {
         await this.loadSettings();
         this.reportRefusedPatterns();
+        // B-218: keeps the Daily notes format (for `{{notedate:FMT}}`) cached, off the keystroke hot path.
+        watchDailyNotesFormat(this);
 
         // B-149: registered as a CM6 editor extension (gated on
         // genuine-typing `userEvent`s — see `change-source-gate.ts`)
@@ -193,6 +197,28 @@ export default class HotstringsPlugin extends Plugin {
             // re-merge DEFAULT_SNIPPETS here — doing so resurrected deleted or
             // renamed defaults on every launch (B-130, issues #55/#56).
             this.settings = { ...saved, snippets: saved.snippets };
+            // B-217: a default that was fixed later reaches an install that still holds its old, untouched value.
+            // Each upgrade runs once per install (`defaultsUpgraded`), so a value set back later stays.
+            const applied = readAppliedUpgrades(saved.defaultsUpgraded);
+            const plan = planDefaultsUpgrade(saved.snippets, applied);
+            if (plan.newlyApplied.length > 0) {
+                this.settings = {
+                    ...this.settings,
+                    snippets: { ...saved.snippets, ...plan.updates },
+                    defaultsUpgraded: [...applied, ...plan.newlyApplied],
+                };
+                // The file is written only when a default was rewritten; the marker alone rides along with the next
+                // save (any edit in settings), so a data.json that needs nothing is left exactly as it was.
+                if (Object.keys(plan.updates).length > 0) {
+                    try {
+                        await this.saveSettings();
+                    } catch (error) {
+                        // The upgrade stays in memory (the user keeps the fixed default this session) and is
+                        // retried on the next load; a failing disk must not make the plugin fail to load.
+                        console.warn("[snipsy] could not save the upgraded default snippets", error);
+                    }
+                }
+            }
         } else if (compat) {
             // B-255: fresh install of the compatibility build. Its users never
             // had Snipsy's defaults, so nothing is seeded, and it behaves like
@@ -214,7 +240,7 @@ export default class HotstringsPlugin extends Plugin {
             // later delete/rename of a default snippet sticks. Seeded as the
             // "Defaults" group (B-131) so the set is one deletable unit in
             // the Snippets tab and restorable from the General tab.
-            this.settings = { ...saved, snippets: defaultSnippetsAsGroup() };
+            this.settings = { ...saved, snippets: defaultSnippetsAsGroup(), defaultsUpgraded: allDefaultsUpgradeIds() };
             await this.saveSettings();
         }
     }
