@@ -4,6 +4,7 @@ import {
     isSingleCharTyping,
     type ChangeInfo,
     isTypingUserEvent,
+    listContinuationTail,
     shouldAttemptExpansion,
     shouldRunDeferredExpansion,
 } from "./change-source-gate";
@@ -205,5 +206,65 @@ describe("isSingleCharTyping (ADR-0008 instant mode)", () => {
     it("the caret must sit right after the typed character", () => {
         expect(isSingleCharTyping([typed], { ...caret, head: 4 })).toBe(false);
         expect(isSingleCharTyping([typed], { ...caret, head: 6 })).toBe(false);
+    });
+});
+
+describe("listContinuationTail [B-246]", () => {
+    it.each([
+        ["bullet", "g\n- ", "g", "\n- "],
+        ["star bullet", "g\n* ", "g", "\n* "],
+        ["plus bullet", "g\n+ ", "g", "\n+ "],
+        ["numbered", "g\n2. ", "g", "\n2. "],
+        ["numbered with a parenthesis", "g\n10) ", "g", "\n10) "],
+        ["task", "g\n- [ ] ", "g", "\n- [ ] "],
+        ["nested (tab indent)", "g\n\t- ", "g", "\n\t- "],
+        ["nested (space indent)", "g\n    1. ", "g", "\n    1. "],
+        ["nothing replaced", "\n- ", "", "\n- "],
+        ["blockquote", "g\n> ", "g", "\n> "],
+        ["nested blockquote", "g\n> > ", "g", "\n> > "],
+        ["list in a blockquote", "g\n> - ", "g", "\n> - "],
+        ["task in a callout", "g\n> - [ ] ", "g", "\n> - [ ] "],
+        ["numbered in a blockquote", "g\n> 2. ", "g", "\n> 2. "],
+    ])("%s: returns the inserted tail", (_name, inserted, replaced, tail) => {
+        expect(listContinuationTail(inserted, replaced)).toBe(tail);
+    });
+
+    it("a plain Enter (no marker) is not a continuation", () => {
+        expect(listContinuationTail("g\n", "g")).toBeUndefined();
+        expect(listContinuationTail("g\n   ", "g")).toBeUndefined();
+    });
+
+    it("a quote prefix followed by text, or a list marker without a space inside a quote, is not a continuation", () => {
+        expect(listContinuationTail("g\n> text", "g")).toBeUndefined();
+        expect(listContinuationTail("g\n> -", "g")).toBeUndefined();
+        expect(listContinuationTail("g\n>- x", "g")).toBeUndefined();
+    });
+
+    it("a line break followed by text is not a continuation (a paste, not an Enter)", () => {
+        expect(listContinuationTail("g\n- item", "g")).toBeUndefined();
+        expect(listContinuationTail("g\n-x", "g")).toBeUndefined();
+        expect(listContinuationTail("g\n2.x", "g")).toBeUndefined();
+    });
+
+    it("a marker-like line without the trailing space is not a continuation", () => {
+        expect(listContinuationTail("g\n-", "g")).toBeUndefined();
+    });
+
+    it("the inserted text must start with what it replaced", () => {
+        expect(listContinuationTail("x\n- ", "g")).toBeUndefined();
+    });
+
+    it("more than one line break is not a continuation", () => {
+        expect(listContinuationTail("g\n\n- ", "g")).toBeUndefined();
+    });
+
+    it("a number with no marker punctuation, or a very long number, is not a marker", () => {
+        expect(listContinuationTail("g\n2 ", "g")).toBeUndefined();
+        expect(listContinuationTail("g\n1234567890. ", "g")).toBeUndefined();
+    });
+
+    it("Enter on an empty item (the marker is removed: nothing is inserted) is not a continuation", () => {
+        expect(listContinuationTail("", "- ")).toBeUndefined();
+        expect(listContinuationTail("\n", "- ")).toBeUndefined();
     });
 });

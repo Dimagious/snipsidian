@@ -24,7 +24,8 @@ import { Decoration, EditorView, keymap } from "@codemirror/view";
  * ## Pinned rules
  *
  * Layout after an expansion (`E` = inserted text, `S` = the separator
- * that was typed after the trigger, one character; Enter counts as `\n`):
+ * that was typed after the trigger: one character, or after Enter in a list item or a quote
+ * (B-246) the line break plus the new marker, `\n- `):
  *
  *     ... [from E to) [to S end) ...        cursor = `cursor`
  *

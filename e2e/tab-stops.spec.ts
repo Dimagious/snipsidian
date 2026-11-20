@@ -1,4 +1,6 @@
 import { test, expect, ui, seedSnippets } from "./fixtures";
+import type { SnipsyApp } from "./fixtures";
+import type { ObsidianHelpers } from "obsidian-plugin-dev-kit/e2e";
 
 /**
  * E2E (B-243 / B-244, NOT run by the maker: needs a real Obsidian window):
@@ -149,14 +151,19 @@ test.describe("[B-243] tab stops", () => {
         expect(await obsidian.editor().text()).toBe("[text](url) ");
     });
 
-    // Real Obsidian 1.14.5: Enter in a list item continues the list marker in
-    // the same keystroke, and no snippet expands there, with or without
-    // fields (the same in 1.7.3). Pinned so a change of that behaviour shows
-    // up; expanding on Enter in lists is backlog B-246.
-    test("Enter in a list item expands nothing and opens no session", async ({ win, obsidian }) => {
+    // B-246: real Obsidian 1.14.5 continues the list marker in the same change as the line break (the last typed
+    // character becomes itself plus "\n- "). The line break still ends the trigger: the previous line is expanded and
+    // the new marker stays, with the caret after it. A snippet with fields opens a session as on any other line.
+    test("Enter in a list item expands the trigger, keeps the new marker, and a session ends after it", async ({ win, obsidian }) => {
         await obsidian.editor().type("- lnk\n");
-        expect(await obsidian.editor().text()).toBe("- lnk\n- ");
-        await expect(win.locator(".cm-content .snipsy-field-empty")).toHaveCount(0);
+        expect(await obsidian.editor().text()).toBe("- []()\n- ");
+        await obsidian.editor().type("text");
+        await win.keyboard.press("Tab");
+        await obsidian.editor().type("url");
+        expect(await obsidian.editor().text()).toBe("- [text](url)\n- ");
+        await win.keyboard.press("Tab");
+        await obsidian.editor().type("!");
+        expect(await obsidian.editor().text()).toBe("- [text](url)\n- !");
     });
 
     test("command `next-field` jumps like Tab, and does nothing without a session", async ({ obsidian }) => {
@@ -250,3 +257,140 @@ test.describe("[B-243] field sessions from the picker", () => {
         expect(await obsidian.editor().text()).toBe("[word](url)");
     });
 });
+
+test.describe("[B-246] Enter in a list item", () => {
+    test.beforeEach(async ({ obsidian }) => {
+        await obsidian.editor().clear();
+        await seedSnippets(obsidian, { sig: "Best regards" });
+    });
+
+    test("a bullet: expands, keeps the new marker, the caret is after it", async ({ obsidian }) => {
+        await obsidian.editor().type("- sig\n");
+        expect(await obsidian.editor().text()).toBe("- Best regards\n- ");
+        await obsidian.editor().type("x");
+        expect(await obsidian.editor().text()).toBe("- Best regards\n- x");
+    });
+
+    test("a numbered item", async ({ obsidian }) => {
+        await obsidian.editor().type("1. sig\n");
+        expect(await obsidian.editor().text()).toBe("1. Best regards\n2. ");
+        await obsidian.editor().type("x");
+        expect(await obsidian.editor().text()).toBe("1. Best regards\n2. x");
+    });
+
+    test("a task", async ({ obsidian }) => {
+        await obsidian.editor().type("- [ ] sig\n");
+        expect(await obsidian.editor().text()).toBe("- [ ] Best regards\n- [ ] ");
+        await obsidian.editor().type("x");
+        expect(await obsidian.editor().text()).toBe("- [ ] Best regards\n- [ ] x");
+    });
+
+    test("a nested item", async ({ win, obsidian }) => {
+        await obsidian.editor().type("- a\n");
+        await win.keyboard.press("Tab");
+        await obsidian.editor().type("sig\n");
+        expect(await obsidian.editor().text()).toMatch(/^- a\n\s+- Best regards\n\s+- $/);
+        await obsidian.editor().type("x");
+        expect(await obsidian.editor().text()).toMatch(/\n\s+- x$/);
+    });
+
+    test("a word that is not a trigger changes nothing", async ({ obsidian }) => {
+        await obsidian.editor().type("- hello\n");
+        expect(await obsidian.editor().text()).toBe("- hello\n- ");
+    });
+
+    test("Enter on the empty item that follows still removes the marker", async ({ obsidian }) => {
+        await obsidian.editor().type("- sig\n");
+        await obsidian.editor().type("\n");
+        expect((await obsidian.editor().text()).startsWith("- Best regards\n")).toBe(true);
+        expect(await obsidian.editor().text()).not.toMatch(/\n- $/);
+    });
+
+    test("inside a fenced code block nothing expands", async ({ obsidian }) => {
+        await obsidian.editor().type("```\n- sig\n");
+        expect(await obsidian.editor().text()).not.toContain("Best regards");
+    });
+
+    // Real Obsidian 1.14.5 renumbers the items below in the SAME transaction as the continuation (`2. b` becomes
+    // `3. b`), so the update has more than one change; the expansion must still happen.
+    test("a numbered item above others: the items below are renumbered and the trigger still expands", async ({ win, obsidian }) => {
+        await putCaret(obsidian, "1. \n2. b\n3. c", 0, 3);
+        await win.keyboard.type("sig");
+        await win.keyboard.press("Enter");
+        expect(await obsidian.editor().text()).toBe("1. Best regards\n2. \n3. b\n4. c");
+        await obsidian.editor().type("x");
+        expect(await obsidian.editor().text()).toBe("1. Best regards\n2. x\n3. b\n4. c");
+    });
+
+    test("a numbered item above one other item", async ({ win, obsidian }) => {
+        await putCaret(obsidian, "1. \n2. b", 0, 3);
+        await win.keyboard.type("sig");
+        await win.keyboard.press("Enter");
+        expect(await obsidian.editor().text()).toBe("1. Best regards\n2. \n3. b");
+    });
+
+    // The word before the caret is a trigger, and Enter in the middle of a plain line expands it and drops the blank
+    // it broke at (`sig tail` becomes `Best regards` / `tail`). The list does the same.
+    test("Enter in the middle of an item expands and moves the rest to the new item", async ({ win, obsidian }) => {
+        await putCaret(obsidian, "-  tail", 0, 2);
+        await win.keyboard.type("sig");
+        await win.keyboard.press("Enter");
+        expect(await obsidian.editor().text()).toBe("- Best regards\n- tail");
+        expect(await obsidian.editor().selection()).toMatchObject({ head: { line: 1, ch: 2 } });
+    });
+
+    test("Enter in the middle of a plain line (the behaviour the list matches)", async ({ win, obsidian }) => {
+        await putCaret(obsidian, " tail", 0, 0);
+        await win.keyboard.type("sig");
+        await win.keyboard.press("Enter");
+        expect(await obsidian.editor().text()).toBe("Best regards\ntail");
+    });
+
+    test("a checked task: Obsidian opens an unchecked one below", async ({ win, obsidian }) => {
+        await putCaret(obsidian, "- [x] ", 0, 6);
+        await win.keyboard.type("sig");
+        await win.keyboard.press("Enter");
+        expect(await obsidian.editor().text()).toBe("- [x] Best regards\n- [ ] ");
+    });
+
+    test("a list in a blockquote", async ({ win, obsidian }) => {
+        await putCaret(obsidian, "> - ", 0, 4);
+        await win.keyboard.type("sig");
+        await win.keyboard.press("Enter");
+        expect(await obsidian.editor().text()).toBe("> - Best regards\n> - ");
+    });
+
+    test("a plain blockquote line", async ({ win, obsidian }) => {
+        await putCaret(obsidian, "> ", 0, 2);
+        await win.keyboard.type("sig");
+        await win.keyboard.press("Enter");
+        expect(await obsidian.editor().text()).toBe("> Best regards\n> ");
+    });
+
+    test("a callout body, plain and as a list", async ({ win, obsidian }) => {
+        await putCaret(obsidian, "> [!note]\n> ", 1, 2);
+        await win.keyboard.type("sig");
+        await win.keyboard.press("Enter");
+        expect(await obsidian.editor().text()).toBe("> [!note]\n> Best regards\n> ");
+
+        await putCaret(obsidian, "> [!note]\n> - ", 1, 4);
+        await win.keyboard.type("sig");
+        await win.keyboard.press("Enter");
+        expect(await obsidian.editor().text()).toBe("> [!note]\n> - Best regards\n> - ");
+    });
+});
+
+/** Replaces the note with `doc` and puts the caret at `line`, `ch`, with no keystroke (so nothing expands on the way). */
+async function putCaret(obsidian: ObsidianHelpers, doc: string, line: number, ch: number): Promise<void> {
+    await obsidian.editor().clear();
+    await obsidian.evaluate(
+        (app: SnipsyApp, text: string) => {
+            const editor = (app as unknown as { workspace: { activeEditor?: { editor?: { setValue(v: string): void } } } })
+                .workspace.activeEditor?.editor;
+            if (!editor) throw new Error("no active editor");
+            editor.setValue(text);
+        },
+        doc,
+    );
+    await obsidian.editor().setCursor(line, ch);
+}

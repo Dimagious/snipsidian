@@ -88,6 +88,7 @@ function makeUpdate(opts: {
                 });
             },
         },
+        startState: { doc: { lines: 1 } },
         state: {
             doc: opts.doc ?? DOC,
             selection: {
@@ -314,6 +315,41 @@ describe("cm6-bridge/CompositionRetry [B-191]", () => {
             handleViewUpdate(makeApp(), () => ({}), makeUpdate({ composing: true })),
         ).toBe("deferred");
         expect(tryExpandAtSeparator).not.toHaveBeenCalled();
+    });
+
+    it("[B-246] the retry after compositionend keeps the list continuation of the deferred Enter", () => {
+        const start = EditorState.create({ doc: "- sig", selection: { anchor: 5 } });
+        const tr = start.update({ changes: { from: 4, to: 5, insert: "g\n- " }, userEvent: "input.type" });
+        const { retry, view } = make({ composing: true, hasFocus: true });
+        view.state = tr.state;
+        retry.record({
+            docChanged: true,
+            view,
+            transactions: [tr],
+            changes: tr.changes,
+            state: tr.state,
+            startState: start,
+        } as unknown as ViewUpdate);
+        expect(retry.pending).toBe(true);
+
+        retry.onCompositionEnd();
+        view.composing = false;
+        flushTimers();
+        expect(tryExpandAtSeparator).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(tryExpandAtSeparator).mock.calls[0]?.[2]).toEqual(
+            expect.objectContaining({ listContinuation: "\n- " }),
+        );
+    });
+
+    it("a plain deferred update retries without a list continuation", () => {
+        const { retry, view } = make({ composing: true, hasFocus: true });
+        retry.record(makeUpdate({ composing: true }));
+        retry.onCompositionEnd();
+        view.composing = false;
+        flushTimers();
+        expect(vi.mocked(tryExpandAtSeparator).mock.calls[0]?.[2]).toEqual(
+            expect.objectContaining({ listContinuation: undefined }),
+        );
     });
 
     it("handleViewUpdate does not report paste/undo while composing", () => {
@@ -1421,5 +1457,138 @@ describe("cm6-bridge: Tab expansion (B-255)", () => {
         const binding = state.facet(keymap).flat().find((b) => b.key === "Tab");
         expect(binding?.run?.(Object.assign(view, { state }) as unknown as EditorView)).toBe(true);
         expect(expandTriggerAtCursor).toHaveBeenCalled();
+    });
+});
+
+describe("cm6-bridge: Enter in a list item (B-246)", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    /** One real transaction on `doc`, as the update the bridge receives. */
+    const update = (doc: string, spec: TransactionSpec): ViewUpdate => {
+        const state = EditorState.create({ doc, selection: { anchor: doc.length } });
+        const tr = state.update(spec);
+        return {
+            docChanged: tr.docChanged,
+            view: { hasFocus: true, composing: false },
+            transactions: [tr],
+            changes: tr.changes,
+            state: tr.state,
+            startState: state,
+        } as unknown as ViewUpdate;
+    };
+
+    // The shape real Obsidian 1.14.5 produces: the last typed character is replaced by itself plus the new marker.
+    const enter = (doc: string, tail: string, userEvent = "input.type"): ViewUpdate =>
+        update(doc, { changes: { from: doc.length - 1, to: doc.length, insert: doc.slice(-1) + tail }, userEvent });
+
+    const run = (u: ViewUpdate): unknown => {
+        handleViewUpdate(makeApp(), () => ({}), u);
+        return vi.mocked(tryExpandAtSeparator).mock.calls[0]?.[2];
+    };
+
+    it.each([
+        ["bullet", "- sig", "\n- "],
+        ["numbered", "1. sig", "\n2. "],
+        ["task", "- [ ] sig", "\n- [ ] "],
+        ["nested", "- a\n\tsig", "\n\t- "],
+    ])("%s: the inserted marker is handed to the expansion as the list continuation", (_name, doc, tail) => {
+        expect(run(enter(doc, tail))).toEqual(expect.objectContaining({ listContinuation: tail }));
+    });
+
+    it("a plain Enter has no list continuation", () => {
+        expect(run(enter("sig", "\n"))).toEqual(expect.objectContaining({ listContinuation: undefined }));
+    });
+
+    it("a paste ending in a marker is not typing: no expansion attempt at all", () => {
+        run(enter("- sig", "\n- ", "input.paste"));
+        expect(tryExpandAtSeparator).not.toHaveBeenCalled();
+    });
+
+    it("a marker followed by text is not a continuation", () => {
+        expect(run(enter("- sig", "\n- item"))).toEqual(expect.objectContaining({ listContinuation: undefined }));
+    });
+
+    // Real Obsidian 1.14.5 shapes (probed): the same transaction renumbers the items below the new one, and Enter in
+    // the middle of an item drops the blanks after the caret.
+    const withChanges = (doc: string, changes: Array<{ from: number; to?: number; insert: string }>, head: number): ViewUpdate =>
+        update(doc, { changes, selection: { anchor: head }, userEvent: "input.type" });
+
+    it("renumbering of the items below, in the same transaction, is still an Enter", () => {
+        // "1. sig\n2. b\n3. c": g -> "g\n2. ", "2. " -> "3. ", "3. " -> "4. "
+        const u = withChanges(
+            "1. sig\n2. b\n3. c",
+            [
+                { from: 5, to: 6, insert: "g\n2. " },
+                { from: 7, to: 10, insert: "3. " },
+                { from: 12, to: 15, insert: "4. " },
+            ],
+            10,
+        );
+        expect(run(u)).toEqual(expect.objectContaining({ listContinuation: "\n2. " }));
+    });
+
+    it("the blanks after the caret dropped (Enter in the middle of an item) is still an Enter", () => {
+        const u = withChanges("- sig tail", [{ from: 4, to: 5, insert: "g\n- " }, { from: 5, to: 6, insert: "" }], 8);
+        expect(run(u)).toEqual(expect.objectContaining({ listContinuation: "\n- " }));
+    });
+
+    it("a quote and a callout body continue with their prefix", () => {
+        expect(run(enter("> sig", "\n> "))).toEqual(expect.objectContaining({ listContinuation: "\n> " }));
+        vi.clearAllMocks();
+        expect(run(enter("> [!note]\n> - sig", "\n> - "))).toEqual(expect.objectContaining({ listContinuation: "\n> - " }));
+    });
+
+    it("a change before the continuation is not read as an Enter", () => {
+        const u = withChanges("- sig", [{ from: 0, insert: "x" }, { from: 4, to: 5, insert: "g\n- " }], 9);
+        expect(run(u)).toEqual(expect.objectContaining({ listContinuation: undefined }));
+    });
+
+    it("another change after the caret that is not a renumbering is not read as an Enter", () => {
+        const u = withChanges("- sig\nxy", [{ from: 4, to: 5, insert: "g\n- " }, { from: 6, to: 8, insert: "zz" }], 8);
+        expect(run(u)).toEqual(expect.objectContaining({ listContinuation: undefined }));
+    });
+
+    it("a renumbering that changes the marker shape is not read as an Enter", () => {
+        const u = withChanges(
+            "1. sig\n2. b",
+            [{ from: 5, to: 6, insert: "g\n2. " }, { from: 7, to: 10, insert: "- " }],
+            10,
+        );
+        expect(run(u)).toEqual(expect.objectContaining({ listContinuation: undefined }));
+    });
+
+    it("a deletion of text (not blanks) after the caret is not read as an Enter", () => {
+        const u = withChanges("- sigxx", [{ from: 4, to: 5, insert: "g\n- " }, { from: 5, to: 7, insert: "" }], 8);
+        expect(run(u)).toEqual(expect.objectContaining({ listContinuation: undefined }));
+    });
+
+    it("blanks dropped away from the caret are not read as an Enter", () => {
+        const u = withChanges("- sig a b", [{ from: 4, to: 5, insert: "g\n- " }, { from: 7, to: 8, insert: "" }], 8);
+        expect(run(u)).toEqual(expect.objectContaining({ listContinuation: undefined }));
+    });
+
+    it("a selection (not a single caret) is not read as an Enter", () => {
+        const u = update("- sig", {
+            changes: { from: 4, to: 5, insert: "g\n- " },
+            selection: { anchor: 0, head: 8 },
+            userEvent: "input.type",
+        });
+        expect(run(u)).toEqual(expect.objectContaining({ listContinuation: undefined }));
+    });
+
+    it("the caret must end the insertion", () => {
+        const u = update("- sig", {
+            changes: { from: 4, to: 5, insert: "g\n- " },
+            selection: { anchor: 2 },
+            userEvent: "input.type",
+        });
+        expect(run(u)).toEqual(expect.objectContaining({ listContinuation: undefined }));
+    });
+
+    it("Enter on an empty item (the marker is deleted) is left alone", () => {
+        const u = update("- ", { changes: { from: 0, to: 2, insert: "" }, userEvent: "input.type" });
+        expect(run(u)).toEqual(expect.objectContaining({ listContinuation: undefined }));
     });
 });

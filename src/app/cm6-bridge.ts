@@ -15,6 +15,7 @@ import {
     isDeferredByComposition,
     isSingleCharTyping,
     isTypingUserEvent,
+    listContinuationTail,
     shouldAttemptExpansion,
     type ChangeInfo,
     shouldRunDeferredExpansion,
@@ -103,8 +104,57 @@ export function handleViewUpdate(
 
     runExpansion(update.view, app, getSnippets, getPrefix, getHighlight, getPatterns, typing.instant, {
         pairCloser: typing.pairCloser,
+        listContinuation: findListContinuation(update),
     });
     return "expanded";
+}
+
+/** A list marker the editor renumbered: `"2. "` becomes `"3. "`, with the same indentation, quote prefix and delimiter. */
+const NUMBERED_MARKER = /^[ \t]*(?:>[ \t]*)*\d{1,9}[.)][ \t]+$/;
+
+/** Whether an edit rewrote one numbered list marker into another of the same shape (only the number differs). */
+function isRenumbering(replaced: string, inserted: string): boolean {
+    return (
+        NUMBERED_MARKER.test(replaced) &&
+        NUMBERED_MARKER.test(inserted) &&
+        replaced.replace(/\d+/, "") === inserted.replace(/\d+/, "")
+    );
+}
+
+/**
+ * B-246: the text Obsidian inserted when Enter in a list item or a quote continued it (`"\n- "`), when this update is
+ * exactly that: one change ending at a single empty caret, plus only what the editor does around such an Enter, and
+ * all of it after the caret (real Obsidian 1.14.5): the numbers of the items below shifted (`"2. "` becomes `"3. "`
+ * in the same transaction), and the blanks that followed the caret dropped (Enter in the middle of `- sig tail`,
+ * as a plain line drops the space it breaks at). Anything else is `undefined` and the update is read as before (a
+ * plain Enter has the caret at column 0 of the new line).
+ */
+function findListContinuation(update: ViewUpdate): string | undefined {
+    const { ranges, main } = update.state.selection;
+    if (ranges.length !== 1 || !main.empty) return undefined;
+    // Cheapest first, no walk of the changes on the typing hot path: an Enter always adds a line.
+    if (!(update.state.doc.lines > update.startState.doc.lines)) return undefined;
+    const changes: Array<{ fromA: number; toA: number; fromB: number; toB: number; text: Text }> = [];
+    update.changes.iterChanges((fromA, toA, fromB, toB, text) => {
+        changes.push({ fromA, toA, fromB, toB, text });
+    }, true); // individually: the insertion and the blanks it makes the editor drop sit side by side
+    // Cheap first: only a two-line insertion that ends at the caret can be a continuation.
+    const caret = main.head;
+    const at = changes.findIndex((c) => c.text.lines === 2 && c.toB === caret);
+    const found = changes[at];
+    if (found === undefined) return undefined;
+    const startDoc = update.startState.doc;
+    const tail = listContinuationTail(found.text.toString(), startDoc.sliceString(found.fromA, found.toA));
+    if (tail === undefined) return undefined;
+    const benign = changes.every(
+        (c, i) =>
+            i === at ||
+            (c.fromB >= caret &&
+                (isRenumbering(startDoc.sliceString(c.fromA, c.toA), c.text.toString()) ||
+                    // the blanks right after the caret, dropped
+                    (c.fromB === caret && c.text.length === 0 && /^[ \t]+$/.test(startDoc.sliceString(c.fromA, c.toA))))),
+    );
+    return benign ? tail : undefined;
 }
 
 /**
@@ -230,6 +280,8 @@ function runExpansion(
         closerStepOver?: boolean;
         /** The update inserted an auto-pair: an instant rule that consumes its opener takes the closer too. */
         pairCloser?: string;
+        /** B-246: Enter in a list item continued the list; the text it inserted (`"\n- "`). */
+        listContinuation?: string;
     } = {},
 ): void {
     const fileInfo = app.workspace.activeEditor;
@@ -271,6 +323,7 @@ function runExpansion(
         prefix: getPrefix(),
         patterns: rules.length > 0 ? rules : undefined,
         instant,
+        listContinuation: opts.listContinuation,
     });
     const expanded = instant
         ? separator.then((first) => first ?? tryExpandInstant(editor, patterns.rules, deps))
@@ -318,6 +371,8 @@ export class CompositionRetry {
     private instant = false;
     private doc: Text | undefined;
     private head = -1;
+    /** B-246: the pending update was an Enter that continued a list or a quote: what it inserted. */
+    private listContinuation: string | undefined;
     /** Pending animation-frame handle and the window that owns it. */
     private frame: number | undefined;
     private frameWin: Window | undefined;
@@ -370,6 +425,7 @@ export class CompositionRetry {
             this.instant = isInstantCandidate(update, this.getPatterns);
             this.doc = update.state.doc;
             this.head = update.state.selection.main.head;
+            this.listContinuation = findListContinuation(update);
         }
     }
 
@@ -425,6 +481,7 @@ export class CompositionRetry {
             this.getHighlight,
             this.getPatterns,
             this.instant,
+            { listContinuation: this.listContinuation },
         );
     }
 

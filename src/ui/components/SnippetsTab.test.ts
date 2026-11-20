@@ -3,6 +3,7 @@ import { makeMockPlugin } from "../../test/factories/plugin";
 import { SnippetsTab } from "./SnippetsTab";
 import type { App } from "obsidian";
 import type SnipSidianPlugin from "../../main";
+import { getCompiledPatterns } from "../../store/patterns";
 
 /**
  * Mount tests for SnippetsTab — pins the single-edit-mode contract
@@ -803,6 +804,71 @@ describe("SnippetsTab — per-group enable/disable (B-138)", () => {
 
         expect(plugin.settings.snippets["office/sig"]).toBe("Best");
         expect(plugin.settings.disabledGroups).toEqual(["office"]);
+    });
+
+    // B-265: pattern rules share the group namespace and the `disabledGroups` list of the snippet group.
+    const PATTERNS = [
+        { id: "r1", source: "/--$/", replacement: "-", enabled: true, mode: "instant" as const, group: "work" },
+        { id: "r2", source: "/::$/", replacement: ":", enabled: true, mode: "instant" as const, group: "personal" },
+    ];
+
+    function mountWithPatterns(snippets: Record<string, string>, disabledGroups: string[]): void {
+        const mockPlugin = makeMockPlugin({ settings: { snippets, disabledGroups, patterns: structuredClone(PATTERNS) } });
+        plugin = mockPlugin as unknown as SnipSidianPlugin;
+        saves = mockPlugin._saveCalls;
+        app = mockPlugin.app as unknown as App;
+        new SnippetsTab(app, plugin).render(root);
+    }
+
+    async function deleteGroup(title: string): Promise<void> {
+        (groupHeaderFor(title).querySelector(`[aria-label="Delete group ${title}"]`) as HTMLButtonElement).click();
+        const confirmBtn = Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Delete") as HTMLButtonElement;
+        confirmBtn.click();
+        await flush();
+    }
+
+    async function renameGroup(title: string, to: string): Promise<void> {
+        (groupHeaderFor(title).querySelector(`[aria-label^="Rename group ${title}"]`) as HTMLButtonElement).click();
+        const modalInput = document.body.querySelector(".snipsidian-prompt input") as HTMLInputElement;
+        modalInput.value = to;
+        modalInput.dispatchEvent(new Event("input"));
+        const submitBtn = Array.from(document.body.querySelectorAll(".modal-button-container button")).find((b) => b.textContent === "Rename") as HTMLButtonElement;
+        submitBtn.click();
+        await flush();
+    }
+
+    it("[B-265] deleting a disabled snippet group keeps its slug off while pattern rules are filed under it", async () => {
+        mountWithPatterns({ "work/sig": "Best" }, ["work"]);
+        await deleteGroup("Work");
+
+        expect(plugin.settings.snippets["work/sig"]).toBeUndefined();
+        expect(plugin.settings.disabledGroups).toEqual(["work"]);
+        expect(plugin.settings.patterns?.map((r) => r.id)).toEqual(["r1", "r2"]);
+    });
+
+    it("[B-265] deleting a disabled snippet group with no pattern rules still forgets the slug", async () => {
+        mountWithPatterns({ "other/sig": "Best" }, ["other"]);
+        await deleteGroup("Other");
+        expect(plugin.settings.disabledGroups).toEqual([]);
+    });
+
+    it("[B-265] renaming a disabled snippet group renames its pattern rules too, and they stay off", async () => {
+        mountWithPatterns({ "work/sig": "Best" }, ["work"]);
+        await renameGroup("Work", "Office");
+
+        expect(plugin.settings.disabledGroups).toEqual(["office"]);
+        expect(plugin.settings.patterns?.map((r) => r.group)).toEqual(["office", "personal"]);
+        // the renamed rule is still off: switching the group on would add it back to the compiled rules
+        const live = getCompiledPatterns({ ...plugin.settings, disabledGroups: [] }).rules.length;
+        expect(live).toBeGreaterThan(0);
+        expect(getCompiledPatterns(plugin.settings).rules.length).toBeLessThan(live);
+    });
+
+    it("[B-265] renaming a snippet group with no pattern rules leaves the pattern list untouched", async () => {
+        mountWithPatterns({ "other/sig": "Best" }, []);
+        const before = plugin.settings.patterns;
+        await renameGroup("Other", "Misc");
+        expect(plugin.settings.patterns).toBe(before);
     });
 });
 

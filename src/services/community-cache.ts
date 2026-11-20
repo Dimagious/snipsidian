@@ -72,7 +72,7 @@ export interface CommunityLoadResult {
  *   - **Hit** (TTL not expired): return cached packages, no network.
  *   - **Miss + live OK**: store result (even empty — guards against
  *     repeated 404 / re-listing of a genuinely empty catalog), persist.
- *   - **Live failure (rate-limit / network / non-2xx / parse)**: keep
+ *   - **Live failure (rate-limit / network / non-2xx / parse / no_packs)**: keep
  *     existing cache untouched (whether empty or populated), surface
  *     the reason to the caller. Pre-1.1.7-hotfix this OVERWROTE the
  *     valid cache with `[]` and pinned blank-Packages-tab for 24h.
