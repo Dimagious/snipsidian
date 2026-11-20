@@ -35,7 +35,7 @@ function editorWith(text: string, ch: number, view?: FakeView): MockEditor {
     return view ? Object.assign(mock, { cm: view }) : mock;
 }
 
-const app = { workspace: { activeEditor: { file: { name: "note.md" } } } } as unknown as App;
+const app = { workspace: { activeEditor: { file: { name: "note.md", basename: "note" } } } } as unknown as App;
 const noPrefix = (): undefined => undefined;
 
 describe("field-commands: startFieldSessionInEditor", () => {
@@ -126,6 +126,12 @@ describe("field-commands: expandTriggerAtCursor (B-244)", () => {
         const named = editorWith(":fname", 6);
         await expandTriggerAtCursor(app, asEditor(named), () => ({ fname: "$filename" }), spy);
         expect(named.getLine(0)).toBe("note.md");
+    });
+
+    it("B-204: passes the note's basename, so {{title}} drops the extension", async () => {
+        const mock = editorWith("ttl", 3);
+        await expandTriggerAtCursor(app, asEditor(mock), () => ({ ttl: "{{title}}|$filename" }), noPrefix);
+        expect(mock.getLine(0)).toBe("note|note.md");
     });
 
     it("returns what it expanded (the Tab path marks it), undefined when nothing was", async () => {

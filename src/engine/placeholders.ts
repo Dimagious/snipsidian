@@ -120,8 +120,16 @@ export function resolveTabstops(replacement: string): string {
  */
 const FIELD_OPEN = "\uE002";
 const FIELD_CLOSE = "\uE003";
-const MARKER_SCAN_SOURCE = "\\uE002([1-9])\\uE003|\\$\\|";
+const MARKER_SCAN_SOURCE = "\\uE002(?<field>[1-9])\\uE003|\\$\\|";
 const CURSOR_SCAN_SOURCE = "\\$\\|";
+/**
+ * B-204 / B-218: `{{title}}` and `{{notedate}}` values are held back as `VERBATIM_MARK i VERBATIM_MARK` while the
+ * `$` passes and the marker scan run, then written in by `scanMarkers`, so a note named `Budget $date`, `pw $clipboard`
+ * or `a $| b` is inserted as written (never read as a placeholder or a caret). A snippet that itself contains this
+ * private-use character next to digits would be read as such a marker: not a case worth guarding.
+ */
+const VERBATIM_MARK = "\uE005";
+const VERBATIM_SCAN_SOURCE = "\\uE005(?<verb>\\d+)\\uE005";
 
 /** Number of real tabstops in `text` (escapes and code excluded). */
 export function countTabstops(text: string): number {
@@ -155,14 +163,18 @@ export type FieldHit = { n: number; offset: number };
  * Removes the first `$|` and (when `withFields`) every field marker from
  * `text`, reporting where they were. `dropExtraCursors` removes later `$|` as
  * well (picker paths); otherwise they stay literal (trigger path, as before).
- * Single linear pass, so every offset is relative to the returned text.
+ * `verbatim` are the values `substituteVariables` held back: each marker is
+ * replaced by its value, which is never scanned. Single linear pass, so every
+ * offset is relative to the returned text.
  */
 export function scanMarkers(
     text: string,
     withFields: boolean,
     dropExtraCursors = false,
+    verbatim: readonly string[] = [],
 ): { text: string; cursor?: number; fields: FieldHit[] } {
-    const re = new RegExp(withFields ? MARKER_SCAN_SOURCE : CURSOR_SCAN_SOURCE, "g");
+    const source = (withFields ? MARKER_SCAN_SOURCE : CURSOR_SCAN_SOURCE) + (verbatim.length > 0 ? `|${VERBATIM_SCAN_SOURCE}` : "");
+    const re = new RegExp(source, "g");
     let out = "";
     let last = 0;
     let cursor: number | undefined;
@@ -170,8 +182,12 @@ export function scanMarkers(
     for (let m = re.exec(text); m; m = re.exec(text)) {
         out += text.slice(last, m.index);
         last = m.index + m[0].length;
-        if (m[1] !== undefined) {
-            fields.push({ n: Number(m[1]), offset: out.length });
+        const field = m.groups?.["field"];
+        const verb = m.groups?.["verb"];
+        if (verb !== undefined) {
+            out += verbatim[Number(verb)] ?? m[0];
+        } else if (field !== undefined) {
+            fields.push({ n: Number(field), offset: out.length });
         } else if (cursor === undefined) {
             cursor = out.length;
         } else if (!dropExtraCursors) {
@@ -197,15 +213,19 @@ export function orderFields(fields: FieldHit[]): number[] {
 }
 
 /** Private-use characters Snipsy uses as markers; a substituted value must not carry them. */
-const MARKER_CHARS_RE = /[\uE002-\uE004]/g;
+const MARKER_CHARS_RE = /[\uE002-\uE005]/g;
+const VERBATIM_MARK_RE = /\uE005/g;
 
-/** B-166: `{{date}}`, `{{time}}`, `{{date:FMT}}`, `{{time:FMT}}` (core Templates syntax). */
-const FORMATTED_RE = /\{\{(date|time)(?::([^{}]*))?\}\}/g;
+/**
+ * B-166: `{{date}}`, `{{time}}`, `{{date:FMT}}`, `{{time:FMT}}` (core Templates syntax). B-218: `{{notedate}}` /
+ * `{{notedate:FMT}}`. B-204: `{{title}}` (no format: `{{title:x}}` is not a placeholder).
+ */
+const FORMATTED_RE = /\{\{(?:(date|time|notedate)(?::([^{}]*))?|(title))\}\}/g;
 
 /**
  * B-266: the placeholders `substituteVariables` would replace in `text`, for an importer that must not let foreign
  * text be read as one: `$date`, `$time`, `$filename`, `$clipboard` (word boundary after, as in the engine) and the
- * `{{date}}` / `{{time}}` / `{{date:FMT}}` / `{{time:FMT}}` forms. Keep in step with `substituteVariables`.
+ * `{{date}}` / `{{time}}` / `{{date:FMT}}` / `{{time:FMT}}` / `{{notedate[:FMT]}}` / `{{title}}` forms. Keep in step with `substituteVariables`.
  */
 export function findVariableTokens(text: string): string[] {
     return Array.from(text.matchAll(/\$(?:date|time|filename|clipboard)\b/g), (m) => m[0]);
@@ -229,7 +249,7 @@ function formatTime(d: Date): string {
 
 /**
  * Substitutes `$date` / `$time` / `$filename` / `$clipboard` and the
- * `{{date}}` / `{{time}}` forms. Does NOT touch `$|` or tabstops. Shared by
+ * `{{date}}` / `{{time}}` / `{{title}}` / `{{notedate}}` forms. Does NOT touch `$|` or tabstops. Shared by
  * trigger expansion and the picker insert/wrap paths (B-197).
  */
 export async function substituteVariables(
@@ -239,12 +259,30 @@ export async function substituteVariables(
      *  file name, a date format) must not be able to forge one. Off = values are
      *  inserted verbatim, exactly as before fields existed. */
     stripMarkers = false,
+    /** B-204 / B-218: when given, `{{title}}` / `{{notedate}}` values are pushed here and a marker stands for each in
+     *  the result; the caller hands the array to `scanMarkers`, which writes them in untouched. Without it they are
+     *  inserted in place and the later passes read them (the old behaviour). */
+    verbatim?: string[],
 ): Promise<string> {
-    const clean = (value: string): string => (stripMarkers ? value.replace(MARKER_CHARS_RE, "") : value);
+    // `verbatim` in use: the held-back markers must not be forgeable by any value, fields or not.
+    const clean = (value: string): string =>
+        stripMarkers ? value.replace(MARKER_CHARS_RE, "") : verbatim ? value.replace(VERBATIM_MARK_RE, "") : value;
+    const hold = (value: string): string => {
+        if (!verbatim) return value;
+        verbatim.push(value);
+        return `${VERBATIM_MARK}${verbatim.length - 1}${VERBATIM_MARK}`;
+    };
     // B-166: `{{date:FMT}}` / `{{time:FMT}}`. Empty/missing FMT = core Templates
     // defaults. Custom formats need the injected formatter (moment lives in the
     // adapter layer); without one the token is left untouched.
-    text = text.replace(FORMATTED_RE, (whole, kind: string, fmt: string | undefined) => {
+    text = text.replace(FORMATTED_RE, (whole, kind: string | undefined, fmt: string | undefined, title: string | undefined) => {
+        // B-204: the note's name without its extension; no active file = empty.
+        if (title !== undefined) return hold(clean(ctx.basename ?? ""));
+        // B-218: the date in the note's NAME, re-formatted (empty FMT = `YYYY-MM-DD`). Not a date = empty, like
+        // `{{title}}` without a file. Needs the injected formatter (the Daily notes format lives in the adapter).
+        if (kind === "notedate") {
+            return ctx.formatNoteDate ? hold(clean(ctx.formatNoteDate(fmt && fmt.length > 0 ? fmt : DEFAULT_DATE_FORMAT))) : whole;
+        }
         const isDate = kind === "date";
         const format = fmt && fmt.length > 0 ? fmt : isDate ? DEFAULT_DATE_FORMAT : DEFAULT_TIME_FORMAT;
         if (ctx.formatDate) return clean(ctx.formatDate(ctx.now, format));
@@ -276,13 +314,14 @@ export async function applyPlaceholders(
     // cursor at index 6 of the *raw* string rather than at the end of the
     // expanded date). B-243 fields are located the same way.
     const prepared = prepareTabstops(replacement);
-    const substituted = await substituteVariables(prepared.text, ctx, prepared.fields);
+    const verbatim: string[] = [];
+    const substituted = await substituteVariables(prepared.text, ctx, prepared.fields, verbatim);
 
     // Locate `$|` in the substituted text (first occurrence wins, matching
     // pre-existing behaviour). If a substituted variable happens to contain a
     // literal `$|` (unlikely outside contrived clipboard payloads), the marker
     // there will be honoured.
-    const scan = scanMarkers(substituted, prepared.fields);
+    const scan = scanMarkers(substituted, prepared.fields, false, verbatim);
     const { offsets: fields, docOrder } = orderFieldHits(scan.fields);
     if (fields.length === 0) return { text: scan.text, cursorDelta: scan.cursor };
 

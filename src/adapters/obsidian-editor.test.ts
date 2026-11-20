@@ -299,6 +299,93 @@ describe("adapters/obsidian-editor: makeContext formatDate (B-166)", () => {
     });
 });
 
+describe("adapters/obsidian-editor: B-204 {{title}} and B-218 {{notedate:FMT}}", () => {
+    const now = new Date("2025-09-02T10:11:12");
+
+    it("makeContext carries the basename and a note-date formatter bound to it", () => {
+        const ctx = makeContext(asEditor(new MockEditor("x")), "2026-12-31.md", now, undefined, undefined, undefined, "2026-12-31");
+        expect(ctx.basename).toBe("2026-12-31");
+        expect(ctx.formatNoteDate?.("GGGG-[W]WW")).toBe("2026-W53");
+    });
+
+    it("makeContext without a note: {{notedate}} is empty", () => {
+        const ctx = makeContext(asEditor(new MockEditor("x")), undefined, now);
+        expect(ctx.basename).toBeUndefined();
+        expect(ctx.formatNoteDate?.("YYYY")).toBe("");
+    });
+
+    it("hotstring path: {{title}} drops the extension and keeps dots in the name", async () => {
+        const ed = new MockEditor("hd ");
+        ed.setCursor({ line: 0, ch: 3 });
+        await tryExpandAtSeparator(asEditor(ed), { hd: "# {{title}} ($filename) $|" }, {
+            filename: "v1.2 notes.md",
+            basename: "v1.2 notes",
+            now,
+        });
+        expect(ed.getLine(0)).toBe("# v1.2 notes (v1.2 notes.md)  ");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: "# v1.2 notes (v1.2 notes.md) ".length });
+    });
+
+    it("hotstring path: no active file gives an empty {{title}} and {{notedate}}", async () => {
+        const ed = new MockEditor("hd ");
+        ed.setCursor({ line: 0, ch: 3 });
+        await tryExpandAtSeparator(asEditor(ed), { hd: "[{{title}}|{{notedate:YYYY}}]" }, { now });
+        expect(ed.getLine(0)).toBe("[|] ");
+    });
+
+    it("hotstring path: {{notedate:FMT}} uses the date in the note's name", async () => {
+        const ed = new MockEditor("wk ");
+        ed.setCursor({ line: 0, ch: 3 });
+        await tryExpandAtSeparator(asEditor(ed), { wk: "{{notedate:GGGG-[W]WW}}" }, {
+            filename: "2027-01-01.md",
+            basename: "2027-01-01",
+            now,
+        });
+        expect(ed.getLine(0)).toBe("2026-W53 ");
+    });
+
+    it("hotstring path: a note that is not a date gives an empty {{notedate:FMT}}", async () => {
+        const ed = new MockEditor("wk ");
+        ed.setCursor({ line: 0, ch: 3 });
+        await tryExpandAtSeparator(asEditor(ed), { wk: "<{{notedate:YYYY}}>" }, { filename: "Plan.md", basename: "Plan", now });
+        expect(ed.getLine(0)).toBe("<> ");
+    });
+
+    it("picker insert path (B-197): {{title}} and {{notedate:FMT}} are substituted before $|", async () => {
+        const ed = new MockEditor("");
+        await insertSnippetAtCursor(asEditor(ed), "{{title}} / {{notedate:DD.MM}}$|!", {
+            now,
+            filename: "2026-12-31.md",
+            basename: "2026-12-31",
+        });
+        expect(ed.getLine(0)).toBe("2026-12-31 / 31.12!");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: "2026-12-31 / 31.12".length });
+    });
+
+    it("picker insert path: a note named `a $| b` keeps its text and the caret stays at the real $|", async () => {
+        const ed = new MockEditor("");
+        await insertSnippetAtCursor(asEditor(ed), "{{title}} $|!", { now, basename: "a $| b $date" });
+        expect(ed.getLine(0)).toBe("a $| b $date !");
+        expect(ed.getCursor()).toEqual({ line: 0, ch: "a $| b $date ".length });
+    });
+
+    it("picker wrap path: a note named `a $| b` is inserted as written and does not take the caret", async () => {
+        const ed = new MockEditor("Hello world");
+        ed.setCursor({ line: 0, ch: 11 });
+        ed.selection = "world";
+        await wrapSelectionWithSnippet(asEditor(ed), "{{title}} [$1]", { now, basename: "a $| b" });
+        expect(ed.getLine(0)).toBe("Hello a $| b [world]");
+    });
+
+    it("picker wrap path: the selection stays and {{title}} is substituted", async () => {
+        const ed = new MockEditor("Hello world");
+        ed.setCursor({ line: 0, ch: 11 });
+        ed.selection = "world";
+        await wrapSelectionWithSnippet(asEditor(ed), "[$1]({{title}})", { now, basename: "Plan", filename: "Plan.md" });
+        expect(ed.getLine(0)).toBe("Hello [world](Plan)");
+    });
+});
+
 describe("adapters/obsidian-editor: insertSnippetAtCursor", () => {
     it("[B-192] $1 becomes the cursor and never leaks as text", async () => {
         const ed = new MockEditor("Hello world");

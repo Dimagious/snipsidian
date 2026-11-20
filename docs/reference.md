@@ -122,7 +122,9 @@ and tables.
 | `$time` | now, `HH:mm` |
 | `{{date}}`, `{{time}}` | today / now in `YYYY-MM-DD` / `HH:mm`, the same tokens as core Templates |
 | `{{date:FORMAT}}`, `{{time:FORMAT}}` | your own [Moment.js format](https://momentjs.com/docs/#/displaying/format/), e.g. `{{date:dddd, D MMMM}}` gives `Tuesday, 2 September`; wrap literal text in `[ ]`. An empty format (`{{date:}}`) uses the default |
-| `$filename` | the current note's file name, with its extension (`Meeting.md`) |
+| `$filename` | the current note's file name, **with** its extension (`Meeting.md`) |
+| `{{title}}` | the current note's name **without** its extension (`Meeting`; `v1.2 notes.md` gives `v1.2 notes`). Empty when no note is open |
+| `{{notedate}}`, `{{notedate:FORMAT}}` | the date in the note's **name**, written in `FORMAT` (a [Moment.js format](https://momentjs.com/docs/#/displaying/format/); `YYYY-MM-DD` when empty or missing): in the note `2026-12-31`, `{{notedate:GGGG-[W]WW}}` gives `2026-W53`. The name is read with the date format of the core Daily notes plugin (Settings, Daily notes, Date format; `YYYY-MM-DD` when none is saved), and the whole name has to match it. A format with folders (`YYYY/MM/DD`, `YYYY/MMMM/YYYY-MMM-DD`) is matched against its last part, the file name (`DD`, `YYYY-MMM-DD`). When the name is not a date in that format, the result is empty, like `{{title}}` with no note. The Daily notes plugin does not need to be switched on, but its format is only re-read when a note is opened, so open any note after changing it |
 | `$clipboard` | what is on your clipboard at that moment |
 
 ### Fields (Tab stops)
@@ -202,7 +204,7 @@ A rule is written `/body$/flags`, as in JavaScript.
 | `{{0}}` | the whole match |
 | `{{1}}` to `{{9}}` | what group 1 to 9 matched; empty when that group did not take part, or the pattern has no such group (the editor warns about the second case) |
 | `{{name}}` | what the named group `(?<name>...)` matched. A name that is no group of the pattern stays as written |
-| `$\|`, `$1` to `$9`, `$date`, `$time`, `$filename`, `$clipboard`, `{{date:FMT}}` | the same as in a snippet, see [Placeholders](#placeholders) |
+| `$\|`, `$1` to `$9`, `$date`, `$time`, `$filename`, `$clipboard`, `{{date:FMT}}`, `{{title}}`, `{{notedate:FMT}}` | the same as in a snippet, see [Placeholders](#placeholders) |
 
 `$1` is a Tab stop (a [field](#fields-tab-stops)), not a capture. Captures are written `{{1}}`, so
 the two never mix. The editor says so under the replacement field.
@@ -442,7 +444,7 @@ What the conversion does:
   repeat stops it (`(\d+)/(\d+)`), it becomes **After a separator** and the preview says so.
 - `$1` to `$9` in a replacement (`costs $5`) are stored escaped (`\$5`) so they insert as written;
   this holds for plain triggers too. A replacement with `$|`, `$date`, `$time`, `$filename`,
-  `$clipboard`, `{{date}}` or `{{time}}` written as plain text cannot be escaped, so that match is
+  `$clipboard`, `{{date}}`, `{{time}}`, `{{title}}` or `{{notedate}}` written as plain text cannot be escaped, so that match is
   left out.
 - A rule with the same pattern and replacement as one you already have is left out as "already
   there".

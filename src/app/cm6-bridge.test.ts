@@ -98,12 +98,12 @@ function makeUpdate(opts: {
     } as unknown as ViewUpdate;
 }
 
-function makeApp(opts: { editor?: unknown; filename?: string } = {}): App {
+function makeApp(opts: { editor?: unknown; filename?: string; basename?: string } = {}): App {
     const editor = opts.editor === undefined ? { mock: "editor" } : opts.editor;
     return {
         workspace: {
             activeEditor: editor
-                ? { editor, file: opts.filename ? { name: opts.filename } : null }
+                ? { editor, file: opts.filename ? { name: opts.filename, basename: opts.basename } : null }
                 : null,
         },
     } as unknown as App;
@@ -131,6 +131,17 @@ describe("cm6-bridge/handleViewUpdate", () => {
             { mock: "editor" },
             { fn: "function $|() {}" },
             expect.objectContaining({ filename: "note.md" }),
+        );
+    });
+
+    it("B-204: hands the note's basename (no extension) to the separator path", async () => {
+        const app = makeApp({ filename: "note.md", basename: "note" });
+        handleViewUpdate(app, () => ({ fn: "x" }), makeUpdate({}));
+        await Promise.resolve();
+        expect(tryExpandAtSeparator).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.anything(),
+            expect.objectContaining({ filename: "note.md", basename: "note" }),
         );
     });
 
@@ -628,6 +639,16 @@ describe("cm6-bridge: instant patterns (ADR-0008)", () => {
             { mock: "editor" },
             instant.rules,
             expect.objectContaining({ filename: "n.md" }),
+        );
+    });
+
+    it("B-204: hands the note's basename to the instant path", async () => {
+        handleViewUpdate(makeApp({ filename: "n.md", basename: "n" }), () => ({ brb: "x" }), makeUpdate({}), () => undefined, () => false, getInstant);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(tryExpandInstant).toHaveBeenCalledWith(
+            expect.anything(),
+            instant.rules,
+            expect.objectContaining({ filename: "n.md", basename: "n" }),
         );
     });
 

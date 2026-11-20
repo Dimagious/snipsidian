@@ -410,7 +410,7 @@ export class SnippetPickerModal extends Modal {
         this.isInserting = true;
         const editor = activeView.editor;
         const selection = editor.getSelection();
-        const deps = { filename: activeView.file?.name, now: clock.now(), readClipboard: readClipboardSafe };
+        const deps = { filename: activeView.file?.name, basename: activeView.file?.basename, now: clock.now(), readClipboard: readClipboardSafe };
 
         // B-197: the placeholder pipeline is async (`$clipboard`). The target
         // position is captured inside the adapter before its first await.

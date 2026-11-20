@@ -69,6 +69,11 @@ export interface SnipSidianSettings {
      */
     disabledGroups?: string[];
     /**
+     * B-217: ids of the shipped-default upgrades already looked at (`table@1.11.0`), see
+     * `src/core/defaults-upgrade.ts`. An id in here is never run again, so a value the user sets back is kept.
+     */
+    defaultsUpgraded?: string[];
+    /**
      * ADR-0008: regex triggers. Local only, additive (absent = none). Every
      * rule goes through the S-015 gate (`engine/patterns.ts`) before it can
      * reach the hot path, whichever way it got in; a rule that fails is

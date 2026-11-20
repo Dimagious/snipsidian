@@ -165,6 +165,12 @@ describe("replayTryIt", () => {
         expect(r.text).toContain("2026-11-19 09:05");
     });
 
+    it("B-204 / B-218: {{title}} and {{notedate:FMT}} come back as their own tokens (no note is read)", async () => {
+        const rule: Spec = { id: "a", source: "/;t$/", replacement: "{{title}}|{{notedate:GGGG-[W]WW}}|{{notedate}}", mode: "instant" };
+        const r = await tryIt([rule], ";t");
+        expect(r.text).toBe("{{title}}|{{notedate:GGGG-[W]WW}}|{{notedate:YYYY-MM-DD}}");
+    });
+
     it("marks tab stops and the caret of the replacement", async () => {
         const fields: Spec = { id: "a", source: "/;m$/", replacement: "Meeting $1 with $2" };
         const r = await tryIt([fields], ";m");

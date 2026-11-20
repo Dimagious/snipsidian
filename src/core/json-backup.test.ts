@@ -40,6 +40,11 @@ describe("buildBackupObject", () => {
         expect(buildBackupObject({ snippets: { a: "1" }, patterns: [] })).toEqual({ a: "1" });
     });
 
+    it("B-217: the applied-upgrades marker is settings state, never part of a backup", () => {
+        const settings = { snippets: { a: "1" }, defaultsUpgraded: ["table@1.11.0"] };
+        expect(buildBackupObject(settings)).toEqual({ a: "1" });
+    });
+
     it("a stale snippet under the rules key is dropped when no rules are stored", () => {
         const backup = buildBackupObject({ snippets: { a: "1", [PATTERNS_EXPORT_KEY]: "stale text" } });
         expect(backup).toEqual({ a: "1" });

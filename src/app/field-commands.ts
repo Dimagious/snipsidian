@@ -36,9 +36,11 @@ export async function expandTriggerAtCursor(
     getPatterns: () => CompiledPatterns = () => NO_PATTERNS,
     options: { manual?: boolean; prepared?: CursorExpansion } = {},
 ): Promise<ExpansionResult | undefined> {
-    const filename = app.workspace.activeEditor?.file?.name;
+    const file = app.workspace.activeEditor?.file;
+    const filename = file?.name;
     const result = await tryExpandAtCursor(editor, getSnippets(), {
         filename,
+        basename: file?.basename,
         now: clock.now(),
         readClipboard: readClipboardSafe,
         prefix: getPrefix(),

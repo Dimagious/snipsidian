@@ -653,6 +653,21 @@ describe("patterns: replacement", () => {
         expect(out.cursorDelta).toBe("function ".length);
     });
 
+    it("B-204: {{title}} in a pattern replacement is the note's name, next to a capture", async () => {
+        const out = await apply("/x(\\d)$/", "x7", "[{{1}}|{{title}}]", { ...ctx, basename: "Plan" });
+        expect(out.text).toBe("[7|Plan]");
+    });
+
+    it("B-204 / B-218: a name or note date that holds a capture sentinel cannot forge one", async () => {
+        const evil = String.fromCharCode(0xe100);
+        const out = await apply("/x(\\d)$/", "x7", "{{1}} {{title}} {{notedate:Y}}", {
+            ...ctx,
+            basename: `a${evil}b`,
+            formatNoteDate: () => `c${evil}d`,
+        });
+        expect(out.text).toBe("7 ab cd");
+    });
+
     // ---- the sentinel rules: red tests of ADR-0008 ----
 
     it("a capture before $| puts the caret after the captured text", async () => {

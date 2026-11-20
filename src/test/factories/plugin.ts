@@ -33,12 +33,14 @@ export function makeDefaultSettings(): SnipSidianSettings {
  */
 export function makeMockApp(opts: {
     activeEditor?: MockEditor | null;
+    /** The note open in the active view (`file.name` / `file.basename`). */
+    activeFile?: { name: string; basename: string };
     obsidianVersion?: string;
     vaultBasePath?: string;
     vaultConfigDir?: string;
 } = {}) {
     const activeView = opts.activeEditor
-        ? { editor: opts.activeEditor }
+        ? { editor: opts.activeEditor, file: opts.activeFile }
         : null;
 
     return {

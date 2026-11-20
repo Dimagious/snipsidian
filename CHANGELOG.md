@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`{{title}}`** (B-204): the note's name without its extension, in the same `{{...}}` pass as `{{date}}` (the core Templates token). `# {{title}}` in a note called `v1.2 notes.md` gives `# v1.2 notes`; with no note open it is empty. `$filename` is unchanged and still includes the extension (the docs now say so). Works in the picker, in typed expansions, on Tab, and in pattern rules. The note's name is inserted exactly as written, so a note called `Budget $date` gives `Budget $date`, not a date. The placeholder cheat-line under the Replacement field lists it. **Heads-up:** a snippet you already have that contains the literal text `{{title}}` or `{{notedate}}` now gets it substituted when it expands.
+- **`{{notedate:FORMAT}}`** (B-218): the date in the note's **name**, written in `FORMAT`, for diary notes: in `2026-12-31.md`, `{{notedate:GGGG-[W]WW}}` gives `2026-W53`. The name is read strictly with the core Daily notes date format (`YYYY-MM-DD` if none is saved; the Daily notes plugin may be off; a format with folders such as `YYYY/MM/DD` is matched against its last part, the file name), and when the name is not a date in that format the result is empty. An empty or missing `FORMAT` means `YYYY-MM-DD`. The format is cached and re-read when the plugin loads and whenever a note is opened, never while you type. `{{title}}` and `{{notedate}}` are reserved pattern group names, so they are never captures.
+
+### Fixed
+
+- **The default `table` snippet no longer renders 4 columns in Live Preview** (B-208). The space you type after `table` landed after the last pipe, and the table widget read it as a fourth cell. The snippet now ends with a line break, so that space goes below the table (the separator you type is left on the line under the table), and it has two body rows, a real 3 x 3 table with the caret in the first body cell. End-to-end test: `e2e/default-table.spec.ts`.
+- **Fixed default snippets now reach existing installs** (B-217). Defaults are seeded once, so fixing one never changed anything for anyone already installed. Snipsy now keeps the values each default used to ship with, and on load replaces a stored default (`defaults/<trigger>`, or the ungrouped `<trigger>` older installs still have) only when its value equals an old shipped value exactly. A default you edited, deleted or renamed is left alone, nothing is added back, and the data file is written only when a default was rewritten. Each upgrade runs once and is remembered from the next save on, so a value you later set back to the old text is not replaced again. The new value goes through the same install limits as every other write into your snippets (S-009). First user: `table`. The `tbl2`, `tbl3` and `tbl4` snippets of the Markdown Essentials community pack have the same shape; they live in the catalog and are not touched here.
+
 ## [1.10.0] - 2026-11-19
 
 ### Added
