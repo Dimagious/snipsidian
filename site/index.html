@@ -935,6 +935,7 @@ replacement: |
           <div><code>$time</code> the time now, as <code>HH:mm</code>.</div>
           <div><code>{{date:FORMAT}}</code>, <code>{{time:FORMAT}}</code> a formatted date or time, the same syntax as core Templates. <code>{{date}}</code> alone is <code>YYYY-MM-DD</code>.</div>
           <div><code>$filename</code> the file name of the note you are typing in, with its extension.</div>
+          <div><code>{{title}}</code> the note's name without the extension. <code>{{notedate:FORMAT}}</code> the date in the note's name (read with the Daily notes format), written in <code>FORMAT</code>: in <code>2026-12-31</code>, <code>{{notedate:GGGG-[W]WW}}</code> gives <code>2026-W53</code>.</div>
           <div><code>$clipboard</code> what is on the clipboard, read at the moment the snippet expands.</div>
           <div><code>$1</code> to <code>$9</code> fields: Tab jumps from one to the next, Shift+Tab goes back, and the last Tab lands on <code>$|</code>, or after the text. A snippet with a single <code>$1</code> just puts the caret there. Over a selection in <b>Insert snippet…</b>, the first <code>$1</code> takes the selected text.</div>
         </div>
