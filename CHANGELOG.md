@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-11-20
+
 ### Added
 
 - **`{{title}}`** (B-204): the note's name without its extension, in the same `{{...}}` pass as `{{date}}` (the core Templates token). `# {{title}}` in a note called `v1.2 notes.md` gives `# v1.2 notes`; with no note open it is empty. `$filename` is unchanged and still includes the extension (the docs now say so). Works in the picker, in typed expansions, on Tab, and in pattern rules. The note's name is inserted exactly as written, so a note called `Budget $date` gives `Budget $date`, not a date. The placeholder cheat-line under the Replacement field lists it. **Heads-up:** a snippet you already have that contains the literal text `{{title}}` or `{{notedate}}` now gets it substituted when it expands.
