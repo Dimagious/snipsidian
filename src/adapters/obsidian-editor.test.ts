@@ -2039,3 +2039,79 @@ describe("adapters/obsidian-editor: B-255 manual expansion (selection, caret ins
         expect(await tryExpandAtCursor(asEditor(at("say brb now", 6)), dict, plain)).toBeUndefined();
     });
 });
+
+describe("adapters/obsidian-editor: Enter in a list item (B-246)", () => {
+    const deps = { now: new Date("2025-09-02T10:11:12Z") };
+    const dict: Dict = { sig: "Best regards", lnk: "[$1]($2)" };
+
+    // The editor continued the list in the same change: the document already holds the new marker and the caret
+    // sits after it.
+    const enter = async (
+        doc: string,
+        listContinuation: string,
+        snippets: Dict = dict,
+    ): Promise<{ ed: MockEditor; result: Awaited<ReturnType<typeof tryExpandAtSeparator>> }> => {
+        const ed = new MockEditor(doc);
+        const lines = doc.split("\n");
+        ed.setCursor({ line: lines.length - 1, ch: lines[lines.length - 1]?.length ?? 0 });
+        const result = await tryExpandAtSeparator(asEditor(ed), snippets, { ...deps, listContinuation });
+        return { ed, result };
+    };
+
+    it.each([
+        ["bullet", "- sig\n- ", "\n- ", "- Best regards\n- "],
+        ["numbered", "1. sig\n2. ", "\n2. ", "1. Best regards\n2. "],
+        ["task", "- [ ] sig\n- [ ] ", "\n- [ ] ", "- [ ] Best regards\n- [ ] "],
+        ["nested", "- a\n\tsig\n\t- ", "\n\t- ", "- a\n\tBest regards\n\t- "],
+        ["a trigger after other words", "- say sig\n- ", "\n- ", "- say Best regards\n- "],
+    ])("%s: expands the previous line and keeps the new marker", async (_name, doc, tail, expected) => {
+        const { ed, result } = await enter(doc, tail);
+        expect(ed.value()).toBe(expected);
+        // the caret stays after the new marker, where the editor put it (the line moved only by the expansion's length)
+        const lines = expected.split("\n");
+        expect(ed.getCursor()).toEqual({ line: lines.length - 1, ch: lines[lines.length - 1]?.length });
+        expect(result?.separator).toBe(tail);
+    });
+
+    it("a word that is not a trigger changes nothing", async () => {
+        const { ed, result } = await enter("- hello\n- ", "\n- ");
+        expect(ed.value()).toBe("- hello\n- ");
+        expect(result).toBeUndefined();
+    });
+
+    it("the new marker is not read as a trigger line of its own", async () => {
+        const { ed } = await enter("- sig\n- ", "\n- ", { "-": "dash" });
+        expect(ed.value()).toBe("- sig\n- ");
+    });
+
+    it("does nothing when the caret is not where the Enter left it (a stale update)", async () => {
+        const ed = new MockEditor("- sig\n- x");
+        ed.setCursor({ line: 1, ch: 3 });
+        expect(await tryExpandAtSeparator(asEditor(ed), dict, { ...deps, listContinuation: "\n- " })).toBeUndefined();
+        expect(ed.value()).toBe("- sig\n- x");
+    });
+
+    it("keeps the guards: no expansion inside a fenced code block", async () => {
+        const { ed } = await enter("```\n- sig\n- ", "\n- ");
+        expect(ed.value()).toBe("```\n- sig\n- ");
+    });
+
+    it("keeps the guards: no expansion inside inline code on the line", async () => {
+        const { ed } = await enter("- `sig\n- ", "\n- ");
+        expect(ed.value()).toBe("- `sig\n- ");
+    });
+
+    it("a snippet with fields opens a session that ends after the new marker", async () => {
+        const { ed, result } = await enter("- lnk\n- ", "\n- ");
+        expect(ed.value()).toBe("- []()\n- ");
+        // fields after "- [" (3) and "- [](" (5); the final stop is the caret: after "- []()\n- " (9)
+        expect(result?.session).toEqual({ fields: [3, 5], docOrder: [0, 1], final: 9 });
+    });
+
+    it("without a continuation, the same document is read as before (marker line, caret after the marker)", async () => {
+        const ed = new MockEditor("- sig\n- ");
+        ed.setCursor({ line: 1, ch: 2 });
+        await tryExpandAtSeparator(asEditor(ed), dict, deps);
+        expect(ed.value()).toBe("- sig\n- ");
+    });
+});

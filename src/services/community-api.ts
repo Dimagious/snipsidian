@@ -68,10 +68,14 @@ interface GitHubContentEntry {
  *   - `"network"`: `requestUrl` threw (no response at all — DNS,
  *     TLS, offline). This is the iOS-on-mobile path we kept seeing.
  *   - `"parse"`: 200 OK but the listing JSON couldn't be parsed.
+ *   - `"no_packs"` (B-170): the listing names pack files but every
+ *     pack fetch or parse failed (a bad network moment, a changed
+ *     file format). Not a real empty catalog, so the cache must not
+ *     be overwritten with `[]`.
  */
 export type CommunityFetchResult =
     | { ok: true; packages: PackageItem[] }
-    | { ok: false; reason: "rate_limited" | "not_found" | "http" | "network" | "parse"; status?: number };
+    | { ok: false; reason: "rate_limited" | "not_found" | "http" | "network" | "parse" | "no_packs"; status?: number };
 
 /**
  * Fetch and parse every community pack on the GitHub catalog.
@@ -135,15 +139,23 @@ export async function loadCommunityPackagesFromGitHub(): Promise<CommunityFetchR
     // a single bad entry rejected the whole load instead of failing
     // gracefully. Validate the entry shape before touching it; the
     // download_url is still allowlist-checked in `fetchAndParsePack`.
+    // B-170: count the listed pack files by name BEFORE the shape check, so a listing whose every entry is malformed
+    // (`download_url: null`) is a failed load too, not an empty catalog.
+    const isPackName = (f: GitHubContentEntry | null | undefined): boolean =>
+        !!f && typeof f.name === "string" && (f.name.endsWith(".yml") || f.name.endsWith(".yaml"));
+    const listedPacks = files.filter(isPackName).length;
     const ymlFiles = files.filter(
-        (f): f is GitHubContentEntry =>
-            !!f &&
-            typeof f.name === "string" &&
-            typeof f.download_url === "string" &&
-            (f.name.endsWith(".yml") || f.name.endsWith(".yaml")),
+        (f): f is GitHubContentEntry => isPackName(f) && typeof f.download_url === "string",
     );
     const fetched = await Promise.all(ymlFiles.map(fetchAndParsePack));
-    return { ok: true, packages: fetched.filter((pkg): pkg is PackageItem => pkg !== null) };
+    const packages = fetched.filter((pkg): pkg is PackageItem => pkg !== null);
+    // B-170: pack files are listed but none could be loaded: that is a failed load, not an empty catalog. Reporting
+    // it as `{ ok: true, packages: [] }` made the cache layer store `[]` for 24h and hide every pack until then.
+    if (listedPacks > 0 && packages.length === 0) {
+        console.error(`[snipsy] community fetch: none of the ${listedPacks} listed packs could be loaded`);
+        return { ok: false, reason: "no_packs" };
+    }
+    return { ok: true, packages };
 }
 
 /** Fetch one pack file from its download_url and parse it into a

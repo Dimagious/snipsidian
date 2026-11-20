@@ -1,7 +1,7 @@
 import { App, Notice, ToggleComponent, setIcon } from "obsidian";
 import type SnipSidianPlugin from "../../main";
 import { splitKey, slugifyGroup } from "../../store/keys";
-import { GroupManager } from "../utils/group-utils";
+import { forgetDeletedGroup, GroupManager, renameGroupInSettings } from "../utils/group-utils";
 import { UIStateManager } from "../utils/ui-state";
 import { renderPlaceholderHint } from "../utils/placeholder-hint";
 import { AddSnippetModal, ConfirmModal, FixTriggersModal, GroupPickerModal, TextPromptModal, type SnippetOpResult } from "./Modals";
@@ -625,10 +625,8 @@ export class SnippetsTab {
                     // going forward — drop it from `disabledGroups` too,
                     // so a future group that happens to slugify to the
                     // same name doesn't inherit a stale disabled state.
-                    if (this.plugin.settings.disabledGroups?.includes(group)) {
-                        this.plugin.settings.disabledGroups =
-                            this.plugin.settings.disabledGroups.filter((g) => g !== group);
-                    }
+                    // B-265: unless pattern rules are still filed under it.
+                    forgetDeletedGroup(this.plugin.settings, group);
                     await this.plugin.saveSettings();
                     this.uiState.getGroupOpen().delete(group);
                     this.discardEditIfMissing();
@@ -924,12 +922,9 @@ export class SnippetsTab {
         // `disabledGroups` must follow or a renamed disabled group
         // silently re-enables (and the stale old slug would later
         // mis-disable some unrelated future group of the same name).
-        // Same hygiene pattern as the delete-group cleanup above.
-        if (this.plugin.settings.disabledGroups?.includes(group)) {
-            this.plugin.settings.disabledGroups = this.plugin.settings.disabledGroups
-                .filter((g) => g !== group)
-                .concat(newSlug);
-        }
+        // Same hygiene pattern as the delete-group cleanup above. B-265: the
+        // pattern rules filed under the group are renamed with it.
+        renameGroupInSettings(this.plugin.settings, group, newSlug);
 
         try {
             await this.plugin.saveSettings();

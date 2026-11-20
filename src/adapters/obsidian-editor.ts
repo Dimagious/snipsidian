@@ -236,6 +236,11 @@ export async function tryExpandAtSeparator(
         /** ADR-0008: the closer the editor's auto-pair inserted right after the caret in this update. An instant
          *  rule that replaces the opener removes it too (see `expandAndApply`). */
         pairCloser?: PairedCloser;
+        /** B-246: Enter in a list item: the editor continued the list in the same change and the caret sits after
+         *  the new marker. The text it inserted after the trigger line (`"\n- "`, `"\n2. "`, `"\n\t- [ ] "`). The
+         *  line break is the separator: the trigger is read at the end of the previous line, and the new marker is
+         *  kept (it counts as part of the separator, so a field session ends after it). */
+        listContinuation?: string;
     }
 ): Promise<ExpansionResult | undefined> {
     const cursor = editor.getCursor();
@@ -250,7 +255,13 @@ export async function tryExpandAtSeparator(
     // cursor is at column 0 of a line after the first, treat the
     // line break as the separator and look at the END of the
     // PREVIOUS line — that's where the trigger actually was typed.
-    const isNewlineSeparator = cursor.ch === 0 && cursor.line > 0;
+    // B-246: after a list continuation the caret is past the marker, not at column 0; it must be exactly where the
+    // update put it, or a later move (the user, another plugin) would be read as the Enter.
+    const continuation = deps.listContinuation;
+    const isNewlineSeparator =
+        continuation !== undefined
+            ? cursor.line > 0 && cursor.ch === continuation.length - 1
+            : cursor.ch === 0 && cursor.line > 0;
     const targetLine = isNewlineSeparator ? cursor.line - 1 : cursor.line;
     const lineText = editor.getLine(targetLine) ?? "";
 
@@ -262,6 +273,7 @@ export async function tryExpandAtSeparator(
         lastTyped = "\n";
         ctxCh = sepCh;
     } else {
+        if (continuation !== undefined) return undefined; // the caret is not where the Enter left it
         if (cursor.ch === 0) return undefined; // column 0 of the first line: nothing precedes it
         lastTyped = lineText[cursor.ch - 1] ?? "";
         if (!isSeparator(lastTyped)) return undefined;
@@ -283,7 +295,8 @@ export async function tryExpandAtSeparator(
         () => expand(input, dict, ctx, DEFAULT_DELIMITERS, patterns, deps.instant === true && !isNewlineSeparator),
         targetLine,
         lineText,
-        lastTyped,
+        // B-246: the kept separator is the whole inserted `"\n" + marker`, the engine still sees a plain `"\n"`.
+        isNewlineSeparator && continuation !== undefined ? continuation : lastTyped,
         cursor,
         deps.pairCloser,
     );
@@ -377,10 +390,9 @@ async function expandAndApply(
         // Without `$|` the last Tab lands right after the inserted text plus the
         // separator, where the caret sits with no fields (B-182). A session opens
         // only when the caret was still exactly after the trigger and separator,
-        // so this is also where the live caret ends up. Enter in a list item: if
-        // the editor already continued the list marker before the expansion
-        // lands, the caret moved, so no field session opens (fields are dropped,
-        // caret stays on the new line).
+        // so this is also where the live caret ends up. Enter in a list item
+        // (B-246): the separator is the whole `"\n" + marker` the editor
+        // inserted, so the final stop is after the new marker.
         const final =
             plan.final !== undefined
                 ? from + normalizedLength(plan.insert.slice(0, plan.final))

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Packages: a failed load no longer hides every pack for a day** (B-170). When GitHub listed the catalog but none of the pack files could be loaded (a bad connection at the wrong moment, a changed file), the Packages page stored an empty list and showed no packs for 24 hours. That now counts as a failed load: the packs you already had cached stay, the Refresh notice says the fetch failed, and the next open tries again. A catalog that is really empty is still cached as empty.
+- **Enter in a list item expands the trigger** (B-246). `- sig` + Enter, `1. sig` + Enter and `- [ ] sig` + Enter (also nested items, items inside a blockquote or a callout, and a numbered item above others, whose numbers shift) gave a new list item and left the trigger as typed; now the trigger on the item above expands, the new item keeps its marker (`-`, `2.`, `- [ ]`, `> -`) and the caret stays after it. Enter in the middle of an item expands the word before the caret and moves the rest to the new item, as on a plain line. A plain quote line (`> sig` + Enter) expands too. Fields (`$1`, `$2`) work too, and the last Tab lands after the new marker. Enter on an empty item still removes its marker, and the usual guards (code, math, frontmatter) apply.
+- **Deleting or renaming a snippet group no longer turns its pattern rules back on** (B-265). Snippets and pattern rules share the groups and the Off switch. Deleting a group that was off now keeps it off for the pattern rules still filed under it (the rules are not deleted), and renaming a group renames it on its pattern rules too, so a group that was off stays off.
+
 ## [1.10.0] - 2026-11-19
 
 ### Added
