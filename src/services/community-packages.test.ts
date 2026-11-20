@@ -195,7 +195,7 @@ snippets:
       consoleSpy.mockRestore();
     });
 
-    it("treats individual pack YAML parse errors as ok:true with the bad pack skipped", async () => {
+    it("[B-170] a listed pack whose YAML does not parse, with no other pack, is a failed load (not an empty catalog)", async () => {
       const mockFiles = [
         {
           name: "invalid.yml",
@@ -207,14 +207,14 @@ snippets:
         .mockResolvedValueOnce(reply(200, JSON.stringify(mockFiles)))
         .mockResolvedValueOnce(reply(200, "invalid: yaml: content: ["));
 
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       const result = await loadCommunityPackagesFromGitHub();
 
-      expect(result.ok).toBe(true);
-      if (!result.ok) throw new Error("unreachable");
-      expect(result.packages).toEqual([]);
+      expect(result).toEqual({ ok: false, reason: "no_packs" });
+      consoleSpy.mockRestore();
     });
 
-    it("treats a pack with empty snippets as ok:true with the pack skipped", async () => {
+    it("[B-170] a listed pack with empty snippets, with no other pack, is a failed load", async () => {
       const mockFiles = [
         {
           name: "empty.yml",
@@ -233,11 +233,11 @@ snippets: []
         .mockResolvedValueOnce(reply(200, JSON.stringify(mockFiles)))
         .mockResolvedValueOnce(reply(200, mockYamlContent));
 
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       const result = await loadCommunityPackagesFromGitHub();
 
-      expect(result.ok).toBe(true);
-      if (!result.ok) throw new Error("unreachable");
-      expect(result.packages).toEqual([]);
+      expect(result).toEqual({ ok: false, reason: "no_packs" });
+      consoleSpy.mockRestore();
     });
 
     // Regression: security S-005 / B-036 — `download_url` from the GitHub
@@ -259,9 +259,7 @@ snippets: []
 
       const result = await loadCommunityPackagesFromGitHub();
 
-      expect(result.ok).toBe(true);
-      if (!result.ok) throw new Error("unreachable");
-      expect(result.packages).toEqual([]);
+      expect(result).toEqual({ ok: false, reason: "no_packs" }); // B-170: every listed pack refused
       expect(vi.mocked(requestUrl)).toHaveBeenCalledTimes(1); // only the listing call
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringMatching(/refusing to fetch/),
@@ -283,9 +281,7 @@ snippets: []
       vi.mocked(requestUrl).mockResolvedValueOnce(reply(200, JSON.stringify(mockFiles)));
 
       const result = await loadCommunityPackagesFromGitHub();
-      expect(result.ok).toBe(true);
-      if (!result.ok) throw new Error("unreachable");
-      expect(result.packages).toEqual([]);
+      expect(result).toEqual({ ok: false, reason: "no_packs" }); // B-170
       expect(vi.mocked(requestUrl)).toHaveBeenCalledTimes(1);
       consoleSpy.mockRestore();
     });
@@ -335,6 +331,74 @@ snippets: []
       if (!result.ok) throw new Error("unreachable");
       expect(result.packages).toHaveLength(1);
       expect(result.packages[0]?.label).toBe("OK yaml");
+    });
+
+    // B-170: the listing names packs but every pack fetch fails. This used to
+    // return { ok: true, packages: [] }, which the cache layer stored for 24h.
+    const PACK_URL = "https://raw.githubusercontent.com/Dimagious/snipsidian-community/main/approved/";
+
+    it("[B-170] every pack fetch failing (HTTP error from raw.githubusercontent.com) is a failed load", async () => {
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const files = [
+        { name: "a.yml", download_url: `${PACK_URL}a.yml` },
+        { name: "b.yml", download_url: `${PACK_URL}b.yml` },
+      ];
+      vi.mocked(requestUrl)
+        .mockResolvedValueOnce(reply(200, JSON.stringify(files)))
+        .mockRejectedValueOnce(new Error("offline"))
+        .mockRejectedValueOnce(new Error("offline"));
+
+      expect(await loadCommunityPackagesFromGitHub()).toEqual({ ok: false, reason: "no_packs" });
+      consoleSpy.mockRestore();
+    });
+
+    it("[B-170] one good pack among failing ones is still a successful load of that pack", async () => {
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const files = [
+        { name: "bad.yml", download_url: `${PACK_URL}bad.yml` },
+        { name: "ok.yml", download_url: `${PACK_URL}ok.yml` },
+      ];
+      vi.mocked(requestUrl)
+        .mockResolvedValueOnce(reply(200, JSON.stringify(files)))
+        .mockRejectedValueOnce(new Error("offline"))
+        .mockResolvedValueOnce(reply(200, "name: OK\nsnippets:\n  - trigger: brb\n    replace: be right back\n"));
+
+      const result = await loadCommunityPackagesFromGitHub();
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("unreachable");
+      expect(result.packages.map((p) => p.label)).toEqual(["OK"]);
+      consoleSpy.mockRestore();
+    });
+
+    it("[B-170] a genuinely empty listing ([]) is a successful empty catalog", async () => {
+      vi.mocked(requestUrl).mockResolvedValueOnce(reply(200, "[]"));
+      expect(await loadCommunityPackagesFromGitHub()).toEqual({ ok: true, packages: [] });
+    });
+
+    it("[B-170] a listing where every pack entry is malformed (download_url null) is a failed load, not an empty catalog", async () => {
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const files = [
+        { name: "a.yml", download_url: null },
+        { name: "b.yaml" }, // no download_url at all
+        { name: "README.md", download_url: `${PACK_URL}README.md` },
+      ];
+      vi.mocked(requestUrl).mockResolvedValueOnce(reply(200, JSON.stringify(files)));
+      expect(await loadCommunityPackagesFromGitHub()).toEqual({ ok: false, reason: "no_packs" });
+      expect(vi.mocked(requestUrl)).toHaveBeenCalledTimes(1); // nothing followed
+      consoleSpy.mockRestore();
+    });
+
+    it("[B-170] entries that are not packs at all (no name, number name) stay a successful empty catalog", async () => {
+      const files = [{ type: "dir" }, { name: 42, download_url: `${PACK_URL}z.yml` }, null];
+      vi.mocked(requestUrl).mockResolvedValueOnce(reply(200, JSON.stringify(files)));
+      expect(await loadCommunityPackagesFromGitHub()).toEqual({ ok: true, packages: [] });
+    });
+
+    it("[B-170] a listing with files but no pack files (README only) is a successful empty catalog", async () => {
+      const files = [{ name: "README.md", download_url: `${PACK_URL}README.md` }];
+      vi.mocked(requestUrl).mockResolvedValueOnce(reply(200, JSON.stringify(files)));
+      expect(await loadCommunityPackagesFromGitHub()).toEqual({ ok: true, packages: [] });
+      expect(vi.mocked(requestUrl)).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -515,6 +579,61 @@ snippets: []
       // which pinned the blank state for 24h. Critical invariant.
       expect(mockPlugin.saveSettings).not.toHaveBeenCalled();
       consoleSpy.mockRestore();
+    });
+
+    // B-170: a listing that names packs, all of which fail to load, must not
+    // overwrite the cache with [] for 24h.
+    const failingListing = (): void => {
+      const files = [{ name: "a.yml", download_url: "https://raw.githubusercontent.com/Dimagious/snipsidian-community/main/approved/a.yml" }];
+      vi.mocked(requestUrl)
+        .mockResolvedValueOnce(reply(200, JSON.stringify(files)))
+        .mockRejectedValueOnce(new Error("offline"));
+    };
+
+    it("[B-170] all packs failing: keeps the expired cache, reports `fallback`, writes nothing", async () => {
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const cachedPacks = [{ label: "Cached", snippets: { test: "1" } }];
+      const originalTimestamp = Date.now() - 25 * 60 * 60 * 1000;
+      const mockPlugin = {
+        app: { vault: {} },
+        settings: { communityPackages: { cache: { packages: cachedPacks, lastUpdated: originalTimestamp } } },
+        saveSettings: vi.fn()
+      };
+      failingListing();
+
+      const result = await loadCommunityPackagesWithCache(mockPlugin);
+
+      expect(result.source).toBe("fallback");
+      expect(result.error).toBe("no_packs");
+      expect(result.packages).toBe(cachedPacks);
+      expect(mockPlugin.settings.communityPackages?.cache?.packages).toBe(cachedPacks);
+      expect(mockPlugin.settings.communityPackages?.cache?.lastUpdated).toBe(originalTimestamp);
+      expect(mockPlugin.saveSettings).not.toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it("[B-170] all packs failing with no cache: `fallback`, empty, nothing pinned for 24h", async () => {
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const mockPlugin = { app: { vault: {} }, settings: {}, saveSettings: vi.fn() };
+      failingListing();
+
+      const result = await loadCommunityPackagesWithCache(mockPlugin);
+
+      expect(result).toMatchObject({ source: "fallback", error: "no_packs", packages: [] });
+      expect(mockPlugin.saveSettings).not.toHaveBeenCalled();
+      expect((mockPlugin.settings as { communityPackages?: unknown }).communityPackages).toBeUndefined();
+      consoleSpy.mockRestore();
+    });
+
+    it("[B-170] a genuinely empty listing still caches as empty (live, persisted)", async () => {
+      const mockPlugin = { app: { vault: {} }, settings: {}, saveSettings: vi.fn() };
+      vi.mocked(requestUrl).mockResolvedValueOnce(reply(200, "[]"));
+
+      const result = await loadCommunityPackagesWithCache(mockPlugin);
+
+      expect(result).toMatchObject({ source: "live", packages: [] });
+      expect(mockPlugin.saveSettings).toHaveBeenCalledTimes(1);
+      expect((mockPlugin.settings as { communityPackages?: { cache?: { packages: unknown[] } } }).communityPackages?.cache?.packages).toEqual([]);
     });
   });
 

@@ -152,3 +152,23 @@ export function isSingleCharTyping(
         change.end === selection.head
     );
 }
+
+const LIST_MARKER = "(?:[-*+]|\\d{1,9}[.)])[ \\t]+(?:\\[.\\][ \\t]*)?";
+
+/** A line break, the indentation, then a quote prefix (`> `, nested `> > `, also a callout body) and/or a list marker
+ *  (`-`, `*`, `+`, `1.`, `1)`, optionally a task box), then the caret. A bare indent is not one. */
+const LIST_CONTINUATION = new RegExp(`^\\n[ \\t]*(?:(?:>[ \\t]*)+(?:${LIST_MARKER})?|${LIST_MARKER})$`);
+
+/**
+ * B-246: Enter in a list item. Obsidian continues the list in the same change as the line break, so the update does
+ * not read as "a line break at column 0" but as the last typed characters replaced by themselves plus
+ * `"\n" + indentation + marker` (real Obsidian 1.14.5: `g` becomes `g\n- `, `g` becomes `g\n2. `, `g` becomes
+ * `g\n- [ ] `; in a quote `g\n> `, `g\n> - `). Returns that inserted tail when `inserted` is exactly `replaced`
+ * followed by one, else `undefined`. A plain Enter, a paste, a marker-less indent, or Enter on an empty item (the editor removes the marker: a
+ * deletion, nothing inserted) never match. Pure: the CM6 caller reads the text and the caret.
+ */
+export function listContinuationTail(inserted: string, replaced: string): string | undefined {
+    if (!inserted.startsWith(replaced)) return undefined;
+    const tail = inserted.slice(replaced.length);
+    return LIST_CONTINUATION.test(tail) ? tail : undefined;
+}
