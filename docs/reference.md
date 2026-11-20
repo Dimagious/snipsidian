@@ -54,7 +54,9 @@ tabs.
 ## How expansion works
 
 A trigger expands when a separator lands after it: a space, Tab, Enter, or one of
-`. , ! ? ; : ( ) [ ] { } " '`. The separator stays where you typed it.
+`. , ! ? ; : ( ) [ ] { } " '`. The separator stays where you typed it. Enter at the end of a list
+item, a task, a quote or a callout line works the same way: the trigger expands and the new line
+keeps the marker Obsidian adds (`- `, `2. `, `- [ ] `, `> `).
 
 ```
 You type:   todo·
